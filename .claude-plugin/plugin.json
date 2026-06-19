@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "bett3r-ai-workflow",
+  "version": "0.1.0",
+  "description": "A vertical-slice, dual-gated development flow: grill the design, slice it into independently-verifiable units (tracer bullet first), drive each to green with an executor + verifier + test loop, commit per slice, and land a PR that is the system of record. Project-agnostic — reads the host repo's own conventions at runtime.",
+  "author": {
+    "name": "Tomas Ruiz",
+    "email": "tomasruizr@gmail.com"
+  },
+  "keywords": [
+    "workflow",
+    "vertical-slice",
+    "tracer-bullet",
+    "ddd",
+    "tdd",
+    "code-review",
+    "grill"
+  ]
+}
