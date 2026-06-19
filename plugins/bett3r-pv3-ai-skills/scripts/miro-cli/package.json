@@ -1,0 +1,16 @@
+{
+  "name": "miro-cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Miro frame-data extractor for the bett3r-pv3-ai-skills `miro-to-mermaid` skill. Given a Miro frame URL (+ an SVG export), fetches the frame's event-storming items and connectors via the Miro REST API and prints JSON for the skill to convert to Mermaid.",
+  "scripts": {
+    "frame": "tsx get-frame-data.ts"
+  },
+  "dependencies": {
+    "@mirohq/miro-api": "^2.2.4",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0"
+  }
+}

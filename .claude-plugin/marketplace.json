@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "bett3r-ai-workflow",
+  "owner": {
+    "name": "Tomas Ruiz",
+    "email": "tomasruizr@gmail.com"
+  },
+  "metadata": {
+    "description": "Bett3r internal AI development tooling: the project-agnostic vertical-slice workflow plus the PV3 DDD framework skills.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "bett3r-ai-workflow",
+      "source": "./plugins/bett3r-ai-workflow",
+      "description": "Vertical-slice, dual-gated development flow: grill the design, slice it (tracer bullet first), drive each slice to green with executor + verifier + test loop, commit per slice, land the PR as system of record. Project-agnostic — reads the host repo's conventions at runtime."
+    },
+    {
+      "name": "bett3r-pv3-ai-skills",
+      "source": "./plugins/bett3r-pv3-ai-skills",
+      "description": "PV3 DDD framework skills: scaffold event-sourced schemas, aggregates, policies, read models, modules, and tests, plus a ddd-patterns reference. Reads each host repo's packages/paths from .esas.config.json, so it works in any PV3 repo."
+    }
+  ]
+}
