@@ -7,11 +7,7 @@
     "name": "Tomas Ruiz",
     "email": "tomasruizr@gmail.com"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/bett3r-dev/bett3r-ai-workflow.git",
-    "directory": "plugins/bett3r-pv3-ai-skills"
-  },
+  "repository": "https://github.com/bett3r-dev/bett3r-ai-workflow",
   "keywords": [
     "pv3",
     "ddd",
