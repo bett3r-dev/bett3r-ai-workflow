@@ -25,9 +25,12 @@ Order by `depends_on` (topological). The **tracer-bullet slice runs first**. Sli
 
 For each slice, in order, in a **fresh agent context**:
 
-1. **Implement** — dispatch the `executor` agent with: the slice (`behavior`, `oracle`, `gates`, intended files), the ticket, and the host project directory. The executor reads the repo's own rules/skills.
+1. **Implement** — dispatch the `executor` agent with: the slice (`behavior`, `oracle`, `gates`, intended files), the ticket, and the host project directory. The executor reads the repo's own rules/skills. Instruct it to work **RED → GREEN**: write the oracle test first, **run it and confirm it FAILS** for the right reason (the behavior is genuinely absent — not a typo, missing import, or compile error), *then* implement the minimal code to make it pass. It must report the RED evidence (the failure it saw before implementing).
 
-2. **Mechanical gate** — dispatch the `test-runner` agent to run the slice's **oracle test**. It must pass. (A non-runnable oracle is not a pass — surface it.)
+2. **Mechanical gate** — dispatch the `test-runner` agent to run the slice's **oracle test**. It must pass. Three ways this gate fails, all surfaced not swallowed:
+   - **non-runnable** oracle (won't compile/collect) is not a pass;
+   - **always-green** oracle — the executor reported no credible RED before implementing (or claims it was red but the failure reads as a missing import / wrong path rather than absent behavior). A test that never failed proves nothing; treat as a fail and re-dispatch the executor to fix the oracle, not the code;
+   - **red after implementing** — the obvious fail.
 
 3. **Judgment gate** — dispatch the `verifier` agent. It reads `${CLAUDE_PROJECT_DIR}/.claude/rules`, checks the slice's `gates` + the repo's invariants + the scope guard, and returns PASS / RETRY / ESCALATE.
 
@@ -63,5 +66,6 @@ When all targeted slices are `passes: true` and committed, report: slices comple
 
 - Dispatch to agents; don't implement. Each agent gets a fresh context.
 - **Both gates, every slice.** Never commit on the test alone — the verifier catches what tests can't. Never drop the verifier to save tokens; that's the corner that ships defects.
+- **RED before GREEN.** A green oracle only means something if it was first seen RED for the right reason. An oracle that never failed could be asserting nothing — it's a tautology, not a proof. The executor writes the test, watches it fail, then makes it pass.
 - The tracer bullet goes first — if its seam doesn't hold, stop before building on it.
 - No `build-progress.md`, no `build-summary.md`. The commits and `passes` flags are the truth.
