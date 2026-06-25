@@ -25,6 +25,8 @@ Diff the full branch against its base (`git diff <base>...HEAD`). Read `${CLAUDE
 - **Design fidelity** — does the assembled result deliver what `.work/design.md` resolved? Note any deliberate deviation.
 - **Quality** — real bugs, unsafe casts, security, dead code introduced across the diff. Look for accidental complexity, technical debt or anti-patterns relentlessly and be critical.
 
+Apply the `critique` skill's tone throughout: substance over compliments, no hedging, every finding specific and actionable with a concrete fix. For an assembled feature that crosses a non-trivial architectural seam, run a focused `critique --lens arch,ops` pass over the diff and fold its verdict into the findings below.
+
 Surface findings by severity (Critical / Medium / Low). Fix Critical/Medium before opening the PR (small fixes inline or a follow-up slice). Offer you recommendation for open issues. This review is **not** committed to a file — its conclusions go into the PR body.
 
 ## Step 3 — Dev verification checklist
@@ -70,5 +72,5 @@ The ephemeral `.work/` (design.md, slices.yaml) has now been fully promoted (ADR
 
 - The PR is the system of record — invest in its body, not in committed scratch docs.
 - This pass is cross-slice; trust the per-slice gates for within-slice correctness.
-- Follow the host repo's critique conventions for tone: substance over compliments, specific and actionable findings.
+- Tone follows the `critique` skill: substance over compliments, specific and actionable findings.
 

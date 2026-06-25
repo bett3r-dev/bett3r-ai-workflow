@@ -26,6 +26,16 @@ Run the interview: walk every branch of the decision tree, one question at a tim
 
 Continue until you reach genuine shared understanding — every pivotal fork resolved, no hand-waving.
 
+## Step 2.5 — Critique the resolved design (using the `critique` skill)
+
+Before writing it down, turn the lens on the design. The grill was *convergent* — it built the design *with* the user; the `critique` skill is *divergent* — it attacks the resolved position. Run `critique` (default `arch,ops` lenses) against the resolved decision tree and surface the verdict: the top weaknesses, the severity, and kill-or-continue.
+
+- If critique lands a **fix that's clearly right**, fold it back into the design before writing the doc.
+- If it surfaces a **genuine fork the grill missed**, drop back into Step 2 and resolve it.
+- A weakness with **no good answer** is a risk — carry it into the design doc's *Risks* section rather than pretending it's solved.
+
+Don't let this become a second grill; it's one focused adversarial pass on what's already decided.
+
 ## Step 3 — Write the design doc → `.work/design.md`
 
 Write the resolved design to `.work/design.md` (create `.work/` if absent; it is gitignored and ephemeral). **Markdown + Mermaid** so it renders in an editor with a mermaid preview. Aim for a doc a teammate can review in one pass:
