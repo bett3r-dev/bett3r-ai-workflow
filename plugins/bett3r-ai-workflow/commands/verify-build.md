@@ -25,6 +25,13 @@ Diff the full branch against its base (`git diff <base>...HEAD`). Read `${CLAUDE
 - **Design fidelity** — does the assembled result deliver what `.work/design.md` resolved? Note any deliberate deviation.
 - **Quality** — real bugs, unsafe casts, security, dead code introduced across the diff. Look for accidental complexity, technical debt or anti-patterns relentlessly and be critical.
 
+### Concrete ripple sweeps (run these, don't rely on eyeballing)
+
+Per-slice gates only see a slice's own oracle. A change that ripples *outside* that oracle has no gate but this one — and the two misses below were each a few greps away. Run both explicitly:
+
+- **Signature-ripple sweep.** For each exported symbol whose *signature* changed in the branch diff (an added/removed/retyped parameter, a changed return shape), grep **every** caller across the whole repo — explicitly including `*.integration.test.ts` / e2e / fixture files that are **excluded from the default `yarn test` run** and so never go red locally. Flag, and spot-run, any call site that doesn't match the new shape. (Real miss: a widened `getRulesWorkQueue`/`processRulesJob` arg fixed the one prod call site but left 7 integration suites passing the old signature — invisible because integration tests aren't in `yarn test`.)
+- **Stale skip-rationale check.** Scan test files — especially skipped / `xfail` blocks and tracer tests that short-circuit a path — for comments that justify the skip/short-circuit by citing a blocker: a commit, a P0, a TODO, "broken on this branch". Re-validate each rationale against `HEAD`: a *later* slice or follow-up on the same branch may have already fixed the cited blocker, leaving the path uncovered and the comment lying. (Real miss: a slice-1 tracer drove the command directly "because `getRulesWorkQueue` is a P0"; a later commit fixed that P0 but the tracer and its rationale were never revisited, so the rule→command wire stayed untested.)
+
 Apply the `critique` skill's tone throughout: substance over compliments, no hedging, every finding specific and actionable with a concrete fix. For an assembled feature that crosses a non-trivial architectural seam, run a focused `critique --lens arch,ops` pass over the diff and fold its verdict into the findings below.
 
 Surface findings by severity (Critical / Medium / Low). Fix Critical/Medium before opening the PR (small fixes inline or a follow-up slice). Offer you recommendation for open issues. This review is **not** committed to a file — its conclusions go into the PR body.
