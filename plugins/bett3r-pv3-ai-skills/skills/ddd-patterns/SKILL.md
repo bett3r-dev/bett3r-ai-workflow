@@ -457,6 +457,24 @@ A policy handler that dispatches **more than one command** — a fan-out loop (N
 
 Look at an existing fan-out erasure/cleanup policy under `<serverPath>/src/modules/` in your repo for the reference shape.
 
+### Non-idempotent external side-effects: reconcile by natural key, not a blind ledger
+
+The outbox is **at-least-once**: any event a policy consumes can be redelivered. For a side-effect that targets an aggregate, redelivery is handled by the rules above (`withIdempotencyCheck`, derive-progress-from-state). This subsection is about the harder case: a policy that performs a **non-idempotent external side-effect** — a create-style call to an external system (list a product, issue an invoice) with no idempotency key — and must not perform it twice.
+
+**Classify the side-effect first — the classification picks the tool:**
+
+- **(a) Idempotent** — a PUT, an absolute-value set, an upsert keyed by a stable id. Re-doing it is harmless. → **Nothing needed.**
+- **(b) Targets an aggregate** — the command goes through `executeCommand` against a PV3 aggregate. → The **aggregate dedups** via optimistic concurrency / `withIdempotencyCheck`. Nothing extra in the policy.
+- **(c) Non-idempotent external, no idempotency key** — a create-style external call that has real effect each time. → **Reconcile against the external system by a natural key** *before/instead of* re-doing it: ask the external "does this already exist?" using a key it knows — a SKU or client-reference for a listing, a transactionally-reserved number you read back for an invoice. If it exists, skip; otherwise create.
+
+**Do NOT reach for a blind processed-events ledger / bitmap / lease (Redis or Postgres) to dedup case (c).** A ledger marks an event *processed* **after** the side-effect, re-creating the exact act-then-mark gap an identity-map already has: `read-ledger → POST → write-ledger`, and a crash between the POST and the write re-POSTs on redelivery. The ledger adds machinery without closing the window. **Reconcile is authoritative** — it trusts the external system, not local memory, so it survives total loss of the local dedup store. A best-effort ledger is justified **only** when the side-effect is non-idempotent **AND** non-reconcilable (genuinely fire-and-forget: no read-back, no natural key) — state that explicitly when you build one.
+
+**Prefer pushing dedup into the external** via an idempotency key derived from `event.id` when the external API supports one (Stripe-style `Idempotency-Key`) — that converts case (c) into case (a) at the boundary.
+
+**Do NOT gate the reconcile on `event.metadata.isRedelivery`.** It looks like a free optimization — "only pay the reconcile round-trip when redelivered" — but PV3 stamps `isRedelivery: true` **only** on an operator replay of an already-committed position (the admin "Set Single Data Split Position" path). It is `false` on the crash-before-commit and retry redeliveries — the *dominant* duplicate causes — which are indistinguishable from a first delivery. So a fast-path that "creates directly when `isRedelivery` is false" double-creates on exactly those paths, re-opening the gap this whole subsection closes. The reconcile read (or an external idempotency key) must run **unconditionally**. (`isRedelivery` is the *replay-suppress* signal documented under *Event delivery ordering* — it suppresses a non-idempotent effect on a known replay; it is not a redelivery *detector* and there is no `deliveryAttempt` in PV3.)
+
+This is the same decision the `bett3r-ai-workflow` **grill** skill's *side-effect-reconcilability* probe forces at design time. If you're scaffolding the policy, see also `create-policy` → the redelivery constraints in its *Critical Constraints*.
+
 ### Dependency Declaration
 
 Every policy must declare its aggregate dependency for deployment unit computation. Build error if missing.
