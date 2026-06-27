@@ -1,5 +1,5 @@
 ---
-description: PV3 DDD pattern reference — the framework conventions, gotchas, and hard-won lessons for aggregates, command handlers, policies, read models, schemas, module composition, the MDU/lift dependency model, and the outbox event-delivery ordering model (out-of-order forward-replay, per-stream version watermark). Read when designing or implementing PV3 DDD artifacts (aggregates, policies, read models) or reasoning about event delivery/ordering.
+description: PV3 DDD pattern reference — the framework conventions, gotchas, and hard-won lessons for aggregates, command handlers, policies, read models, schemas, module composition, the MDU/lift dependency model, and the outbox event-delivery ordering model (within-stream strict order, cross-stream at-least-once, the per-stream version watermark, and consumer dedup/idempotency rules). Read when designing or implementing PV3 DDD artifacts (aggregates, policies, read models) or reasoning about event delivery/ordering.
 ---
 
 # DDD Module Patterns (PV3)
@@ -284,31 +284,65 @@ Location: `<domainEventsPath>/src/<domain>/<entity>.events.ts`
 
 Look at an existing `*.events.ts` file under `<domainEventsPath>/src/` in your repo for a working reference.
 
-## Event delivery ordering: out-of-order forward-replay & the per-stream version watermark
+## Event delivery ordering: within-stream strict order, cross-stream at-least-once
 
-**Hard constraint — how the outbox delivers events.** The outbox manager normally hands a stream's events to consumers in version order, but delivery can transiently arrive **out of order**. When an event's transaction is slow to commit, a *later* version on the same stream can become visible and be delivered before the earlier one. When the missing event finally commits, the outbox **replays forward from that event up to the last known event** — so every skipped version is eventually redelivered, in order. Out-of-order delivery is therefore *transient*; in-order delivery is the *eventual* guarantee (the same "per-stream in-order guarantee" the *Cross-stream counters* section below relies on), and the forward-replay is the mechanism that restores it.
+**Hard constraint — how the outbox delivers events.** The outbox **never reorders events within a single stream — full stop.** Not in normal operation, not during gap recovery, not on operator replay. What a consumer *does* face is **at-least-once** delivery: any event can arrive again. Two facts every consumer author must internalize:
 
-Concretely, for a stream at versions `1,2,3,4,5` where `3` commits late: a consumer may first see `1, 2, 4, 5` (with `4` *leaping* past the expected `3`), and only later — once `3` commits — receive the forward replay `3, 4, 5` in order.
+**1. Within a stream: strict version order, always.** Four independent reasons it cannot reorder:
+- A stream's events have **monotonic version = monotonic position**. Optimistic concurrency forces it: to write `v+1` you must have loaded `v`, so `v` commits *before* `v+1` is even written.
+- A stream always routes to **one split**, dispatched position-ordered through a **concurrency-1 queue**.
+- **Gap recovery cannot reorder a stream.** A gap (a lower position still uncommitted while a higher one is visible) is *only ever cross-stream* — a stream's own later versions commit after its earlier ones, so they are never visible or dispatched ahead of them.
+- **Operator reposition cannot reorder.** It re-pulls a range in position order, so it produces *duplicates*, never out-of-order.
 
-**Consumer convention — keep a per-stream version watermark, reject leap-forwards.** An order-sensitive consumer MUST store, per stream it consumes, the **last version it applied** (a watermark) and apply an incoming event **only when its version is the next expected** (`version === watermark + 1`):
+**2. Cross-stream / global position: no order guarantee.** Commit-visibility races and gap recovery *deliberately* deliver a cross-stream-late position after newer ones. Never assume global order.
 
-- **Leap-forward** (`version > watermark + 1`): **reject** — return without applying and without advancing the watermark. Do not throw to force it; the forward-replay is source-driven and will redeliver the skipped versions (and this one) in order. Applying a leap-forward immediately is the bug — it commits a later state ahead of the intermediate ones, and the replay can no longer undo it.
-- **Already-applied** (`version <= watermark`): skip — a duplicate from the replay or an idempotent redelivery.
+**At-least-once — the full set of duplicate causes.** "Resent only when the outbox couldn't store the ACK" is the headline case, not the only one. The ACK can be lost at *two* layers — the Redis dispatched-bit **and** the HTTP response — and an operator can replay on purpose:
 
-`upsert` keyed by stream id gives *idempotency* (the same event twice is safe), not *ordering* (a leap-forward upsert writes a future state over the current). The watermark is the ordering guard; the two are independent.
+| # | Cause | Present in single-replica topology? |
+|---|-------|-------------------------------------|
+| a | Crash/interruption **after a successful send, before the `SETBIT`** → re-dispatched on recovery | Yes |
+| b | Send the outbox **saw as failed** (timeout / 5xx) but the consumer **actually processed** it (lost HTTP response, not the bitmap) → retried | Yes |
+| c | **Operator replay** — admin "Set Single Data Split Position" with `reprocess: true` | Yes, on demand |
+| d | Cross-process **zombie / partition owner** (no fencing) | Not at 1 replica — but it's the contract *before* scale-out |
 
-### Read models — apply the discipline by convention
+**What you do NOT need to handle:** duplicates from watchdog/coordinator re-pulls or gap-recovery re-pulls of already-delivered events. The **dispatched bitmap absorbs those** (`reprocess: false`) before they ever reach you. The duplicates that *do* reach a consumer are (a)–(d).
 
-A read model is the canonical order-sensitive consumer: by convention, project a stream's events in version order — persist the stream's last-projected version on the row and reject any event that leaps past it. A pure last-write-wins `upsert` keyed by the stream id self-heals on forward-replay (the head event lands last), so the watermark is *strictly* load-bearing when the projection is **non-convergent** — it appends to an array, increments/accumulates, or exposes intermediate state observable between deliveries. Adopt the watermark as the default anyway, so a projection that later turns non-convergent doesn't silently inherit a reordering bug.
+### The one rule that matters most: dedup per-stream on version, NEVER on global position
 
-### Policies — case-by-case
+Deduplicate **per-stream, keyed on `version`** (or the event id) — **never** on global position.
 
-Whether a policy needs the watermark is a **per-policy judgment**:
+This is the trap: because cross-stream global order is not guaranteed, a global "skip if `position ≤ last seen`" high-water mark will **drop exactly the gap-recovered events** (a legitimately cross-stream-late position arriving after newer ones) — silently re-creating a dropped-event bug. The discipline:
 
-- **Commutative reaction** — the end result is independent of the order the stream's events are applied (most reactions, especially idempotent per-event side effects). Order doesn't matter; let the outbox redeliver freely, no watermark needed.
-- **Non-commutative reaction** — applying version `N+2` before `N+1` produces a different, unrecoverable outcome (the reaction depends on the prior state of the stream, or fires an irreversible per-transition side effect). The policy MUST **hold state**: keep the per-stream version watermark on a side-table/readmodel it owns and reject leap-forwards exactly as a read model does.
+- Track a **per-stream last-applied version** (a watermark per stream).
+- Incoming `version ≤ lastApplied[stream]` → **duplicate → skip**, but **return 2xx**. Returning an error makes the outbox retry → retry storm; a 2xx lets it set the dispatched bit and stop.
+- Otherwise **apply and advance** the per-stream watermark.
 
-This is the ordering counterpart to the redelivery-safety rules in the *Policies* section below: redelivery-safety makes a handler *idempotent* under replay; the watermark makes an *order-sensitive* handler correct under transient out-of-order delivery. A non-commutative policy needs both.
+Because per-stream order is guaranteed, the watermark is *sufficient* — you never need to remember every event id, just the last version per stream. A within-stream gap (`version > lastApplied + 1`) should never appear; if it does, it signals a bug or deduping on the wrong key, **not** a reordering you must tolerate.
+
+`upsert` keyed by stream id gives *idempotency* (writing the same row twice is safe); the watermark additionally protects *observable effects* a duplicate would corrupt (see read models below). The two are independent.
+
+### In-process PV3 consumers get this for free
+
+**`ReadmodelBuilder` applies the per-stream version watermark internally** — the exact model above — so an in-process PV3 read model is dedup-safe by construction. **Custom / external consumers (HTTP webhooks, non-PV3 services) must replicate it themselves.**
+
+**Read models.** Project a stream's events in version order (the framework guarantees the order and dedups duplicates via its internal watermark). A pure last-write-wins `upsert` keyed by the stream id is self-healing under duplicate redelivery — applying the same head event twice is idempotent. The watermark is *strictly* load-bearing when the projection is **non-convergent**: it appends to an array, increments/accumulates, or exposes intermediate state observable between deliveries — there a re-applied duplicate corrupts the result. The framework's watermark covers in-process read models; a custom projector must carry its own.
+
+**Policies — case-by-case.** Within-stream order is guaranteed, so a policy never sees a stream's events reordered. What it *must* survive is **duplicate redelivery**:
+- **Idempotent reaction** — re-applying the same event is a no-op (most reactions, especially idempotent per-event side effects). Nothing extra needed; let the outbox redeliver freely.
+- **Non-idempotent reaction** — re-applying changes the outcome (accumulates, or fires a per-transition side effect). The policy MUST make each dispatched command idempotent (see *Policies* below) **or** hold a per-stream watermark/side-table to dedup — and must never assume **cross-stream** order.
+
+This is the counterpart to the redelivery-safety rules in the *Policies* section below: redelivery-safety makes a handler *idempotent* under replay; the watermark makes a *dedup-requiring* handler correct under at-least-once delivery.
+
+### Non-idempotent external side effects
+
+If processing an event triggers a real-world action (charge a card, `createShipment`, send an email), the per-stream watermark must be committed **atomically with the side effect**, or the side effect must **carry its own idempotency key** (natural key + `ON CONFLICT DO NOTHING`, or a provider idempotency-key). Otherwise cases (a)/(b) double-fire it. This is the load-bearing work tracked as **TV1-1945**; the `isRedelivery` flag exists to let a consumer cheaply signal "this might be a replay — check before acting."
+
+### TL;DR for a consumer author
+
+1. **Assume at-least-once** — the same event can arrive again (crash-before-bit, lost HTTP response, operator replay, future scale-out).
+2. **Rely on per-stream order** (guaranteed); **never assume cross-stream / global order.**
+3. **Dedup with a per-stream version watermark, not a global position** — and **2xx duplicates** (an error triggers a retry storm).
+4. **Make external side effects idempotent** — commit the watermark *with* the effect, or use a dedup key.
 
 ## Policies
 
@@ -542,7 +576,7 @@ Readmodel schemas MUST be defined in the domain package (`<domainEventsPackageNa
 
 ### Cross-stream counters (multi-stream keyed readmodel)
 
-PV3's per-stream in-order guarantee protects same-stream writes (eventually — see *Event delivery ordering* above for the transient out-of-order window and the version-watermark discipline that a non-convergent same-stream projection still needs). It does **NOT** protect a readmodel whose key (e.g., `correlationId`) groups events from many aggregate streams. A read-then-write counter under that shape is a classic lost-update race.
+PV3's per-stream in-order guarantee protects same-stream writes (always, in order — see *Event delivery ordering* above; within a stream the outbox never reorders, though it may redeliver duplicates, which is why a non-convergent same-stream projection still needs the version watermark). It does **NOT** protect a readmodel whose key (e.g., `correlationId`) groups events from many aggregate streams — both because cross-stream order is *not* guaranteed and because a read-then-write counter under that shape is a classic lost-update race.
 
 **Pattern:** atomic increment + CAS-filtered status write.
 
