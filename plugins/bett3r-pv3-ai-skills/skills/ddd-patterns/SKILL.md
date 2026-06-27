@@ -1,5 +1,5 @@
 ---
-description: PV3 DDD pattern reference — the framework conventions, gotchas, and hard-won lessons for aggregates, command handlers, policies, read models, schemas, module composition, the MDU/lift dependency model, and the outbox event-delivery ordering model (within-stream strict order, cross-stream at-least-once, the per-stream version watermark, and consumer dedup/idempotency rules). Read when designing or implementing PV3 DDD artifacts (aggregates, policies, read models) or reasoning about event delivery/ordering.
+description: PV3 DDD pattern reference — the framework conventions, gotchas, and hard-won lessons for aggregates, command handlers, policies, read models, schemas, module composition, the MDU/lift dependency model, and the outbox event-delivery ordering model (within-stream strict order, cross-stream at-least-once, the per-stream version watermark, consumer dedup/idempotency rules, and the `event.metadata.isRedelivery` operator-replay signal). Read when designing or implementing PV3 DDD artifacts (aggregates, policies, read models) or reasoning about event delivery/ordering, consumer redelivery, or replay handling.
 ---
 
 # DDD Module Patterns (PV3)
@@ -335,7 +335,31 @@ This is the counterpart to the redelivery-safety rules in the *Policies* section
 
 ### Non-idempotent external side effects
 
-If processing an event triggers a real-world action (charge a card, `createShipment`, send an email), the per-stream watermark must be committed **atomically with the side effect**, or the side effect must **carry its own idempotency key** (natural key + `ON CONFLICT DO NOTHING`, or a provider idempotency-key). Otherwise cases (a)/(b) double-fire it. This is the load-bearing work tracked as **TV1-1945**; the `isRedelivery` flag exists to let a consumer cheaply signal "this might be a replay — check before acting."
+If processing an event triggers a real-world action (charge a card, `createShipment`, send an email), the per-stream watermark must be committed **atomically with the side effect**, or the side effect must **carry its own idempotency key** (natural key + `ON CONFLICT DO NOTHING`, or a provider idempotency-key). Otherwise cases (a)/(b) double-fire it. This is the load-bearing work tracked as **TV1-1945**, and the flag below does **not** change it. For the *narrower* "don't re-send the shipped email when an operator replays a position we already produced" case, read `event.metadata.isRedelivery` — specified next.
+
+### `event.metadata.isRedelivery` — the operator-replay signal (what it is, what it is NOT)
+
+Every dispatched event carries `event.metadata.isRedelivery: boolean`. A consumer reads it straight off the metadata it already receives — **there is no new handler API**; PV3 `ReadmodelBuilder` and policy handlers already get `event.metadata`. The flag is **off by default** (absent / `false`) and is stamped `true` in exactly one situation:
+
+> `isRedelivery === true` **iff the dispatched bit was already set at the moment the outbox decided to send this position** — i.e. a position that was previously **delivered *and* committed** (its ACK landed, so the bit is set) is being sent again. The only path that re-sends an already-committed position is the admin **"Set Single Data Split Position"** replay (`shouldReprocess` / `reprocess: true`, cause (c) above).
+
+That makes it **false-positive-free: it is never set on a genuine first delivery.**
+
+| Delivery path | dispatched bit when outbox decides | `isRedelivery` |
+|---|---|---|
+| Normal first delivery | 0 | `false` |
+| Crash-before-commit re-dispatch (cause (a)) | 0 | `false` |
+| Lost-HTTP-response retry (cause (b)) | 0 | `false` |
+| **Operator replay of an already-committed position (cause (c))** | **1** | **`true`** |
+
+**What it IS for.** A consumer can safely **suppress a non-idempotent side effect on a replay** — the "we already shipped; don't re-send the shipped email" case. Because the flag never fires on a real first delivery, suppressing on `isRedelivery` can **never drop a first-time effect**. Both meanings of a set flag ("recovery wanted to re-run" vs "operator asked to reprocess") collapse to the same instruction for this use case: *you have produced this before → suppress*. The original event object is **not mutated** — the flag is added to the dispatched copy's metadata only.
+
+**What it is NOT.** It is **not a dedup primitive and not exactly-once.** It is deliberately **silent on the crash/retry redelivery paths** (causes (a) and (b)): those dispatch with the bit still `0`, so they are indistinguishable from a first delivery and arrive with `isRedelivery: false`. A consumer needing *absolute* exactly-once side effects must still dedup on **`(stream, version)` / event id**, with the effect committed atomically (or carrying its own idempotency key) — that is TV1-1945, unchanged by this flag. A single boolean also cannot distinguish "recovery redelivery" from "operator wants a reprocess"; for the suppress-side-effect use case that distinction does not matter.
+
+**Decision rule.**
+- Need to *drop duplicates correctly in all cases* → **per-stream version watermark** (above). `isRedelivery` does not help here — it's `false` on causes (a)/(b).
+- Need only to *avoid re-emitting a non-idempotent effect on an operator replay* → **`event.metadata.isRedelivery`**.
+- Need both → do both; they compose (watermark for correctness, flag for the replay-suppress shortcut).
 
 ### TL;DR for a consumer author
 
@@ -343,6 +367,7 @@ If processing an event triggers a real-world action (charge a card, `createShipm
 2. **Rely on per-stream order** (guaranteed); **never assume cross-stream / global order.**
 3. **Dedup with a per-stream version watermark, not a global position** — and **2xx duplicates** (an error triggers a retry storm).
 4. **Make external side effects idempotent** — commit the watermark *with* the effect, or use a dedup key.
+5. **`event.metadata.isRedelivery` is a replay *hint*, not dedup.** `true` marks an operator replay of an already-committed position (cause (c)) **only** — use it to suppress re-firing a non-idempotent effect (it never fires on a first delivery, so it can't drop one). It is `false` on crash/retry redelivery (causes (a)/(b)), so it does **not** replace the watermark or `(stream, version)` dedup.
 
 ## Policies
 
