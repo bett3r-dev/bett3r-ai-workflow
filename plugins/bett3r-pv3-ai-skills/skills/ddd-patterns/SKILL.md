@@ -617,6 +617,18 @@ Cross-subdomain reads use the in-process client library against the readmodel's 
 
 Readmodel schemas MUST be defined in the domain package (`<domainEventsPackageName>`, in `<domain>-integration.types.ts`), not inline in the readmodel file. The client library generator and OpenAPI spec derive types from the domain package. Inline schemas produce untyped or incomplete generated artifacts.
 
+### Projector read-modify-write: `upsert` does NOT deep-merge on the update path
+
+The natural projector shape — `readById` → mutate a nested `jsonb` map → `upsert(fullDoc)` — relies on assumptions that do not hold the way they look (verified against `pv3-adapter-database-postgres` / `pv3-library-outbox-manager`):
+
+- **`upsert`'s merge is asymmetric.** The row-exists **UPDATE** path is a shallow `data = data || $2` — a full nested object you read-mutate-write **wholesale-replaces** the stored one. `jsonb_recursive_merge` (deep) runs **only** on the INSERT `ON CONFLICT` race path. Only **dot-notation** keys get a JS-side `mergeDeepRight`; a plain full nested object does not.
+- **`readById` + `upsert` are non-atomic** — separate connections/transactions. The `FOR UPDATE` inside `upsert` covers only its own re-read+write, not the projector's earlier `readById`.
+- So a same-stream read-modify-write is loss-safe **only** because the outbox serializes same-stream events through a per-split `concurrency:1` dispatch queue (a stream → exactly one split). It is **NOT** protected by deep-merge.
+
+**Therefore loss-safety is topology-dependent.** Single-consumer = safe; a multi-instance rebalance **fencing gap** (a zombie/GC-paused old owner still holding an in-flight dispatch) can overlap two same-stream projections, and the shallow overwrite drops a sub-key. Same hazard if two *different* streams project into the *same* doc id with `splitCount > 1`, or any non-outbox writer touches the row. No single-consumer test reproduces this — it only bites under multi-split (ADR-016 D1).
+
+**If you need additive-across-concurrent-writers semantics on a nested map, do NOT rely on `upsert` merging a full nested object.** Use **dot-notation keys** (which get `mergeDeepRight`), an atomic increment / per-field CAS (see *Cross-stream counters* below), or an explicit lock. This complements the delivery-side rule above: even given the delivery contract, the *persistence-side* RMW has its own concurrency footgun.
+
 ### Cross-stream counters (multi-stream keyed readmodel)
 
 PV3's per-stream in-order guarantee protects same-stream writes (always, in order — see *Event delivery ordering* above; within a stream the outbox never reorders, though it may redeliver duplicates, which is why a non-convergent same-stream projection still needs the version watermark). It does **NOT** protect a readmodel whose key (e.g., `correlationId`) groups events from many aggregate streams — both because cross-stream order is *not* guaranteed and because a read-then-write counter under that shape is a classic lost-update race.
