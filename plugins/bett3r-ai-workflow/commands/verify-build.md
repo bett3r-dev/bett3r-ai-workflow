@@ -18,7 +18,12 @@ Read `.work/slices.yaml` and `.work/design.md`. All slices should be `passes: tr
 
 ## Step 2 — Whole-PR coherence review
 
-Diff the full branch against its base (`git diff <base>...HEAD`). Read `${CLAUDE_PROJECT_DIR}/.claude/rules` for the repo's architectural checklist. Review the **assembled** change — the things no single-slice verifier could see:
+**Resolve the true base first — don't trust `master`/`origin/master` by default.** Under `/start-multi`'s worktree fleet, a per-ticket branch is cut from an *integration* branch that hasn't merged to `master` yet, so the branch's true fork point is that integration branch, not `master`. Diffing against a stale `master` silently inflates the scope (a real case: 509 files / +68k/−46k instead of ~67 files) and the coherence review runs against the wrong diff — a *silent* scope error, no command errors. Before reviewing:
+
+1. Compute the diff against the assumed base, then **sanity-check its file count against `.work/slices.yaml`'s union of `touches:` paths.** If the diff is wildly larger (e.g. >3–5×), treat `master`/`origin/master` as **suspect**, not authoritative.
+2. When suspect, resolve the real base: `git branch -r --contains <first-branch-commit>` to find the nearest integration/parent branch, and prefer `git merge-base <candidate> HEAD` over the assumed default.
+
+Then diff the full branch against that resolved base (`git diff <base>...HEAD`). Read `${CLAUDE_PROJECT_DIR}/.claude/rules` for the repo's architectural checklist. Review the **assembled** change — the things no single-slice verifier could see:
 
 - **Cross-slice invariants** — does the feature hold as a whole; do the slices compose correctly; any contract that two slices had to agree on?
 - **Coherence** — consistent patterns across slices, no duplication introduced between them, no slice undone by a later one.
@@ -47,7 +52,7 @@ Produce a single **developer verification checklist**: the things a human should
 
 ## Step 5 — Open the PR (the system of record)
 
-Push the branch and open the PR (compose the repo's `create-pr` flow if it has one; otherwise `gh pr create`). The PR **body is the record**:
+Push the branch and open the PR (compose the repo's `create-pr` flow if it has one; otherwise `gh pr create --base <resolved-base>` — pass the base resolved in Step 2, not a hardcoded `master`). **Verify the created PR's base after the fact:** `gh pr create` succeeds silently even when it targets the wrong ref, so confirm the PR's `changed_files`/`commits` roughly match the local `git log <base>..HEAD` count/diffstat. If they don't, retarget with `gh api -X PATCH repos/<owner>/<repo>/pulls/<n> -f base=<true-base>` — **not** `gh pr edit --base`, which can fail with an unrelated GraphQL token-scope error and leave the base silently unchanged. The PR **body is the record**:
 
 ```
 ## <TICKET-ID> — <title>
