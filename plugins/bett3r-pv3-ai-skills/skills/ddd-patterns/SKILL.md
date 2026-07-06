@@ -369,6 +369,20 @@ That makes it **false-positive-free: it is never set on a genuine first delivery
 4. **Make external side effects idempotent** — commit the watermark *with* the effect, or use a dedup key.
 5. **`event.metadata.isRedelivery` is a replay *hint*, not dedup.** `true` marks an operator replay of an already-committed position (cause (c)) **only** — use it to suppress re-firing a non-idempotent effect (it never fires on a first delivery, so it can't drop one). It is `false` on crash/retry redelivery (causes (a)/(b)), so it does **not** replace the watermark or `(stream, version)` dedup.
 
+### Redelivery-safe external effects: the A/B/C layer model
+
+When a non-idempotent external effect must survive at-least-once redelivery, three *distinct* questions each get their own layer. They compose in a fixed order; a robust boundary uses whichever layers its hazard requires, not one in place of another.
+
+| Layer | Answers | Mechanism |
+|---|---|---|
+| **A — aggregate invariant** | "already *recorded* this fact?" | `withIdempotencyCheck` on state — a bounded key-set (`array.slice(-N)`, keyed on an inbound-trigger id riding event **metadata**, never payload) for a many-times fact, or an O(1) boolean marker when at most one occurrence is possible |
+| **B — policy checkpoint** | "already *performed* this external action?" | A shared `guardExternalEffect` helper wrapping `transactionalIdempotencyCheckpoint(event.id)` — durable (Postgres), survives cache/snapshot loss, keyed on the trigger's committed `event.id` |
+| **C — reconcile-by-natural-key** | "did the external system already accept it (crashed before we recorded)?" | A connector query against the external system's own natural key, run **unconditionally** on every delivery — see *Non-idempotent external side-effects: reconcile by natural key* below |
+
+**Guard order at the boundary:** `isRedelivery`-skip **FIRST** (ACK, zero I/O, zero checkpoint mutation — an operator force-replay reprojects read models via reconcile only), **THEN** the Layer B/C dedup. Do **not** use `isRedelivery` as the dedup gate — it is `false` on exactly the crash-before-mark duplicate that B/C exist to close (`isRedelivery = version ≤ watermark`; a crash-window duplicate is `version > watermark`), so it is a no-op precisely where duplication happens. (Full treatment under *Non-idempotent external side effects* above and *…reconcile by natural key* below.)
+
+**The graceful-no-op / no-throw contract.** Every dedup/skip path MUST resolve as command **success** — never throw. A throw on a null-version stream dead-letters and trips the outbox breaker (ADR-016 §4); on a versioned stream it halts the stream. So a shared guard returns a value the caller branches on — e.g. `guardExternalEffect(...) → { performed: boolean, result?: T }`, branch on `performed` — rather than signalling "already done" by throwing and catching. Reference shared-helper shape: `guardExternalEffect` (event-id-keyed checkpoint + optional reconcile, composed in the fixed order above); even in a repo without that exact package, that composition is the reusable part.
+
 ## Policies
 
 Use `PolicyBuilder` from PV3:
