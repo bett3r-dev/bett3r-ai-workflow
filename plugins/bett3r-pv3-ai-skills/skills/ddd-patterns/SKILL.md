@@ -165,6 +165,7 @@ SomethingStarted: ( _, event, metadata ) => {
 ### System / admin-only aggregates
 
 - **Global infrastructure aggregates** (cronjob subscriptions, feature flags, global config) can skip `scopeInvariant()`, `ownerId` in reducers, and `accountId` in event metadata; their readmodels skip `FilterByAccountIdTransformer` / `FilterByScopeTransformer`. Admin-only, not tenant-scoped; enforce access via route-config (`private`, no subdomain).
+- **Tenant-scoped, NOT row-scoped aggregates (org-global config)** — the middle bucket between the two above. A tenant resource whose capability is collapsed to `['all']`-only in the permissions/resources registry (org-global config with no per-user delegation — e.g. a price-list or size-guide shared by the whole account) models **no per-row ownership**. Such aggregates **omit `ownerId` from reducers AND `scopeInvariant()` from commands**, and their readmodel creation projectors **omit the `ownerId` projection** — but they **keep** `accountId` in event metadata and `FilterByAccountIdTransformer` on the readmodel (they ARE tenant-isolated, just not row-scoped). Do NOT "restore" `ownerId`/`scopeInvariant` on these under the blanket security rule — it is dead machinery once the resource is collapsed to `all` (`scopeInvariant()` short-circuits on `all`, and no `FilterByScopeTransformer` reads the field). Verify against the actual `['all']`-only collapse decision before applying this carve-out to a resource — it doesn't apply just because an aggregate happens to skip `ownerId` today.
 - **Admin-only domain aggregates** inside a named module directory emit an empty subdomain via `.withSubdomain( '' )` on the aggregate/readmodel builder. This overrides filesystem auto-derivation: routes carry no `x-subdomain` and the gateway authorizes via the admin path (`userType === 'admin'`) instead of org feature-entitlement + permission. The subdomain's block must be **absent** from `permissions-catalog.json` (an orphaned block fails the `generate-all` drift check). Every route in such a module must call `.withSubdomain( '' )`.
 
 ### Lifecycle status guards (defence-in-depth)
@@ -522,7 +523,7 @@ export const MyReadmodel = ({ database, realtimeSession, databaseSessionMode }: 
 - Use `upsert` for idempotency (never `insert`)
 - `extractIdFromEventStream( event )` for document IDs
 - `FilterByAccountIdTransformer()` for multi-tenant filtering; `FilterByScopeTransformer()` for permission-based scope filtering (always AFTER `FilterByAccountIdTransformer`)
-- Project `ownerId: event.metadata?.userId` in creation event projectors
+- Project `ownerId: event.metadata?.userId` in creation event projectors — **except** for the tenant-scoped-but-not-row-scoped carve-out above (`['all']`-only collapsed resources), which omit it entirely
 - Collection names: `{domain}_{entity}_readmodel`
 - Registration: `ports.eventsourcing.routeEventHandler( MyReadmodel( ports ));`
 - **Schema location:** readmodel schemas MUST live in the domain package (`<domain>-integration.types.ts`), not inline — the client library generator and OpenAPI spec derive types from the domain package; inline schemas produce untyped/incomplete generated artifacts.

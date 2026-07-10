@@ -49,6 +49,7 @@ Key behaviors to rely on:
 - **Auth = Mode C `DEV_ADMIN_USER` bypass.** Every request resolves to `testUser` (defaults to `DEFAULT_TEST_USER`, an admin with `permissions: ['*']`). Override per-call with `x-auth-user-id` / `x-auth-account-id` headers when a flow needs a different identity.
 - **Tolerant outbox** (`E2ELocalOutbox`): policies referencing modules you didn't load fail as warnings, not test failures.
 - **Mocked external ports**: `mailer.sendMail` is a `jest.fn()`; `paymentGateway` auto-approves charges and refunds (mocked gateway); `vectorDatabase` / `platformAnalytics` are no-ops. The DB is `MemoryDb` — each harness instance is a fresh, isolated eventstore.
+- **`createIntegrationHarness` never calls `eventstore.start()`** — only `database.start()` / `databaseSessionMode.start()` / `outbox.start()` / `realtimeSession.start()`. A policy's `ports.eventstore.onStarted(async () => { ... })` hook (the idiom cron-registering policies use to register a subscription at boot) therefore **never fires** under this harness, even though the harness boots the owning module's `create(ports)` normally. Don't chase "why isn't my subscription registering" in a harness-based test — it's a harness gap, not a bug in the policy. Verify boot-time `onStarted` registration by running the real server against local dev infra and reading the eventstore/readmodel directly, not via this harness.
 
 ## Parallelism & isolation
 
