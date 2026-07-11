@@ -34,6 +34,8 @@ For each slice, in order, in a **fresh agent context**:
 
 3. **Judgment gate** — dispatch the `verifier` agent. It reads `${CLAUDE_PROJECT_DIR}/.claude/rules`, checks the slice's `gates` + the repo's invariants + the scope guard, and returns PASS / RETRY / ESCALATE.
 
+   **Out-of-oracle ripple check (mandatory when the slice changes a wire contract).** The per-slice oracle only covers the slice's own path — it structurally cannot see a suite that lives outside the default test run. When a slice changes an **exported artifact's signature**, an **event/trigger name**, or **deletes a symbol / route / field**, the executor (and verifier) must `grep` callers across the **whole repo including `*.integration.test.ts`, `*.e2e.*`, and fixture files that are excluded from the default `yarn test` run** (they need `jest.integration.config.js` / testcontainers, so they never go red locally). Then either **run the affected suites** via the integration config, or **explicitly flag them as un-run** in the slice summary — never imply "green" for suites the gate structurally cannot see. (Real miss: TV1-1969 changed a dispatcher's trigger event; three pre-existing integration suites still encoded the old topology and were red at HEAD, but none were in `yarn test`, so the dual gate never saw them.)
+
 4. **Resolve:**
    - **test green AND verifier PASS** → **commit the slice** (Step 4).
    - **RETRY or test fail** → re-dispatch the `executor` with the specific feedback. **Max 2 retries**, then ESCALATE.
@@ -58,7 +60,9 @@ One commit per slice. Git is the record.
 
 ## Step 5 — Done
 
-When all targeted slices are `passes: true` and committed, report: slices completed, the commit per slice, and any ESCALATEd items. Then:
+When all targeted slices are `passes: true` and committed, report: slices completed, the commit per slice, and any ESCALATEd items, **plus any out-of-`yarn test` suites flagged as un-run** (from the ripple check in Step 3).
+
+**Verify the carry-forward against HEAD before handing it to `/verify-build` — do not assert it from memory.** The summary's carry-forward note (which file rippled, which suite went red) is what `/verify-build`'s signature-ripple sweep builds on; a wrong file named there can hide real breakages. Re-check every named file against `HEAD` (it is actually the red/affected one) before writing it. (Real miss: TV1-1969's summary named only one of three broken suites and mis-attributed it — the real recovery-semantics break was in a different file.) Then:
 
 > Run `/verify-build` for the whole-PR coherence review and to open the PR.
 
