@@ -1,6 +1,6 @@
 ---
-
-## description: Begin a unit of work — create the branch and scaffold the ephemeral .work/ workspace. Thin and mechanical, no context docs.
+description: Begin a unit of work — create the branch and scaffold the ephemeral .work/ workspace. Thin and mechanical, no context docs.
+---
 
 # /start — begin work
 
