@@ -1,0 +1,19 @@
+name: validate-plugins
+
+# These plugins fail silently: an artifact whose frontmatter doesn't parse
+# never registers — it just vanishes from the skills list in every consuming
+# repo, with no error anywhere. PR time is the last moment a human is looking
+# before it propagates. See scripts/validate-plugins.py.
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate plugin artifacts (frontmatter + manifests)
+        run: python3 scripts/validate-plugins.py
