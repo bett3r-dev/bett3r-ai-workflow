@@ -1,6 +1,6 @@
 ---
-
-## description: Land the work — one whole-PR coherence review across all slices, a dev verification checklist, finalize ADRs, and open the PR as the system of record.
+description: Land the work — one whole-PR coherence review across all slices, a dev verification checklist, finalize ADRs, and open the PR as the system of record.
+---
 
 # /verify-build — land the work
 
@@ -32,7 +32,11 @@ Then diff the full branch against that resolved base (`git diff <base>...HEAD`).
 
 ### Concrete ripple sweeps (run these, don't rely on eyeballing)
 
-Per-slice gates only see a slice's own oracle. A change that ripples *outside* that oracle has no gate but this one — and the misses below were each a few greps away. Run all of them explicitly:
+Per-slice gates only see a slice's own oracle. A change that ripples *outside* that oracle has no gate but this one — and the misses below were each a few greps away. Run all of them explicitly.
+
+They all fall out of one fact: **a green gate is evidence only for the path it actually ran.** Each sweep is a different way that path can be narrower than it looks — the seam between two slices (composition), a caller in another package (removal), a suite outside `yarn test` (signature), a record shape no test creates (persisted-data), the *reason* a test is green (mechanism-claim), or a rationale that has gone stale (skip-rationale).
+
+`/build` now runs a first-pass out-of-oracle ripple check per slice (signature / event-name / deletion changes, incl. suites outside `yarn test`). **Do not assume it caught them** — its summary's carry-forward is a claim to verify against `HEAD`, not evidence. These sweeps are the backstop.
 
 - **Cross-slice composition sweep.** Per-slice gates structurally cannot catch a defect whose *cause spans two slices*: each slice is individually correct, but they compose into a bad state in the seam. Enumerate the invariants/cursors/floors that more than one slice touches, and reason explicitly about each **pairwise** interaction — especially where one slice *advances* a value another slice *reads* or *trims* against. Run the full suite across the whole diff (not just per-slice oracles). (Real miss: a cold-start by-position *refill* (one slice) and a WAL Reader stream *trim* (another) were each correct, but composed into a silent-drop window — the trim floor advanced past an event that committed mid-refill because no heartbeat was held; neither slice's oracle could see the seam.)
 - **Removal-grep sweep (deletion slices).** When a slice **deletes** a symbol, route, config field, or subsystem, build-passing ≠ caller-free: broken callers living in *sibling packages or the other repo* still compile that package fine. `grep` the whole repo(s) for every deleted symbol/route/field and assert **zero live callers remain**. (Real miss: a slice that deleted the bitmap/position subsystem left a `set-data-split-position` admin route → 404 at runtime in a separate package, a hand-written debug-mcp tool, and dead config fields — all green because the broken callers lived elsewhere.)
@@ -45,7 +49,7 @@ Apply the `critique` skill's tone throughout: substance over compliments, no hed
 
 **Disprove every Critical/High before propagating it.** A plausible-sounding Critical that's actually a false positive is *more* expensive than a missed nit — "fixing" it introduces a regression. Before reporting or acting on any Critical/High finding, attempt to **disprove** it: (a) read the actual call site — not the diff hunk in isolation; (b) run a `git blame` / base-branch check — "is this pre-existing on the base, not introduced by this PR? Y/N"; (c) construct a concrete failing input that reproduces it. Drop or downgrade any Critical that can't survive all three. (Real miss: 3 of 4 reported Criticals on TV1-1950 were false positives — a truthy `'0'` misread as falsy, a verbatim-from-`master` pre-existing line, and a "double increment" that was load-bearing for restart determinism — each would have introduced a bug if "fixed"; the git-blame check alone kills two of them.)
 
-Surface findings by severity (Critical / Medium / Low). Fix Critical/Medium before opening the PR (small fixes inline or a follow-up slice). Offer you recommendation for open issues. This review is **not** committed to a file — its conclusions go into the PR body.
+Surface findings by severity (Critical / Medium / Low). Fix Critical/Medium before opening the PR (small fixes inline or a follow-up slice). For anything left open, state your recommendation and why it can ship unresolved. This review is **not** committed to a file — its conclusions go into the PR body (Step 5).
 
 ## Step 3 — Dev verification checklist
 
@@ -89,6 +93,8 @@ The ephemeral `.work/` (design.md, slices.yaml) has now been fully promoted (ADR
 ## Principles
 
 - The PR is the system of record — invest in its body, not in committed scratch docs.
-- This pass is cross-slice; trust the per-slice gates for within-slice correctness.
+- This pass is cross-slice; trust the per-slice gates for within-slice correctness — but not for anything that ripples *outside* a slice's oracle. That is this pass's job.
+- **"Tests pass" is not evidence for a path that has no test.** A green gate covers the path it ran, nothing more. Every sweep above is a way that path is narrower than it looks; name the untested path rather than inferring coverage from green.
+- **Disprove in both directions** — disprove a *finding* before you report it (a false Critical is costlier than a missed nit), and disprove the *claims the code makes about itself* before they propagate into the PR body.
 - Tone follows the `critique` skill: substance over compliments, specific and actionable findings.
 
