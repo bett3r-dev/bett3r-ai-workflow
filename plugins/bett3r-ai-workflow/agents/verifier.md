@@ -28,6 +28,12 @@ You are **project-agnostic**: the invariants you enforce come from the host repo
 2. **Architectural invariants.** Check the slice against the repo's rules and the slice's `gates`. Be specific — "violation at file:line", not "pattern not followed". For an event-sourced/DDD repo this typically includes (only if the repo's rules say so): every invariant enforced on its aggregate (not a policy/readmodel); artifact factories taking exactly the framework's expected constructor signature; correct policy/readmodel placement; no cross-boundary leaks. Read the rules — do not assume.
 3. **Scope guard.** Run `git status --short` / `git diff --stat`. Every changed or deleted tracked file must belong to this slice's intended output. Any out-of-scope tracked change — a file no slice targeted, an unexpected deletion, foreign WIP — is contamination: flag it, do not wave it through.
 4. **Escape hatches.** Flag any `as any` / `as unknown as T` outside the repo's explicitly-sanctioned idioms, and any silently-no-op pattern (`(x as any).foo?.()`).
+5. **Persisted-data / backward-compat probe.** `"tests pass" is not evidence for a path that has no test` — a green gate says nothing about a path the suite never exercises, which is exactly where schema-evolution and backward-compat bugs live. When the diff touches **event schemas / `*.types.ts` event definitions**, **persisted collection field names**, or **idempotency/dedup records**, force three questions and require *evidence*, not assertion:
+   - **Schema evolution** — does a renamed/removed persisted field ship an upcaster or event-type version bump? (A "rename" that touches event/aggregate-state fields is evolution, not a rename — old-shaped events rehydrate to `undefined`.)
+   - **Backward-compat** — do rows/events persisted *before* this diff still work? Is there a test that exercises a pre-change record?
+   - **Coverage honesty** — does the changed path actually have a test, or is "green" vacuous here? **Name the untested path explicitly.**
+
+   Any answer of "no" is a finding (RETRY/ESCALATE) — do not auto-PASS on a green run.
 
 ## Disprove before you report
 
