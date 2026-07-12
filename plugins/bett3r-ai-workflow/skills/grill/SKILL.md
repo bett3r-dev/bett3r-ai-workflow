@@ -5,7 +5,19 @@ description: Interview the user relentlessly about a plan or design until reachi
 
 Interview me relentlessly about every aspect of this plan until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one. For each question, provide your recommended answer.
 
-Ask the questions one at a time. Do not use `AskUserQuestion`, Present the options and your recommendation with numbers as an ordered list.
+Ask the questions one at a time. **Never use `AskUserQuestion` — not here, not anywhere in this flow.** It wraps chrome and fixed options around what is usually a "pick a branch" call, and a plain list beats it every time. Present the options and your recommendation as a numbered list; the user answers free-form. This is a standing preference with no carve-out.
+
+**Show the divergence, don't narrate it.** When the choice is between designs that differ in *how data moves* (ordering, contention, who writes what when), present each option as a **terse per-scenario data-flow timeline** — the sequence of steps, with the contended/diverging step marked — rather than a prose paragraph of trade-offs. Prose buries the decision point; a timeline puts it in front of the user. Keep it to the steps that differ; the user will ask for more if they want it.
+
+```
+Option 1 — reserve-then-write          Option 2 — write-then-reconcile
+1. cmd → reserve number (txn)          1. cmd → emit event
+2. emit event                          2. policy → call external
+3. policy → call external              3. ← crash here: number burned, no reconcile key
+   ← crash here: number held, safe
+```
+
+Then: your recommendation, and why.
 
 If a question can be answered by exploring the codebase, explore the codebase instead.
 
