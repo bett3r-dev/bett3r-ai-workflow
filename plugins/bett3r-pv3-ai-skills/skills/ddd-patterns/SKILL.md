@@ -241,6 +241,16 @@ export const SomethingHappened = () => Event({
 });
 ```
 
+### Renaming a persisted field is schema evolution, not a rename
+
+Renaming or removing a field on a **persisted event** schema (`<domain>.types.ts`) — or on the **aggregate state** that rehydrates from those events — requires an **upcaster or event-type version bump, never a bare rename.** PV3 rehydrates aggregates by reading event fields **by name**, so any event persisted under the old name rehydrates to `undefined` for that field (e.g. `accounts["undefined"]`), silently breaking replay and every command that depends on that state (`*_NOT_FOUND`).
+
+- **The tell** — a PR scoped as a "pure rename" that edits `*.types.ts` event schemas, or the `applyEvent` / rehydration field reads on aggregate state. That is a data-store change, not a symbol rename.
+- **The check** — does a pre-existing (old-shaped) event still rehydrate correctly? Is there a test that persists an old-shaped event and replays it? A green *targeted* test run does **not** cover this — the replay path usually has no test.
+- **The safe contrast** — PV3 derives stream / route / subscription identity from the **filename**, not the const, so renaming *code symbols* (const names, type names) is safe and has zero data-store impact. Renaming *persisted fields* is not. Apply the rule to the persisted half only; don't over-apply it to symbol renames.
+
+Cross-ref: this is why `create-schema` / `create-aggregate` renames on existing modules are not mechanical.
+
 ## Event delivery: within-stream strict order, cross-stream at-least-once
 
 **Hard contract — how the outbox delivers events:**
