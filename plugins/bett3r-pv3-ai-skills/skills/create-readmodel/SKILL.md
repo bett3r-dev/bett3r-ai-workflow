@@ -1,6 +1,6 @@
 ---
-
-## description: Scaffold an event-driven read model (projection) for querying. Use when adding query-side projections from events.
+description: Scaffold an event-driven read model (projection) for querying. Use when adding query-side projections from events.
+---
 
 # Skill: Create Readmodel
 
