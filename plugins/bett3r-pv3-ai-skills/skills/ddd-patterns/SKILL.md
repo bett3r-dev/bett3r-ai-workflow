@@ -79,7 +79,7 @@ The client library (`<clientLibraryPackageName>`) is fully typed. Never use `any
 
 ### Transactional Side-Writes
 
-Handlers receive a `transaction` parameter (4th arg: `{ context, transaction }`). Writes via `transaction.getCollection()` are atomic with the event store commit — if events roll back, side-writes roll back.
+Handlers receive a `transaction` parameter (4th arg: `{ context, transaction }`). Writes via `transaction.getCollection()` are atomic with the event store commit — if events roll back, side-writes roll back. **Testing caveat:** this atomicity holds in *production* (`PostgresEventstore`), but the in-memory integration harness wires `DatabaseEventstore`, which *discards* the transaction — so a harness-based test cannot validate rollback or in-transaction read-your-writes semantics, in either direction (see `create-integration-test` → *Harness fidelity*). Verify those against the real server on local infra.
 
 ```typescript
 .withHandler( async( createEvent, state, data, { context, transaction }) => {
