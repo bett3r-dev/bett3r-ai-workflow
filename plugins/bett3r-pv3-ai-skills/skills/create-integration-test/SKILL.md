@@ -51,6 +51,23 @@ Key behaviors to rely on:
 - **Mocked external ports**: `mailer.sendMail` is a `jest.fn()`; `paymentGateway` auto-approves charges and refunds (mocked gateway); `vectorDatabase` / `platformAnalytics` are no-ops. The DB is `MemoryDb` — each harness instance is a fresh, isolated eventstore.
 - **`createIntegrationHarness` never calls `eventstore.start()`** — only `database.start()` / `databaseSessionMode.start()` / `outbox.start()` / `realtimeSession.start()`. A policy's `ports.eventstore.onStarted(async () => { ... })` hook (the idiom cron-registering policies use to register a subscription at boot) therefore **never fires** under this harness, even though the harness boots the owning module's `create(ports)` normally. Don't chase "why isn't my subscription registering" in a harness-based test — it's a harness gap, not a bug in the policy. Verify boot-time `onStarted` registration by running the real server against local dev infra and reading the eventstore/readmodel directly, not via this harness.
 
+## Harness fidelity — where it silently diverges from production
+
+This skill's whole value proposition is *fidelity*: "the real command → aggregate → eventstore → outbox → readmodel pipeline," not mocks. But **the harness is not production**, and on at least one correctness-relevant adapter it diverges *silently* — so a suite written with it can produce both false negatives **and false positives** about transactional, ordering, and delivery semantics, and the person writing the test has no reason to suspect it.
+
+**The known divergence — the eventstore:**
+
+- **Production** wires `PostgresEventstore` — multi-stream reads run on the *transaction* connection, so a command reads its own and a prior command's writes within one transaction (read-your-writes).
+- **The harness** wires `DatabaseEventstore` — it *accepts* the `_transaction` and **discards it**. And it does so **unconditionally, even in the harness's "Postgres mode,"** which swaps only the *database*, never the *eventstore*.
+
+Consequence (a real incident): an integration test observed a genuine stale read — a spurious event carrying `previousStock: 0` where a prior command *in the same transaction* had written `8` — that **does not exist in production**. A production-code filter was written and shipped to satisfy the test. The test "proved" a bug in code production never runs, and it arrived with a testcontainer reproduction that *defeated* scrutiny ("observed, not inferred" — but observed in the wrong environment).
+
+**Rule.** An assertion about **in-transaction / ordering / delivery** semantics — read-your-writes across commands, transactional side-writes, rollback — is valid **only if the adapter under test is production's.** Before writing one, **diff the harness's port wiring against the composition root** (`setupPorts.ts` / `setup*Ports.ts`) and state plainly which adapters match. If the eventstore (or whatever adapter the assertion depends on) differs, this harness *cannot* decide the question — verify it against the real server on local dev infra instead.
+
+**The MemoryDb trap.** `MemoryDb`'s noop pool makes pooled and transactional reads **indistinguishable** — so a MemoryDb-backed test cannot reproduce an in-transaction defect *in either direction*. Never use it for a test whose subject *is* transactional behavior.
+
+> Best of all, make this drift **checkable**: a host-repo check that fails when the harness's wiring diverges from the composition root *undeclared* turns a silent trap into a build error — a defect whose signature is *absence* needs a gate, not a reader who remembers to look. Recommend it where the harness lives.
+
 ## Parallelism & isolation
 
 These suites parallelize safely **across files** — that's why the parallel integration script runs `--maxWorkers=4`.
@@ -251,4 +268,5 @@ Prefer `--runInBand` while developing (clearer logs, no cross-worker DB surprise
 - [ ] One harness per `describe`, set up in `beforeAll`, `await h.cleanup()` in `afterAll`
 - [ ] Commands sent as `{ id, body }`; outbox-driven outcomes asserted via `h.waitFor`
 - [ ] Happy path + at least one cross-component flow (policy/choreography/callback) covered
+- [ ] **No in-transaction / ordering / delivery assertion unless the adapter under test matches production** — harness wiring diffed against the composition root; note in particular that the eventstore is `DatabaseEventstore` here vs. `PostgresEventstore` in production (see *Harness fidelity*)
 - [ ] Passes: `node "$(yarn bin jest)" --testMatch='**/*.integration.test.ts' --testTimeout=30000 --no-coverage --runInBand --testPathPattern="<domain>"`
