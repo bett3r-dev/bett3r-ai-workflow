@@ -27,7 +27,7 @@ For each slice, in order, in a **fresh agent context**:
 
 1. **Implement** — dispatch the `executor` agent with: the slice (`behavior`, `oracle`, `gates`, intended files), the ticket, and the host project directory. The executor reads the repo's own rules/skills. Instruct it to work **RED → GREEN**: write the oracle test first, **run it and confirm it FAILS** for the right reason (the behavior is genuinely absent — not a typo, missing import, or compile error), *then* implement the minimal code to make it pass. It must report the RED evidence (the failure it saw before implementing).
 
-2. **Mechanical gate** — dispatch the `test-runner` agent to run the slice's **oracle test**. It must pass. Three ways this gate fails, all surfaced not swallowed:
+2. **Mechanical gate** — dispatch the `test-runner` agent to run the slice's **oracle test**. It must pass — where "pass" is read from jest's own summary line, **never from a piped command's exit code** (`… | tail` reports `tail`'s status, not jest's, so a red run surfaces as exit 0). A run with no parsed `Tests:` summary is **inconclusive** — treat it as non-runnable, not a pass. Three ways this gate fails, all surfaced not swallowed:
    - **non-runnable** oracle (won't compile/collect) is not a pass;
    - **always-green** oracle — the executor reported no credible RED before implementing (or claims it was red but the failure reads as a missing import / wrong path rather than absent behavior). A test that never failed proves nothing; treat as a fail and re-dispatch the executor to fix the oracle, not the code;
    - **red after implementing** — the obvious fail.
