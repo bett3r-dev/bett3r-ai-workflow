@@ -62,8 +62,11 @@ skill's Step 1 — so that skill works in any repo without a host-provided scrip
 
 ## Install
 
-```
-claude --plugin-dir /Users/tomasruiz/Documents/development/bett3r-pv3-ai-skills
-```
+Both plugins ship from the same marketplace repo (`bett3r-ai-workflow`):
 
-(Or add it to a marketplace once `repository` is set in `.claude-plugin/plugin.json`.)
+```bash
+claude plugin marketplace add <this-repo-url>
+claude plugin install bett3r-pv3-ai-skills
+# or for local dev, from your clone of this repo:
+claude --plugin-dir ./plugins/bett3r-pv3-ai-skills
+```

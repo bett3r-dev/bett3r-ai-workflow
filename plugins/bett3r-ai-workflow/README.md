@@ -45,6 +45,6 @@ A PV3 repo installs this **plus** `bett3r-pv3-ai-skills`; a non-PV3 repo install
 ```bash
 claude plugin marketplace add <this-repo-url>
 claude plugin install bett3r-ai-workflow
-# or for local dev:
-claude --plugin-dir /Users/tomasruiz/Documents/development/bett3r-ai-workflow
+# or for local dev, from your clone of this repo:
+claude --plugin-dir ./plugins/bett3r-ai-workflow
 ```
