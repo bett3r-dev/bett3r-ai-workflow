@@ -15,6 +15,11 @@ The thing to design (a ticket id, a feature description, or "the active work").
 
 - Read the ticket / context. Read the relevant bounded context's `CONTEXT.md` (locate it via `.esas.config.json` `domainEventsPath`, per the `domain-modeling` skill) so you speak the project's ubiquitous language from the first question.
 - Explore the codebase for anything the design depends on — **answer from the code, not speculation**, wherever a question can be settled that way.
+- **Verify the ticket against the code before trusting it — stale tickets are the norm, not the exception.** Building from the ticket text alone routinely produces the wrong change: re-implementing something that already shipped, or implementing something whose premise no longer holds. (In one 4-ticket run, three descriptions were stale — a "missing" flag had shipped months earlier, an already-fixed error, an event schema already live built-to-contract by its consumer — and a fourth's stated premise was simply false.) This is minutes of work and it is exactly what the design-first gate is for, so make it explicit:
+  1. **Grep for the ticket's central symbol** — the flag, event, or command it names. Does it already exist?
+  2. **`git log -S <symbol>`** — has it been shipped? Reverted? Had its tests deleted?
+  3. **Check the ticket's stated *premise*, not just its ask** — if it says "this unblocks X," confirm X is blocked *only* by this, and that something actually populates what X depends on.
+  4. Where the ticket and the code disagree, **the code wins** — and the design doc says so explicitly, so the reader knows the ticket text was stale and what the real change is.
 
 ## Step 2 — Grill (using the `grill` + `domain-modeling` skills)
 
