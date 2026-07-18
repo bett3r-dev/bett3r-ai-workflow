@@ -1,5 +1,5 @@
 ---
-description: Fleet orchestrator — drive N work units (tickets) through the full flow in parallel, one git worktree each. Resumable, decision-logged into PRs, draft PRs only.
+description: Fleet orchestrator — drive N work units (tickets) through the full flow in parallel, one git worktree each. Resumable, decision-logged into PRs, opened ready for review.
 ---
 
 # /start-multi — parallel delivery across worktrees
@@ -22,7 +22,7 @@ Work-unit ids (+ optional descriptions), then flags.
 | `--keep-worktrees` · `--fresh` · `--run-id <id>` | Teardown / resume-state controls. |
 
 ## Per-unit pipeline
-`start → design → plan → build → verify-build` (the standard flow, unattended). Each unit ends at a pushed **draft** PR whose body is the record. When a unit's ticket carries a `design-multi:resolved:v1` block (see step 0), its `design` step still runs — but the answers are already in the ticket, so it acts as a **verification second pass** that escalates only on code drift (step 4).
+`start → design → plan → build → verify-build` (the standard flow, unattended). Each unit ends at a pushed **ready-for-review** PR whose body is the record. When a unit's ticket carries a `design-multi:resolved:v1` block (see step 0), its `design` step still runs — but the answers are already in the ticket, so it acts as a **verification second pass** that escalates only on code drift (step 4).
 
 ## Steps
 
@@ -36,7 +36,7 @@ Work-unit ids (+ optional descriptions), then flags.
 
 **4 — Collect & resume.** Aggregate per-unit state into `run.yaml`. Resume any `in_progress` (dead agent) or escalated unit from its next incomplete step — the flow is idempotent: slices already `passes: true` and committed are skipped. **Batch escalations** and present them together as a numbered list — recommendation first, one line of *why* each escalated. Do **not** use `AskUserQuestion`; the user answers free-form. A **design-heavy** unit stops after `design` — surface its `.work/design.md` for review before it proceeds to `plan`. A **design-resolved** unit is not gated: it runs `/design` **as normal**, but because the ticket already carries the resolved decisions, the grill **verifies rather than re-derives** (see `/design`) and flows straight to `plan` with nothing to ask. It escalates only if the code has **drifted** enough to re-open a fork the resolved block doesn't answer — batched like any other escalation. The resolved block turns the ordinary design step into a cheap unattended **second pass**; there's no separate mode to maintain here.
 
-**5 — Commit & PR.** Per passed unit, ensure the per-slice commits are in place; then (unless `--no-pr`) run `verify-build` to open the **draft** PR — `--base <parent-branch>` if stacked, else the default branch. Record `prUrl`. A stacked child wave may begin once its parent is committed.
+**5 — Commit & PR.** Per passed unit, ensure the per-slice commits are in place; then (unless `--no-pr`) run `verify-build` to open the PR **ready for review** — `--base <parent-branch>` if stacked, else the default branch. Record `prUrl`. A stacked child wave may begin once its parent is committed.
 
 **6 — Rescue learnings (before teardown).** Aggregate each unit's worktree buffer `.work/learnings.md` into the run dir (`<run>/learnings.md`), tagged by unit; fold in any flow-friction you hit while dispatching / resuming. This **must precede teardown** — the buffers live in the worktrees and step 7 deletes them. (This subsumes `verify-build`'s per-unit "run `/capture-learnings`" nudge, which an unattended agent can't action; the fleet defers it here.)
 
@@ -69,7 +69,7 @@ Orchestrator is the **sole writer** of `run.yaml`; agents write only `units/<id>
 - **Mind the two axes.** Each unit's `build` may itself parallelize independent slices — the across-unit and within-unit axes **multiply**, so keep `--max-parallel` conservative and respect the host repo's sandbox/disk limits.
 - **Never clobber a dirty worktree; tear down only what this run created.**
 - **Resumable** via run.yaml + idempotent steps + per-slice commits.
-- **Draft PRs; push is the last step; nothing merged; the tracker is never transitioned.**
+- **Ready-for-review PRs; push is the last step; nothing merged; the tracker is never transitioned.**
 - **No silent decisions** — autonomous and escalated alike ride into the PR body / ADRs with their rejected options.
 - **Resolved designs make the grill a second pass.** A ticket carrying a `design-multi:resolved:v1` block (from `/design-multi`) runs `design` as normal, but the answers are already present — the grill verifies rather than asks and flows through; only code-drift that re-opens an unanswered fork escalates it. This seam makes a design-multi → start-multi handoff unattended without a special mode.
 - **Learnings survive teardown.** Unit agents `record` flow-frictions to their buffer; the orchestrator **rescues those buffers before teardown** and runs one batched `/capture-learnings` at the end. Per-unit capture would race on issue-filing and die with the worktree — the fleet is the richest learning source, so it can't be the one flow that drops them.
