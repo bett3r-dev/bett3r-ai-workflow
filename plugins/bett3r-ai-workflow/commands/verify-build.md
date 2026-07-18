@@ -72,7 +72,7 @@ Produce a single **developer verification checklist**: the things a human should
 
 ## Step 5 — Open the PR (the system of record)
 
-Push the branch and open the PR (compose the repo's `create-pr` flow if it has one; otherwise `gh pr create --base <resolved-base>` — pass the base resolved in Step 2, not a hardcoded `master`). **Verify the created PR's base after the fact:** `gh pr create` succeeds silently even when it targets the wrong ref, so confirm the PR's `changed_files`/`commits` roughly match the local `git log <base>..HEAD` count/diffstat. If they don't, retarget with `gh pr edit --base <true-base>`. The PR **body is the record**:
+Push the branch and open the PR **ready for review, not a draft** (compose the repo's `create-pr` flow if it has one, overriding any draft default it carries; otherwise `gh pr create --base <resolved-base>`, which opens a review-ready PR — do **not** pass `--draft`, and pass the base resolved in Step 2, not a hardcoded `master`). **Verify the created PR's base after the fact:** `gh pr create` succeeds silently even when it targets the wrong ref, so confirm the PR's `changed_files`/`commits` roughly match the local `git log <base>..HEAD` count/diffstat. If they don't, retarget with `gh pr edit --base <true-base>`. The PR **body is the record**:
 
 ```
 ## <TICKET-ID> — <title>
