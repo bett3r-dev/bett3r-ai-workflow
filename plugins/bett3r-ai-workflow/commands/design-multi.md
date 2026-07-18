@@ -38,6 +38,8 @@ Ticket ids (+ optional descriptions), then flags.
 
   **Single-writer rule:** each agent writes **only** its own `units/<id>.*` files; only you write `run.yaml`. An agent that fails unrecoverably is marked `failed`; the others continue.
 
+  **Learnings, not issues:** an agent that hits friction in the flow itself (a probe that misfired, a skill that misled, a step that fought the grain) appends the note to its own `<run>/units/<id>.learnings.md` — **buffer only**, never `/capture-learnings` inside an agent (it files GitHub issues one-confirm-each and dedups against the backlog; parallel agents racing it duplicate). The orchestrator captures once (step 6).
+
 **3 — Collect.** Aggregate per-unit state into `run.yaml`. Resume any `in_progress` (dead agent) unit from its next incomplete step — Phase A is idempotent; a unit already at `critiqued` with a draft on disk is skipped.
 
 **4 — Phase B: the one batched interview.** Gather **every open fork across all tickets** into a single numbered list, grouped by ticket, **recommendation first**, one line of *why* each. Do **not** use `AskUserQuestion` — the user answers free-form (standing rule, per `grill`). When a fork is between designs that differ in *how data moves*, show the **per-scenario data-flow timeline**, not prose. This one pass also does what per-ticket `/design` can't: **cross-ticket coherence** — unify overlapping glossary terms, flag conflicting decisions across tickets, and surface duplicated scope. Fold answers back into each draft; if an answer opens a new fork, resolve it here — but keep it a focused sitting, not a fresh grill.
@@ -54,7 +56,7 @@ Ticket ids (+ optional descriptions), then flags.
     The `:v1` is the **contract version** shared with `/start-multi`. Bump it (`:v2`, …) only if the block's *shape* changes, so an older `/start-multi` refuses to misparse a newer block instead of guessing.
   - **Apply the glossary/ADR deltas once, by you** (single writer — parallel agents never touch the shared `CONTEXT.md`). These are **durable and committed**, exactly as `/design` treats them today. The full design draft stays ephemeral in the run dir.
 
-**6 — Report.** Per ticket → forks auto-resolved / forks you resolved → the design written to the description → glossary/ADR deltas committed → the `BASE` it's grounded against. Then the handoff:
+**6 — Report & capture.** Per ticket → forks auto-resolved / forks you resolved → the design written to the description → glossary/ADR deltas committed → the `BASE` it's grounded against. Then aggregate the per-unit `<run>/units/*.learnings.md` (plus any flow-friction you hit in Phase B/C) and run **`/capture-learnings` once**, deduped across tickets — the parallel design pass is a strong source of grill / critique / flow learnings, and one batched capture keeps them from dying with the ephemeral run dir. Then the handoff:
 
 > Designs resolved and written to the tickets. Run `/start-multi <ids>` — it detects the resolved designs and runs `design` as a verification **second pass**, not a fresh grill, so the fleet stays unattended unless the code has drifted.
 
@@ -83,3 +85,4 @@ Orchestrator is the **sole writer** of `run.yaml`; agents write only `units/<id>
 - **No silent decisions** — auto-resolved and human-resolved alike ride into the ticket with rejected options and evidence.
 - **Glossary/ADR are durable and committed by the single writer; the design draft is ephemeral;** the resolved design in the ticket is what start-multi consumes.
 - **Confirm before writing to a ticket** — it's outward-facing and (for description appends) touches a shared artifact.
+- **Capture learnings once, at the end.** Agents `record` flow-frictions to their own buffer; the orchestrator runs a single batched `/capture-learnings` over the aggregated buffers — never per-agent (it races on issue-filing), and never left to die with the ephemeral run dir.
