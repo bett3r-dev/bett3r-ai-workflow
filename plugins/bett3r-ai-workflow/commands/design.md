@@ -21,6 +21,14 @@ The thing to design (a ticket id, a feature description, or "the active work").
   3. **Check the ticket's stated *premise*, not just its ask** — if it says "this unblocks X," confirm X is blocked *only* by this, and that something actually populates what X depends on.
   4. Where the ticket and the code disagree, **the code wins** — and the design doc says so explicitly, so the reader knows the ticket text was stale and what the real change is.
 
+## Step 1.5 — If the ticket carries a resolved-design block (second pass)
+
+If the ticket has a `<!-- design-multi:resolved:v1 ... -->` block, its design was already resolved in an earlier `/design-multi` interview. **This run is a verification second pass, not a fresh grill.** Those are prior decisions, each with its rejected options and the evidence that settled it — treat them as **authoritative pre-answers**, the same way you treat the code:
+
+- **Verify, don't re-derive.** For each resolved decision, confirm it still holds against the *current* code (the same step-1 protocol). Only **re-open** a fork the code now **contradicts** — e.g. the block was grounded against an older base and something it assumed has since shipped or changed.
+- On a ticket whose code hasn't drifted, the grill has **nothing to ask** and flows straight to Step 2.5 / the doc. This is exactly what lets `/start-multi` run such a ticket unattended.
+- Where a resolved decision no longer holds, surface it as a normal fork (Step 2). Running standalone, you ask the user; under `/start-multi`, that unit escalates.
+
 ## Step 2 — Grill (using the `grill` + `domain-modeling` skills)
 
 Run the interview: walk every branch of the decision tree, one question at a time, each with your recommended answer; resolve dependencies between decisions before moving on. While you do:
