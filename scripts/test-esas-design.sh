@@ -590,8 +590,9 @@ assert_md "$SKILL_MD" 'it points at the sibling skill for the hook line' 'esas-p
 # Scope guard, asserted rather than trusted: `comment` and `resolve` are slice
 # 6 and are not committed. Documenting a tool that does not exist teaches the
 # model to call it and read the failure as its own mistake.
-refute_md "$SKILL_MD" 'it does not document the unshipped comment tool' '`comment`'
-refute_md "$SKILL_MD" 'it does not document the unshipped resolve tool' '`resolve`'
+assert_md "$SKILL_MD" 'it documents the comment tool, which now ships' '`comment`'
+assert_md "$SKILL_MD" 'it documents the resolve tool, which now ships' '`resolve`'
+assert_md "$SKILL_MD" 'it steers anchors away from couplings that draw no line' 'handled-by'
 refute_md "$COMMAND_MD" 'the command does not promise comment/resolve either' '`comment`'
 
 printf '\n'

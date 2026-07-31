@@ -118,6 +118,11 @@ of the graph. Neither of them is "read the whole graph", which is the thing to
 keep not doing.
 
 The tools that exist today are `propose`, `modify`, `remove`, `reclassify`,
-`get_flow`, `get_design`, `read_changes`, `mark_synced` and `status`. If a
-gesture seems to need something not on that list, say so instead of improvising
-a file edit around it.
+`comment`, `resolve`, `get_flow`, `get_design`, `read_changes`, `mark_synced`
+and `status`. If a gesture seems to need something not on that list, say so
+instead of improvising a file edit around it.
+
+`comment` and `resolve` are the grill on canvas: an open question lands on the
+sticky it concerns, and `resolved: false` is the shared to-decide list. Prefer a
+node anchor — the spine couplings (`handled-by`, `produces`, `issues`) usually
+draw no line, so a comment anchored there has nowhere to show.

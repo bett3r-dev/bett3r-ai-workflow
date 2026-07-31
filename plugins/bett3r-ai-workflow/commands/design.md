@@ -98,19 +98,23 @@ When the preflight says `mcp: registered`, call the `status` tool. It answers in
 
 - **It returns `{repoPath, gitSha, lastSeq, cursorSeq, pendingByAuthor, lockState, warnings}`** — board mode is live. Note `lastSeq` for the board comparison, and read `warnings` out loud if there are any: they mean another session is designing in this checkout, or that a writer is on a different build than yours.
 - **There is no such tool in this session** — two causes, and they look identical from here. Either the entry was added by an earlier run and the session was never restarted: do the restart step below, and do **not** write the entry again. Or the server failed to spawn, in which case restarting changes nothing and the second attempt is the diagnosis: **still missing after a restart ⇒ the server failed to spawn** — check the entry's path resolves, and that the esas checkout has its dependencies installed (`bin/esas-mcp.mjs` runs the sources through `tsx`, so a fresh clone with no install dies at boot). Claude Code logs the spawn failure; read it rather than restarting a third time.
-- **It returns `ESAS_DIR_MISSING`** — the server is running, but against a different checkout than the one you are in. Fix `ESAS_REPO_PATH` in the entry, then restart.
+- **It returns `ESAS_DIR_MISSING`** — the server is running and answering about *this* checkout, which simply has no `.esas/`. In a fleet worktree that is **the correct answer, not a fault to fix** (see the skill's main-checkout rule). In the main checkout it means the extractor has not run here yet: `yarn esas`, then re-check. Do not add `ESAS_REPO_PATH` to point it elsewhere — that is how a worktree ends up writing into another checkout's design layer.
 
 When the preflight says `mcp: unregistered` or `mcp: absent` — and the `mcp__esas__*` tools are not already in this session from a user-scoped registration — add the entry. **Add the one key to `mcpServers`** with an edit, not a read-modify-write of the whole file: rewriting it reformats every other server and turns a one-key diff into a whole-file one.
 
 ```jsonc
 "esas": {
+  "type": "stdio",
   "command": "node",
-  "args": [ "<abs path to the esas checkout>/packages/esas-mcp/bin/esas-mcp.mjs" ],
-  "env": { "ESAS_REPO_PATH": "<abs path to this repo>" }
+  "args": [ "<abs path to the esas checkout>/packages/esas-mcp/bin/esas-mcp.mjs" ]
 }
 ```
 
-Resolve the esas checkout from a link the host repo already has (teselly's `package.json` carries `"sticky-notes-board": "link:../esas/packages/sticky-notes-board"`, so it is `../esas`), and make it absolute. If nothing links esas, **ask** — do not guess a path. `ESAS_REPO_PATH` is optional (the server otherwise designs against its working directory, which is the repo root), but set it: it turns a wrong target into a message instead of a silent write to the wrong `.esas`. `.mcp.json` is git-tracked, so this dirties the working tree — say so, and let the user decide whether it ships with the PR.
+Resolve the esas checkout from a link the host repo already has (teselly's `package.json` carries `"sticky-notes-board": "link:../esas/packages/sticky-notes-board"`, so it is `../esas`), and make it absolute. If nothing links esas, **ask** — do not guess a path.
+
+**Do not set `ESAS_REPO_PATH`.** The server designs against its working directory, and Claude Code spawns a project server with the working directory set to the project root — including inside a worktree, where that is the worktree itself. `.mcp.json` is git-tracked, so the entry is byte-identical in every worktree of a fleet: pinning an absolute path there would make all of them design against the one checkout it names, which is exactly the split layer the main-checkout rule exists to prevent. Unpinned, a worktree answers `ESAS_DIR_MISSING`, which is the right answer there.
+
+`.mcp.json` is git-tracked, so this dirties the working tree — say so, and let the user decide whether it ships with the PR.
 
 Then **stop the command** with this, verbatim:
 
