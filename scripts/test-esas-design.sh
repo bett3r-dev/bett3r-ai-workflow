@@ -587,9 +587,10 @@ assert_md "$SKILL_MD" 'a worktree answers ESAS_DIR_MISSING and that is correct' 
 assert_md "$SKILL_MD" 'the refused batch is retried whole, never probed item by item' 'never item by item'
 assert_md "$SKILL_MD" 'it points at the sibling skill for the hook line' 'esas-pending'
 
-# Scope guard, asserted rather than trusted: `comment` and `resolve` are slice
-# 6 and are not committed. Documenting a tool that does not exist teaches the
-# model to call it and read the failure as its own mistake.
+# Scope guard, asserted rather than trusted: `comment` and `resolve` ship as
+# of esas PR #1 (slice 6), so the skill must document them — an undocumented
+# tool is one the model never reaches for. The command still names no tools:
+# tool inventory is the skill's job, and the command defers to it.
 assert_md "$SKILL_MD" 'it documents the comment tool, which now ships' '`comment`'
 assert_md "$SKILL_MD" 'it documents the resolve tool, which now ships' '`resolve`'
 assert_md "$SKILL_MD" 'it steers anchors away from couplings that draw no line' 'handled-by'
