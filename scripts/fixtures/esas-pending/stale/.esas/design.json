@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "propose": {
+    "nodes": [
+      {
+        "type": "command",
+        "label": "New Command A",
+        "subdomain": "sales",
+        "author": "human",
+        "ts": "2026-07-31T04:10:29.492Z",
+        "note": "board edit: New Command A"
+      },
+      {
+        "type": "command",
+        "label": "New Command B",
+        "subdomain": "sales",
+        "author": "human",
+        "ts": "2026-07-31T04:10:29.492Z",
+        "note": "board edit: New Command B"
+      }
+    ],
+    "edges": []
+  }
+}

@@ -17,3 +17,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate plugin artifacts (frontmatter + manifests)
         run: python3 scripts/validate-plugins.py
+      # The shipped UserPromptSubmit hook runs on every prompt in every repo
+      # where the plugin is enabled, and a non-zero exit blocks the prompt.
+      # Run it under dash too — `sh` is dash on Debian/Ubuntu, bash on macOS.
+      - name: Test shipped hooks (esas-pending)
+        run: |
+          sh scripts/test-hooks.sh
+          HOOK_SH=dash sh scripts/test-hooks.sh
+          HOOK_SH=bash sh scripts/test-hooks.sh

@@ -17,6 +17,8 @@ A Claude Code plugin that encodes a **vertical-slice, dual-gated development flo
 Utility: **`/bett3r-ai-workflow:commit`** — smart, logically-grouped commits for ad-hoc work outside the slice loop (`/build` commits each slice itself).
 | Multi | `/bett3r-ai-workflow:start-multi` | Fleet orchestrator: drive N work units through the flow in parallel, one git worktree each. Resumable; PRs opened ready for review. |
 
+Hook: **`UserPromptSubmit` → `esas: N pending (seq A→B)`** (`hooks/esas-pending.sh`). While the user has unsynced edits on the ESAS design board, the count goes in front of the next prompt so Claude knows its picture is stale — telemetry, never a trigger. Silent and free in every repo without a `.esas/` directory, and it always exits 0, because a `UserPromptSubmit` hook that doesn't would erase the user's prompt. The standing rule for reacting to it (never unsolicited) is the **`esas-pending`** skill. See `hooks/README.md`.
+
 Plus skills: **`grill`** (the relentless design interview), **`critique`** (the divergent counterpart — a one-shot adversarial multi-lens stress-test of a resolved design; wired into `/design` and `/verify-build`), **`domain-modeling`** (sharpen the ubiquitous language + ADRs; glossaries live in the host repo's domain package), **`seed-context`** (bootstrap a whole bounded context's glossary from existing code — code-first, grill the gaps; refers to `domain-modeling`), **`vertical-slicing`** (the slicing methodology), and **`record`** (instant frictionless capture of a thought/learning to `.work/learnings.md`, drained by `capture-learnings`). And the generic agent roles: **`executor`**, **`verifier`**, **`test-runner`**.
 
 ## Propagation (capture → evolve)
