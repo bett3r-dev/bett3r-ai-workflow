@@ -209,8 +209,7 @@ END {
 # The balance check closes that window, because a prefix of a JSON object can
 # never be balanced. What it does *not* do is validate JSON grammar — a
 # balanced document with a trailing comma parses here and not in the store.
-# That is a hand-edited file rather than a torn write, and the seq-staleness
-# rule below catches the version of it that matters.
+# That is a hand-edited file rather than a torn write.
 cursor_seq=0
 cursor_offset=0
 if [ -f "$cursor" ]; then

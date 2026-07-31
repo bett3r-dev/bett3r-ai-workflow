@@ -1,0 +1,8 @@
+{
+  "name": "host-repo",
+  "private": true,
+  "scripts": {
+    "esas": "pv3 g esas",
+    "esas:board": "node node_modules/sticky-notes-board/bin/esas-board.mjs"
+  }
+}

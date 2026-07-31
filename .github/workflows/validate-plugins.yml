@@ -25,3 +25,11 @@ jobs:
           sh scripts/test-hooks.sh
           HOOK_SH=dash sh scripts/test-hooks.sh
           HOOK_SH=bash sh scripts/test-hooks.sh
+      # /design's board-mode preflight is a shell block inside the command's
+      # markdown, so it has no compiler and no import to break loudly. This
+      # extracts and runs the shipped block against fixture host repos.
+      - name: Test /design board mode (esas-design)
+        run: |
+          sh scripts/test-esas-design.sh
+          PREFLIGHT_SH=dash sh scripts/test-esas-design.sh
+          PREFLIGHT_SH=bash sh scripts/test-esas-design.sh

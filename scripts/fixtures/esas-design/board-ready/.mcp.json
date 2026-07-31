@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "atlassian": {
+      "type": "http",
+      "url": "https://mcp.atlassian.com/v1/mcp"
+    },
+    "esas": {
+      "command": "node",
+      "args": [
+        "/Users/dev/development/esas/packages/esas-mcp/bin/esas-mcp.mjs"
+      ],
+      "env": {
+        "ESAS_REPO_PATH": "/Users/dev/development/host-repo"
+      }
+    }
+  }
+}

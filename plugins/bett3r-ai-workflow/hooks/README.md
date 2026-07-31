@@ -55,9 +55,9 @@ repo** where the plugin is enabled (there is no per-directory matcher):
   noise floor** — the whole cost is the process spawn that every command hook
   pays, and the hook's own work does not register.
 
-It also degrades silently rather than loudly: with `wc`, `sed`, `awk` and `head`
-all absent (`PATH=/nonexistent`) it prints nothing, to either stream, and exits
-0.
+It also degrades silently rather than loudly: with `wc` and `awk` — the only two
+tools it still needs — absent (`PATH=/nonexistent`) it prints nothing, to
+either stream, and exits 0.
 
 The declared `timeout` is 5 s. Scanning cost is linear in feed size, on the feed
 the cursor has *not* bounded:
