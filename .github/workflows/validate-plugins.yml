@@ -17,3 +17,19 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate plugin artifacts (frontmatter + manifests)
         run: python3 scripts/validate-plugins.py
+      # The shipped UserPromptSubmit hook runs on every prompt in every repo
+      # where the plugin is enabled, and a non-zero exit blocks the prompt.
+      # Run it under dash too — `sh` is dash on Debian/Ubuntu, bash on macOS.
+      - name: Test shipped hooks (esas-pending)
+        run: |
+          sh scripts/test-hooks.sh
+          HOOK_SH=dash sh scripts/test-hooks.sh
+          HOOK_SH=bash sh scripts/test-hooks.sh
+      # /design's board-mode preflight is a shell block inside the command's
+      # markdown, so it has no compiler and no import to break loudly. This
+      # extracts and runs the shipped block against fixture host repos.
+      - name: Test /design board mode (esas-design)
+        run: |
+          sh scripts/test-esas-design.sh
+          PREFLIGHT_SH=dash sh scripts/test-esas-design.sh
+          PREFLIGHT_SH=bash sh scripts/test-esas-design.sh

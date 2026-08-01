@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "propose": {
+    "nodes": [
+      {
+        "type": "command",
+        "label": "Place Order",
+        "subdomain": "sales",
+        "author": "human",
+        "ts": "2026-07-31T04:10:29.504Z",
+        "note": "board edit: Place Order"
+      }
+    ],
+    "edges": []
+  }
+}

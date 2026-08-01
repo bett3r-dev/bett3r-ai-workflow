@@ -1,0 +1,17 @@
+{
+  "description": "ESAS design-board telemetry: puts the pending-edit count in front of a prompt while the user has unsynced board changes. Inert in every repo without a .esas/ directory.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/esas-pending.sh"],
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

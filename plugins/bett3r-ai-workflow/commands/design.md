@@ -11,6 +11,151 @@ The thing to design (a ticket id, a feature description, or "the active work").
 
 ---
 
+## Step 0 — Board mode (skip unless this repo has a `.esas/`)
+
+Where ESAS is set up, this interview has a second surface: the decisions land in `.work/design.md` as always, and the **structure** lands on a live board the user watches on another screen while you talk. Board mode is off by default and costs one command to rule out.
+
+Run the preflight from the repo root. It reports facts and decides nothing:
+
+```sh
+# --- esas preflight ---
+# Facts about this checkout's design layer. Decides nothing; the table below
+# does that. Every `key: value` line it can print has a row there, and
+# scripts/test-esas-design.sh asserts both halves of that.
+#
+# No `exit` anywhere and every variable prefixed: this runs in whatever shell
+# the tool call lands in, and it has no business ending it or renaming
+# somebody's `path`.
+esas_port=${ESAS_BOARD_PORT:-3727}
+
+if [ ! -d .esas ]; then
+  printf 'esas_dir: absent\n'
+else
+  printf 'esas_dir: present\n'
+  if [ -f .esas/graph.json ];  then printf 'graph: present\n';  else printf 'graph: absent\n';  fi
+  if [ -f .esas/design.json ]; then printf 'design: present\n'; else printf 'design: absent\n'; fi
+  if [ -f .esas/ops.jsonl ];   then printf 'ops: present\n';    else printf 'ops: absent\n';    fi
+
+  if [ ! -f .mcp.json ]; then
+    printf 'mcp: absent\n'
+  else
+    esas_registered=no
+    while IFS= read -r esas_line || [ -n "$esas_line" ]; do
+      case $esas_line in *esas-mcp/bin/esas-mcp.mjs*) esas_registered=yes ;; esac
+    done < .mcp.json
+    if [ "$esas_registered" = yes ]
+      then printf 'mcp: registered\n'
+      else printf 'mcp: unregistered\n'
+    fi
+  fi
+
+  if ! command -v curl >/dev/null 2>&1; then
+    printf 'board: unknown\n'
+  else
+    esas_body=$( curl -fs --max-time 2 "http://127.0.0.1:$esas_port/api/esas/status" 2>/dev/null )
+    # Which checkout the board serves is not a question about how it spells the
+    # path or serialises the answer, so both spellings of this directory are
+    # tried (the board resolves symlinks, a shell does not), spaced and
+    # compact. A false `other-repo` sends the user hunting for a rival board
+    # that is not there, which is worse than the ambiguity it would report.
+    esas_serving=no
+    for esas_path in "$PWD" "$( pwd -P )"; do
+      case $esas_body in
+        *"\"repoPath\":\"$esas_path\""*|*"\"repoPath\": \"$esas_path\""*) esas_serving=yes ;;
+      esac
+    done
+    if [ -z "$esas_body" ]; then
+      printf 'board: off\n'
+    elif [ "$esas_serving" = yes ]; then
+      printf 'board: serving\n';    printf '  status: %s\n' "$esas_body"
+    else
+      printf 'board: other-repo\n'; printf '  status: %s\n' "$esas_body"
+    fi
+  fi
+fi
+# --- end esas preflight ---
+```
+
+### What each verdict means
+
+| report | what it means | what you do |
+|---|---|---|
+| `esas_dir: absent` | No design layer here — a fleet worktree, or a repo the extractor has never run in. | **Board mode off.** Run Steps 1–4 exactly as written. Never create `.esas/` to switch it on; the directory is the marker of "this checkout designs". |
+| `esas_dir: present`, `graph: absent` | `.esas/` exists but the extractor has not produced a graph. | Board mode off until it has. Ask the user to run the repo's extractor (`yarn esas` in teselly), then re-run the preflight. Proposals against a graph that isn't there have nothing to attach to. |
+| `esas_dir: present`, `graph: present` | Reality is on disk. | Board mode is possible — continue down this table. |
+| `design: absent`, `ops: absent` | No design session has started here. | The normal, clean start. See *Seeding* below — there is nothing to create. |
+| `design: present` or `ops: present` | A design layer is already on disk. | It is either the unit of work you are resuming or the residue of one that shipped. **Ask whose session it is** — see *Seeding*. |
+| `mcp: registered` | The entry is in `.mcp.json`. That is not the same as the server running. | Call the `status` tool now — see *Registering* for the three ways this answers. |
+| `mcp: unregistered` / `mcp: absent` | This repo's `.mcp.json` does not register the server. That is all the preflight can see — it reads the project file only. | Write the entry, then **stop** — see *Registering* — **unless the `mcp__esas__*` tools are already available in this session**, which means it is registered elsewhere (a user-scoped `~/.claude.json`). Then skip the write: it would cost a needless restart and put a duplicate entry in a git-tracked file. |
+| `board: off` | Nothing is serving this repo on :3727. | The normal state before the user launches it. Print the launch line and **carry on** — see *The board*. |
+| `board: serving` | A board is up on this checkout. | Compare its `lastSeq` with the `status` tool's. Same number ⇒ the link is live. |
+| `board: other-repo` | Something holds :3727 serving a *different* checkout. | Say so before the first proposal: until it is closed this repo's board cannot claim the port (`strictPort` never drifts), and the screen the user is watching will never move. Then carry on. |
+| `board: unknown` | No `curl` here, so the board was not probed at all. | Say it was not verified rather than reporting it down, and carry on. |
+
+### Registering `esas-mcp` — and the restart that makes it real
+
+When the preflight says `mcp: registered`, call the `status` tool. It answers in exactly three ways:
+
+- **It returns `{repoPath, gitSha, lastSeq, cursorSeq, pendingByAuthor, lockState, warnings}`** — board mode is live. Note `lastSeq` for the board comparison, and read `warnings` out loud if there are any: they mean another session is designing in this checkout, or that a writer is on a different build than yours.
+- **There is no such tool in this session** — two causes, and they look identical from here. Either the entry was added by an earlier run and the session was never restarted: do the restart step below, and do **not** write the entry again. Or the server failed to spawn, in which case restarting changes nothing and the second attempt is the diagnosis: **still missing after a restart ⇒ the server failed to spawn** — check the entry's path resolves, and that the esas checkout has its dependencies installed (`bin/esas-mcp.mjs` runs the sources through `tsx`, so a fresh clone with no install dies at boot). Claude Code logs the spawn failure; read it rather than restarting a third time.
+- **It returns `ESAS_DIR_MISSING`** — the server is running and answering about *this* checkout, which simply has no `.esas/`. In a fleet worktree that is **the correct answer, not a fault to fix** (see the skill's main-checkout rule). In the main checkout it means the extractor has not run here yet: `yarn esas`, then re-check. Do not add `ESAS_REPO_PATH` to point it elsewhere — that is how a worktree ends up writing into another checkout's design layer.
+
+When the preflight says `mcp: unregistered` or `mcp: absent` — and the `mcp__esas__*` tools are not already in this session from a user-scoped registration — add the entry. **Add the one key to `mcpServers`** with an edit, not a read-modify-write of the whole file: rewriting it reformats every other server and turns a one-key diff into a whole-file one.
+
+```jsonc
+"esas": {
+  "type": "stdio",
+  "command": "node",
+  "args": [ "<abs path to the esas checkout>/packages/esas-mcp/bin/esas-mcp.mjs" ]
+}
+```
+
+Resolve the esas checkout from a link the host repo already has (teselly's `package.json` carries `"sticky-notes-board": "link:../esas/packages/sticky-notes-board"`, so it is `../esas`), and make it absolute. If nothing links esas, **ask** — do not guess a path.
+
+**Do not set `ESAS_REPO_PATH`.** The server designs against its working directory, and Claude Code spawns a project server with the working directory set to the project root — including inside a worktree, where that is the worktree itself. `.mcp.json` is git-tracked, so the entry is byte-identical in every worktree of a fleet: pinning an absolute path there would make all of them design against the one checkout it names, which is exactly the split layer the main-checkout rule exists to prevent. Unpinned, a worktree answers `ESAS_DIR_MISSING`, which is the right answer there.
+
+`.mcp.json` is git-tracked, so this dirties the working tree — say so, and let the user decide whether it ships with the PR.
+
+Then **stop the command** with this, verbatim:
+
+> **RESTART REQUIRED — `esas-mcp` is registered but not running.**
+> Registration takes effect only at session start: Claude Code spawns stdio MCP servers when a session boots, so the tools do not exist in *this* one no matter what the file now says.
+> Exit this session, start a new one in this repo, approve the `esas` server when Claude Code asks (repos with `enableAllProjectMcpServers` are not asked), and run `/design` again.
+> Nothing is lost — no design write has happened, and `.work/design.md` is written at the end of the interview, not now.
+
+Three rules while this session lasts:
+
+- **Do not call any `mcp__esas__*` tool for the rest of this session.** They are not there. A "no such tool" is not a transient failure to retry around.
+- **Never substitute for the missing server.** Do not create or edit `.esas/design.json`, `.esas/ops.jsonl` or `.esas/.claude-cursor` by hand.
+- **If the user does not restart** ("just keep going"): run Steps 1–4 with board mode off. That is a complete, correct `/design` — it produces `.work/design.md` and nothing else. Say once that the board layer will be there next session, then drop it.
+
+### Seeding the design layer
+
+`.esas/design.json` is the store's file and the store is the only writer: atomically, under a lock, with one attributed op appended to `.esas/ops.jsonl` per batch. **Never create or edit `.esas/design.json` by hand.** A hand-written verb has no op behind it, so it has no author, no rationale, no validation — the board renders a design nobody asserted, and the next `rebuild` (which replays the feed) drops it without a word.
+
+So seeding is not a file write. `design: absent` already *is* the empty design everywhere that reads it — the board loader and `get_design` both answer with an empty document rather than an error. (The hook never opens `design.json` at all; it reads `ops.jsonl` against the cursor, so it is indifferent either way.) **The first `propose` seeds it**, through the same path every later write takes. Say that to the user instead of manufacturing an empty file.
+
+What does need a decision is a layer that is already there. The design layer is gitignored and lives one unit of work, deleted after the merge — so `design: present` before you have written anything means you are resuming, or you are looking at residue. **Ask whose session it is.** Resuming keeps the verbs, the feed and the sync cursor and needs nothing done. Starting clean means the *user* deletes `.esas/design.json`, `.esas/design.json.bak`, `.esas/ops.jsonl` and `.esas/.claude-cursor`. Never delete them unasked: they are the only copy of a session's intent, and they are not in git.
+
+(A sync cursor left behind by a previous feed reads as "nothing has been synced" and inflates the hook's pending count — see the `esas-pending` skill. That one is cosmetic and clears on the next sync. Another unit of work's *verbs* are not.)
+
+### The board — print the command, verify the endpoint, never own the process
+
+Launch is the user's. Tell them the line their repo uses — `yarn esas:board` in teselly, otherwise `node <esas checkout>/packages/sticky-notes-board/bin/esas-board.mjs` — and do not spawn it yourself: a board started from a tool call dies with it.
+
+The board claims **:3727 strictly**. It never drifts to the next free port, so `GET /api/esas/status` on that port either answers for this repo or does not answer at all. It returns `{repoPath, gitSha, lastSeq}`; `lastSeq` is the same number the `status` tool reports, which is what makes a dead link visible by comparing two screens instead of debugging.
+
+**Never block the design on the board.** It is the projection, not the source of truth: writes land in files through `esas-mcp`, and a board launched an hour later renders everything that already happened. What genuinely stops board mode is a missing `.esas/` (no substrate) or a missing server (no hands). A dark second screen is not one of them.
+
+### What board mode changes about the rest of this command
+
+- **Step 2 gains a surface.** Propose as decisions resolve, not in one dump at the end — the point is that the user watches the model take shape while you talk. Batch each turn's proposals into **one** call (arrays in, one write, one op).
+- **Read reality with `get_flow`**, one command flow at a time, never by re-reading the whole graph. `scope.boundary` defaults to `'end-to-end'`; `'subdomain'` keeps a flow's cross-subdomain hand-offs visible as leaves rather than pretending the ripple stops at the boundary.
+- **The gestures live in the `esas-design` skill** — the sync point, corrections, restarts, and the fleet rule. Follow it; it is the behavioural half of this step.
+- **Step 3 still writes `.work/design.md`.** The two surfaces are complementary, not redundant: `.work/design.md` carries the decisions — the forks, the why, the rejected options — and `design.json` (structure) carries the verbs. Both feed `/plan`, so do not thin one because the other exists.
+
+---
+
 ## Step 1 — Ground the interview
 
 - Read the ticket / context. Read the relevant bounded context's `CONTEXT.md` (locate it via `.esas.config.json` `domainEventsPath`, per the `domain-modeling` skill) so you speak the project's ubiquitous language from the first question.

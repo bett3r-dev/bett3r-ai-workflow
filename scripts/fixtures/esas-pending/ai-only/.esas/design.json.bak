@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "propose": {
+    "nodes": [
+      {
+        "type": "command",
+        "label": "Place Order",
+        "subdomain": "sales",
+        "author": "human",
+        "ts": "2026-07-31T04:10:29.476Z",
+        "note": "board edit: Place Order"
+      },
+      {
+        "type": "command",
+        "label": "Reserve Stock",
+        "subdomain": "sales",
+        "author": "ai",
+        "ts": "2026-07-31T04:10:29.478Z",
+        "note": "proposed: Reserve Stock"
+      }
+    ],
+    "edges": []
+  }
+}

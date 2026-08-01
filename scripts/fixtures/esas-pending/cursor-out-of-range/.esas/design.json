@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "propose": {
+    "nodes": [
+      {
+        "type": "command",
+        "label": "Place Order",
+        "subdomain": "sales",
+        "author": "human",
+        "ts": "2026-07-31T04:10:29.465Z",
+        "note": "board edit: Place Order"
+      },
+      {
+        "type": "command",
+        "label": "Cancel Order",
+        "subdomain": "sales",
+        "author": "human",
+        "ts": "2026-07-31T04:10:29.467Z",
+        "note": "board edit: Cancel Order"
+      },
+      {
+        "type": "command",
+        "label": "Reserve Stock",
+        "subdomain": "sales",
+        "author": "ai",
+        "ts": "2026-07-31T04:10:29.469Z",
+        "note": "proposed: Reserve Stock"
+      },
+      {
+        "type": "command",
+        "label": "Refund Order",
+        "subdomain": "sales",
+        "author": "human",
+        "ts": "2026-07-31T04:10:29.472Z",
+        "note": "board edit: Refund Order"
+      }
+    ],
+    "edges": []
+  }
+}
