@@ -151,7 +151,8 @@ The board claims **:3727 strictly**. It never drifts to the next free port, so `
 
 - **Step 2 gains a surface.** Propose as decisions resolve, not in one dump at the end — the point is that the user watches the model take shape while you talk. Batch each turn's proposals into **one** call (arrays in, one write, one op).
 - **Read reality with `get_flow`**, one command flow at a time, never by re-reading the whole graph. `scope.boundary` defaults to `'end-to-end'`; `'subdomain'` keeps a flow's cross-subdomain hand-offs visible as leaves rather than pretending the ripple stops at the boundary.
-- **The gestures live in the `esas-design` skill** — the sync point, corrections, restarts, and the fleet rule. Follow it; it is the behavioural half of this step.
+- **Arm the summon watcher on any turn that leaves the user something to answer on the board, as the last thing you do before going idle.** That is the moment, and the two neighbouring ones are wrong: at preflight there is nothing to answer yet, so the wake is spent on a press that resolves nothing; mid-turn, a background task that exits while you are still talking re-invokes a session that was never waiting. One armed watch at a time — arming a second while the first is alive costs a wake nobody asked for. What the watcher *is*, how the wake behaves and the six invariants that keep it from looping or going silent are the `esas-design` skill's half; this step decides only when it goes up.
+- **The gestures live in the `esas-design` skill** — the sync point, the summon, corrections, restarts, and the fleet rule. Follow it; it is the behavioural half of this step.
 - **Step 3 still writes `.work/design.md`.** The two surfaces are complementary, not redundant: `.work/design.md` carries the decisions — the forks, the why, the rejected options — and `design.json` (structure) carries the verbs. Both feed `/plan`, so do not thin one because the other exists.
 
 ---

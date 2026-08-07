@@ -1,6 +1,6 @@
 ---
 name: esas-design
-description: "Gestures for a live ESAS design-board session (a repo with .esas/ plus the esas-mcp tools). STANDING RULES wherever those tools exist: 'look at the board' — any phrasing — means read_changes, then reconcile, then mark_synced, in that order and never half of it, and never unasked; while the user has unread board edits, do not assert what the design says — sync first if they asked you to look, otherwise say your picture may be behind and let them decide; a write refused with CONFLICT_PENDING_SYNC is cleared by ONE read_changes + mark_synced at the seq it named and the SAME batch retried whole. Read this file for the withdrawal and correction gestures, the two restarts, and why the board is main-checkout-only."
+description: "Gestures for a live ESAS design-board session (a repo with .esas/ plus the esas-mcp tools). STANDING RULES wherever those tools exist: 'look at the board' — any phrasing — means read_changes, then reconcile, then mark_synced, in that order and never half of it, and never unasked; while the user has unread board edits, do not assert what the design says — sync first if they asked you to look, otherwise say your picture may be behind and let them decide; a write refused with CONFLICT_PENDING_SYNC is cleared by ONE read_changes + mark_synced at the seq it named and the SAME batch retried whole; a watcher exiting on .esas/.summon is the user pressing 'look now' on the board — the answers are in the feed, not the wake, so delete the sentinel FIRST, then run that gesture. Read this file for the summon's six invariants, the withdrawal and correction gestures, the two restarts, and the main-checkout-only rule."
 ---
 
 # Designing on the board
@@ -37,7 +37,8 @@ So "sync first" never licenses syncing unasked: it means *do not assert* until
 you have. With edits pending and no invitation to look, say your picture may be
 behind and let the user decide. The one sync you make on your own initiative is
 the one a refused write demands — and that one the store asked for, by name and
-by seq.
+by seq. A summon is not a second exception: the button is the user asking,
+through a channel that is not the prompt — see *The summon*, below.
 
 ### When a write comes back refused
 
@@ -51,6 +52,102 @@ The answer is one `read_changes({ sinceSeq })`, reconcile, `mark_synced`, then
 rejection already named it, and probing turns one refusal into a dozen writes
 racing the user's next edit. Do not reword the proposal to dodge the conflict
 either; the user's edit may be the answer to it.
+
+## The summon — the board asking you to look *now*
+
+You are turn-based, so a board answer normally costs a terminal turn to collect:
+the user answers on the canvas, then types into the terminal to say they did.
+That is the whole reason answering on the board is slower than typing. The
+summon removes it. The user presses **Ask Claude**, the board POSTs to
+`/api/esas/board/summon`, and the route writes `.esas/.summon` — empty, because
+the file's existence is the entire signal. It says *look now*, never *look at
+this*: what changed is already in the feed, which is the one place both of you
+agree on.
+
+What re-invokes you is a background watcher **exiting** on that file. `/design`
+says when it goes up; this is what it is. Arm it as a `Bash` call with
+`run_in_background`, from the repo root:
+
+```sh
+esas_deadline=$(( $( date +%s ) + 1800 ))
+until [ -f .esas/.summon ]; do
+  [ "$( date +%s )" -ge "$esas_deadline" ] && break
+  sleep 2
+done
+if [ -f .esas/.summon ]
+  then printf 'SUMMONED: .esas/.summon appeared\n'
+  else printf 'TIMEOUT: 30m with no summon\n'
+fi
+```
+
+**No hook does this**, and reaching for one is the first wrong turn.
+`FileChanged` fires but has *no decision control* — side effects only, it cannot
+inject context. `Stop` can force a continuation, but it fires the instant you
+finish posting the questions, which is before anything has been answered. Both
+are ruled out at the mechanism level, not merely unused.
+
+The user answers where the questions already are: `?openComments=1&author=ai`
+opens the board on the open threads instead of the whole canvas.
+
+Six invariants. Each has a failure that reads as *the wake is broken* rather
+than as a bug in the half that caused it:
+
+1. **Delete the sentinel before `read_changes`.** The file's existence is the
+   signal, so one still on disk when you re-arm exits the next watcher
+   instantly: you wake, find nothing, re-arm, wake again, and the loop never
+   ends. Deleting first loses nothing — what changed is in the feed, and the
+   feed is not going anywhere.
+2. **Re-arm while any anchored fork is still `resolved: false`.** The user
+   answers in bursts and presses once per burst. A watch armed for the first
+   press and not the second ends the board session with no announcement: the
+   canvas still shows open questions, nothing says you stopped listening, and
+   the next thing the user notices is that they are typing again.
+3. **Tolerate an empty wake.** The route cannot know whether any session is
+   armed, so a press with nobody listening leaves the sentinel sitting until
+   some later watcher exits on it at once. "Nothing new since the cursor" is a
+   normal outcome, not an error: say so in one line and re-arm, rather than
+   hunting for the change that must surely be there.
+4. **Never propose from partial answers** — only for forks whose dependencies
+   are all resolved. A press means *I answered something*, never *I answered
+   everything*; three answers plus a guess at the fourth is a design the user
+   never agreed to, on their canvas, under your name.
+5. **Self-bound the watcher, and `TaskStop` it when the sync arrives by
+   another route.** A `run_in_background` command's `timeout` does **not** bound
+   it — one armed with a five-minute timeout was still polling twenty-five
+   minutes later — so the loop carries its own deadline, above. And a watch the
+   user has overtaken by saying "look at the board" in the terminal is now
+   waiting for a press that would answer an answered question: kill it, rather
+   than leave a process polling a directory nobody is designing in.
+6. **Echo the exit reason — `SUMMONED` or `TIMEOUT`.** From the outside the two
+   are one event: you wake with a background task that finished. Printing which
+   one ended the loop is the difference between *the user pressed the button*
+   and *nobody was there for half an hour*, and at 3am that is the whole
+   diagnosis.
+
+**A summon is the user asking**, so the standing rule against syncing unasked
+does not reach it — `esas-pending` carries the matching carve-out, and it is
+exactly that narrow: the press is an ask, the `esas: N pending` count still is
+not. What the wake then runs is the ordinary gesture, whole: `read_changes`,
+reconcile, `mark_synced`.
+
+Expect a second refusal, and a louder one. The wake is delivered as a
+background-task notification wrapped in a platform banner that declares itself
+**not user input**, and not a response to any pending question. Every word of
+that is accurate, and none of it is about what the read returns:
+**the notification is not the answer.** It is the doorbell, not the sentence.
+What the user actually said is in the feed — the authored comments
+`read_changes` returns — and the banner makes no claim about those, because the
+summon carries no payload by design: it says *look now*, never *look at this*.
+So the banner is true and you sync anyway. Taken for a refusal, it ends the
+board session silently while the user watches a canvas that answered nothing —
+invariant 2's failure, arriving through a different door.
+
+`.esas/.summon`, `/api/esas/board/summon` and `?openComments=1&author=ai` are
+**cross-repo contracts** — spelled in esas's `esas-store/src/summon.ts`,
+`paths.ts`, the board's `summon-route.ts` and `query-url.ts`, and pinned on that
+side too. The port, `3727`, is the fourth, and `/design` carries it. Nothing
+links the two repos at build time, so a paraphrase here breaks the gesture with
+both suites green on both sides. Copy them; never reword them.
 
 ## "Scrap that, I was wrong" — remove
 

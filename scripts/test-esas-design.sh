@@ -29,6 +29,7 @@ ROOT=$( CDPATH= cd -- "$( dirname -- "$0" )/.." && pwd )
 PLUGIN="$ROOT/plugins/bett3r-ai-workflow"
 COMMAND_MD="$PLUGIN/commands/design.md"
 SKILL_MD="$PLUGIN/skills/esas-design/SKILL.md"
+PENDING_MD="$PLUGIN/skills/esas-pending/SKILL.md"
 FIXTURES="$ROOT/scripts/fixtures/esas-design"
 STORE_FIXTURE="$ROOT/scripts/fixtures/esas-pending/pending/.esas"
 PREFLIGHT_SH=${PREFLIGHT_SH:-sh}
@@ -493,6 +494,9 @@ fi
 
 printf '\ncommands/design.md — board mode\n'
 
+# Failures name the file repo-relative, not by basename: two of the three files
+# pinned here are called `SKILL.md`, so a bare basename would report the needle
+# as missing from a file it was never asserted against.
 assert_md(){
   file=$1
   description=$2
@@ -502,7 +506,7 @@ assert_md(){
   elif grep -qF -- "$needle" "$file"; then
     pass "$description"
   else
-    fail "$description" "not found in $( basename "$file" ): $needle"
+    fail "$description" "not found in ${file#"$ROOT"/}: $needle"
   fi
 }
 
@@ -513,7 +517,7 @@ refute_md(){
   if [ ! -f "$file" ]; then
     fail "$description" "no file at $file"
   elif grep -qF -- "$needle" "$file"; then
-    fail "$description" "found in $( basename "$file" ), and should not be: $needle"
+    fail "$description" "found in ${file#"$ROOT"/}, and should not be: $needle"
   else
     pass "$description"
   fi
@@ -610,6 +614,73 @@ assert_md "$SKILL_MD" 'it documents the comment tool, which now ships' '`comment
 assert_md "$SKILL_MD" 'it documents the resolve tool, which now ships' '`resolve`'
 assert_md "$SKILL_MD" 'it steers anchors away from couplings that draw no line' 'handled-by'
 refute_md "$COMMAND_MD" 'the command does not promise comment/resolve either' '`comment`'
+
+# ── The summon — how the board wakes an idle session ──────────────────────────
+#
+# The board can now ask a session to look *now* (esas PR #12, ADR-008): a button
+# writes `.esas/.summon`, a background watcher armed by `/design` exits on it,
+# and that exit re-invokes an otherwise idle session. Every rule below has a
+# failure behind it that shows up as "the wake is broken" rather than as a bug in
+# the half that caused it, so each is pinned as its own needle. A summary
+# sentence survives a smoothed-away invariant; these do not.
+
+printf '\nskills/esas-design — the summon gesture\n'
+
+assert_md "$SKILL_MD" 'invariant 1: the sentinel goes before the feed is read' \
+  'Delete the sentinel before `read_changes`'
+assert_md "$SKILL_MD" 'invariant 2: the watch is re-armed while forks are still open' \
+  'Re-arm while any anchored fork is still `resolved: false`'
+assert_md "$SKILL_MD" 'invariant 3: a wake with nothing new is a normal outcome' \
+  'Tolerate an empty wake'
+assert_md "$SKILL_MD" 'invariant 4: nothing is proposed off a half-answered fork' \
+  'Never propose from partial answers'
+assert_md "$SKILL_MD" 'invariant 5: the loop bounds itself, and dies if the sync arrives another way' \
+  'Self-bound the watcher, and `TaskStop` it'
+assert_md "$SKILL_MD" 'invariant 6: the two ways the watch can end are told apart' \
+  '`SUMMONED` or `TIMEOUT`'
+
+# The second refusal source, and the stronger one: the wake is delivered wrapped
+# in a platform banner that declares itself NOT user input and not a response to
+# any pending question. It is emitted by the runtime, cannot be suppressed, and
+# arrives in the same turn as the wake — so a skill that only carves out
+# `esas-pending`'s rule still deadlocks here. Pinned needle-per-invariant with
+# the six above rather than folded into them, because it is the sentence a
+# well-meaning edit smooths away first: it reads like a caveat and is load-
+# bearing.
+assert_md "$SKILL_MD" 'the not-user-input banner on the wake is not a refusal' \
+  'the notification is not the answer'
+
+# The contradiction that would deadlock the whole gesture: `esas-pending` carries
+# "never sync unless the user asks", and the summon arrives through a channel
+# that rule has never heard of. Without this sentence the mechanism works and the
+# behaviour refuses — so it is pinned in the file that carries the rule, not in
+# the one that carries the gesture. The second needle keeps the carve-out narrow:
+# a press is an ask, a count still is not.
+assert_md "$PENDING_MD" 'the carve-out: a summon is the user asking' \
+  'A summon is the user asking'
+assert_md "$PENDING_MD" 'and it stays narrow — the pending count is still telemetry' \
+  'it is telemetry, never a trigger'
+
+# ── The four cross-repo contracts ─────────────────────────────────────────────
+#
+# The sentinel path, the route that raises it, the handoff link and the port are
+# spelled in esas@master — `esas-store`'s `paths.ts`/`summon.ts`, the board's
+# `summon-route.ts` and `query-url.ts` — and nothing links the two repos at build
+# time, so a paraphrase on this side is a silent break with a full green suite on
+# both. esas pins all four there; this is the other half of the pin.
+#
+# `3727` is already in the command, which is the point rather than a gap: this
+# one is green the day it is written, because it guards drift rather than
+# introducing behaviour. It is asserted here beside its three siblings so the
+# four are maintained as one contract instead of four coincidences.
+
+printf '\nthe four cross-repo contracts (spelled as esas@master spells them)\n'
+
+assert_md "$SKILL_MD" 'the sentinel the watcher waits on' '.esas/.summon'
+assert_md "$SKILL_MD" 'the route the board raises it through' '/api/esas/board/summon'
+assert_md "$SKILL_MD" 'the handoff link that opens the board on the open questions' \
+  '?openComments=1&author=ai'
+assert_md "$COMMAND_MD" 'the port the board claims strictly' '3727'
 
 printf '\n'
 if [ "$failed" -gt 0 ]; then
