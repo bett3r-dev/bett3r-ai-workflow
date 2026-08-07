@@ -1,5 +1,10 @@
 #!/bin/sh
-# Oracle for `/design` board-mode and the `esas-design` skill.
+# Oracle for `/design` board-mode and the `esas-design` skill — plus the half of
+# the `grill` skill that decides which forks a board is shown at all. That last
+# one is deliberately not board-scoped: the decision-tree map `grill` opens with
+# applies in every repo, board or no board. It is pinned here because it is the
+# terminal half of a split whose other half lives on the canvas, and half a split
+# is not worth guarding. See the note above its section.
 #
 # Both artifacts are text a model reads, so most of what they promise can only
 # be reviewed. Two parts can be *executed*, and this suite executes them:
@@ -30,6 +35,7 @@ PLUGIN="$ROOT/plugins/bett3r-ai-workflow"
 COMMAND_MD="$PLUGIN/commands/design.md"
 SKILL_MD="$PLUGIN/skills/esas-design/SKILL.md"
 PENDING_MD="$PLUGIN/skills/esas-pending/SKILL.md"
+GRILL_MD="$PLUGIN/skills/grill/SKILL.md"
 FIXTURES="$ROOT/scripts/fixtures/esas-design"
 STORE_FIXTURE="$ROOT/scripts/fixtures/esas-pending/pending/.esas"
 PREFLIGHT_SH=${PREFLIGHT_SH:-sh}
@@ -660,6 +666,61 @@ assert_md "$PENDING_MD" 'the carve-out: a summon is the user asking' \
   'A summon is the user asking'
 assert_md "$PENDING_MD" 'and it stays narrow — the pending count is still telemetry' \
   'it is telemetry, never a trigger'
+
+# ── The map and the questions ─────────────────────────────────────────────────
+#
+# The design's third fork — "if a question is on the board, is it also asked in
+# the terminal?" — is **dissolved** rather than answered: the terminal *names*
+# each fork in one line of the decision tree, the board *holds* the fork itself.
+# Neither surface is a copy of the other, so there is no duplication policy to
+# enforce and nothing to keep in sync between two renderings of one question.
+#
+# The split that makes it work is which forks can go up at all: an independent
+# fork is fully written before any answer arrives and batches; a dependent fork's
+# *wording* does not exist until the previous answer lands, so posting it means
+# posting a guess at what the user will say. That is the summon's fourth
+# invariant — never propose from partial answers — applied to asking.
+
+printf '\nskills/esas-design — the map and the questions\n'
+
+assert_md "$SKILL_MD" 'the split itself, in the words the design gives it' \
+  'the terminal carries the map, the board carries the questions'
+assert_md "$SKILL_MD" 'independent forks batch to the canvas, dependent ones stay serial' \
+  'Batch the independent forks to the board; serialize the dependent ones'
+assert_md "$SKILL_MD" 'the duplication question is dissolved, not policed' \
+  'Neither surface is a second copy of the other'
+
+# ── skills/grill — the map half, pinned here on purpose ───────────────────────
+#
+# `grill` is the third skill this suite reads, and the only one that is not a
+# board artifact: the decision-tree opener applies in every repo, `.esas/` or no
+# `.esas/`. It is pinned *here* because the map is the terminal half of the
+# board's question surface — pinning "the board holds the questions" in one file
+# while leaving "the terminal holds the map" unguarded in another would pin half
+# a sentence. The suite header carries the same clause, so this is a stated
+# scope rather than a quiet widening.
+#
+# The conditionality needle is the load-bearing one for every repo that will
+# never have a board: the map is unconditional, the canvas is not, and a reader
+# with no `.esas/` must come away with today's flow exactly.
+
+printf '\nskills/grill — the decision-tree map (not board-scoped; see note)\n'
+
+assert_md "$GRILL_MD" 'the interview opens with the map, before question one' \
+  'Open with the decision tree, before the first question'
+assert_md "$GRILL_MD" 'the map is maintained as tracks resolve, not printed once' \
+  'Keep the map current'
+assert_md "$GRILL_MD" 'a map line names its fork — it is not the question again' \
+  'one line per fork, never the question restated'
+assert_md "$GRILL_MD" 'the board half is conditional; the map half is not' \
+  'The map is unconditional; the canvas is not'
+
+# Green the moment it is written, and asserted anyway. The map is a numbered
+# list, which is the exact shape that tempts a picker, and the standing
+# preference has no carve-out — so the one edit that would quietly undo it is an
+# edit that adds the map and reaches for `AskUserQuestion` to render it.
+assert_md "$GRILL_MD" 'the standing rule survives the map: no picker, ever' \
+  'Never use `AskUserQuestion`'
 
 # ── The four cross-repo contracts ─────────────────────────────────────────────
 #

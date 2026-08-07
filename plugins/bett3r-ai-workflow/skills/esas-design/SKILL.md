@@ -53,6 +53,49 @@ rejection already named it, and probing turns one refusal into a dozen writes
 racing the user's next edit. Do not reword the proposal to dodge the conflict
 either; the user's edit may be the answer to it.
 
+## The map and the questions — what goes where
+
+The board is not a second rendering of the interview. It is one half of a split:
+**the terminal carries the map, the board carries the questions.** The terminal
+*names* each fork in one line of the decision tree `grill` opens with; the board
+*holds* the fork itself — its options, your recommendation, the thread it
+collects — as a `comment` anchored to the element it concerns.
+
+**Neither surface is a second copy of the other**, so there is nothing to keep in
+sync between them and no policy to remember about where a question may be asked.
+Get that wrong in the obvious direction — ask the fork in the terminal *and* post
+it to the board — and the user answers in one place while you are watching the
+other, or answers twice and reconciles the two themselves, or reads the canvas as
+a stale echo of a conversation that has moved on and stops looking at it. A second
+screen is only worth having while everything on it is still live.
+
+**Batch the independent forks to the board; serialize the dependent ones in the
+terminal.** A fork is independent when you could write it out in full right now,
+because it turns on nothing you have yet to hear. Those go up in **one**
+`comment` call — arrays in, one write, one op — each anchored to the node it is
+about, and the user answers them in any order, all at once, or after lunch. That
+is the entire payoff of a canvas: the grill is deliberately serial, and a serial
+question posted to a board is just a slower terminal.
+
+A dependent fork cannot go up at all, because its *wording* does not exist yet.
+"Then where does the reservation number come from?" is not a question until the
+previous answer says there is one. Posting it anyway means posting your guess at
+what the user is about to say, on their canvas, under your name — and if they
+answer the guess, you have resolved a fork nobody asked. Those stay in the
+terminal, one at a time, exactly as `grill` runs them. It is the summon's fourth
+invariant — *never propose from partial answers* — pointed at asking instead of
+proposing: the same dependency edge, one step earlier.
+
+The precedent is not hypothetical. `/design-multi`'s Phase B already gathers every
+open fork across every ticket into one batched sitting, and it works; the board is
+that sitting with anchors.
+
+Anchoring is what makes a batched fork legible — see *Writing and reading* for
+`comment`/`resolve` and why a node anchor beats a spine coupling that draws no
+line. `resolved: false` is the shared to-decide list, so `resolve` each comment as
+its fork is answered: the map in the terminal and the open threads on the canvas
+are then two views of one state, which is the only sense in which they overlap.
+
 ## The summon — the board asking you to look *now*
 
 You are turn-based, so a board answer normally costs a terminal turn to collect:
