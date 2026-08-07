@@ -576,6 +576,21 @@ else
   assert_in_description 'so is the whole-batch retry after a refused write' 'CONFLICT_PENDING_SYNC'
 fi
 
+# The withdrawal gesture. Pinned needle by needle because the failure it exists
+# to prevent was not "the model did not know how to delete" — it was the model
+# knowing, being refused, and encoding the retraction in the sticky's own label
+# instead of saying so. So the anti-pattern is asserted as literally as the
+# gesture: a skill that describes `remove` and omits "do not rename it
+# RETRACTED" has not covered this.
+assert_md "$SKILL_MD" 'the body carries the withdrawal gesture' 'Scrap that, I was wrong'
+assert_md "$SKILL_MD" 'it says a proposal-only element is withdrawn, not flagged removed' 'withdrawn'
+assert_md "$SKILL_MD" 'it names the label workaround as the thing not to do' 'RETRACTED'
+assert_md "$SKILL_MD" 'it warns the comment thread dies with the withdrawn proposal' 'The thread goes with it'
+assert_md "$SKILL_MD" 'it warns a withdrawal is not undo-able from the board' 'not undo-able'
+assert_md "$SKILL_MD" 'it separates withdrawing from reclassifying' 'this was never right'
+assert_md "$SKILL_MD" 'a stuck refusal is reported, never routed around with another verb' \
+  'never a reason to reach for a *different* verb'
+
 assert_md "$SKILL_MD" 'the body carries the reclassify gesture' 'that rename is a correction'
 assert_md "$SKILL_MD" 'it warns that a reclassify dirties a git-tracked file' '.esas.overrides.json'
 assert_md "$SKILL_MD" 'it warns the diff may be reformatting, not content' 'whitespace'

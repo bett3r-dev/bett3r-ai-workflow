@@ -1,6 +1,6 @@
 ---
 name: esas-design
-description: "Gestures for a live ESAS design-board session (a repo with .esas/ plus the esas-mcp tools). STANDING RULES wherever those tools exist: 'look at the board' — any phrasing — means read_changes, then reconcile, then mark_synced, in that order and never half of it, and never unasked; while the user has unread board edits, do not assert what the design says — sync first if they asked you to look, otherwise say your picture may be behind and let them decide; a write refused with CONFLICT_PENDING_SYNC is cleared by ONE read_changes + mark_synced at the seq it named and the SAME batch retried whole. Read this file for the correction gesture, the two restarts, and why the board is main-checkout-only."
+description: "Gestures for a live ESAS design-board session (a repo with .esas/ plus the esas-mcp tools). STANDING RULES wherever those tools exist: 'look at the board' — any phrasing — means read_changes, then reconcile, then mark_synced, in that order and never half of it, and never unasked; while the user has unread board edits, do not assert what the design says — sync first if they asked you to look, otherwise say your picture may be behind and let them decide; a write refused with CONFLICT_PENDING_SYNC is cleared by ONE read_changes + mark_synced at the seq it named and the SAME batch retried whole. Read this file for the withdrawal and correction gestures, the two restarts, and why the board is main-checkout-only."
 ---
 
 # Designing on the board
@@ -51,6 +51,43 @@ The answer is one `read_changes({ sinceSeq })`, reconcile, `mark_synced`, then
 rejection already named it, and probing turns one refusal into a dozen writes
 racing the user's next edit. Do not reword the proposal to dodge the conflict
 either; the user's edit may be the answer to it.
+
+## "Scrap that, I was wrong" — remove
+
+Changing your mind about your **own** proposal is `remove`. Nothing else, and
+nothing extra. The tool decides what the deletion means from what the target
+*is*, so you never have to pick:
+
+- the element is **in reality** — it is a design statement about code that
+  exists. It stays on the board desaturated, and no propose-edge may touch it;
+- the element is **only proposed by this design** — the proposal is
+  **withdrawn**: its entry leaves `design.json`, taking every proposed edge on
+  it, every `modify` standing on it, and the comments anchored to those.
+
+So a proposal you re-anchored, split, or simply got wrong just goes. Do not
+rename it `"(RETRACTED — use X)"`, do not leave a note on it explaining that it
+is not real, and do not park it somewhere out of the way. Every one of those
+leaves a sticky on the user's canvas asserting an element that does not exist,
+and the board has no way to show that a label is a disclaimer. If a removal ever
+comes back refused, **say so and stop** — never route around it (see *A refusal
+is the same rule*, under **Writing and reading**).
+
+Two consequences to weigh before you withdraw, not after:
+
+- **The thread goes with it.** Comments anchored to a withdrawn proposal are
+  deleted, because the element survives in no layer and a comment on nothing is
+  never drawn again. If the conversation reached a conclusion worth keeping, say
+  it in the terminal — or re-anchor it to the element that replaced it — before
+  the withdrawal, not after.
+- **It is not undo-able from the board.** A withdrawal is an op like any other
+  and a rebuild re-applies it. Recovering a withdrawn proposal means proposing
+  it again.
+
+`remove` is also not `reclassify`, and the two are easy to confuse because both
+end with an entry leaving `design.json`. The difference is one sentence:
+withdrawing says *this was never right*, reclassifying says *this is already
+true*. Guess wrong toward reclassify and you write a phantom element into a
+git-tracked file that ships with the PR.
 
 ## "That rename is a correction" — reclassify
 
@@ -121,6 +158,14 @@ The tools that exist today are `propose`, `modify`, `remove`, `reclassify`,
 `comment`, `resolve`, `get_flow`, `get_design`, `read_changes`, `mark_synced`
 and `status`. If a gesture seems to need something not on that list, say so
 instead of improvising a file edit around it.
+
+**A refusal is the same rule.** A verb that comes back refused and stays refused
+is a fact about the board worth one sentence in the terminal, and
+never a reason to reach for a *different* verb that lands.
+Writing the intent into a label, a note
+or a comment because the verb for it would not go through does not record the
+intent; it records a contradiction, on the user's canvas, in the one field they
+read as the truth. Say what you tried, quote what it said, and let them decide.
 
 `comment` and `resolve` are the grill on canvas: an open question lands on the
 sticky it concerns, and `resolved: false` is the shared to-decide list. Prefer a
