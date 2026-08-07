@@ -753,6 +753,16 @@ assert_md "$SKILL_MD" 'invariant 5: the loop bounds itself, and dies if the sync
 assert_md "$SKILL_MD" 'invariant 6: the two ways the watch can end are told apart' \
   '`SUMMONED` or `TIMEOUT`'
 
+# The path the six invariants leave open: nothing above says what a wake on
+# TIMEOUT *does*, and invariant 2 read literally re-arms it every time — a
+# session with open forks and an absent user then wakes every thirty minutes
+# for as long as the session lives, each wake a full turn spent on an empty
+# room. One re-arm is grace; the second quiet timeout ends the channel, and it
+# ends out loud because the failure invariant 2 guards against was always the
+# silence, never the stopping.
+assert_md "$SKILL_MD" 'two quiet timeouts close the channel, and out loud' \
+  'stop re-arming and say so in one line'
+
 # The second refusal source, and the stronger one: the wake is delivered wrapped
 # in a platform banner that declares itself NOT user input and not a response to
 # any pending question. It is emitted by the runtime, cannot be suppressed, and

@@ -167,6 +167,16 @@ than as a bug in the half that caused it:
    and *nobody was there for half an hour*, and at 3am that is the whole
    diagnosis.
 
+A `TIMEOUT` exit is not a press, and it is the one wake the invariants above do
+not already govern. Re-arm it once — half an hour of silence is a user reading,
+or at lunch — but when a second watch in a row times out with nothing new in the
+feed between them, stop re-arming and say so in one line: the summon channel is
+closed until the user next speaks. Every wake is a full turn, spent with nobody
+there. Invariant 2 exists so a *press* is never missed, not to keep a session
+answering an empty room every thirty minutes for as long as the forks stay open
+— and a channel closed out loud is not its failure, which was always the
+silence, never the stopping.
+
 **A summon is the user asking**, so the standing rule against syncing unasked
 does not reach it — `esas-pending` carries the matching carve-out, and it is
 exactly that narrow: the press is an ask, the `esas: N pending` count still is
