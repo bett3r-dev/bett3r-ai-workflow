@@ -1,0 +1,3 @@
+# Ephemeral per-unit-of-work scratch space (design.md, slices.yaml).
+# Git is the record; .work/ is disposable.
+.work/
