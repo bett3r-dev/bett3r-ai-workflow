@@ -15,6 +15,26 @@ The thing to design (a ticket id, a feature description, or "the active work").
 
 Where ESAS is set up, this interview has a second surface: the decisions land in `.work/design.md` as always, and the **structure** lands on a live board the user watches on another screen while you talk. Board mode is off by default and costs one command to rule out.
 
+Two gates decide it, and they ask different questions. **Capability asks whether a board is possible; relevance asks whether it is warranted.** Both must say yes — board mode is **on** only when they both do, and the `grill` skill's canvas subsection, which defers to "`/design` has put board mode on" rather than restating either half, reads it as that conjunction. (The `esas-design` skill is scoped differently on purpose: its standing rules fire wherever the `mcp__esas__*` tools exist, so "look at the board" still syncs correctly in a session where board mode was never armed.) Relevance is first, and it is cheaper than one command: it costs none.
+
+### Gate 1 — relevance: what the decision tree names
+
+**Board mode is armed by what the drafted decision tree names.** Draft the tree first — the `grill` skill opens the interview with it — then read it back: does any track name **a command, an event, an aggregate, a policy, a read model, or a coupling** between them? One is enough. If none does, the design is not about structure, and a board would render nothing but the questions' own text: a canvas of stickies nobody asked for, on a second screen the user now has to close.
+
+So Step 0 is *settled* before the first proposal, not *finished* before Step 1. Ground the interview, draft the tree, answer this gate — and only on a yes go on to the preflight below. It keeps the number 0 because board mode has to be decided before anything is written, not because it is the first thing that happens.
+
+**Relevance runs before the preflight, never after it.** The order is the mechanism, not a preference: the preflight prints verdicts and the table under it turns them into things you say out loud — *run the extractor*, *here is the launch line*, *another repo holds the port*. Run it first and the silent path has already spoken by the time the gate answers no. Which is also why relevance is **not** a preflight key and must never become one: a shell block cannot read a decision tree, and a key it printed would have to be answered before there was anything to answer about. The cost of this order is real and it lands on one path — a repo that needs the `esas-mcp` restart now hits that stop after the grounding rather than before it, and under the mid-interview fallback later still, after forks the user has already answered. All of it is re-done in the new session, which is why the restart copy below names what it costs instead of promising the stop is free. That is still the cheaper half of the trade; the alternative is every design in the repo opening with board talk, structural or not.
+
+**On a no, say nothing at all about boards.** Not a shorter version, not a footnote — nothing. No offer, no "this repo has ESAS set up but we won't need it", no mention that a gate was consulted. Run Steps 1–4 exactly as written. A mention is not free: it hands the user a second surface to have an opinion about in a design where the answer is already known.
+
+**The fallback is to arm mid-interview at the first artifact-touching fork.** This gate is answered at the moment of least knowledge, so a design that opens on config and turns structural at fork 4 must not be locked out by its opening. Re-ask it whenever a new fork names an artifact; on a yes, run the preflight then and pick board mode up from there. A late board loses nothing — it is a projection, and one opened an hour in renders everything that already happened.
+
+**When it is close, unsure means silent.** This gate asks for a judgement, and nothing in this repo's suite can tell a right call from a wrong one — the only thing that makes prose safe here is which way it fails, so it is stated as a rule rather than left to taste. A false yes costs the user a screen they did not want and a paragraph of board talk in a design with no structure in it; a false no costs a board that arrives one fork later through the fallback above. Those are not the same size. And do not resolve the doubt by asking: *"should I open a board?"* is exactly the output this gate exists to suppress.
+
+**Frontend, infrastructure, PV3-internal plumbing and work outside the modelled subdomains are the usual no's — as worked examples, never as a rule.** Classify by kind of work and you are wrong precisely at the edges: `ui` is a node type in the extractor's own graph, and teselly's `.esas.config.json` carries a `webAppPath`, so "frontend" is not outside the model by definition. Read the tree in front of you, not the label on the ticket.
+
+### Gate 2 — capability: what is actually on disk
+
 Run the preflight from the repo root. It reports facts and decides nothing:
 
 ```sh
@@ -121,7 +141,7 @@ Then **stop the command** with this, verbatim:
 > **RESTART REQUIRED — `esas-mcp` is registered but not running.**
 > Registration takes effect only at session start: Claude Code spawns stdio MCP servers when a session boots, so the tools do not exist in *this* one no matter what the file now says.
 > Exit this session, start a new one in this repo, approve the `esas` server when Claude Code asks (repos with `enableAllProjectMcpServers` are not asked), and run `/design` again.
-> Nothing is lost — no design write has happened, and `.work/design.md` is written at the end of the interview, not now.
+> No design write is lost — nothing has been written to `.esas/`, and `.work/design.md` is written at the end of the interview, not now. What the restart does cost is this session's reading: the grounding pass, and any forks already answered. The new session re-does them.
 
 Three rules while this session lasts:
 

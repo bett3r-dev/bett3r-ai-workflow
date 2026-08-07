@@ -566,6 +566,61 @@ assert_md "$COMMAND_MD" 'it treats a pre-existing design layer as a question, no
   'whose session it is'
 assert_md "$COMMAND_MD" 'both surfaces feed /plan' '`design.json` (structure)'
 
+# ── The relevance gate ────────────────────────────────────────────────────────
+#
+# Board mode has two gates and they answer different questions. The *capability*
+# gate is the preflight above — is a board possible in this checkout. The
+# *relevance* gate is a judgement on the drafted decision tree — is a board
+# warranted by this design. Both must say yes, and they are pinned apart because
+# collapsing them is the regression: with one gate, every design run in a repo
+# that happens to have a `.esas/` opens with board talk, including the ones with
+# no structure in them at all.
+#
+# Nothing below is derived from a preflight key, deliberately — a shell block
+# cannot read a decision tree, and a key would have to be printed before there
+# was anything to answer about. The coverage check above is the guard on that: if
+# this gate ever grows a `key: value`, that check fails, and the fix is to take
+# the key back out rather than to document it.
+
+printf '\ncommands/design.md — the relevance gate\n'
+
+assert_md "$COMMAND_MD" 'the gate is derived from the tree, not from a flag or a work kind' \
+  'armed by what the drafted decision tree names'
+assert_md "$COMMAND_MD" 'it names the artifact kinds that arm it' \
+  'a command, an event, an aggregate, a policy, a read model, or a coupling'
+assert_md "$COMMAND_MD" 'relevance and capability are kept apart, in those words' \
+  'Capability asks whether a board is possible; relevance asks whether it is warranted'
+assert_md "$COMMAND_MD" 'the gate is answered before the preflight runs, never after' \
+  'Relevance runs before the preflight'
+assert_md "$COMMAND_MD" 'on a no there is no board output at all — not a quieter one' \
+  'say nothing at all about boards'
+assert_md "$COMMAND_MD" 'a design that turns structural late is not locked out by its opening' \
+  'arm mid-interview at the first artifact-touching fork'
+
+# Pinned on its own, and the load-bearing pin of this section: the gate asks for
+# a judgement, and no suite here can tell a right call from a wrong one (design
+# risk 4). The gate is accepted *only* because it fails safe, and it fails safe
+# only while the text says which way it falls — so this needle is the whole
+# mitigation, not a nicety. It is also the first sentence a well-meaning edit
+# smooths away, because beside six rules that read like rules it reads like a
+# hedge.
+assert_md "$COMMAND_MD" 'unsure falls towards silence, stated as a rule' \
+  'unsure means silent'
+
+# Putting the gate ahead of the preflight falsified a sentence in the restart
+# copy further down, so the correction is pinned here, beside its cause, rather
+# than up with the other restart pins. It was true while the preflight ran first:
+# the stop landed before anything had been read or asked, so nothing *had* been
+# spent. Ordered behind the decision tree it is false — the grounding pass is
+# gone, and under the mid-interview fallback so are the forks the user already
+# answered. Refute plus assert, the same shape used on any corrected claim here:
+# an unpinned correction is one a later editor restores in good faith, because
+# the old sentence is shorter and reads kinder.
+refute_md "$COMMAND_MD" 'the restart copy no longer claims the stop costs nothing' \
+  'Nothing is lost'
+assert_md "$COMMAND_MD" 'it names what the restart actually costs the user' \
+  'the grounding pass, and any forks already answered'
+
 printf '\nskills/esas-design — the D5 gestures\n'
 
 # The frontmatter description is the only part of a skill that is resident
