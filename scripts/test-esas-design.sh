@@ -1,10 +1,15 @@
 #!/bin/sh
 # Oracle for `/design` board-mode and the `esas-design` skill — plus the half of
-# the `grill` skill that decides which forks a board is shown at all. That last
-# one is deliberately not board-scoped: the decision-tree map `grill` opens with
-# applies in every repo, board or no board. It is pinned here because it is the
-# terminal half of a split whose other half lives on the canvas, and half a split
-# is not worth guarding. See the note above its section.
+# the `grill` skill that decides which forks a board is shown at all, and the
+# half of `/design-multi` that puts its batched interview on the canvas. The
+# `grill` half is deliberately not board-scoped: the decision-tree map `grill`
+# opens with applies in every repo, board or no board. It is pinned here because
+# it is the terminal half of a split whose other half lives on the canvas, and
+# half a split is not worth guarding. `/design-multi` is board-scoped like the
+# rest, and is pinned here rather than in a suite of its own because its Phase B
+# is the same batch this file already guards in `/design`, run over N tickets —
+# the rule that would drift is the one shared with the single-ticket flow. See
+# the notes above both sections.
 #
 # Both artifacts are text a model reads, so most of what they promise can only
 # be reviewed. Two parts can be *executed*, and this suite executes them:
@@ -36,6 +41,7 @@ COMMAND_MD="$PLUGIN/commands/design.md"
 SKILL_MD="$PLUGIN/skills/esas-design/SKILL.md"
 PENDING_MD="$PLUGIN/skills/esas-pending/SKILL.md"
 GRILL_MD="$PLUGIN/skills/grill/SKILL.md"
+DESIGN_MULTI_MD="$PLUGIN/commands/design-multi.md"
 FIXTURES="$ROOT/scripts/fixtures/esas-design"
 STORE_FIXTURE="$ROOT/scripts/fixtures/esas-pending/pending/.esas"
 PREFLIGHT_SH=${PREFLIGHT_SH:-sh}
@@ -823,6 +829,58 @@ assert_md "$GRILL_MD" 'the board half is conditional; the map half is not' \
 # edit that adds the map and reaches for `AskUserQuestion` to render it.
 assert_md "$GRILL_MD" 'the standing rule survives the map: no picker, ever' \
   'Never use `AskUserQuestion`'
+
+# ── commands/design-multi — Phase B on the canvas ─────────────────────────────
+#
+# The fourth file this suite reads and the second command. Phase B is the
+# longest numbered list anywhere in the flow — every open fork of every ticket
+# in one sitting — which makes it the strongest case for a canvas the flow has,
+# and simultaneously the one place a board write goes worst: `design.json` is
+# scoped by ADR-001 to **one** unit of work and Phase B is holding N of them.
+#
+# So the pins come in two halves. The first four are the behaviour — comments
+# only, one writer, a ticket-id prefix on every entry, a `resolve` on every fold.
+# The last four are the boundaries that stop the behaviour from growing into the
+# failure it is carved around: the reason the other verbs stay out, the words
+# that say why a text prefix is doing a field's work, the fork count above which
+# the canvas stops helping, and the teardown nobody downstream will do.
+#
+# There is deliberately no `refute_md` on `propose` here, unlike the two
+# corrections above. The rejection has to be *argued* in the file — a rule whose
+# reason has been trimmed is the one the next edit undoes — so the rejected
+# verbs are named in the prose that rules them out, and a refute would forbid
+# the argument along with the act. The positive pin (the only verbs Phase B
+# writes) is the guard; the ADR-001 pin is what keeps it from being re-litigated
+# by someone who reads "comments only" as an arbitrary restriction.
+
+printf '\ncommands/design-multi — Phase B on the canvas\n'
+
+assert_md "$DESIGN_MULTI_MD" 'Phase B writes two verbs and no others' \
+  '`comment` and `resolve` are the only verbs Phase B writes'
+assert_md "$DESIGN_MULTI_MD" 'the other verbs are refused for ADR-001, not for taste' \
+  'scopes the design layer to one unit of work'
+assert_md "$DESIGN_MULTI_MD" 'the orchestrator is the sole writer of the batch, as it is of run.yaml' \
+  'No agent writes to the design layer'
+assert_md "$DESIGN_MULTI_MD" 'every comment says which ticket it belongs to' \
+  'Prefix every comment with its ticket id'
+assert_md "$DESIGN_MULTI_MD" 'the prefix does a fields work because the store has no field' \
+  'one flat chronological list per anchor'
+assert_md "$DESIGN_MULTI_MD" 'an answered fork is resolved in the pass that folds it back' \
+  'Folding an answer back resolves its comment'
+assert_md "$DESIGN_MULTI_MD" 'the flat thread is a ceiling to fall back from, not one to design around' \
+  'Above roughly fifteen open forks, keep the whole list in the terminal'
+
+# Teardown is the one thing in this slice nothing downstream does for you.
+# `/start-multi` branches into worktrees that have no `.esas/` at all, and the
+# next `/design` in this repo meets `design: present` and asks whose session it
+# is — about a run that ended days ago. Both halves are pinned, because the
+# obvious over-correction is as bad as the omission: the layer is gitignored and
+# it is the only copy of a session's intent, so it is *named* to the user and
+# never removed for them.
+assert_md "$DESIGN_MULTI_MD" 'the handoff names the layer the run leaves behind' \
+  'delete `.esas/design.json`'
+assert_md "$DESIGN_MULTI_MD" 'and it is the user who deletes it, never you' \
+  'never delete the files yourself'
 
 # ── The four cross-repo contracts ─────────────────────────────────────────────
 #
