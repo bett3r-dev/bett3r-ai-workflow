@@ -544,7 +544,7 @@ assert_md "$COMMAND_MD" 'the .mcp.json edit merges rather than replaces' \
 # The board is a projection. Its absence costs a second screen, not the design.
 assert_md "$COMMAND_MD" 'a board that is not running does not block the command' \
   'Never block the design on the board'
-assert_md "$COMMAND_MD" 'it prints the launch line instead of spawning the board' 'yarn esas:board'
+assert_md "$COMMAND_MD" 'it hands the user the launch line their repo uses' 'yarn esas:board'
 assert_md "$COMMAND_MD" 'it names the port the board claims strictly' '3727'
 assert_md "$COMMAND_MD" 'it names the endpoint that identifies a board' '/api/esas/status'
 
@@ -620,6 +620,53 @@ refute_md "$COMMAND_MD" 'the restart copy no longer claims the stop costs nothin
   'Nothing is lost'
 assert_md "$COMMAND_MD" 'it names what the restart actually costs the user' \
   'the grounding pass, and any forks already answered'
+
+# ── The launch offer ──────────────────────────────────────────────────────────
+#
+# The board is offered at the one moment it is worth looking at — when the first
+# batch of questions is ready to post — and started only on a yes. Both halves
+# are pinned, because this regresses in two opposite directions: moved back to
+# the preflight it offers a board before the design has shown it needs one, and
+# turned into an unasked spawn it takes a screen the user never asked for. The
+# cost of either is the same and it is not paid here: `:3727` is claimed
+# strictly, so an unwanted board squats the one port and the *next* repo's board
+# is the one that will not come up.
+#
+# The reason this command used to give for not spawning — "a board started from a
+# tool call dies with it" — is false. A `run_in_background` launch outlives the
+# turn that armed it, demonstrated twice: the design's own spike, and again while
+# verifying the summon watcher, where a detached watch outlived its turn and
+# re-invoked an idle session. So it is deleted rather than softened, and the
+# refute is what makes that stick — a rule kept alive by a reason known to be
+# wrong is worse than no rule, because the next reader cannot tell which half to
+# trust. Refute plus assert on the reason that replaces it, the same shape the
+# restart correction above uses.
+
+printf '\ncommands/design.md — the launch offer\n'
+
+refute_md "$COMMAND_MD" 'the falsified reason for not spawning is gone, not softened' \
+  'a board started from a tool call dies with it'
+assert_md "$COMMAND_MD" 'the offer lands when there is something to look at, not at the preflight' \
+  'the first batch of questions is ready to post'
+assert_md "$COMMAND_MD" 'the launch is offered and waits for a yes — never taken unasked' \
+  'never spawn it unasked'
+assert_md "$COMMAND_MD" 'the reason that replaced the falsified one is the port, not the process tree' \
+  'squats :3727'
+
+# Already pinned on the skill below, as one of the four cross-repo contracts.
+# Pinned again here for a different reason: the offer is the moment the user is
+# handed a URL, and an offer that hands them the bare board sends them to a
+# canvas with their questions somewhere on it.
+assert_md "$COMMAND_MD" 'the offer carries the link to the open questions, not to the whole canvas' \
+  '?openComments=1&author=ai'
+
+# `repoPath` is already in this file twice — the `status` tool's return shape and
+# the endpoint's — so the field name alone would pass without the row saying
+# anything. The needles carry the row's own words instead.
+assert_md "$COMMAND_MD" 'the other-repo verdict names which repo holds the port' \
+  'Name the repo that holds it'
+assert_md "$COMMAND_MD" 'and says where that name is read from' \
+  'the `repoPath` in the `status:` line'
 
 printf '\nskills/esas-design — the D5 gestures\n'
 

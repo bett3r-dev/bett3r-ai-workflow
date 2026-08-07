@@ -107,9 +107,9 @@ fi
 | `design: present` or `ops: present` | A design layer is already on disk. | It is either the unit of work you are resuming or the residue of one that shipped. **Ask whose session it is** — see *Seeding*. |
 | `mcp: registered` | The entry is in `.mcp.json`. That is not the same as the server running. | Call the `status` tool now — see *Registering* for the three ways this answers. |
 | `mcp: unregistered` / `mcp: absent` | This repo's `.mcp.json` does not register the server. That is all the preflight can see — it reads the project file only. | Write the entry, then **stop** — see *Registering* — **unless the `mcp__esas__*` tools are already available in this session**, which means it is registered elsewhere (a user-scoped `~/.claude.json`). Then skip the write: it would cost a needless restart and put a duplicate entry in a git-tracked file. |
-| `board: off` | Nothing is serving this repo on :3727. | The normal state before the user launches it. Print the launch line and **carry on** — see *The board*. |
+| `board: off` | Nothing is serving this repo on :3727. | The normal state before the user launches it. **Carry on** — the offer comes later, when the first batch of questions is ready, not here; see *The board*. |
 | `board: serving` | A board is up on this checkout. | Compare its `lastSeq` with the `status` tool's. Same number ⇒ the link is live. |
-| `board: other-repo` | Something holds :3727 serving a *different* checkout. | Say so before the first proposal: until it is closed this repo's board cannot claim the port (`strictPort` never drifts), and the screen the user is watching will never move. Then carry on. |
+| `board: other-repo` | Something holds :3727 serving a *different* checkout, and the `status:` line under the verdict says which. | **Name the repo that holds it** — the `repoPath` in the `status:` line is the project root that board serves — and say so before the first proposal: until it is closed this repo's board cannot claim the port (`strictPort` never drifts), and the screen the user is watching will never move. Naming it is the difference between a thing the user can close and a board they may not remember starting. Then carry on. |
 | `board: unknown` | No `curl` here, so the board was not probed at all. | Say it was not verified rather than reporting it down, and carry on. |
 
 ### Registering `esas-mcp` — and the restart that makes it real
@@ -159,9 +159,11 @@ What does need a decision is a layer that is already there. The design layer is 
 
 (A sync cursor left behind by a previous feed reads as "nothing has been synced" and inflates the hook's pending count — see the `esas-pending` skill. That one is cosmetic and clears on the next sync. Another unit of work's *verbs* are not.)
 
-### The board — print the command, verify the endpoint, never own the process
+### The board — offer the launch when there is something to see, verify the endpoint, never spawn it unasked
 
-Launch is the user's. Tell them the line their repo uses — `yarn esas:board` in teselly, otherwise `node <esas checkout>/packages/sticky-notes-board/bin/esas-board.mjs` — and do not spawn it yourself: a board started from a tool call dies with it.
+**Offer the board at the moment the first batch of questions is ready to post, and start it only on a yes.** That is the first moment it is worth looking at, and it is the same moment the summon watcher goes up (below), for the same reason: before it the canvas holds the graph and nothing to answer, so the offer costs the user a second screen and gives them nothing to do on it. Offer the line their repo uses — `yarn esas:board` in teselly, otherwise `node <esas checkout>/packages/sticky-notes-board/bin/esas-board.mjs` — together with the link the questions are behind, `?openComments=1&author=ai`, which opens on the open threads instead of on the whole canvas. On a yes, start it as a `Bash` call with `run_in_background`, which outlives the turn that started it; in the foreground it would hold that turn open for as long as the board serves. On a no, leave them the line and carry on — the board is a projection, and one opened an hour in renders everything that already happened.
+
+**Never spawn it unasked, and never at the preflight.** The port is the reason, and it is strict (below): a board nobody asked for squats :3727 for as long as it runs, and the repo that pays is the *next* one — its board will not bind, in a session that did nothing wrong and has no reason to suspect a board it never started. An orphan is also the hardest kind to find, which is what the `board: other-repo` row above is for. Offering at the preflight makes that the ordinary outcome rather than the unlucky one: the preflight answers *capability*, and a checkout that can hold a board is not yet a design that needs one.
 
 The board claims **:3727 strictly**. It never drifts to the next free port, so `GET /api/esas/status` on that port either answers for this repo or does not answer at all. It returns `{repoPath, gitSha, lastSeq}`; `lastSeq` is the same number the `status` tool reports, which is what makes a dead link visible by comparing two screens instead of debugging.
 
@@ -197,7 +199,7 @@ If the ticket has a `<!-- design-multi:resolved:v1 ... -->` block, its design wa
 
 ## Step 2 — Grill (using the `grill` + `domain-modeling` skills)
 
-Run the interview: walk every branch of the decision tree, one question at a time, each with your recommended answer; resolve dependencies between decisions before moving on. While you do:
+Run the interview: walk every branch of the decision tree, one question at a time (under board mode the independent forks batch to the canvas and only the dependent ones stay serial — the `grill` skill's split), each with your recommended answer; resolve dependencies between decisions before moving on. While you do:
 
 - **Sharpen the language** — challenge terms against the glossary, propose canonical terms for fuzzy ones, stress-test relationships with concrete edge-case scenarios, and **cross-reference claims against the code**.
 - **Update `CONTEXT.md` inline** the moment a term resolves (glossary only — no implementation detail).
