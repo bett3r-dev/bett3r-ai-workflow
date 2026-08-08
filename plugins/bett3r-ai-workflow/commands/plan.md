@@ -33,6 +33,8 @@ Present the proposed slices as a numbered list. For each: **title**, **blocked-b
 
 **Iterate until the user approves.** Do not write `slices.yaml` or publish until approved.
 
+**Unattended branch.** Inside a `/start-multi` fleet run there is **no user to approve, by construction** — this step reads as a hard gate with no exit, so an agent must decide on its own whether the instruction applies to it, and a literal one stalls here. When invoked by an unattended agent (or the ticket carries a `design-multi:resolved:vN` block, whose slicing the human already reviewed): **skip the review pass, write `slices.yaml`, and record in the file that the breakdown was not human-reviewed**, so `/verify-build` and the PR body can say so. `/design` already has this shape for its own interview; this is its counterpart.
+
 ## Step 5 — Write `.work/slices.yaml`
 
 Write the approved slices (the `vertical-slicing` skill's schema): `id`, `name`, `passes: false`, `depends_on`, `behavior`, `oracle` (the test that proves it), `gates` (the project invariants the verifier must confirm). Record the ADR path and branch. Lead each slice with behavior; `touches` (files) is an optional hint only.

@@ -4,9 +4,19 @@
 
 ## Location & numbering — match the repo
 
-**Detect the repo's existing ADR convention and follow it** — do not impose a new one. Scan for an existing ADR directory (commonly `docs/adr/`, `docs/development/adr/`, or `docs/decisions/`) and copy its location, filename pattern, and numbering. Scan existing ADRs for the highest number and increment by one.
+**Detect the repo's existing ADR convention and follow it** — do not impose a new one. Scan for an existing ADR directory (commonly `docs/adr/`, `docs/development/adr/`, or `docs/decisions/`) and copy its location and filename pattern.
 
-Only if the repo has **no** ADRs yet, default to `docs/adr/NNNN-slug.md` (sequential, zero-padded). Create the directory lazily — only when the first ADR is needed.
+Only if the repo has **no** ADRs yet, default to **`docs/adr/ADR-NNN-slug.md`** — the spelling the rest of this plugin renders into every host repo (`vertical-slicing`'s `slices.yaml` schema, `verify-build`'s PR-body template). This rule fires exactly once per repo, on the *first* ADR, and every later ADR inherits whatever it produced by "match what's there" — so a default that disagrees with the templates sets a convention the repo keeps forever, and one the flow's own artifacts then fail to match. The three must agree; if the zero-padded form is ever preferred, both templates change too. Create the directory lazily — only when the first ADR is needed.
+
+**Never take the next number from a directory listing.** A listing shows only numbers that reached *your* branch, and numbers on unmerged siblings, open PRs and long-lived stacks are already claimed — invisible and taken. Scan every ref:
+
+```sh
+git log --all --name-only --pretty=format: | grep -oE 'ADR-[0-9]+' | sort -u | tail -5
+```
+
+and go above that. The collision is **silent**: different slugs mean different filenames, so nothing conflicts, the merge is clean, and both land. It is not a parallelism artifact either — two sequential sessions on two long-lived stacks produce it just as readily, and one repo's namespace reached 22% duplicated numbers this way. Duplicates break every inbound `ADR-0NN` citation permanently, and renumbering after merge is not a cleanup but a decision about breaking references — so the cheap moment is before the number is used. Under a fleet, the orchestrator allocates numbers rather than lanes self-numbering; `/verify-build` re-checks uniqueness **against the merge target** regardless, since a number can be claimed between design and merge.
+
+Prefer **amending an existing ADR** where one already covers the ground, and release a reserved number you did not use.
 
 ## Template
 

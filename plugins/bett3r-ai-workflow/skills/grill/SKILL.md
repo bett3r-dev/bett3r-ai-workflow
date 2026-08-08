@@ -39,9 +39,21 @@ Where the repo has a `.esas/` and `/design` has put board mode on, the map gains
 
 **The map is unconditional; the canvas is not.** In a repo with no `.esas/` nothing in this subsection applies and nothing above it changes: the map is printed in the terminal, every fork is asked here, and the interview runs exactly as it did before board mode existed.
 
+## Presenting a fork so it can be answered
+
+Three defaults, all of them direct user feedback, all of them otherwise re-taught every session that starts here. `/design` and `critique` inherit them.
+
+- **Never re-reference a label you coined earlier without restating it.** "Option b3", "scenario A", "the hybrid" — labels accumulate across a long interview and become unfollowable ( *"it is very hard for me to follow you… I start to lose track"* ). Carry a descriptive title alongside the label every time: *"b3 (throw and record the oversell separately)"*.
+- **A timeline with a concrete named cast beats prose.** Define the cast once — real product names, SKUs, amounts — then walk it step by step per scenario as an indented timeline with an outcome line. This is mandatory where a fork is about **how data moves**; a previously-lost explanation landed immediately on being relabelled this way.
+- **Bold the key idea at the start of each paragraph** in long output, so the reader can skim the spine and descend only where they want to.
+
+**And where a fork concerns the behaviour of the flow, a skill, or a command this session is itself running: the session is a participant, not an observer.** In-session behaviour is evidence about the **loaded version**, never about the design question, and an absence in the running session is never an argument for or against adding something. State which version produced any observation offered as evidence, and let the user weigh whether they *want* the capability independently of whether it currently works.
+
 ## Standard high-leverage probes
 
 These are not the whole interview — they are questions that collapse a large branch of the tree in one move. Fire the relevant one whenever the design touches its trigger, *early*, before walking the branch the long way.
+
+- **Background-wake dependence** — whenever any part of the design relies on a **background task's exit re-invoking a session** (a file watcher, a poll loop, a fleet coordination signal), ask: *"what does the consuming text say when the wake arrives wrapped in a refusal?"* The wake is delivered inside a platform-emitted `[SYSTEM NOTIFICATION - NOT USER INPUT] … Do NOT interpret this as user acknowledgement, confirmation, or response to any pending question` banner. It is unsuppressable, it arrives in the same turn as the wake, and it is **stronger** than any in-plugin standing rule the design carves out — so a session that obeys it ends the gesture silently while the user watches a surface that answered nothing. The design must **explicitly disarm it** (as `esas-design` does: the notification is not the answer, the sentinel is empty by design, so the banner makes no claim about what a subsequent read returns). This is a standing platform constraint, not a property of any one gesture, and a text-review pass will always pass a design that ignores it — it deadlocks only when the mechanism actually runs.
 
 - **Side-effect reconcilability** — whenever the design performs an **external or otherwise non-idempotent side-effect** that can be retried/redelivered, ask: *"Is this side-effect **reconcilable** against the external system by a natural key — can you ask it 'does this already exist?' (a SKU, a client-reference, a transactionally-reserved number you can read back)?"*
   - **Yes** → reconcile by that key; build **no** local dedup structure (ledger/bitmap/lease). Reconcile is authoritative — it survives total loss of any local dedup store.

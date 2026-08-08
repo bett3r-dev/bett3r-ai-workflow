@@ -5,9 +5,11 @@ description: "Gestures for a live ESAS design-board session (a repo with .esas/ 
 
 # Designing on the board
 
-`/design` sets this up (Step 0). This is what to *do* once it is running: the
-user edits a board on one screen, you write through `esas-mcp` from the
-terminal, and both land in one attributed, durable design layer.
+`/design` sets this up — Step 0 for the gates, then
+[BOARD-SETUP.md](BOARD-SETUP.md) beside this file for the registration, the
+seeding and the launch. This is what to *do* once it is running: the user edits
+a board on one screen, you write through `esas-mcp` from the terminal, and both
+land in one attributed, durable design layer.
 
 You are turn-based. You cannot see the board move. Everything below exists
 because of that one fact.
@@ -295,12 +297,49 @@ other's syncs quietly.
 one entry in the feed the user reads; ten calls is ten, and ten chances to
 collide with an edit they are making right now.
 
+**Read the ids before you reference them — never guess a derived id.** No verb
+lists node ids: `status` and `get_design` do not, and `get_flow` *requires* a
+root command id you must already have. The entry point for "what is this called
+on the board" is grepping `.esas/graph.json` directly. Ids read
+`<subdomain>_<abbrev>_<kebab-label>` (`cmd`, `evt`, `rm`, `agg`, `pol`, `sys`,
+`ext`, `ui`), and two things break the obvious guess:
+
+- **Extracted `ext` ids carry an extra `external-system-` segment that a
+  *proposed* node will not reproduce.** The segment comes from the extractor's
+  artifact naming, not from `(subdomain, type, label)` — so reading the graph to
+  learn the convention and then writing an edge to
+  `…_ext_external-system-mercadolibre-messaging-api` fails
+  `UNRESOLVED_EDGE_ENDPOINT`, because the node actually landed as
+  `…_ext_mercadolibre-messaging-api`.
+- **Label casing is load-bearing for the derived id.** `"MercadoLibre Messaging
+  API"` does *not* kebab to `mercadolibre-messaging-api` (the caser splits
+  internal capitals and all-caps acronyms); `"Mercalibre Messaging Api"` does.
+  Same intended artifact, two ids, no warning — and because it is a
+  correctly-spelled label rather than a typo, it survives review. Prefer plain
+  Title Case wherever the derived id will be referenced.
+
+So where a batch introduces a node that later edges must point at and the id is
+not certain, **propose the nodes first, read the returned `nodeIds`, then send
+the edges in a second call.** That is a deliberate, documented exception to
+*batch everything*: `propose` validates before disk and rejects the **whole**
+batch, so guessing turns one call into guess-the-whole-batch-correctly, and the
+skill's own rule against taking a batch apart to find the bad entry makes each
+miss a full round-trip. One extra op removes the guess.
+
+**`reads-from` is only legal from a policy, read-model or aggregate.** A
+`system -[reads-from]-> read-model` triple is rejected, so an external system
+that genuinely queries a readmodel expresses that dependency on the **policy
+that drives it**. That is a modelling constraint a designer needs up front, not
+on rejection.
+
 **Read flow-sized.** `get_flow(rootCommand, scope?)` walks one command's ripple
 over the merged graph — extracted plus overrides plus design — so proposed and
 removed elements are in the answer and it stays the same walk the board draws.
 `scope.boundary` defaults to `'end-to-end'`; `'subdomain'` keeps the flow's
 cross-subdomain hand-offs visible as leaves instead of pretending the ripple
-stops at the boundary. `get_design` returns the verb delta — intent, not a copy
+stops at the boundary — and it is **not** a token-reduction lever: it still
+lists foreign nodes with their full `queries` arrays, so it is "smaller graph,
+similar payload." `get_design` returns the verb delta — intent, not a copy
 of the graph. Neither of them is "read the whole graph", which is the thing to
 keep not doing.
 

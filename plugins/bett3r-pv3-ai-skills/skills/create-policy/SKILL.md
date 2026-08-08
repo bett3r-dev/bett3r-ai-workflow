@@ -301,6 +301,24 @@ export const CrossServicePolicy = ( ports: Ports ) => {
 - **Symmetric branch redelivery guards** — When a policy handler has multiple branches (e.g. an "open"/"activate" branch and a "close"/"resolve" branch) that each dispatch a command, ALL branches that can receive re-delivered events must swallow the matching "already done" error codes. A common defect: only the "start" branch guards `ALREADY_ACTIVE` but the "resolve" branch leaves `NOT_ACTIVE` / `STATE_NOT_FOUND` unswallowed. Outbox redelivery of a "resolve" event after the process is gone will throw and poison the stream. Fix: wrap every branch's `executeCommand` in a `try/catch` that swallows its own idempotency codes — a review caught exactly this asymmetry: the activate branch correctly swallowed its `..._ALREADY_ACTIVE` code, but the resolve branch was missing the symmetric `..._NOT_ACTIVE` / `STATE_NOT_FOUND` guard.
 - **Non-idempotent external side-effects → reconcile by natural key, not a blind ledger** — For a policy whose side-effect is a non-idempotent **external** create-call with no idempotency key (list a product, issue an invoice), redelivery safety comes from **reconciling against the external by a natural key** (ask it "does this SKU / client-reference / reserved-number already exist?"), NOT from a local processed-events ledger/bitmap. A ledger marks *after* the side-effect, re-creating the act-then-mark gap; reconcile is authoritative and survives loss of the local store. A best-effort ledger is justified **only** when the side-effect is non-idempotent **and** non-reconcilable. Prefer pushing dedup into the external via an idempotency key derived from `event.id` when it supports one. See the `ddd-patterns` skill → "Non-idempotent external side-effects: reconcile by natural key".
 
+## A new policy emits an internal operation — register its capability before `generate-all`
+
+Registering a **new** `PolicyBuilder` policy makes `generate-all`'s authorization-surface generator fail hard, blocking the whole build:
+
+```
+operation `<subdomain>:<kebab-of-policy-name>` has no capability coverage
+```
+
+Even with no endpoint and no command authored, a policy silently emits an **internal operation route** — the kebab-case of the policy factory name minus `Policy`, exactly like every rules-execution policy. Add that operation key to the `<subdomain>:internal` capability in `packages/shared/capabilities/src/registry.ts`, next to its siblings, **before** running `generate-all`:
+
+```
+automation:suspension-resume-channel-reconciliation  →  automation:internal
+```
+
+It is not obvious that a policy with no HTTP surface produces an authorization operation, so every new policy author rediscovers it — two independent lanes hit it in the same week. Where the composition of several slices adds several such policies, the drift only *exists* once they are assembled, which is why `/verify-build` also runs the repo's codegen gate as a whole-PR sweep. One trap on the catch side: if that gate reports an entry missing which you can see present in `registry.ts`, **suspect the gate's inputs before editing the source** — it resolves through the repo's own `paths` mapping and will happily read a stale compiled `.js` sitting beside the `.ts`. "Fixing" it by duplicating the entry creates real drift.
+
+Boot-time registration in a policy has a second, unrelated hazard — see `ddd-patterns` → *`onStarted` is not a queue*.
+
 ## Pre-State-Change Watermark on the Trigger Event
 
 When a command both **(a) mutates state** and **(b) emits an event that triggers a downstream policy needing the pre-mutation value of that state field**, the handler MUST compute the pre-mutation value and emit it onto the event. The policy cannot recover it by reading the aggregate state — the same event that fired the policy already advanced state in the reducer, so by the time the policy reads, the old value is gone.

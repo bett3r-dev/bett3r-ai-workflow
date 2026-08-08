@@ -23,6 +23,23 @@ jobs:
           fetch-depth: 0
       - name: Validate plugin artifacts (frontmatter + manifests)
         run: python3 scripts/validate-plugins.py
+      # Shared facts now live in EVIDENCE.md and are *linked* rather than
+      # restated, which trades one failure mode for another: a referenced file
+      # is only as good as the reference being followed. EVIDENCE.md shipped
+      # linked from 5 artifacts while needed by 8 — caught by a hand audit, by
+      # luck, once. Nothing about that miss was visible in any file: both the
+      # link and its absence parse fine. This reads the "Referenced by" line as
+      # a manifest and enforces the backlink in both directions.
+      - name: Check artifact links + the EVIDENCE.md backlink contract
+        run: python3 scripts/check-artifact-links.py
+      # These artifacts absorbed 121 recorded occurrences of real failures, and
+      # prose has no compiler: an edit that tightens a sentence can delete the
+      # fact inside it and leave every other gate green. Each needle is one
+      # distinctive phrase per absorbed fact, asserted present *corpus-wide* —
+      # so content is free to move between artifacts (that is the whole point of
+      # splitting them) while a deletion still fails loudly.
+      - name: Check the absorbed facts are still in the corpus (needles)
+        run: python3 scripts/check-needles.py
       # The shipped UserPromptSubmit hook runs on every prompt in every repo
       # where the plugin is enabled, and a non-zero exit blocks the prompt.
       # Run it under dash too — `sh` is dash on Debian/Ubuntu, bash on macOS.

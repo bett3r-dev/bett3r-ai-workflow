@@ -1,0 +1,471 @@
+{
+  "_about": [
+    "Needles: one short, distinctive literal string per hard-won fact absorbed into the",
+    "plugin artifacts. `scripts/check-needles.py` asserts each one is present SOMEWHERE in",
+    "the corpus (plugins/**/*.md). Presence is asserted corpus-wide, never per file, so",
+    "content is free to move between artifacts — that is the point: the gate proves a fact",
+    "survived a restructure, it does not freeze the layout.",
+    "",
+    "Adding a needle: pick a phrase that could only survive if the FACT survives — a coined",
+    "term, a literal command, a measured number, a distinctive noun phrase. Not a full",
+    "sentence (legitimate rewording breaks it) and not a common word (it passes by accident).",
+    "Verify it is present before committing; the gate refuses an absent needle.",
+    "",
+    "Removing a needle: only with the deliberate decision that the fact no longer applies,",
+    "recorded in the commit message. A red gate is not a reason to delete the entry."
+  ],
+  "_fields": {
+    "needle": "Required. The literal substring asserted present in at least one corpus file.",
+    "issue":  "Originating ai-learning issue number, or null where the absorbing commit closed a batch and the individual attribution is not recoverable.",
+    "commit": "The branch commit that absorbed the fact. `git show <sha>` carries the full rationale and the `Closes #…` set — see `_sources`.",
+    "was_in": "DOCUMENTATION ONLY — the artifact this needle lived in when it was pinned. Never asserted. A starting point for a search, and expected to go stale as content moves.",
+    "note":   "Required. One line naming the fact the needle guards, so a red gate teaches instead of just failing.",
+    "file":   "OPTIONAL and rare. Repo-relative path. Present only where the LOCATION is itself the fact — then the needle must appear in that exact file. Do not add it to make a needle 'more precise'; it defeats the corpus-wide design."
+  },
+  "_sources": {
+    "140d36a": { "subject": "EVIDENCE.md — name the four facts once", "closes": [] },
+    "0ffe29b": { "subject": "verify-build: sweeps become a trigger table", "closes": [57, 61, 69, 71, 72, 73, 74, 87, 88, 89, 90, 98, 99, 102, 121, 130] },
+    "9bd32cd": { "subject": "build + agents: mutation where RED is unavailable", "closes": [66, 68, 82, 84, 85, 97, 111, 118, 119, 122, 134] },
+    "1077d5c": { "subject": "start-multi: the orchestrator owns what no lane can see", "closes": [52, 59, 60, 64, 65, 70, 75, 76, 77, 79, 80, 81, 83, 86, 93, 94, 95, 96, 110, 112, 135] },
+    "b332053": { "subject": "design: the ticket is evidence, silence generalizes", "closes": [58, 67, 91, 103, 104, 105, 107, 108, 109, 114, 115, 123, 125, 126, 129, 133, 137] },
+    "e41fcdc": { "subject": "skills: expiry on handoffs, facts into critique", "closes": [100, 101, 106, 113, 127, 128, 132, 138] },
+    "022e30f": { "subject": "pv3: the two boot orders, complete-state writes", "closes": [56, 62, 63, 78, 139] },
+    "a2c44f9": { "subject": "audit: /start emits the baseline, EVIDENCE.md reachable", "closes": [77] },
+    "bcc1a95": { "subject": "start-multi: trim the narration, keep every fact", "closes": [] }
+  },
+
+  "needles": [
+    {
+      "needle": "## 1 — A verdict is evidence only about what it actually executed",
+      "issue": null,
+      "commit": "140d36a",
+      "file": "plugins/bett3r-ai-workflow/EVIDENCE.md",
+      "was_in": "plugins/bett3r-ai-workflow/EVIDENCE.md",
+      "note": "Fact 1's heading. File-pinned deliberately: six artifacts cite it as '§1', so the numbered section is an addressable anchor and may not migrate."
+    },
+    {
+      "needle": "## 3 — An inherited statement is a claim with a provenance and an expiry",
+      "issue": null,
+      "commit": "140d36a",
+      "file": "plugins/bett3r-ai-workflow/EVIDENCE.md",
+      "was_in": "plugins/bett3r-ai-workflow/EVIDENCE.md",
+      "note": "Fact 3's heading. File-pinned for the same reason as fact 1 — verify-build and design-multi cite '§3' by number."
+    },
+    {
+      "needle": "a gate states its blind spot in the same breath as its verdict",
+      "issue": null,
+      "commit": "140d36a",
+      "was_in": "plugins/bett3r-ai-workflow/EVIDENCE.md",
+      "note": "The rule fact 1 exists to state: 'green' with no named blind spot is a claim, not a result."
+    },
+    {
+      "needle": "a negative result is evidence only if the probe could have produced a positive",
+      "issue": null,
+      "commit": "140d36a",
+      "was_in": "plugins/bett3r-ai-workflow/EVIDENCE.md",
+      "note": "The positive-control corollary — every absence claim (zero callers, nothing drifted) ships with something the probe must flag."
+    },
+    {
+      "needle": "fails alarming or fails reassuring",
+      "issue": null,
+      "commit": "140d36a",
+      "was_in": "plugins/bett3r-ai-workflow/EVIDENCE.md",
+      "note": "Why reassuring-failing checks ('no errors in ten minutes, therefore green') are the ones that need a positive control."
+    },
+    {
+      "needle": "An unspecified seam adjacent to a specified one",
+      "issue": null,
+      "commit": "140d36a",
+      "was_in": "plugins/bett3r-ai-workflow/EVIDENCE.md",
+      "note": "Fact 4 — the highest-risk place in a design, because the specified rule is exactly what gets reused in the gap."
+    },
+    {
+      "needle": "Tests: 0 total",
+      "issue": null,
+      "commit": "140d36a",
+      "was_in": "plugins/bett3r-ai-workflow/EVIDENCE.md",
+      "note": "A run that executed nothing exits 0. Inconclusive, never green, never a baseline. Restated by test-runner and verify-build."
+    },
+    {
+      "needle": "stops parsing options at the first operand",
+      "issue": null,
+      "commit": "140d36a",
+      "was_in": "plugins/bett3r-ai-workflow/EVIDENCE.md",
+      "note": "Probe hygiene: BSD getopt turns a trailing `--include` into a filename — prints nothing, exits 0, no stderr."
+    },
+
+    {
+      "needle": "known-baseline-failures.md",
+      "issue": 77,
+      "commit": "a2c44f9",
+      "was_in": "plugins/bett3r-ai-workflow/commands/start.md",
+      "note": "/start emits the baseline itself; without it every later step re-derives the base's pre-existing failures (fleet lanes, in parallel)."
+    },
+    {
+      "needle": "134 × TS6305",
+      "issue": 77,
+      "commit": "a2c44f9",
+      "was_in": "plugins/bett3r-ai-workflow/commands/start.md",
+      "note": "The measurement behind 'capture the baseline on a freshly built tree' — unresolved .d.ts cascades into ordinary-looking type errors."
+    },
+
+    {
+      "needle": "mutation-blind",
+      "issue": null,
+      "commit": "9bd32cd",
+      "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
+      "note": "A predicate claimed single-source-of-truth must fail one test per declared consumer; a shortfall means a second inline copy exists."
+    },
+    {
+      "needle": "slicesDone: 1",
+      "issue": null,
+      "commit": "9bd32cd",
+      "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
+      "note": "Set `passes: true` in the same turn as the commit — one lane sat on six committed slices with a state file reading slicesDone: 1."
+    },
+    {
+      "needle": "auto-backgrounds at",
+      "issue": null,
+      "commit": "9bd32cd",
+      "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
+      "note": "Bash backgrounds a gate at the 600 s ceiling against your instruction; a subagent awaiting a backgrounded job deadlocks permanently."
+    },
+
+    {
+      "needle": "The fixture owns anything ambient",
+      "issue": null,
+      "commit": "9bd32cd",
+      "was_in": "plugins/bett3r-ai-workflow/agents/executor.md",
+      "note": "An assertion reading PATH/HOME/TZ/locale/git-config has a verdict that is a property of who ran it."
+    },
+    {
+      "needle": "Never negative-test a guard by mutating tracked files",
+      "issue": null,
+      "commit": "9bd32cd",
+      "was_in": "plugins/bett3r-ai-workflow/agents/executor.md",
+      "note": "Prove a guard fails on bad input in a throwaway scratch dir — never end a turn with a deliberate mutation in the tree."
+    },
+    {
+      "needle": "\"none\" is a valid answer, the field is not",
+      "issue": null,
+      "commit": "9bd32cd",
+      "was_in": "plugins/bett3r-ai-workflow/agents/executor.md",
+      "note": "The executor's issues/deviations field is required output — it is routed verbatim into the verifier and is the cheapest defect-catch in the flow."
+    },
+
+    {
+      "needle": "failure outside the slice's surface",
+      "issue": null,
+      "commit": "9bd32cd",
+      "was_in": "plugins/bett3r-ai-workflow/agents/test-runner.md",
+      "note": "A load-flaky failure untouched by the slice's diff is an environment artifact, named as such — not a slice RED that triggers executor churn."
+    },
+    {
+      "needle": "output *is* the reply channel",
+      "issue": null,
+      "commit": "9bd32cd",
+      "was_in": "plugins/bett3r-ai-workflow/agents/test-runner.md",
+      "note": "All three agents stop asking for a relay: the dispatching agent reads their return value directly. Present in executor, verifier and test-runner."
+    },
+
+    {
+      "needle": "PASS-with-follow-ups is not available for a named mitigation",
+      "issue": null,
+      "commit": "9bd32cd",
+      "was_in": "plugins/bett3r-ai-workflow/agents/verifier.md",
+      "note": "A finding leaving a design-named mitigation unverified is RETRY, not a follow-up — parking it silently un-mitigates a consciously accepted risk."
+    },
+    {
+      "needle": "SYSTEM NOTIFICATION - NOT USER INPUT",
+      "issue": null,
+      "commit": "9bd32cd",
+      "was_in": "plugins/bett3r-ai-workflow/agents/verifier.md",
+      "note": "A background wake arrives wrapped in an unsuppressable platform refusal; a text-review pass passes the design and the mechanism deadlocks."
+    },
+    {
+      "needle": "claim → probe run → holds / FALSE",
+      "issue": null,
+      "commit": "9bd32cd",
+      "was_in": "plugins/bett3r-ai-workflow/agents/verifier.md",
+      "note": "The falsification table — the verifier's required output shape, covering the design docs' claims and not only the diff's."
+    },
+    {
+      "needle": "parseAmountToMinorUnits",
+      "issue": null,
+      "commit": "b332053",
+      "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
+      "note": "Quote symbols as the source spells them — a paraphrased identifier is indistinguishable from a real one until you grep."
+    },
+    {
+      "needle": "5 files / 7 call expressions",
+      "issue": null,
+      "commit": "b332053",
+      "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
+      "note": "State what a count counts, never 'five call sites'. Restated in design-multi and EVIDENCE §3."
+    },
+    {
+      "needle": "gh api /orgs/<org>/packages",
+      "issue": null,
+      "commit": "b332053",
+      "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
+      "note": "Check the mechanism behind a ticket's rationale: a package 'blocked on publishing 1.4.0' had never been published at any version."
+    },
+    {
+      "needle": "prose fitting is not the claim being true",
+      "issue": null,
+      "commit": "b332053",
+      "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
+      "note": "The second pass verifies a resolved block's reasoning, not that its cited sites still read as quoted — zero drift reads as nothing to check."
+    },
+    {
+      "needle": "unspecified seams",
+      "issue": null,
+      "commit": "b332053",
+      "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
+      "note": "The design-doc section name that /plan and /build consume as explicit non-guidance. A section nobody emits is a silence that gets generalized."
+    },
+    {
+      "needle": "could a fresh session holding only this repo",
+      "issue": null,
+      "commit": "b332053",
+      "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
+      "note": "Step 4's self-containment gate — a step may not hand off state living only in its own context, and this fails worse the better the session was."
+    },
+    {
+      "needle": "no user to approve, by construction",
+      "issue": null,
+      "commit": "b332053",
+      "was_in": "plugins/bett3r-ai-workflow/commands/plan.md",
+      "note": "/plan's unattended branch — a literal reading of the human-review gate stalls every fleet lane at this step."
+    },
+
+    {
+      "needle": "design-multi:resolved:v(\\d+)",
+      "issue": null,
+      "commit": "b332053",
+      "was_in": "plugins/bett3r-ai-workflow/commands/design-multi.md",
+      "note": "/design-multi greps for its own past output before dispatching — the one command guaranteed to meet its own work, and otherwise blind to it."
+    },
+    {
+      "needle": "The emit precedes the critique deliberately",
+      "issue": null,
+      "commit": "b332053",
+      "was_in": "plugins/bett3r-ai-workflow/commands/design-multi.md",
+      "note": "critique's terminal-looking verdict outcompetes a trailing 'then emit'; two of three agents once ended their turn with no files written."
+    },
+    {
+      "needle": "evidence the agent stopped",
+      "issue": null,
+      "commit": "b332053",
+      "was_in": "plugins/bett3r-ai-workflow/commands/design-multi.md",
+      "note": "A task-completion notification is never evidence the agent produced anything — stat the files from disk before collecting a unit."
+    },
+    {
+      "needle": "delta: specified, deferred to build",
+      "issue": null,
+      "commit": "b332053",
+      "was_in": "plugins/bett3r-ai-workflow/commands/design-multi.md",
+      "note": "The third state beyond apply-or-skip for a glossary/ADR delta describing code that has not landed yet."
+    },
+
+    {
+      "needle": "ADR-057",
+      "issue": 52,
+      "commit": "1077d5c",
+      "was_in": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "note": "Three lanes once picked the same ADR number: different filenames, no conflict, clean merge. The orchestrator allocates, lanes never self-number."
+    },
+    {
+      "needle": "status=ready",
+      "issue": 59,
+      "commit": "1077d5c",
+      "was_in": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "note": "The :v2 resolved-block readiness field. Without it an unattended lane picks up a deferred/blocked/umbrella unit and may open a bad PR."
+    },
+    {
+      "needle": "diamond base",
+      "issue": 60,
+      "commit": "1077d5c",
+      "was_in": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "note": "A two-parent merge is the orchestrator's, not the child's — a base that does not compile surfaces its failures deep inside the child."
+    },
+    {
+      "needle": "Archive (never delete)",
+      "issue": 64,
+      "commit": "1077d5c",
+      "was_in": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "note": "A reused worktree's .work/ is archived, not deleted: those buffers hold the learnings.md that step 6 exists to rescue."
+    },
+    {
+      "needle": "git show <BASE>:<path>",
+      "issue": 65,
+      "commit": "1077d5c",
+      "was_in": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "note": "Compute base-sensitive recon against the pinned BASE, never a working-dir grep whose HEAD has drifted from it."
+    },
+    {
+      "needle": "cliff",
+      "issue": 75,
+      "commit": "1077d5c",
+      "was_in": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "note": "Size --max-parallel by memory, not cores: past some N the fleet falls off a cliff, not a slope (95 s alone vs >38 min under load)."
+    },
+    {
+      "needle": "TO: <TICKET-ID>",
+      "issue": 79,
+      "commit": "1077d5c",
+      "was_in": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "note": "Address every message from agents.yaml, never from recall — reconstructing the map from dispatch order misrouted two corrections in one run."
+    },
+    {
+      "needle": "terminal state and a positive control",
+      "issue": 94,
+      "commit": "1077d5c",
+      "was_in": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "note": "A stall detector without a terminal state cries wolf exactly when the run is going well, and gets muted right before it would have been useful."
+    },
+    {
+      "needle": "Failed to resolve entry for package",
+      "issue": null,
+      "commit": "1077d5c",
+      "was_in": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "note": "'install' is not 'ready' — workspace deps resolve through a gitignored build/, so a fresh worktree needs a build before any agent is dispatched."
+    },
+    {
+      "needle": "parentTipAtCut",
+      "issue": null,
+      "commit": "1077d5c",
+      "was_in": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "note": "A child cut at build-complete is stranded on a base its parent then fixes; record the tip and forward-merge after the parent's verify-build."
+    },
+    {
+      "needle": "saleTime: data.date ?? existing.saleTime",
+      "issue": null,
+      "commit": "1077d5c",
+      "was_in": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "note": "A directive carries the constraint, never the expression — this one was implemented faithfully and double-billed a metering period."
+    },
+
+    {
+      "needle": "author: 'human'",
+      "issue": null,
+      "commit": "0ffe29b",
+      "was_in": "plugins/bett3r-ai-workflow/commands/verify-build.md",
+      "note": "Mechanical-guard sweep: enumerate every surface that can set the dispatch field. A sibling MCP surface forwarded it and disarmed the guard."
+    },
+    {
+      "needle": "72 lines below a line the PR had just fixed",
+      "issue": null,
+      "commit": "0ffe29b",
+      "was_in": "plugins/bett3r-ai-workflow/commands/verify-build.md",
+      "note": "Claim-correction sweep: sweep the belief in synonyms, and re-sweep every file the PR itself edited — a self-contradicting file is worse than neither fix."
+    },
+    {
+      "needle": "--diff-filter=A --name-only",
+      "issue": null,
+      "commit": "0ffe29b",
+      "was_in": "plugins/bett3r-ai-workflow/commands/verify-build.md",
+      "note": "Merge-ripple sweep: new files conflict with nothing, so they appear in no conflict list — an added oracle merged green and tested nothing."
+    },
+    {
+      "needle": "33 of 57 suites",
+      "issue": null,
+      "commit": "0ffe29b",
+      "was_in": "plugins/bett3r-ai-workflow/commands/verify-build.md",
+      "note": "A green *partial* inventory reads as full coverage — compare the runner's reported file count against the repo's test files on disk."
+    },
+    {
+      "needle": "delete_branch_on_merge",
+      "issue": null,
+      "commit": "0ffe29b",
+      "was_in": "plugins/bett3r-ai-workflow/commands/verify-build.md",
+      "note": "A stacked child keeps pointing at a merged branch; merging it there returns exit 0, shows MERGED, and delivers nothing to the default branch."
+    },
+    {
+      "needle": "binary-classification symptom",
+      "issue": null,
+      "commit": "0ffe29b",
+      "was_in": "plugins/bett3r-ai-workflow/commands/verify-build.md",
+      "note": "A control byte in a source literal makes git call the file binary — grep returning nothing on a file you just edited is the earlier tell."
+    },
+
+    {
+      "needle": "Restatement-heavy output",
+      "issue": null,
+      "commit": "e41fcdc",
+      "was_in": "plugins/bett3r-ai-workflow/skills/critique/SKILL.md",
+      "note": "critique's input contract: hand the lenses verified facts, not a summary. Restatement means the input was too abstract, not that the design was sound."
+    },
+    {
+      "needle": "ADR-NNN-slug.md",
+      "issue": null,
+      "commit": "e41fcdc",
+      "was_in": "plugins/bett3r-ai-workflow/skills/domain-modeling/ADR-FORMAT.md",
+      "note": "The no-ADRs-yet default must match what vertical-slicing and verify-build render; it fires once per repo and sets a convention forever."
+    },
+    {
+      "needle": "UNRESOLVED_EDGE_ENDPOINT",
+      "issue": null,
+      "commit": "e41fcdc",
+      "was_in": "plugins/bett3r-ai-workflow/skills/esas-design/SKILL.md",
+      "note": "Proposed node ids do not derive the way extracted ones do — read the returned nodeIds instead of guessing a whole batch correctly."
+    },
+    {
+      "needle": "Background-wake dependence",
+      "issue": null,
+      "commit": "e41fcdc",
+      "was_in": "plugins/bett3r-ai-workflow/skills/grill/SKILL.md",
+      "note": "The grill probe for any design leaning on a background task's exit re-invoking a session — it must explicitly disarm the platform refusal."
+    },
+    {
+      "needle": "No transcript found",
+      "issue": null,
+      "commit": "e41fcdc",
+      "was_in": "plugins/bett3r-ai-workflow/skills/handoff/SKILL.md",
+      "note": "A recorded agentId dies with its session — which is precisely the situation a handoff exists to serve. Carry what a fresh dispatch needs."
+    },
+    {
+      "needle": "gate that never fired is indistinguishable from a gate that cannot fire",
+      "issue": null,
+      "commit": "b332053",
+      "was_in": "plugins/bett3r-ai-workflow/skills/vertical-slicing/SKILL.md",
+      "note": "Order a self-enforcing slice so a later slice in the same PR is its first live subject. Also stated in verify-build step 4."
+    },
+
+    {
+      "needle": "redrainRequested",
+      "issue": null,
+      "commit": "022e30f",
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md",
+      "note": "`onStarted` is not a queue: under the start-first boot order a bare `if (draining) return` silently drops every declaration after the first."
+    },
+    {
+      "needle": "{ replace: true }",
+      "issue": null,
+      "commit": "022e30f",
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md",
+      "note": "A complete-state projector write needs replace; the default merge can add and overwrite but never delete a key."
+    },
+    {
+      "needle": "MemoryDb-green is not Postgres-green",
+      "issue": null,
+      "commit": "022e30f",
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md",
+      "note": "MemoryDb's upsert takes no options argument at all, so it silently ignores replace — the harness cannot even express the bug."
+    },
+    {
+      "needle": "has no capability coverage",
+      "issue": null,
+      "commit": "022e30f",
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/create-policy/SKILL.md",
+      "note": "A new PolicyBuilder policy emits an internal operation route with no HTTP surface, and generate-all fails hard until it has a capability entry."
+    },
+    {
+      "needle": "TickCronjob",
+      "issue": null,
+      "commit": "022e30f",
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/create-integration-test/SKILL.md",
+      "note": "Drive a standalone cron poll policy through a real cron tick; a bare pollFn(ports) call dispatches a command that never reaches the pipeline."
+    }
+  ]
+}
