@@ -37,6 +37,14 @@ Whatever the `--tone`, these hold:
 
 `--tone brutal` amplifies this: no qualifiers, no "might/could" — only "will/does". Be blunt about what's broken.
 
+## Input contract — hand the lenses facts, not a summary
+
+**The input must carry the grounding pass's verified facts** — `file:line` citations, grep and enumeration results, the call sites actually checked — and not only the design narrative. This is an explicit requirement of the caller (`/design` Step 2.5, `/design-multi` Phase A), not something to be summarised away.
+
+The reason is structural: **a prose summary of a design is self-consistent by construction**, so the lenses can only critique the *argument*, and they return architectural opinion the author could have produced themselves. Given facts, they can catch the argument being **wrong about the code** — which is the failure that actually matters and the one an author cannot catch by re-reading their own draft. One such pass returned a single finding that justified the whole cost: a call site discarding exactly the value the ticket was about, at exactly the site of the silent degrade. It flipped the recommended fix and invalidated the draft's proposed rendering outright.
+
+**Restatement-heavy output is a cost signal, not a clean bill of health** — it means the input was too abstract, not that the design was sound.
+
 ## Step 1 — Parse
 
 Extract the **target** (everything that isn't a flag), the **lens** set (default `arch,ops`), and the **tone**. Where a claim in the design can be settled by reading the code, read the code — critique from evidence, not speculation.
