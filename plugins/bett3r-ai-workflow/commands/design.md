@@ -43,9 +43,45 @@ Run the preflight from the repo root. It reports facts and decides nothing:
 # does that. Every `key: value` line it can print has a row there, and
 # scripts/test-esas-design.sh asserts both halves of that.
 #
+# The plugin line leads because it is the one fact that can invalidate every
+# line under it — and the whole command around them. A session runs the build
+# the version-keyed cache holds, not the source tree you are reading, so if
+# those two have drifted, everything below is a correct report from the wrong
+# copy of this file. That is worth one line at the top rather than four JSON
+# files under ~/.claude/plugins/ once somebody suspects it.
+#
 # No `exit` anywhere and every variable prefixed: this runs in whatever shell
 # the tool call lands in, and it has no business ending it or renaming
 # somebody's `path`.
+
+# `CLAUDE_PLUGIN_ROOT` is substituted for *hook* invocations only, so it is
+# unset here and cannot answer this. `PATH` can: the cache `bin` directory of
+# every enabled plugin is on it, and that directory is keyed by the version —
+#     …/plugins/cache/<marketplace>/bett3r-ai-workflow/<version>/bin
+# The marketplace directory happens to share this plugin's name, which is why
+# the pattern insists on a path segment *before* the plugin one: without it the
+# sibling `bett3r-pv3-ai-skills` under the same marketplace would read as this
+# plugin, and report its version as ours.
+esas_plugin_version=''
+esas_path_rest=$PATH
+while [ -n "$esas_path_rest" ]; do
+  esas_path_entry=${esas_path_rest%%:*}
+  case $esas_path_rest in
+    *:*) esas_path_rest=${esas_path_rest#*:} ;;
+    *)   esas_path_rest='' ;;
+  esac
+  case $esas_path_entry in
+    */plugins/cache/*/bett3r-ai-workflow/*/bin)
+      esas_plugin_version=${esas_path_entry%/bin}
+      esas_plugin_version=${esas_plugin_version##*/} ;;
+  esac
+done
+if [ -n "$esas_plugin_version" ]; then
+  printf 'plugin: loaded\n'; printf '  version: %s\n' "$esas_plugin_version"
+else
+  printf 'plugin: unknown\n'
+fi
+
 esas_port=${ESAS_BOARD_PORT:-3727}
 
 if [ ! -d .esas ]; then
@@ -100,6 +136,8 @@ fi
 
 | report | what it means | what you do |
 |---|---|---|
+| `plugin: loaded` | A version-keyed cache directory for this plugin is on `PATH`, and the `version:` line under it is the build **this session** is running. That is a different question from which source tree you are editing: the cache is copied afresh only when the version string changes, so an edited plugin whose version stayed put is still being served from the old copy. | Nothing, in the ordinary case — read it and carry on. It earns its place on one path: if you have just changed this plugin and the number here is the previous release, **the change is not loaded**, and nothing you are reading in this session is what is running. Say so before acting on any of it; the fix is a version bump and a fresh session, not another edit to a file nobody is executing. |
+| `plugin: unknown` | No cache directory for this plugin on `PATH` — the session is running the plugin from source, or it was never installed from the marketplace at all. | **Not an error, and not a thing to fix.** It means this one line cannot answer the question, so carry on exactly as normal. If the answer turns out to matter — a command behaving like a version you do not recognise — read `~/.claude/plugins/installed_plugins.json` instead. |
 | `esas_dir: absent` | No design layer here — a fleet worktree, or a repo the extractor has never run in. | **Board mode off.** Run Steps 1–4 exactly as written. Never create `.esas/` to switch it on; the directory is the marker of "this checkout designs". |
 | `esas_dir: present`, `graph: absent` | `.esas/` exists but the extractor has not produced a graph. | Board mode off until it has. Ask the user to run the repo's extractor (`yarn esas` in teselly), then re-run the preflight. Proposals against a graph that isn't there have nothing to attach to. |
 | `esas_dir: present`, `graph: present` | Reality is on disk. | Board mode is possible — continue down this table. |

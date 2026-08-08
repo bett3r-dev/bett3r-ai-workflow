@@ -46,6 +46,30 @@ FIXTURES="$ROOT/scripts/fixtures/esas-design"
 STORE_FIXTURE="$ROOT/scripts/fixtures/esas-pending/pending/.esas"
 PREFLIGHT_SH=${PREFLIGHT_SH:-sh}
 
+# The preflight's first line reads which build of this plugin the session loaded
+# off the version-keyed cache directory on `PATH`. That makes the ambient `PATH`
+# an input to the report, and the one machine where a cache directory is always
+# present is the machine of whoever is editing this plugin — so an unscrubbed
+# run would print `plugin: loaded` on a laptop and `plugin: unknown` on CI, and
+# every expectation below would be wrong in exactly one of the two places for no
+# defect at all. Only the plugin-cache entries are dropped; `curl` and `python3`
+# stay resolvable, because half these cases are about what the preflight does
+# when it can reach the board. The `loaded` branch is then asserted once,
+# deliberately, against a synthesized entry.
+CLEAN_PATH=''
+path_rest=$PATH
+while [ -n "$path_rest" ]; do
+  path_entry=${path_rest%%:*}
+  case $path_rest in
+    *:*) path_rest=${path_rest#*:} ;;
+    *)   path_rest='' ;;
+  esac
+  case $path_entry in
+    */plugins/cache/*) continue ;;
+  esac
+  CLEAN_PATH=${CLEAN_PATH:+$CLEAN_PATH:}$path_entry
+done
+
 # Canonicalised, because `$TMPDIR` ends in `/` on macOS and the doubled slash
 # that produces is a spelling of a path no board would ever emit — an
 # inequality invented by this suite is not one worth asserting.
@@ -104,7 +128,8 @@ run_preflight(){
   rm -rf "$work"
   mkdir -p "$work"
   cp -R "$FIXTURES/$1/." "$work/"
-  ( cd "$work" && ESAS_BOARD_PORT="${2:-1}" "$PREFLIGHT_SH" "$PREFLIGHT" ) >"$TMP/out" 2>"$TMP/err"
+  ( cd "$work" && PATH="$CLEAN_PATH" ESAS_BOARD_PORT="${2:-1}" "$PREFLIGHT_SH" "$PREFLIGHT" ) \
+    >"$TMP/out" 2>"$TMP/err"
   status=$?
 }
 
@@ -135,15 +160,20 @@ assert_report(){
 printf '\nboard-mode detection (dry-run in fixture host repos)\n'
 
 # No `.esas` is the fleet worktree and every repo that has never designed. The
-# report stops at the first line on purpose: nothing below it can matter, and a
-# command that keeps probing teaches the model that board mode is negotiable.
+# probing stops at the `esas_dir` line on purpose: nothing below it can matter,
+# and a command that keeps probing teaches the model that board mode is
+# negotiable. (The `plugin` line above it is not part of that stop — it is a
+# fact about the session, not about this checkout's design layer, and it is
+# true in a repo that will never have one.)
 assert_report 'no-esas' \
-  'a repo with no .esas/: board mode off, and the report stops there' \
-  'esas_dir: absent'
+  'a repo with no .esas/: board mode off, and nothing is probed below that verdict' \
+  'plugin: unknown
+esas_dir: absent'
 
 assert_report 'no-graph' \
   '.esas/ without graph.json: the extractor has not run here' \
-  'esas_dir: present
+  'plugin: unknown
+esas_dir: present
 graph: absent
 design: absent
 ops: absent
@@ -152,7 +182,8 @@ board: off'
 
 assert_report 'board-ready' \
   'extracted + registered + no design layer yet: the clean board-mode start' \
-  'esas_dir: present
+  'plugin: unknown
+esas_dir: present
 graph: present
 design: absent
 ops: absent
@@ -161,7 +192,8 @@ board: off'
 
 assert_report 'unregistered' \
   'a .mcp.json without the esas entry reads as unregistered, not as absent' \
-  'esas_dir: present
+  'plugin: unknown
+esas_dir: present
 graph: present
 design: absent
 ops: absent
@@ -170,7 +202,8 @@ board: off'
 
 assert_report 'no-mcp-json' \
   'no .mcp.json at all is its own verdict — the entry has to create the file' \
-  'esas_dir: present
+  'plugin: unknown
+esas_dir: present
 graph: present
 design: absent
 ops: absent
@@ -186,8 +219,9 @@ mkdir -p "$work_in_session"
 cp -R "$FIXTURES/board-ready/." "$work_in_session/"
 cp "$STORE_FIXTURE/design.json" "$STORE_FIXTURE/ops.jsonl" "$STORE_FIXTURE/.claude-cursor" \
   "$work_in_session/.esas/" 2>/dev/null
-out=$( cd "$work_in_session" && ESAS_BOARD_PORT=1 "$PREFLIGHT_SH" "$PREFLIGHT" 2>"$TMP/err" )
-expected='esas_dir: present
+out=$( cd "$work_in_session" && PATH="$CLEAN_PATH" ESAS_BOARD_PORT=1 "$PREFLIGHT_SH" "$PREFLIGHT" 2>"$TMP/err" )
+expected='plugin: unknown
+esas_dir: present
 graph: present
 design: present
 ops: present
@@ -200,6 +234,48 @@ elif [ -s "$TMP/err" ]; then
   fail 'a design layer already on disk is reported quietly' "stderr: $( cat "$TMP/err" )"
 else
   pass 'a design.json + ops.jsonl already on disk are reported, not assumed fresh'
+fi
+
+# ── The plugin line ───────────────────────────────────────────────────────────
+#
+# Every case above answers `plugin: unknown`, because the suite scrubs the cache
+# entries off `PATH` (see the top of this file). This is the other branch, and
+# the only one that carries a number: a plugin reaches a session through a
+# version-keyed cache directory, so the version in that path *is* the build the
+# session is running — the one fact the source tree in front of you cannot
+# report about itself.
+#
+# The entry is synthesized rather than borrowed from a real cache, so the
+# assertion says the same thing on CI as on the machine that ships this plugin.
+# The sibling entry is appended *after* it and is load-bearing: the marketplace
+# directory shares this plugin's name, so a pattern one `*` too loose reads
+# `bett3r-pv3-ai-skills` as this plugin, and since the last match on `PATH`
+# wins, that mistake shows up here as `8.8.8`.
+
+printf '\nthe plugin line (which build of this plugin the session loaded)\n'
+
+work="$TMP/work"
+rm -rf "$work"; mkdir -p "$work"
+cp -R "$FIXTURES/no-esas/." "$work/"
+# The marketplace segment is spelled out rather than abbreviated, because the
+# doubled name is the whole trap: `.claude-plugin/marketplace.json` is itself
+# named `bett3r-ai-workflow` and the cache is keyed by that field, so
+# `cache/bett3r-ai-workflow/bett3r-ai-workflow/<version>/bin` is the only shape
+# this repo ever produces for its own users. A fixture that abbreviates it to
+# `mkt` cannot tell a correct pattern from a loose one, and this case passes
+# either way — which is the same as not having it.
+loaded_path="/tmp/x/plugins/cache/bett3r-ai-workflow/bett3r-ai-workflow/9.9.9/bin:/tmp/x/plugins/cache/bett3r-ai-workflow/bett3r-pv3-ai-skills/8.8.8/bin"
+out=$( cd "$work" && PATH="$loaded_path:$CLEAN_PATH" ESAS_BOARD_PORT=1 "$PREFLIGHT_SH" "$PREFLIGHT" 2>"$TMP/err" )
+expected='plugin: loaded
+  version: 9.9.9
+esas_dir: absent'
+if [ "$out" != "$expected" ]; then
+  fail 'a version-keyed cache dir on PATH is reported as the loaded build' \
+    'expected:' "$expected" 'actual:' "$out"
+elif [ -s "$TMP/err" ]; then
+  fail 'the plugin line is read off PATH quietly' "stderr: $( cat "$TMP/err" )"
+else
+  pass 'a version-keyed cache dir on PATH is reported as the loaded build'
 fi
 
 # ── The board probe ───────────────────────────────────────────────────────────
@@ -265,7 +341,8 @@ else
   else
     assert_report 'board-ready' \
       'a board serving this checkout reports `serving` plus the status body' \
-      'esas_dir: present
+      'plugin: unknown
+esas_dir: present
 graph: present
 design: absent
 ops: absent
@@ -285,7 +362,8 @@ board: serving
   else
     assert_report 'board-ready' \
       'a spaced status body from this checkout is still `serving`' \
-      'esas_dir: present
+      'plugin: unknown
+esas_dir: present
 graph: present
 design: absent
 ops: absent
@@ -304,7 +382,8 @@ board: serving
   else
     assert_report 'board-ready' \
       'a board serving a different checkout is `other-repo`, never `serving`' \
-      'esas_dir: present
+      'plugin: unknown
+esas_dir: present
 graph: present
 design: absent
 ops: absent
@@ -330,7 +409,7 @@ board: other-repo
   else
     rm -rf "$TMP/work"; mkdir -p "$TMP/work"
     cp -R "$FIXTURES/board-ready/." "$TMP/work/"
-    out=$( cd "$link" && ESAS_BOARD_PORT="$BOARD_PORT" "$PREFLIGHT_SH" "$PREFLIGHT" 2>"$TMP/err" )
+    out=$( cd "$link" && PATH="$CLEAN_PATH" ESAS_BOARD_PORT="$BOARD_PORT" "$PREFLIGHT_SH" "$PREFLIGHT" 2>"$TMP/err" )
     case $out in
       *'board: serving'*) pass 'a checkout reached through a symlink is still `serving`' ;;
       *) fail 'a checkout reached through a symlink is still `serving`' "actual: [$out]" ;;
@@ -346,7 +425,8 @@ board: other-repo
   if [ -n "$dead_port" ]; then
     assert_report 'board-ready' \
       'nothing listening reads as `board: off` — not an error, the board is user-launched' \
-      'esas_dir: present
+      'plugin: unknown
+esas_dir: present
 graph: present
 design: absent
 ops: absent
@@ -426,7 +506,9 @@ fi
 # The names planted are the ones this block used *before* it was namespaced
 # (`port`, `body`, `serving`, …) — the collisions a caller would actually
 # suffer. `esas_*` names are excluded on purpose: the contract is that the
-# block leaves only those behind, not that it binds nothing.
+# block leaves only those behind, not that it binds nothing. `path` is planted
+# with them and is the one a caller is likeliest to be holding, which is why the
+# plugin line walks `PATH` through `esas_`-prefixed names of its own.
 work="$TMP/work"
 rm -rf "$work"; mkdir -p "$work"
 cp -R "$FIXTURES/board-ready/." "$work/"
@@ -437,6 +519,7 @@ for esas_name in port body serving registered line path here spaced; do
   eval "\$esas_name=CALLER"
 done
 ESAS_BOARD_PORT=1
+PATH="$CLEAN_PATH"
 . "$PREFLIGHT"
 printf 'survived\n'
 [ "\$IFS" = "\$esas_ifs_before" ] && printf 'ifs-intact\n'
@@ -479,7 +562,7 @@ if [ ! -s "$PREFLIGHT" ]; then
 else
   # Several verdicts share a line (`if ... then printf ...; else printf ...; fi`),
   # so this matches per occurrence, not per line. Getting that wrong is how the
-  # first draft of this check silently covered 2 of 15.
+  # first draft of this check silently covered 2 of 17.
   grep -o "printf '[a-z_]*: [a-z-]*" "$PREFLIGHT" | sed "s/^printf '//" | sort -u >"$TMP/verdicts"
   found=$( wc -l <"$TMP/verdicts" | tr -d ' ' )
   table=$( awk '/^# --- esas preflight ---/{on=1} /^# --- end esas preflight ---/{on=0;next} !on{print}' "$COMMAND_MD" )
@@ -848,12 +931,15 @@ assert_md "$GRILL_MD" 'the standing rule survives the map: no picker, ever' \
 # and simultaneously the one place a board write goes worst: `design.json` is
 # scoped by ADR-001 to **one** unit of work and Phase B is holding N of them.
 #
-# So the pins come in two halves. The first four are the behaviour — comments
+# So the pins come in four groups. The first four are the behaviour — comments
 # only, one writer, a ticket-id prefix on every entry, a `resolve` on every fold.
-# The last four are the boundaries that stop the behaviour from growing into the
-# failure it is carved around: the reason the other verbs stay out, the words
-# that say why a text prefix is doing a field's work, the fork count above which
-# the canvas stops helping, and the teardown nobody downstream will do.
+# The next three are the boundaries that stop the behaviour from growing into
+# the failure it is carved around: the reason the other verbs stay out, the
+# words that say why a text prefix is doing a field's work, and the fork count
+# above which the canvas stops helping. Then five on arming the summon — the
+# batch turn posts and then waits, which makes it the one turn that has to end
+# in a listener, and each of the five fails its own way (argued where they
+# stand). Last, the two on the teardown nobody downstream will do.
 #
 # There is deliberately no `refute_md` on `propose` here, unlike the two
 # corrections above. The rejection has to be *argued* in the file — a rule whose
@@ -879,6 +965,30 @@ assert_md "$DESIGN_MULTI_MD" 'an answered fork is resolved in the pass that fold
   'Folding an answer back resolves its comment'
 assert_md "$DESIGN_MULTI_MD" 'the flat thread is a ceiling to fall back from, not one to design around' \
   'Above roughly fifteen open forks, keep the whole list in the terminal'
+
+# The turn that posts the batch is the turn that ends by arming the summon, and
+# this is the file where that was missing: `/design` says when the watch goes up
+# for a single design, while Phase B — post N tickets' forks, then wait — is the
+# strongest case for it the flow has, with nothing saying so. Unarmed, the
+# board's **Ask Claude** button implies a channel nobody is listening on: the
+# press raises the sentinel and no watcher exits on it. Pinned needle-per-rule
+# like the invariants themselves, because the four halves fail differently — the
+# wrong moment spends a wake on nobody, a second watch over a live one costs one
+# nobody asked for, a watch never re-armed ends the sitting in silence, and a
+# watch always re-armed answers an empty room every timeout for as long as the
+# forks stay open. The fifth needle is this command's own: Phase A dispatches N
+# agents and not one of them arms anything, for the same reason not one of them
+# writes the batch.
+assert_md "$DESIGN_MULTI_MD" 'the batch turn ends by arming, so the button has a listener' \
+  'after you post the batch, as the last thing you do before going idle'
+assert_md "$DESIGN_MULTI_MD" 'a second watch over a live one buys a wake nobody asked for' \
+  'One armed watch at a time'
+assert_md "$DESIGN_MULTI_MD" 'a batch is answered in bursts, so the watch survives the first press' \
+  'Re-arm after each wake'
+assert_md "$DESIGN_MULTI_MD" 'an absent user does not cost a wake every timeout for the rest of the run' \
+  'Two quiet timeouts end the channel'
+assert_md "$DESIGN_MULTI_MD" 'the orchestrator arms it, as it posts the batch — never an agent' \
+  'no agent arms anything'
 
 # Teardown is the one thing in this slice nothing downstream does for you.
 # `/start-multi` branches into worktrees that have no `.esas/` at all, and the

@@ -34,7 +34,8 @@ board" (any phrasing). `/design` owns what happens then.
 ### The one thing that *is* an ask
 
 **A summon is the user asking.** The board has an *Ask Claude* button; pressing
-it writes `.esas/.summon`, and a `/design` session may have armed a background
+it writes `.esas/.summon`, and a `/design` session — or a `/design-multi` Phase B
+sitting, which posts a batch and then waits — may have armed a background
 watcher on that file whose exit re-invokes it. So you can arrive at a turn
 nobody typed — no prompt, no "look at the board", just a background task that
 finished. That is not the rule above being circumvented. It is the user

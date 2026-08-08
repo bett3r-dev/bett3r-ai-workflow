@@ -13,9 +13,20 @@ host repo* — a `.esas/` beside a `.mcp.json` beside a `package.json` — so th
 because a repo with exactly one MCP server is not the case that breaks a
 detector.
 
+**One input these directories cannot own: `PATH`.** The preflight's first line
+reports which build of the plugin the session loaded, read off the version-keyed
+cache directory on `PATH` — a fact about the session, not about the checkout, so
+no fixture can carry it. The suite scrubs plugin-cache entries out of `PATH`
+before every run (`CLEAN_PATH`), which is what makes the report identical on CI
+and on the one machine where such a directory is always present: the machine of
+whoever is editing this plugin. The `loaded` branch is then asserted once against
+a synthesized entry, spelled with the marketplace segment in full, because the
+marketplace and the plugin share a name and that doubling is the trap the glob
+has to survive.
+
 | fixture | what it is | the verdict it pins |
 |---|---|---|
-| `no-esas` | a repo the extractor never ran in — or a fleet worktree | `esas_dir: absent`, and the report stops there |
+| `no-esas` | a repo the extractor never ran in — or a fleet worktree | `esas_dir: absent`, and nothing is probed below it |
 | `no-graph` | `.esas/` exists, the extractor has not produced a graph | `graph: absent` — reality is not on disk yet |
 | `no-mcp-json` | extracted, and the repo has no `.mcp.json` at all | `mcp: absent` — the entry has to create the file |
 | `unregistered` | extracted, `.mcp.json` carries other servers but no esas | `mcp: unregistered` — the case that must not read as absent |

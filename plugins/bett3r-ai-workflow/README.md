@@ -25,7 +25,7 @@ Plus skills: **`grill`** (the relentless design interview), **`critique`** (the 
 
 ## Propagation (capture → evolve)
 
-The flow improves itself. `capture-learnings` routes each learning to **where its source-of-truth lives** — an improvement to a shared skill becomes a GitHub issue in that plugin's repo; a repo-specific fact stays local. `evolve`, run inside a plugin repo, turns its accumulated issues into reviewed PRs. On merge, every repo that installs the plugin gets the improvement. (Requires each plugin's `repository` set in `plugin.json`, or a git remote, for issue routing.)
+The flow improves itself. `capture-learnings` routes each learning to **where its source-of-truth lives** — an improvement to a shared skill becomes a GitHub issue in that plugin's repo; a repo-specific fact stays local. `evolve`, run inside a plugin repo, turns its accumulated issues into reviewed PRs. On merge **and a version bump**, every repo that installs the plugin gets the improvement on its next refresh — the bump is not bookkeeping, it is the release itself, because the install is a version-keyed cache that copies nothing when the string has not moved (see `docs/adr/ADR-001`, and the CI gate that now refuses the omission). (Requires each plugin's `repository` set in `plugin.json`, or a git remote, for issue routing.)
 
 ## Core principles
 

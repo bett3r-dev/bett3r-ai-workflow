@@ -15,6 +15,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The version gate below diffs this branch against its merge base, and
+          # the default depth-1 checkout has no base ref to resolve — the gate
+          # would error instead of judging. This is the one failure invisible on
+          # a laptop, where every ref is already on disk.
+          fetch-depth: 0
       - name: Validate plugin artifacts (frontmatter + manifests)
         run: python3 scripts/validate-plugins.py
       # The shipped UserPromptSubmit hook runs on every prompt in every repo
@@ -33,3 +39,30 @@ jobs:
           sh scripts/test-esas-design.sh
           PREFLIGHT_SH=dash sh scripts/test-esas-design.sh
           PREFLIGHT_SH=bash sh scripts/test-esas-design.sh
+      # Every step above reads the source tree. This one reads the *diff*,
+      # because the failure it guards is not in any file: a plugin is copied into
+      # the version-keyed cache only when its `version` string changes, so a
+      # correct source tree that kept its old version reaches nobody — which is
+      # how two behaviour-changing commits once shipped with this workflow green,
+      # and green correctly.
+      #
+      # The gate and its oracle live in scripts/, outside plugins/**, and that is
+      # load-bearing rather than tidy: a rule that lived inside a plugin would
+      # count as a touch of that plugin, so changing the rule — or repairing
+      # it — would demand a release. Outside, it never fires on its own change,
+      # and it exempts nothing else.
+      #
+      # On `push` to master the base is master, the diff is empty, and this is a
+      # correct no-op; the judgement happens on the pull request.
+      - name: Require a version bump for every touched plugin
+        run: sh scripts/check-plugin-version-bump.sh "origin/${{ github.base_ref || 'master' }}"
+      # The gate itself has no compiler and only ever runs on somebody else's PR,
+      # so a broken one is discovered by the PR it wrongly judged. This drives it
+      # over throwaway git repos. Both interpreters are varied together — the
+      # suite's and the gate's — because `sh` is dash on Debian/Ubuntu and bash
+      # on macOS, and both scripts ship as POSIX.
+      - name: Test the version gate (throwaway git repos)
+        run: |
+          sh scripts/test-version-gate.sh
+          GATE_SH=dash dash scripts/test-version-gate.sh
+          GATE_SH=bash bash scripts/test-version-gate.sh
