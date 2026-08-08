@@ -931,12 +931,15 @@ assert_md "$GRILL_MD" 'the standing rule survives the map: no picker, ever' \
 # and simultaneously the one place a board write goes worst: `design.json` is
 # scoped by ADR-001 to **one** unit of work and Phase B is holding N of them.
 #
-# So the pins come in two halves. The first four are the behaviour — comments
+# So the pins come in four groups. The first four are the behaviour — comments
 # only, one writer, a ticket-id prefix on every entry, a `resolve` on every fold.
-# The last four are the boundaries that stop the behaviour from growing into the
-# failure it is carved around: the reason the other verbs stay out, the words
-# that say why a text prefix is doing a field's work, the fork count above which
-# the canvas stops helping, and the teardown nobody downstream will do.
+# The next three are the boundaries that stop the behaviour from growing into
+# the failure it is carved around: the reason the other verbs stay out, the
+# words that say why a text prefix is doing a field's work, and the fork count
+# above which the canvas stops helping. Then five on arming the summon — the
+# batch turn posts and then waits, which makes it the one turn that has to end
+# in a listener, and each of the five fails its own way (argued where they
+# stand). Last, the two on the teardown nobody downstream will do.
 #
 # There is deliberately no `refute_md` on `propose` here, unlike the two
 # corrections above. The rejection has to be *argued* in the file — a rule whose
@@ -962,6 +965,30 @@ assert_md "$DESIGN_MULTI_MD" 'an answered fork is resolved in the pass that fold
   'Folding an answer back resolves its comment'
 assert_md "$DESIGN_MULTI_MD" 'the flat thread is a ceiling to fall back from, not one to design around' \
   'Above roughly fifteen open forks, keep the whole list in the terminal'
+
+# The turn that posts the batch is the turn that ends by arming the summon, and
+# this is the file where that was missing: `/design` says when the watch goes up
+# for a single design, while Phase B — post N tickets' forks, then wait — is the
+# strongest case for it the flow has, with nothing saying so. Unarmed, the
+# board's **Ask Claude** button implies a channel nobody is listening on: the
+# press raises the sentinel and no watcher exits on it. Pinned needle-per-rule
+# like the invariants themselves, because the four halves fail differently — the
+# wrong moment spends a wake on nobody, a second watch over a live one costs one
+# nobody asked for, a watch never re-armed ends the sitting in silence, and a
+# watch always re-armed answers an empty room every timeout for as long as the
+# forks stay open. The fifth needle is this command's own: Phase A dispatches N
+# agents and not one of them arms anything, for the same reason not one of them
+# writes the batch.
+assert_md "$DESIGN_MULTI_MD" 'the batch turn ends by arming, so the button has a listener' \
+  'after you post the batch, as the last thing you do before going idle'
+assert_md "$DESIGN_MULTI_MD" 'a second watch over a live one buys a wake nobody asked for' \
+  'One armed watch at a time'
+assert_md "$DESIGN_MULTI_MD" 'a batch is answered in bursts, so the watch survives the first press' \
+  'Re-arm after each wake'
+assert_md "$DESIGN_MULTI_MD" 'an absent user does not cost a wake every timeout for the rest of the run' \
+  'Two quiet timeouts end the channel'
+assert_md "$DESIGN_MULTI_MD" 'the orchestrator arms it, as it posts the batch — never an agent' \
+  'no agent arms anything'
 
 # Teardown is the one thing in this slice nothing downstream does for you.
 # `/start-multi` branches into worktrees that have no `.esas/` at all, and the
