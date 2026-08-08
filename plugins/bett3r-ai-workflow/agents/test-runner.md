@@ -40,4 +40,5 @@ FAILED:
 - If something fails: include the failing test name(s) and the specific assertion/error — enough for the executor to act, not the full stack dump.
 - If the test could not run (missing dep, no DB, env), say so explicitly and distinguish it from a genuine failure — a non-runnable oracle is not a passing oracle.
 - Name any runner that **structurally cannot see** the slice's paths (ignore-patterns, an `include` glob that misses the file's extension). A green count over a suite that never collected the diff is the most expensive verdict you can return, because it reads as coverage.
+- What makes a run's verdict trustworthy (and the ways it silently isn't) is stated once in [EVIDENCE.md](../EVIDENCE.md) §1.
 - Your returned output *is* the reply channel — the agent that spawned you reads it directly. Don't ask for a relay or caveat the report with your tooling limits.

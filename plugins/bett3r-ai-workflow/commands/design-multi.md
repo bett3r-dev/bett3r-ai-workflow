@@ -129,6 +129,7 @@ Orchestrator is the **sole writer** of `run.yaml`; agents write only `units/<id>
 - **The batch is where cross-ticket coherence happens** — per-ticket `/design` can't see the other tickets; this pass can. Unify terms, flag conflicts, kill duplicated scope there.
 - **The board carries Phase B's questions, never its answers.** Comments and `resolve`, one writer, one batch, a ticket-id prefix on every entry, a watcher armed behind it so the answers can come back without a terminal turn — and the layer they live in is named in the handoff for the user to delete, because a per-run command is borrowing a per-unit-of-work file.
 - **No silent decisions** — auto-resolved and human-resolved alike ride into the ticket with rejected options and evidence.
+- **Every inherited statement is a claim with a provenance and an expiry** — the ticket's, the brief's, the draft's, and your own recall. [EVIDENCE.md](../EVIDENCE.md) §3 states what that costs and how to check it.
 - **Glossary/ADR are durable and committed by the single writer; the design draft is ephemeral;** the resolved design in the ticket is what start-multi consumes.
 - **Confirm before writing to a ticket** — it's outward-facing and (for description appends) touches a shared artifact.
 - **Capture learnings once, at the end.** Agents `record` flow-frictions to their own buffer; the orchestrator runs a single batched `/capture-learnings` over the aggregated buffers — never per-agent (it races on issue-filing), and never left to die with the ephemeral run dir.

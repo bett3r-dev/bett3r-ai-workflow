@@ -24,16 +24,27 @@ Create a branch off the current branch. Name it from the ticket id + a slug (e.g
 
 Create `.work/ and add it to .gitignore` if it is missing. It holds `design.md` and `slices.yaml` — ephemeral, never committed.
 
-## Step 4 — (optional) Pull ticket context
+## Step 4 — Capture the baseline → `.work/known-baseline-failures.md`
+
+Record the typecheck/test failures that are **already** on the base, and **how they were captured**. Cheap once here; otherwise every later step re-derives it, and under a fleet every lane pays for it in parallel.
+
+Two rules, because a wrong baseline is worse than none — a lane either chases errors that are not its own or, in the dangerous direction, treats real new errors as pre-existing cover:
+
+- **Capture on a freshly built tree.** When the toolchain cannot resolve a package's `.d.ts`, the failure cascades into ordinary-looking `TS2345`/`TS2322`/`TS2339` in every importing file — indistinguishable by inspection from genuine type errors. So *"filter out the known-noise code and trust the remainder"* is not a safe protocol: the remainder is contaminated by the same cause. (Measured once: `134 × TS6305 + 24 "real"` became `0 + 1` after re-emitting declarations.) A baseline taken with unresolved-dependency errors present is inflated and must not be published.
+- **An incremental typechecker under-reports on a second run** — it re-checks almost nothing. Clear the incremental state for a comparable full count.
+
+Later steps compare **by file, not by total**: a total hides an equal-and-opposite swap.
+
+## Step 5 — (optional) Pull ticket context
 
 If a ticket id is given and a tracker MCP is available (Jira/GitHub), fetch the ticket summary/description for context. If not, continue — the user will describe the work.
 
-## Step 5 — Hand off
+## Step 6 — Hand off
 
 > Branch `<name>` ready. Run `/design` to grill and model the work.
 
 ## Principles
 
-- Thin. The branch + `.work/` are all `start` produces.
+- Thin. The branch, the baseline and `.work/` are all `start` produces.
 - `.work/` is gitignored and disposable; git is the record.
 

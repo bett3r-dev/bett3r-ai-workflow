@@ -118,6 +118,7 @@ Orchestrator is the **sole writer** of `run.yaml`; agents write only `units/<id>
 - **Mind the two axes.** Each unit's `build` may itself parallelize independent slices — the across-unit and within-unit axes **multiply**, so keep `--max-parallel` conservative and respect the host repo's sandbox/disk limits.
 - **Never clobber a dirty worktree; tear down only what this run created.**
 - **Resumable** via run.yaml + idempotent steps + per-slice commits.
+- **Read a gate's verdict the way [EVIDENCE.md](../EVIDENCE.md) says to**, and require the same of every lane — a fleet multiplies both the number of instruments and the number of ways each one can be green about nothing.
 - **Ready-for-review PRs; push is the last step; nothing merged; the tracker is never transitioned.**
 - **No silent decisions** — autonomous and escalated alike ride into the PR body / ADRs with their rejected options.
 - **Resolved designs make the grill a second pass.** A ticket carrying a `design-multi:resolved:vN` block (from `/design-multi`) runs `design` as normal, but the answers are already present — the grill verifies rather than asks and flows through; only code-drift that re-opens an unanswered fork escalates it. This seam makes a design-multi → start-multi handoff unattended without a special mode.
