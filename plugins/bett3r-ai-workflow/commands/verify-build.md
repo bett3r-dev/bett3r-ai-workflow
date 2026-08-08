@@ -97,6 +97,16 @@ Push the branch and open the PR **ready for review, not a draft** (compose the r
 
 **For a stacked child:** GitHub auto-retargets a child only when the parent's branch is **deleted**. Where `delete_branch_on_merge` is false (`gh api repos/{owner}/{repo} --jq .delete_branch_on_merge`), the child keeps pointing at a merged branch — merging it there returns exit 0, shows MERGED, and delivers nothing to the default branch. Retarget explicitly (`gh pr edit <n> --base <default>`), and verify **after every merge** with `git merge-base --is-ancestor origin/<head> origin/<default>`; that is the only check that catches a wrong-target merge, because the wrong-target merge itself reports success.
 
+**A closing keyword binds to exactly one issue — repeat it per issue.** `Closes #56, closes #62, closes #63`, in the body and in every commit message. A bare list closes the first and turns the rest into ordinary mentions: they get a cross-reference link and stay open. The comma is not what does the work (`Closes #56, #62` closes one) — the keyword is. Nothing about the malformed line is visible anywhere: well-formed commit, PR MERGED, gates green, and the only tell is a backlog count nobody has a reason to read. Seven such lines shipped 80 references as 7 closures and left **73 issues open**. The plugin repo gates this (`scripts/check-closes-syntax.py`, over commit messages *and* instructional examples); a host repo does not, so here the rule travels with you.
+
+**"Merged" is not "closed" — assert the issues reached CLOSED.** Same shape as the wrong-target merge above, one level up: the merge reports success and the delivery that failed is the issue state, not the diff. So after the merge, read the referenced set rather than trusting the keyword that named it:
+
+```sh
+for n in <every issue the PR references>; do printf '%s %s\n' "$n" "$(gh issue view "$n" --json state -q .state)"; done
+```
+
+**One line per reference, every one `CLOSED`** — check the line count *before* the states, because a `gh` failure prints a blank state and greps clean. Report the ones that did not close, and close them (`gh issue close <n> -c "landed in #<pr>"`). Bulk form when the set is long: `comm -13 <(gh issue list --state closed --limit 500 --json number -q '.[].number' | sort) <(printf '%s\n' <referenced> | sort)` — what it prints is what stayed open.
+
 The PR **body is the record**:
 
 ```

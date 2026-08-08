@@ -6,6 +6,8 @@ description: Generate tests using Given/When/Then pattern for PV3 DDD components
 
 Generate co-located test files for PV3 DDD components using Jest and Given/When/Then structure.
 
+**Open the `ddd-patterns` reference for the artifact you are testing** — each one names the fixtures that are *required*, not optional, and they are the cases a happy-path suite silently omits: [AGGREGATES.md](../ddd-patterns/AGGREGATES.md) (the happy-path + state-rejection pair per status-guarded command; the `STATE_NOT_FOUND` test for every state-reading idempotency predicate; the lock acquire/release fixtures), [POLICIES.md](../ddd-patterns/POLICIES.md) (the redelivery-after-partial-progress test asserting **zero** duplicate events), [READMODELS.md](../ddd-patterns/READMODELS.md) (the interleaved brand-new-key concurrency test), and [DELIVERY.md](../ddd-patterns/DELIVERY.md) for what redelivery a test has to simulate. [`ddd-patterns` → SKILL.md](../ddd-patterns/SKILL.md) has the trigger table.
+
 ## Project configuration
 
 Resolve these placeholders from `.esas.config.json` at the repo root:

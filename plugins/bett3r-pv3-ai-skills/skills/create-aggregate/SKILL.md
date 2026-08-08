@@ -6,6 +6,8 @@ description: Scaffold a new event-sourced aggregate with PV3 AggregateBuilder pa
 
 Scaffold an event-sourced aggregate using PV3's `AggregateBuilder`.
 
+**Read [`ddd-patterns` → AGGREGATES.md](../ddd-patterns/AGGREGATES.md) before writing the file.** It is this skill's reference half: command-handler options, `idempotency.check` semantics, transactional side-writes and the UNIQUE-constraint lock, event-namespace coverage, system/admin-only and tenant-but-not-row-scoped aggregates, lifecycle status guards, and the idempotency-predicate null-safety bug. Changing an *existing* aggregate's fields also means [SCHEMAS.md](../ddd-patterns/SCHEMAS.md) → *Renaming a persisted field*.
+
 ## Project configuration
 
 Resolve these placeholders from the `.esas.config.json` at your repo root:
@@ -165,7 +167,7 @@ ApplyBulkItemsChange: commandBuilder( multiStream( ports, 'itemId' ))
   })
 ```
 
-Pair with a `ReducerNOOP` entry for the completion event (it lands on a per-correlation stream the aggregate doesn't reduce — see "Event namespace coverage" note (2) in the `ddd-patterns` skill).
+Pair with a `ReducerNOOP` entry for the completion event (it lands on a per-correlation stream the aggregate doesn't reduce — see "Event namespace coverage" note (2) in [`ddd-patterns` → AGGREGATES.md](../ddd-patterns/AGGREGATES.md)).
 
 **Two multi-stream shapes — pick by what state the handler needs:**
 

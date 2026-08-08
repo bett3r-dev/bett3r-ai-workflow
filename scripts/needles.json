@@ -16,24 +16,136 @@
   ],
   "_fields": {
     "needle": "Required. The literal substring asserted present in at least one corpus file.",
-    "issue":  "Originating ai-learning issue number, or null where the absorbing commit closed a batch and the individual attribution is not recoverable.",
+    "issue": "Originating ai-learning issue number, or null where the absorbing commit closed a batch and the individual attribution is not recoverable.",
     "commit": "The branch commit that absorbed the fact. `git show <sha>` carries the full rationale and the `Closes #…` set — see `_sources`.",
     "was_in": "DOCUMENTATION ONLY — the artifact this needle lived in when it was pinned. Never asserted. A starting point for a search, and expected to go stale as content moves.",
-    "note":   "Required. One line naming the fact the needle guards, so a red gate teaches instead of just failing.",
-    "file":   "OPTIONAL and rare. Repo-relative path. Present only where the LOCATION is itself the fact — then the needle must appear in that exact file. Do not add it to make a needle 'more precise'; it defeats the corpus-wide design."
+    "note": "Required. One line naming the fact the needle guards, so a red gate teaches instead of just failing.",
+    "file": "OPTIONAL and rare. Repo-relative path. Present only where the LOCATION is itself the fact — then the needle must appear in that exact file. Do not add it to make a needle 'more precise'; it defeats the corpus-wide design."
   },
   "_sources": {
-    "140d36a": { "subject": "EVIDENCE.md — name the four facts once", "closes": [] },
-    "0ffe29b": { "subject": "verify-build: sweeps become a trigger table", "closes": [57, 61, 69, 71, 72, 73, 74, 87, 88, 89, 90, 98, 99, 102, 121, 130] },
-    "9bd32cd": { "subject": "build + agents: mutation where RED is unavailable", "closes": [66, 68, 82, 84, 85, 97, 111, 118, 119, 122, 134] },
-    "1077d5c": { "subject": "start-multi: the orchestrator owns what no lane can see", "closes": [52, 59, 60, 64, 65, 70, 75, 76, 77, 79, 80, 81, 83, 86, 93, 94, 95, 96, 110, 112, 135] },
-    "b332053": { "subject": "design: the ticket is evidence, silence generalizes", "closes": [58, 67, 91, 103, 104, 105, 107, 108, 109, 114, 115, 123, 125, 126, 129, 133, 137] },
-    "e41fcdc": { "subject": "skills: expiry on handoffs, facts into critique", "closes": [100, 101, 106, 113, 127, 128, 132, 138] },
-    "022e30f": { "subject": "pv3: the two boot orders, complete-state writes", "closes": [56, 62, 63, 78, 139] },
-    "a2c44f9": { "subject": "audit: /start emits the baseline, EVIDENCE.md reachable", "closes": [77] },
-    "bcc1a95": { "subject": "start-multi: trim the narration, keep every fact", "closes": [] }
+    "140d36a": {
+      "subject": "EVIDENCE.md — name the four facts once",
+      "closes": []
+    },
+    "0ffe29b": {
+      "subject": "verify-build: sweeps become a trigger table",
+      "closes": [
+        57,
+        61,
+        69,
+        71,
+        72,
+        73,
+        74,
+        87,
+        88,
+        89,
+        90,
+        98,
+        99,
+        102,
+        121,
+        130
+      ]
+    },
+    "9bd32cd": {
+      "subject": "build + agents: mutation where RED is unavailable",
+      "closes": [
+        66,
+        68,
+        82,
+        84,
+        85,
+        97,
+        111,
+        118,
+        119,
+        122,
+        134
+      ]
+    },
+    "1077d5c": {
+      "subject": "start-multi: the orchestrator owns what no lane can see",
+      "closes": [
+        52,
+        59,
+        60,
+        64,
+        65,
+        70,
+        75,
+        76,
+        77,
+        79,
+        80,
+        81,
+        83,
+        86,
+        93,
+        94,
+        95,
+        96,
+        110,
+        112,
+        135
+      ]
+    },
+    "b332053": {
+      "subject": "design: the ticket is evidence, silence generalizes",
+      "closes": [
+        58,
+        67,
+        91,
+        103,
+        104,
+        105,
+        107,
+        108,
+        109,
+        114,
+        115,
+        123,
+        125,
+        126,
+        129,
+        133,
+        137
+      ]
+    },
+    "e41fcdc": {
+      "subject": "skills: expiry on handoffs, facts into critique",
+      "closes": [
+        100,
+        101,
+        106,
+        113,
+        127,
+        128,
+        132,
+        138
+      ]
+    },
+    "022e30f": {
+      "subject": "pv3: the two boot orders, complete-state writes",
+      "closes": [
+        56,
+        62,
+        63,
+        78,
+        139
+      ]
+    },
+    "a2c44f9": {
+      "subject": "audit: /start emits the baseline, EVIDENCE.md reachable",
+      "closes": [
+        77
+      ]
+    },
+    "bcc1a95": {
+      "subject": "start-multi: trim the narration, keep every fact",
+      "closes": []
+    }
   },
-
   "needles": [
     {
       "needle": "## 1 — A verdict is evidence only about what it actually executed",
@@ -93,7 +205,6 @@
       "was_in": "plugins/bett3r-ai-workflow/EVIDENCE.md",
       "note": "Probe hygiene: BSD getopt turns a trailing `--include` into a filename — prints nothing, exits 0, no stderr."
     },
-
     {
       "needle": "known-baseline-failures.md",
       "issue": 77,
@@ -108,7 +219,6 @@
       "was_in": "plugins/bett3r-ai-workflow/commands/start.md",
       "note": "The measurement behind 'capture the baseline on a freshly built tree' — unresolved .d.ts cascades into ordinary-looking type errors."
     },
-
     {
       "needle": "mutation-blind",
       "issue": null,
@@ -130,7 +240,6 @@
       "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
       "note": "Bash backgrounds a gate at the 600 s ceiling against your instruction; a subagent awaiting a backgrounded job deadlocks permanently."
     },
-
     {
       "needle": "The fixture owns anything ambient",
       "issue": null,
@@ -152,7 +261,6 @@
       "was_in": "plugins/bett3r-ai-workflow/agents/executor.md",
       "note": "The executor's issues/deviations field is required output — it is routed verbatim into the verifier and is the cheapest defect-catch in the flow."
     },
-
     {
       "needle": "failure outside the slice's surface",
       "issue": null,
@@ -167,7 +275,6 @@
       "was_in": "plugins/bett3r-ai-workflow/agents/test-runner.md",
       "note": "All three agents stop asking for a relay: the dispatching agent reads their return value directly. Present in executor, verifier and test-runner."
     },
-
     {
       "needle": "PASS-with-follow-ups is not available for a named mitigation",
       "issue": null,
@@ -238,7 +345,6 @@
       "was_in": "plugins/bett3r-ai-workflow/commands/plan.md",
       "note": "/plan's unattended branch — a literal reading of the human-review gate stalls every fleet lane at this step."
     },
-
     {
       "needle": "design-multi:resolved:v(\\d+)",
       "issue": null,
@@ -267,7 +373,6 @@
       "was_in": "plugins/bett3r-ai-workflow/commands/design-multi.md",
       "note": "The third state beyond apply-or-skip for a glossary/ADR delta describing code that has not landed yet."
     },
-
     {
       "needle": "ADR-057",
       "issue": 52,
@@ -345,7 +450,6 @@
       "was_in": "plugins/bett3r-ai-workflow/commands/start-multi.md",
       "note": "A directive carries the constraint, never the expression — this one was implemented faithfully and double-billed a metering period."
     },
-
     {
       "needle": "author: 'human'",
       "issue": null,
@@ -388,7 +492,6 @@
       "was_in": "plugins/bett3r-ai-workflow/commands/verify-build.md",
       "note": "A control byte in a source literal makes git call the file binary — grep returning nothing on a file you just edited is the earlier tell."
     },
-
     {
       "needle": "Restatement-heavy output",
       "issue": null,
@@ -431,7 +534,6 @@
       "was_in": "plugins/bett3r-ai-workflow/skills/vertical-slicing/SKILL.md",
       "note": "Order a self-enforcing slice so a later slice in the same PR is its first live subject. Also stated in verify-build step 4."
     },
-
     {
       "needle": "redrainRequested",
       "issue": null,
@@ -466,6 +568,146 @@
       "commit": "022e30f",
       "was_in": "plugins/bett3r-pv3-ai-skills/skills/create-integration-test/SKILL.md",
       "note": "Drive a standalone cron poll policy through a real cron tick; a bare pollFn(ports) call dispatches a command that never reaches the pipeline."
+    },
+    {
+      "needle": "dedup per-stream on version, NEVER on global position",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/DELIVERY.md",
+      "note": "The one dedup rule: a global position high-water mark drops exactly the gap-recovered events, silently re-creating a dropped-event bug."
+    },
+    {
+      "needle": "lastApplied[stream]",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/DELIVERY.md",
+      "note": "The dedup key is a per-stream last-applied version watermark; per-stream order makes it sufficient, so no consumer needs to remember every event id."
+    },
+    {
+      "needle": "but return 2xx",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/DELIVERY.md",
+      "note": "A skipped duplicate must still answer 2xx — an error makes the outbox retry it forever (retry storm) instead of setting the dispatched bit."
+    },
+    {
+      "needle": "zombie / partition owner",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/DELIVERY.md",
+      "note": "The four duplicate causes (a)-(d): crash-before-SETBIT, lost HTTP response, operator replay, and the unfenced cross-process owner that only appears after scale-out."
+    },
+    {
+      "needle": "iff the dispatched bit was already set",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/DELIVERY.md",
+      "note": "The exact definition of event.metadata.isRedelivery — true only where the outbox is re-sending an already-committed position, i.e. only operator replay."
+    },
+    {
+      "needle": "false-positive-free",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/DELIVERY.md",
+      "note": "isRedelivery is never set on a genuine first delivery, which is what makes suppressing an effect on it safe — and it is silent on the crash/retry paths."
+    },
+    {
+      "needle": "TV1-1945",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/DELIVERY.md",
+      "note": "A non-idempotent external effect needs the watermark committed atomically with it, or its own idempotency key; isRedelivery does not replace that work."
+    },
+    {
+      "needle": "version ≤ watermark",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/DELIVERY.md",
+      "note": "Guard order at the boundary: isRedelivery-skip first, then B/C dedup — isRedelivery is a no-op precisely on the crash-window duplicate, which is version > watermark."
+    },
+    {
+      "needle": "transactionalIdempotencyCheckpoint",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/DELIVERY.md",
+      "note": "The A/B/C layer model's B layer: a durable event.id-keyed checkpoint, distinct from the aggregate invariant (A) and the reconcile-by-natural-key (C)."
+    },
+    {
+      "needle": "appliedTargetKeys",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/POLICIES.md",
+      "note": "Partial-progress redelivery: seed `remaining` from the source aggregate's recorded progress, never by re-walking live downstream balances."
+    },
+    {
+      "needle": "mergeLeft({ isDeleted: true })",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/POLICIES.md",
+      "note": "The soft-delete trap: stateExists() does not protect a soft-deleted aggregate, so a terminal command re-emits its event on redelivery."
+    },
+    {
+      "needle": "non-reconcilable",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/POLICIES.md",
+      "note": "A blind processed-events ledger is justified only when the external effect is both non-idempotent AND non-reconcilable; otherwise reconcile by natural key."
+    },
+    {
+      "needle": "delta-vs-applied contribution ledger",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/READMODELS.md",
+      "note": "Plain atomicIncrement is not redelivery-idempotent; an accumulating cross-stream counter needs a deterministic-id contribution ledger and delta-only increments."
+    },
+    {
+      "needle": "initializeFieldOnce",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/READMODELS.md",
+      "note": "Brand-new-row bootstrap: identity-only upsert plus per-field CAS init with op:'notExists' — a skeleton-of-zeros upsert loses a racing increment."
+    },
+    {
+      "needle": "operator does not exist: text @> jsonb",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/READMODELS.md",
+      "note": "An array-of-string field queried with op:'contains' needs { strategy: 'gin' }; the default strategy materializes a text column and fails at runtime."
+    },
+    {
+      "needle": "getCommandSchemas",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/AGGREGATES.md",
+      "note": "`.produces([])` crashes endpoint registration; a side-effect-only command declares one possible event and returns [] from the handler."
+    },
+    {
+      "needle": "OPERATION_IN_PROGRESS",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/AGGREGATES.md",
+      "note": "At-most-one-in-flight is a UNIQUE-constraint side-write acquired in the command transaction and released by every terminal handler — a missed one is the stuck-lock bug."
+    },
+    {
+      "needle": "subscription identity from the **filename**",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SCHEMAS.md",
+      "note": "The safe contrast to persisted-field renames: PV3 derives stream/route/subscription identity from the filename, so renaming code symbols is safe. Do not over-apply the rule."
+    },
+    {
+      "needle": "## Which reference to open",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md",
+      "note": "ddd-patterns is a hub plus six references; the trigger table is what gets the pointer followed. Lose it and six files are orphaned with nothing erroring."
+    },
+    {
+      "needle": "A closing keyword binds to exactly one",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/evolve.md",
+      "note": "GitHub closes only the first issue after each Closes keyword. `Closes #56 #62 #63` closed #56 and left the rest open — 80 referenced issues became 7 closures and 73 stragglers, with the PR MERGED and CI green. Fails in the reassuring direction; the only tell is a backlog count."
     }
   ]
 }

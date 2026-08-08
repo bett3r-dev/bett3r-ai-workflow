@@ -6,6 +6,8 @@ description: Orchestrate complete DDD module creation including schemas, aggrega
 
 Orchestrate the creation of a complete PV3 DDD module by composing all sub-skills.
 
+**Read [`ddd-patterns` → MODULES.md](../ddd-patterns/MODULES.md) before writing `index.ts`** — the `create()` composition shape and why a boot hook (`onStarted`) must be correct under *both* boot orders. [`ddd-patterns` → SKILL.md](../ddd-patterns/SKILL.md) carries the cross-cutting rules this skill's checklist assumes (the MDU/lift artifact-factory contract, the composition-root boundary, invariant placement) plus the trigger table naming the per-artifact references the sub-skills use.
+
 ## Project configuration
 
 Resolve these placeholders from the repo's `.esas.config.json`:

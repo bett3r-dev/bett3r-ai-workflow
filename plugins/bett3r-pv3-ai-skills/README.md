@@ -25,6 +25,22 @@ A PV3 repo installs both; a non-PV3 repo installs just the workflow plugin.
 | `event-storming-to-spec` | Turns event-storming output (Mermaid / structured text) into a PV3 DDD specification that feeds `create-module`. |
 | `miro-to-mermaid` | Extracts event-storming artifacts from a Miro board into structured Mermaid flowcharts. Requires a host-repo Miro frame-data fetcher (see the skill's Step 1). |
 
+`ddd-patterns` is a **hub plus six references**, not one file: its `SKILL.md` holds the
+project-configuration preamble, the rules that apply to *every* artifact kind (the MDU/lift
+factory contract, the composition-root boundary, invariant placement, endpoint identity), and
+a trigger table — one row per reference, naming the condition to open it and what skipping it
+has cost. The per-kind material lives beside it in
+[AGGREGATES.md](skills/ddd-patterns/AGGREGATES.md),
+[SCHEMAS.md](skills/ddd-patterns/SCHEMAS.md),
+[DELIVERY.md](skills/ddd-patterns/DELIVERY.md),
+[POLICIES.md](skills/ddd-patterns/POLICIES.md),
+[READMODELS.md](skills/ddd-patterns/READMODELS.md) and
+[MODULES.md](skills/ddd-patterns/MODULES.md), each pointed at from the `create-*` skill that
+already sends you there. `DELIVERY.md` is deliberately its own file rather than folded into a
+per-artifact one: the at-least-once contract, the per-stream version watermark and
+`isRedelivery` bind **any** consumer — policy, read model, or an external non-PV3 service —
+and buried under one artifact kind the other two would never find them.
+
 ## The `.esas.config.json` seam
 
 Every PV3 repo carries an `.esas.config.json` at its root. The skills resolve these fields

@@ -1,0 +1,90 @@
+{
+  "_comment": "Behavioral eval scenarios. Each one puts an artifact in front of a real headless session and asserts what the session DOES — which reference it opens, and which rule it states. See README.md for why this exists and why it is not a CI gate.",
+  "defaults": {
+    "runs": 3,
+    "min_pass": 2,
+    "allowed_tools": "Read,Grep,Glob"
+  },
+  "scenarios": [
+    {
+      "id": "provisioner-reached",
+      "why": "start-multi's step 2 delegates worktree readiness to the provisioner agent. If that dispatch is read past, the fleet installs without building and every lane misreads the result as a broken baseline. This is the split with the most behavior riding on it.",
+      "guards_split": "commands/start-multi.md -> agents/provisioner.md",
+      "artifact": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/start-multi.md. You are running it. You are at step 2: you have just cut a clean worktree for unit TV1-1900 at /tmp/run/wt/TV1-1900, branched off the pinned BASE, and the base check passed. List concretely and specifically every action you take next, before you dispatch the unit's pipeline agent. Name actual commands and actual filenames.",
+      "must_open": ["agents/provisioner.md"],
+      "must_state": [
+        ["provisioner"],
+        ["claim", "spot-check", "spot check", "inconclusive", "verify"]
+      ],
+      "must_not_state": [],
+      "_calibration": "The first version of this asserted the orchestrator would state `build:all` / the baseline filename. It opened provisioner.md 3/3 and failed the text assertion 3/3 — because that assertion encoded a PRE-split expectation. After the split the orchestrator is right not to recite the agent's internals; that is what delegating means. The build rule is now asserted where it lives, by `provisioner-states-its-own-rules`. A behavioral eval can be wrong about what correct looks like, and this one was."
+    },
+    {
+      "id": "provisioner-states-its-own-rules",
+      "why": "The other half of the split above. The moved content is only as good as its new home: this asserts the rules actually land when the provisioner agent is the one running, which is the context they now load in. Pairs with provisioner-reached — one proves the pointer is followed, this proves what is behind it works.",
+      "guards_split": "agents/provisioner.md (the content that moved out of start-multi)",
+      "artifact": "plugins/bett3r-ai-workflow/agents/provisioner.md",
+      "prompt": "Read the agent file plugins/bett3r-ai-workflow/agents/provisioner.md. You are the provisioner. You have been handed unit TV1-1900, worktree /tmp/run/wt/TV1-1900, repo kind 'standard', run dir /tmp/run, scratchpad /tmp/scratch/TV1-1900. The worktree was reused from an earlier unit and already has a .work/ directory in it. Walk through exactly what you do, naming actual commands, and say what you report back.",
+      "must_open": [],
+      "must_state": [
+        ["build:all", "turbo build", "recursive"],
+        ["archive"],
+        ["known-baseline-failures"]
+      ],
+      "must_not_state": []
+    },
+    {
+      "id": "base-check-not-delegated",
+      "why": "NEGATIVE CONTROL for the split above. Verifying the branch base must stay with the orchestrator — 'never trust an agent's ahead/behind' ('74 ahead' was really 74 behind). A split that quietly hands this to the provisioner would still look correct and would still pass the provisioner-reached scenario. If this never fails, the suite is not discriminating.",
+      "guards_split": "commands/start-multi.md (what deliberately did NOT move)",
+      "artifact": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/start-multi.md. You are running it as the orchestrator. A unit's worktree has just been cut and its branch created from the pinned BASE. How do you establish that the branch is actually on the base you intended? State the exact command and say who runs it.",
+      "must_open": [],
+      "must_state": [
+        ["rev-list --count", "merge-base --is-ancestor"],
+        ["yourself", "orchestrator", "I run", "you run", "not the agent", "do not trust", "never trust"]
+      ],
+      "must_not_state": ["delegate this check to the provisioner"]
+    },
+    {
+      "id": "board-setup-pointer-followed",
+      "why": "design.md's Step 0 prints a verdict and five rows became pointers into BOARD-SETUP.md. The mcp:unregistered path ends in a session restart — the single most disruptive instruction in the flow, and the one most costly to miss.",
+      "guards_split": "commands/design.md -> skills/esas-design/BOARD-SETUP.md",
+      "artifact": "plugins/bett3r-ai-workflow/commands/design.md",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/design.md. You are running /design in a repo that has a .esas/ directory. The board-mode preflight has just printed 'mcp: unregistered'. The design question is structural, so relevance passed. What exactly do you do now, and what do you tell the user? Be specific about any cost to them.",
+      "must_open": ["BOARD-SETUP.md"],
+      "must_state": [
+        ["RESTART REQUIRED", "restart"],
+        ["mcpServers", ".mcp.json"]
+      ],
+      "must_not_state": []
+    },
+    {
+      "id": "evidence-consulted-for-a-sweep",
+      "why": "EVIDENCE.md is the original split and the one with 9 declared consumers. Its stated risk is that a reference is only as good as the reference being followed — and it already shipped linked from 5 while needed by 8.",
+      "guards_split": "commands/verify-build.md -> EVIDENCE.md",
+      "artifact": "plugins/bett3r-ai-workflow/commands/verify-build.md",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/verify-build.md. You are running /verify-build. The full test suite reported 'Tests: 0 total' and exited 0, and a slice's oracle is in a tier excluded from the default run. Is this branch green? Justify your answer using this flow's own definition of evidence, and say what you record.",
+      "must_open": ["EVIDENCE.md"],
+      "must_state": [
+        ["inconclusive"],
+        ["never green", "not green", "never a baseline", "not a baseline"]
+      ],
+      "must_not_state": []
+    },
+    {
+      "id": "mutation-when-red-is-unavailable",
+      "why": "The executor's rule for a slice whose deliverable IS a test or a guard: there is no natural RED, so mutation is the only evidence available. A rule with no oracle behind it is exactly the kind that gets smoothed away, and it lives in an agent file that loads in a fresh context.",
+      "guards_split": "agents/executor.md (+ EVIDENCE.md §2)",
+      "artifact": "plugins/bett3r-ai-workflow/agents/executor.md",
+      "prompt": "Read the agent file plugins/bett3r-ai-workflow/agents/executor.md. You are the executor. Your slice's entire deliverable is a new CI guard script that must fail when a forbidden pattern appears. You cannot get a natural RED, because before your slice there is nothing to run. What evidence do you produce that the guard actually works, and what exactly do you report?",
+      "must_open": [],
+      "must_state": [
+        ["mutation", "mutate", "break one production line", "break the production line"],
+        ["positive", "negative control", "control"]
+      ],
+      "must_not_state": []
+    }
+  ]
+}

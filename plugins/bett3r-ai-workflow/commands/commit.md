@@ -27,6 +27,7 @@ Follow the repo's observed convention; default to `type(scope): summary` (conven
 - **scope** — the module or area affected.
 - **summary** — imperative, lowercase, no trailing period; favor *why* over *what*.
 - Reference the ticket (from the branch) in the body if the repo does so, and include the repo's trailer/sign-off convention (detect it — don't hardcode).
+- **A GitHub closing keyword binds to exactly one issue — repeat it per issue.** `Closes #12, closes #13`, never a bare list: `Closes #12 #13` closes `#12` and leaves the rest as ordinary mentions, and a comma does not change that. The mistake is silent in every direction — the commit is well-formed, the merge succeeds, nothing warns — so the message is the last place it can be caught cheaply.
 
 Use `$ARGUMENTS` as guidance if provided.
 

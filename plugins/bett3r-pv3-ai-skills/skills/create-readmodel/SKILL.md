@@ -6,6 +6,8 @@ description: Scaffold an event-driven read model (projection) for querying. Use 
 
 Scaffold a PV3 read model that projects events into a queryable collection.
 
+**Read [`ddd-patterns` → READMODELS.md](../ddd-patterns/READMODELS.md) before writing the file** — projector read-modify-write and `{ replace: true }`, cross-stream counters, brand-new-row bootstrap, GIN indexes for array fields, subscriptions and `databaseSessionMode`, cross-subdomain read boundaries, and the query-route traps. **If the projection is not a pure last-write-wins `upsert`** (it appends, increments, or exposes intermediate state), also read [DELIVERY.md](../ddd-patterns/DELIVERY.md) for the duplicate/ordering contract it must survive.
+
 ## Project configuration
 
 This skill resolves the following placeholders from your repo's `.esas.config.json`:
@@ -290,7 +292,7 @@ RuleExecutionCompleted: async ( event ) => {
 }
 ```
 
-This is the pattern for any batch-rollup readmodel keyed by a correlation id whose per-batch counters are advanced by events from many sibling streams. See the `ddd-patterns` skill → "Cross-stream counters".
+This is the pattern for any batch-rollup readmodel keyed by a correlation id whose per-batch counters are advanced by events from many sibling streams. See [`ddd-patterns` → READMODELS.md](../ddd-patterns/READMODELS.md) → "Cross-stream counters".
 
 ### Brand-new-row bootstrap when no "genesis" event exists
 
