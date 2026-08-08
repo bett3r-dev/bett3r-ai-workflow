@@ -68,7 +68,7 @@ Consequence (a real incident): an integration test observed a genuine stale read
 
 > Best of all, make this drift **checkable**: a host-repo check that fails when the harness's wiring diverges from the composition root *undeclared* turns a silent trap into a build error — a defect whose signature is *absence* needs a gate, not a reader who remembers to look. Recommend it where the harness lives.
 
-**A boot hook fires under the other order here.** The harness calls `eventstore.start()` **before** modules load, so `onStarted` callbacks run *immediately and interleaved* with the declarations after them — the reverse of the real server. That makes this harness the **only** in-process gate covering that order (MemoryDb never calls `start()` at all, so hooks never fire there). See `ddd-patterns` → *`onStarted` is not a queue* for the guard it breaks and the drop it produces.
+**A boot hook fires under the other order here.** The harness calls `eventstore.start()` **before** modules load, so `onStarted` callbacks run *immediately and interleaved* with the declarations after them — the reverse of the real server. That makes this harness the **only** in-process gate covering that order (MemoryDb never calls `start()` at all, so hooks never fire there). See [`ddd-patterns` → MODULES.md](../ddd-patterns/MODULES.md) → *`onStarted` is not a queue* for the guard it breaks and the drop it produces.
 
 ## Driving a cron poll policy: use a real tick, not `fn( ports )`
 

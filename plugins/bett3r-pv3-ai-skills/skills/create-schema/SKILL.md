@@ -6,6 +6,8 @@ description: Scaffold schemas, types, and events for a new DDD domain using @bet
 
 Scaffold type definitions, event schemas, and aggregate schemas for a PV3 DDD module.
 
+**Read [`ddd-patterns` → SCHEMAS.md](../ddd-patterns/SCHEMAS.md) before writing the files** — the `jsonschema-definer` conventions, the two-file domain split, the event factory shape, and (load-bearing on any *existing* module) why renaming or removing a persisted field is schema evolution, not a rename.
+
 ## Project configuration
 
 This skill resolves the following placeholders from your repo's `.esas.config.json`:
