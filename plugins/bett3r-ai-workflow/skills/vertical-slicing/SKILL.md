@@ -23,6 +23,12 @@ Order slices so the **first** one is the thinnest end-to-end path through the **
 
 "Make the change easy, then make the easy change." Before the feature slices, look for **prefactoring** — reshaping existing code so the feature drops in cleanly (extract a seam, rename to the ubiquitous language, pull a shared helper). When it exists, prefactoring is the **earliest slice(s)**, done before any feature slice. A clean prefactor slice is often the easiest first commit and de-risks everything after it.
 
+## Self-referential enforcement — order it so it proves itself
+
+When a slice introduces a mechanism that governs the repo's **own** changes (a CI gate, a lint rule, a schema check, a pre-commit hook), order the slices so a **later slice in the same PR is its first live subject**. Put the mechanism in a slice that does not trigger itself, and let the next slice be what it governs. The PR then *demonstrates* the rule instead of asserting it.
+
+Both other orderings fail. Mechanism-last means it is never exercised by its own PR and ships asserted-but-unproven — and for an enforcement mechanism that is the whole risk: **a gate that never fired is indistinguishable from a gate that cannot fire.** Both-in-one-slice turns CI red on the introducing commit, and the natural fix under pressure is to weaken or exempt the gate. This is the class where "the tests pass" is weakest evidence, because the fixture was written by whoever wrote the rule; a live proof inside the same PR is much stronger and is free if the slices are ordered for it.
+
 ## What a good slice looks like (event-sourced / DDD)
 
 The canonical slice is **one command, end-to-end**:
