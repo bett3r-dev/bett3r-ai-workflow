@@ -5,9 +5,11 @@ description: "Gestures for a live ESAS design-board session (a repo with .esas/ 
 
 # Designing on the board
 
-`/design` sets this up (Step 0). This is what to *do* once it is running: the
-user edits a board on one screen, you write through `esas-mcp` from the
-terminal, and both land in one attributed, durable design layer.
+`/design` sets this up — Step 0 for the gates, then
+[BOARD-SETUP.md](BOARD-SETUP.md) beside this file for the registration, the
+seeding and the launch. This is what to *do* once it is running: the user edits
+a board on one screen, you write through `esas-mcp` from the terminal, and both
+land in one attributed, durable design layer.
 
 You are turn-based. You cannot see the board move. Everything below exists
 because of that one fact.

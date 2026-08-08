@@ -17,13 +17,15 @@ Where ESAS is set up, this interview has a second surface: the decisions land in
 
 Two gates decide it, and they ask different questions. **Capability asks whether a board is possible; relevance asks whether it is warranted.** Both must say yes — board mode is **on** only when they both do, and the `grill` skill's canvas subsection, which defers to "`/design` has put board mode on" rather than restating either half, reads it as that conjunction. (The `esas-design` skill is scoped differently on purpose: its standing rules fire wherever the `mcp__esas__*` tools exist, so "look at the board" still syncs correctly in a session where board mode was never armed.) Relevance is first, and it is cheaper than one command: it costs none.
 
+**Both gates are in this step; everything downstream of them is not.** Registering `esas-mcp` and the restart that makes it real, seeding the design layer, the launch offer, and what board mode changes about Steps 2–3 are [BOARD-SETUP.md](../skills/esas-design/BOARD-SETUP.md), and each row of the verdict table below names the section there that answers it. **It is opened only on a double yes** — on either no you do not read it and you do not mention it, per the silence rule under Gate 1.
+
 ### Gate 1 — relevance: what the decision tree names
 
 **Board mode is armed by what the drafted decision tree names.** Draft the tree first — the `grill` skill opens the interview with it — then read it back: does any track name **a command, an event, an aggregate, a policy, a read model, or a coupling** between them? One is enough. If none does, the design is not about structure, and a board would render nothing but the questions' own text: a canvas of stickies nobody asked for, on a second screen the user now has to close.
 
 So Step 0 is *settled* before the first proposal, not *finished* before Step 1. Ground the interview, draft the tree, answer this gate — and only on a yes go on to the preflight below. It keeps the number 0 because board mode has to be decided before anything is written, not because it is the first thing that happens.
 
-**Relevance runs before the preflight, never after it.** The order is the mechanism, not a preference: the preflight prints verdicts and the table under it turns them into things you say out loud — *run the extractor*, *here is the launch line*, *another repo holds the port*. Run it first and the silent path has already spoken by the time the gate answers no. Which is also why relevance is **not** a preflight key and must never become one: a shell block cannot read a decision tree, and a key it printed would have to be answered before there was anything to answer about. The cost of this order is real and it lands on one path — a repo that needs the `esas-mcp` restart now hits that stop after the grounding rather than before it, and under the mid-interview fallback later still, after forks the user has already answered. All of it is re-done in the new session, which is why the restart copy below names what it costs instead of promising the stop is free. That is still the cheaper half of the trade; the alternative is every design in the repo opening with board talk, structural or not.
+**Relevance runs before the preflight, never after it.** The order is the mechanism, not a preference: the preflight prints verdicts and the table under it turns them into things you say out loud — *run the extractor*, *here is the launch line*, *another repo holds the port*. Run it first and the silent path has already spoken by the time the gate answers no. Which is also why relevance is **not** a preflight key and must never become one: a shell block cannot read a decision tree, and a key it printed would have to be answered before there was anything to answer about. The cost of this order is real and it lands on one path — a repo that needs the `esas-mcp` restart now hits that stop after the grounding rather than before it, and under the mid-interview fallback later still, after forks the user has already answered. All of it is re-done in the new session, which is why the restart copy in BOARD-SETUP.md names what it costs instead of promising the stop is free. That is still the cheaper half of the trade; the alternative is every design in the repo opening with board talk, structural or not.
 
 **On a no, say nothing at all about boards.** Not a shorter version, not a footnote — nothing. No offer, no "this repo has ESAS set up but we won't need it", no mention that a gate was consulted. Run Steps 1–4 exactly as written. A mention is not free: it hands the user a second surface to have an opinion about in a design where the answer is already known.
 
@@ -141,79 +143,16 @@ fi
 | `esas_dir: absent` | No design layer here — a fleet worktree, or a repo the extractor has never run in. | **Board mode off.** Run Steps 1–4 exactly as written. Never create `.esas/` to switch it on; the directory is the marker of "this checkout designs". |
 | `esas_dir: present`, `graph: absent` | `.esas/` exists but the extractor has not produced a graph. | Board mode off until it has. Ask the user to run the repo's extractor (`yarn esas` in teselly), then re-run the preflight. Proposals against a graph that isn't there have nothing to attach to. |
 | `esas_dir: present`, `graph: present` | Reality is on disk. | Board mode is possible — continue down this table. |
-| `design: absent`, `ops: absent` | No design session has started here. | The normal, clean start. See *Seeding* below — there is nothing to create. |
-| `design: present` or `ops: present` | A design layer is already on disk. | It is either the unit of work you are resuming or the residue of one that shipped. **Ask whose session it is** — see *Seeding*. |
-| `mcp: registered` | The entry is in `.mcp.json`. That is not the same as the server running. | Call the `status` tool now — see *Registering* for the three ways this answers. |
-| `mcp: unregistered` / `mcp: absent` | This repo's `.mcp.json` does not register the server. That is all the preflight can see — it reads the project file only. | Write the entry, then **stop** — see *Registering* — **unless the `mcp__esas__*` tools are already available in this session**, which means it is registered elsewhere (a user-scoped `~/.claude.json`). Then skip the write: it would cost a needless restart and put a duplicate entry in a git-tracked file. |
-| `board: off` | Nothing is serving this repo on :3727. | The normal state before the user launches it. **Carry on** — the offer comes later, when the first batch of questions is ready, not here; see *The board*. |
+| `design: absent`, `ops: absent` | No design session has started here. | The normal, clean start. There is nothing to create — BOARD-SETUP.md §*Seeding*. |
+| `design: present` or `ops: present` | A design layer is already on disk. | It is either the unit of work you are resuming or the residue of one that shipped. **Ask whose session it is** — BOARD-SETUP.md §*Seeding*. |
+| `mcp: registered` | The entry is in `.mcp.json`. That is not the same as the server running. | Call the `status` tool now — BOARD-SETUP.md §*Registering* for the three ways this answers. |
+| `mcp: unregistered` / `mcp: absent` | This repo's `.mcp.json` does not register the server. That is all the preflight can see — it reads the project file only. | Write the entry, then **stop** — BOARD-SETUP.md §*Registering* — **unless the `mcp__esas__*` tools are already available in this session**, which means it is registered elsewhere (a user-scoped `~/.claude.json`). Then skip the write: it would cost a needless restart and put a duplicate entry in a git-tracked file. |
+| `board: off` | Nothing is serving this repo on :3727. | The normal state before the user launches it. **Carry on** — the offer comes later, when the first batch of questions is ready, not here; BOARD-SETUP.md §*The board*. |
 | `board: serving` | A board is up on this checkout. | Compare its `lastSeq` with the `status` tool's. Same number ⇒ the link is live. |
 | `board: other-repo` | Something holds :3727 serving a *different* checkout, and the `status:` line under the verdict says which. | **Name the repo that holds it** — the `repoPath` in the `status:` line is the project root that board serves — and say so before the first proposal: until it is closed this repo's board cannot claim the port (`strictPort` never drifts), and the screen the user is watching will never move. Naming it is the difference between a thing the user can close and a board they may not remember starting. Then carry on. |
 | `board: unknown` | No `curl` here, so the board was not probed at all. | Say it was not verified rather than reporting it down, and carry on. |
 
-### Registering `esas-mcp` — and the restart that makes it real
-
-When the preflight says `mcp: registered`, call the `status` tool. It answers in exactly three ways:
-
-- **It returns `{repoPath, gitSha, lastSeq, cursorSeq, pendingByAuthor, lockState, warnings}`** — board mode is live. Note `lastSeq` for the board comparison, and read `warnings` out loud if there are any: they mean another session is designing in this checkout, or that a writer is on a different build than yours.
-- **There is no such tool in this session** — two causes, and they look identical from here. Either the entry was added by an earlier run and the session was never restarted: do the restart step below, and do **not** write the entry again. Or the server failed to spawn, in which case restarting changes nothing and the second attempt is the diagnosis: **still missing after a restart ⇒ the server failed to spawn** — check the entry's path resolves, and that the esas checkout has its dependencies installed (`bin/esas-mcp.mjs` runs the sources through `tsx`, so a fresh clone with no install dies at boot). Claude Code logs the spawn failure; read it rather than restarting a third time.
-- **It returns `ESAS_DIR_MISSING`** — the server is running and answering about *this* checkout, which simply has no `.esas/`. In a fleet worktree that is **the correct answer, not a fault to fix** (see the skill's main-checkout rule). In the main checkout it means the extractor has not run here yet: `yarn esas`, then re-check. Do not add `ESAS_REPO_PATH` to point it elsewhere — that is how a worktree ends up writing into another checkout's design layer.
-
-When the preflight says `mcp: unregistered` or `mcp: absent` — and the `mcp__esas__*` tools are not already in this session from a user-scoped registration — add the entry. **Add the one key to `mcpServers`** with an edit, not a read-modify-write of the whole file: rewriting it reformats every other server and turns a one-key diff into a whole-file one.
-
-```jsonc
-"esas": {
-  "type": "stdio",
-  "command": "node",
-  "args": [ "<abs path to the esas checkout>/packages/esas-mcp/bin/esas-mcp.mjs" ]
-}
-```
-
-Resolve the esas checkout from a link the host repo already has (teselly's `package.json` carries `"sticky-notes-board": "link:../esas/packages/sticky-notes-board"`, so it is `../esas`), and make it absolute. If nothing links esas, **ask** — do not guess a path.
-
-**Do not set `ESAS_REPO_PATH`.** The server designs against its working directory, and Claude Code spawns a project server with the working directory set to the project root — including inside a worktree, where that is the worktree itself. `.mcp.json` is git-tracked, so the entry is byte-identical in every worktree of a fleet: pinning an absolute path there would make all of them design against the one checkout it names, which is exactly the split layer the main-checkout rule exists to prevent. Unpinned, a worktree answers `ESAS_DIR_MISSING`, which is the right answer there.
-
-`.mcp.json` is git-tracked, so this dirties the working tree — say so, and let the user decide whether it ships with the PR.
-
-Then **stop the command** with this, verbatim:
-
-> **RESTART REQUIRED — `esas-mcp` is registered but not running.**
-> Registration takes effect only at session start: Claude Code spawns stdio MCP servers when a session boots, so the tools do not exist in *this* one no matter what the file now says.
-> Exit this session, start a new one in this repo, approve the `esas` server when Claude Code asks (repos with `enableAllProjectMcpServers` are not asked), and run `/design` again.
-> No design write is lost — nothing has been written to `.esas/`, and `.work/design.md` is written at the end of the interview, not now. What the restart does cost is this session's reading: the grounding pass, and any forks already answered. The new session re-does them.
-
-Three rules while this session lasts:
-
-- **Do not call any `mcp__esas__*` tool for the rest of this session.** They are not there. A "no such tool" is not a transient failure to retry around.
-- **Never substitute for the missing server.** Do not create or edit `.esas/design.json`, `.esas/ops.jsonl` or `.esas/.claude-cursor` by hand.
-- **If the user does not restart** ("just keep going"): run Steps 1–4 with board mode off. That is a complete, correct `/design` — it produces `.work/design.md` and nothing else. Say once that the board layer will be there next session, then drop it.
-
-### Seeding the design layer
-
-`.esas/design.json` is the store's file and the store is the only writer: atomically, under a lock, with one attributed op appended to `.esas/ops.jsonl` per batch. **Never create or edit `.esas/design.json` by hand.** A hand-written verb has no op behind it, so it has no author, no rationale, no validation — the board renders a design nobody asserted, and the next `rebuild` (which replays the feed) drops it without a word.
-
-So seeding is not a file write. `design: absent` already *is* the empty design everywhere that reads it — the board loader and `get_design` both answer with an empty document rather than an error. (The hook never opens `design.json` at all; it reads `ops.jsonl` against the cursor, so it is indifferent either way.) **The first `propose` seeds it**, through the same path every later write takes. Say that to the user instead of manufacturing an empty file.
-
-What does need a decision is a layer that is already there. The design layer is gitignored and lives one unit of work, deleted after the merge — so `design: present` before you have written anything means you are resuming, or you are looking at residue. **Ask whose session it is.** Resuming keeps the verbs, the feed and the sync cursor and needs nothing done. Starting clean means the *user* deletes `.esas/design.json`, `.esas/design.json.bak`, `.esas/ops.jsonl` and `.esas/.claude-cursor`. Never delete them unasked: they are the only copy of a session's intent, and they are not in git.
-
-(A sync cursor left behind by a previous feed reads as "nothing has been synced" and inflates the hook's pending count — see the `esas-pending` skill. That one is cosmetic and clears on the next sync. Another unit of work's *verbs* are not.)
-
-### The board — offer the launch when there is something to see, verify the endpoint, never spawn it unasked
-
-**Offer the board at the moment the first batch of questions is ready to post, and start it only on a yes.** That is the first moment it is worth looking at, and it is the same moment the summon watcher goes up (below), for the same reason: before it the canvas holds the graph and nothing to answer, so the offer costs the user a second screen and gives them nothing to do on it. Offer the line their repo uses — `yarn esas:board` in teselly, otherwise `node <esas checkout>/packages/sticky-notes-board/bin/esas-board.mjs` — together with the link the questions are behind, `?openComments=1&author=ai`, which opens on the open threads instead of on the whole canvas. On a yes, start it as a `Bash` call with `run_in_background`, which outlives the turn that started it; in the foreground it would hold that turn open for as long as the board serves. On a no, leave them the line and carry on — the board is a projection, and it opens current whenever they launch it.
-
-**Never spawn it unasked, and never at the preflight.** The port is the reason, and it is strict (below): a board nobody asked for squats :3727 for as long as it runs, and the repo that pays is the *next* one — its board will not bind, in a session that did nothing wrong and has no reason to suspect a board it never started. An orphan is also the hardest kind to find, which is what the `board: other-repo` row above is for. Offering at the preflight makes that the ordinary outcome rather than the unlucky one: the preflight answers *capability*, and a checkout that can hold a board is not yet a design that needs one.
-
-The board claims **:3727 strictly**. It never drifts to the next free port, so `GET /api/esas/status` on that port either answers for this repo or does not answer at all. It returns `{repoPath, gitSha, lastSeq}`; `lastSeq` is the same number the `status` tool reports, which is what makes a dead link visible by comparing two screens instead of debugging.
-
-**Never block the design on the board.** It is the projection, not the source of truth: writes land in files through `esas-mcp`, and a board launched an hour later renders everything that already happened. What genuinely stops board mode is a missing `.esas/` (no substrate) or a missing server (no hands). A dark second screen is not one of them.
-
-### What board mode changes about the rest of this command
-
-- **Step 2 gains a surface.** Propose as decisions resolve, not in one dump at the end — the point is that the user watches the model take shape while you talk. Batch each turn's proposals into **one** call (arrays in, one write, one op).
-- **Read reality with `get_flow`**, one command flow at a time, never by re-reading the whole graph. `scope.boundary` defaults to `'end-to-end'`; `'subdomain'` keeps a flow's cross-subdomain hand-offs visible as leaves rather than pretending the ripple stops at the boundary.
-- **Arm the summon watcher on any turn that leaves the user something to answer on the board, as the last thing you do before going idle.** That is the moment, and the two neighbouring ones are wrong: at preflight there is nothing to answer yet, so the wake is spent on a press that resolves nothing; mid-turn, a background task that exits while you are still talking re-invokes a session that was never waiting. One armed watch at a time — arming a second while the first is alive costs a wake nobody asked for. What the watcher *is*, how the wake behaves and the six invariants that keep it from looping or going silent are the `esas-design` skill's half; this step decides only when it goes up.
-- **The gestures live in the `esas-design` skill** — the sync point, the summon, corrections, restarts, and the fleet rule. Follow it; it is the behavioural half of this step.
-- **Step 3 still writes `.work/design.md`.** The two surfaces are complementary, not redundant: `.work/design.md` carries the decisions — the forks, the why, the rejected options — and `design.json` (structure) carries the verbs. Both feed `/plan`, so do not thin one because the other exists.
+**On a double yes, the rest of board mode is [BOARD-SETUP.md](../skills/esas-design/BOARD-SETUP.md)** — registering `esas-mcp` and the restart it needs, seeding the design layer, the launch offer, and what changes in Steps 2–3. Read it once, then run Steps 1–4 with those changes folded in. On either no it is never opened, and Steps 1–4 run exactly as written below.
 
 ---
 

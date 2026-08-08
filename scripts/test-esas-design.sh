@@ -11,17 +11,33 @@
 # the rule that would drift is the one shared with the single-ticket flow. See
 # the notes above both sections.
 #
+# Board mode is split across two files and the split is the thing to hold onto:
+# **the trigger is inline, the response is a reference.** commands/design.md
+# keeps everything that decides whether board mode applies at all — both gates,
+# the preflight, and the verdict table that turns each printed key into a
+# response — because a reference is only as good as the reference being
+# followed, and a command that has to open a file to learn whether the file is
+# relevant has not saved anybody anything. Everything downstream of a double yes
+# — registering `esas-mcp` and the restart, seeding, the launch offer, what
+# changes in Steps 2–3 — is skills/esas-design/BOARD-SETUP.md, loaded only after
+# the command has printed a verdict that calls for it. So the needles below are
+# split the same way, and each one is asserted against the file that now carries
+# the sentence rather than against the command by habit.
+#
 # Both artifacts are text a model reads, so most of what they promise can only
 # be reviewed. Two parts can be *executed*, and this suite executes them:
 #
 #   1. **The preflight.** `/design`'s board-mode detection is one fenced `sh`
 #      block in commands/design.md, extracted here verbatim and run against
 #      fixture host repos. The block under test is the block that ships — there
-#      is no second copy to drift.
+#      is no second copy to drift. It stays in the command for that reason among
+#      others: moved to the reference it would need a copy here, and a copy is
+#      a thing that drifts.
 #   2. **The decision table.** Every `key: value` verdict the preflight can
-#      print must have a row in the table below it. A verdict with no
-#      documented response is a branch the model improvises, which is the
-#      failure this whole slice exists to prevent.
+#      print must have a row in the table below it, in commands/design.md. A
+#      verdict with no documented response is a branch the model improvises,
+#      which is the failure this whole slice exists to prevent. A row may point
+#      at BOARD-SETUP.md for the detail; it may not go missing.
 #
 # The rest is presence assertions on the load-bearing sentences — the restart
 # step, the four D5 gestures, the tools that do *not* exist yet. Those catch
@@ -38,6 +54,7 @@
 ROOT=$( CDPATH= cd -- "$( dirname -- "$0" )/.." && pwd )
 PLUGIN="$ROOT/plugins/bett3r-ai-workflow"
 COMMAND_MD="$PLUGIN/commands/design.md"
+BOARD_MD="$PLUGIN/skills/esas-design/BOARD-SETUP.md"
 SKILL_MD="$PLUGIN/skills/esas-design/SKILL.md"
 PENDING_MD="$PLUGIN/skills/esas-pending/SKILL.md"
 GRILL_MD="$PLUGIN/skills/grill/SKILL.md"
@@ -587,11 +604,11 @@ fi
 
 # ── The command text ──────────────────────────────────────────────────────────
 
-printf '\ncommands/design.md — board mode\n'
+printf '\nskills/esas-design/BOARD-SETUP.md — registering, seeding, the launch\n'
 
-# Failures name the file repo-relative, not by basename: two of the three files
-# pinned here are called `SKILL.md`, so a bare basename would report the needle
-# as missing from a file it was never asserted against.
+# Failures name the file repo-relative, not by basename: two of the files pinned
+# here are called `SKILL.md`, so a bare basename would report the needle as
+# missing from a file it was never asserted against.
 assert_md(){
   file=$1
   description=$2
@@ -620,22 +637,31 @@ refute_md(){
 
 # Registration only takes effect at session start, so the one thing this
 # command must never do is write the entry and carry on as though it worked.
-assert_md "$COMMAND_MD" 'it names the restart as its own step' 'RESTART REQUIRED'
-assert_md "$COMMAND_MD" 'it stops the command after writing the entry' \
+assert_md "$BOARD_MD" 'it names the restart as its own step' 'RESTART REQUIRED'
+assert_md "$BOARD_MD" 'it stops the command after writing the entry' \
   'Registration takes effect only at session start'
-assert_md "$COMMAND_MD" 'it forbids calling the esas tools in the session that registered them' \
+assert_md "$BOARD_MD" 'it forbids calling the esas tools in the session that registered them' \
   'Do not call any `mcp__esas__*` tool for the rest of this session'
-assert_md "$COMMAND_MD" 'it says what happens when the user does not restart' \
+assert_md "$BOARD_MD" 'it says what happens when the user does not restart' \
   'If the user does not restart'
-assert_md "$COMMAND_MD" 'the .mcp.json edit merges rather than replaces' \
+assert_md "$BOARD_MD" 'the .mcp.json edit merges rather than replaces' \
   'Add the one key to `mcpServers`'
 
 # The board is a projection. Its absence costs a second screen, not the design.
-assert_md "$COMMAND_MD" 'a board that is not running does not block the command' \
+assert_md "$BOARD_MD" 'a board that is not running does not block the command' \
   'Never block the design on the board'
-assert_md "$COMMAND_MD" 'it hands the user the launch line their repo uses' 'yarn esas:board'
-assert_md "$COMMAND_MD" 'it names the port the board claims strictly' '3727'
-assert_md "$COMMAND_MD" 'it names the endpoint that identifies a board' '/api/esas/status'
+assert_md "$BOARD_MD" 'it hands the user the launch line their repo uses' 'yarn esas:board'
+
+# These two are asserted on BOARD-SETUP.md rather than on the command *because*
+# the command still contains both literals — the preflight probes
+# `http://127.0.0.1:$esas_port/api/esas/status` and defaults `esas_port` to 3727
+# — so left on COMMAND_MD they would go green off the shell block while the
+# prose that says what the port and the endpoint *mean* was deleted. A needle
+# satisfied by a different sentence than the one it was written for is a needle
+# that has stopped working. The port keeps a second pin on the command, below,
+# where it is one of the four cross-repo contracts.
+assert_md "$BOARD_MD" 'it names the port the board claims strictly' '3727'
+assert_md "$BOARD_MD" 'it names the endpoint that identifies a board' '/api/esas/status'
 
 # design.json is the store's file. A hand-written one bypasses the lock, the
 # ops feed and validation, and renders as a design nothing attributed.
@@ -645,15 +671,15 @@ assert_md "$COMMAND_MD" 'it names the endpoint that identifies a board' '/api/es
 # *Seeding*, so it kept matching after the registration-path rule beside it was
 # deleted — the exact rule that stops a model with no server from writing the
 # file itself.
-assert_md "$COMMAND_MD" 'it forbids hand-writing the design file' \
+assert_md "$BOARD_MD" 'it forbids hand-writing the design file' \
   'Never create or edit `.esas/design.json` by hand'
-assert_md "$COMMAND_MD" 'a session with no server is told not to do the store'"'"'s job itself' \
+assert_md "$BOARD_MD" 'a session with no server is told not to do the store'"'"'s job itself' \
   'Never substitute for the missing server'
-assert_md "$COMMAND_MD" 'it says the first write is what seeds the file' \
+assert_md "$BOARD_MD" 'it says the first write is what seeds the file' \
   'The first `propose` seeds it'
-assert_md "$COMMAND_MD" 'it treats a pre-existing design layer as a question, not a given' \
+assert_md "$BOARD_MD" 'it treats a pre-existing design layer as a question, not a given' \
   'whose session it is'
-assert_md "$COMMAND_MD" 'both surfaces feed /plan' '`design.json` (structure)'
+assert_md "$BOARD_MD" 'both surfaces feed /plan' '`design.json` (structure)'
 
 # ── The relevance gate ────────────────────────────────────────────────────────
 #
@@ -697,17 +723,21 @@ assert_md "$COMMAND_MD" 'unsure falls towards silence, stated as a rule' \
   'unsure means silent'
 
 # Putting the gate ahead of the preflight falsified a sentence in the restart
-# copy further down, so the correction is pinned here, beside its cause, rather
-# than up with the other restart pins. It was true while the preflight ran first:
-# the stop landed before anything had been read or asked, so nothing *had* been
-# spent. Ordered behind the decision tree it is false — the grounding pass is
-# gone, and under the mid-interview fallback so are the forks the user already
-# answered. Refute plus assert, the same shape used on any corrected claim here:
-# an unpinned correction is one a later editor restores in good faith, because
-# the old sentence is shorter and reads kinder.
-refute_md "$COMMAND_MD" 'the restart copy no longer claims the stop costs nothing' \
+# copy, so the correction is pinned here, beside its cause, rather than up with
+# the other restart pins — the two needles read BOARD-SETUP.md, which is where
+# the restart copy lives, while the cause stays in the gate above. It was true
+# while the preflight ran first: the stop landed before anything had been read
+# or asked, so nothing *had* been spent. Ordered behind the decision tree it is
+# false — the grounding pass is gone, and under the mid-interview fallback so
+# are the forks the user already answered. Refute plus assert, the same shape
+# used on any corrected claim here: an unpinned correction is one a later editor
+# restores in good faith, because the old sentence is shorter and reads kinder.
+# The refute follows the copy rather than staying on the command, where after
+# the split it would be satisfied by a file that no longer says anything about
+# restarts at all.
+refute_md "$BOARD_MD" 'the restart copy no longer claims the stop costs nothing' \
   'Nothing is lost'
-assert_md "$COMMAND_MD" 'it names what the restart actually costs the user' \
+assert_md "$BOARD_MD" 'it names what the restart actually costs the user' \
   'the grounding pass, and any forks already answered'
 
 # ── The launch offer ──────────────────────────────────────────────────────────
@@ -731,26 +761,33 @@ assert_md "$COMMAND_MD" 'it names what the restart actually costs the user' \
 # trust. Refute plus assert on the reason that replaces it, the same shape the
 # restart correction above uses.
 
-printf '\ncommands/design.md — the launch offer\n'
+printf '\nthe launch offer (BOARD-SETUP.md) and the row that defers to it (design.md)\n'
 
-refute_md "$COMMAND_MD" 'the falsified reason for not spawning is gone, not softened' \
+refute_md "$BOARD_MD" 'the falsified reason for not spawning is gone, not softened' \
   'a board started from a tool call dies with it'
-assert_md "$COMMAND_MD" 'the offer lands when there is something to look at, not at the preflight' \
+assert_md "$BOARD_MD" 'the offer lands when there is something to look at, not at the preflight' \
   'the first batch of questions is ready to post'
-assert_md "$COMMAND_MD" 'the launch is offered and waits for a yes — never taken unasked' \
+assert_md "$BOARD_MD" 'the launch is offered and waits for a yes — never taken unasked' \
   'never spawn it unasked'
-assert_md "$COMMAND_MD" 'the reason that replaced the falsified one is the port, not the process tree' \
+assert_md "$BOARD_MD" 'the reason that replaced the falsified one is the port, not the process tree' \
   'squats :3727'
 
 # Already pinned on the skill below, as one of the four cross-repo contracts.
 # Pinned again here for a different reason: the offer is the moment the user is
 # handed a URL, and an offer that hands them the bare board sends them to a
 # canvas with their questions somewhere on it.
-assert_md "$COMMAND_MD" 'the offer carries the link to the open questions, not to the whole canvas' \
+assert_md "$BOARD_MD" 'the offer carries the link to the open questions, not to the whole canvas' \
   '?openComments=1&author=ai'
 
-# `repoPath` is already in this file twice — the `status` tool's return shape and
-# the endpoint's — so the field name alone would pass without the row saying
+# The last two stay on the command, because the row does: `board: other-repo` is
+# a verdict the preflight prints, and the whole point of the split is that a
+# verdict's response is reachable without opening anything. It is also the one
+# row that is not a pointer — an orphan board is what the *offer* rules above
+# exist to prevent, so the response has to be readable in the file that reports
+# it.
+#
+# `repoPath` is already in the command — the preflight matches the probe's
+# answer on it — so the field name alone would pass without the row saying
 # anything. The needles carry the row's own words instead.
 assert_md "$COMMAND_MD" 'the other-repo verdict names which repo holds the port' \
   'Name the repo that holds it'
@@ -807,10 +844,16 @@ assert_md "$SKILL_MD" 'it points at the sibling skill for the hook line' 'esas-p
 # of esas PR #1 (slice 6), so the skill must document them — an undocumented
 # tool is one the model never reaches for. The command still names no tools:
 # tool inventory is the skill's job, and the command defers to it.
+#
+# The guard is applied to BOARD-SETUP.md too. Splitting the setup prose out of
+# the command created a second place the inventory can leak into, and a scope
+# guard that covers only the file it was written against stops guarding a scope
+# the moment that scope grows — silently, and while still reporting green.
 assert_md "$SKILL_MD" 'it documents the comment tool, which now ships' '`comment`'
 assert_md "$SKILL_MD" 'it documents the resolve tool, which now ships' '`resolve`'
 assert_md "$SKILL_MD" 'it steers anchors away from couplings that draw no line' 'handled-by'
 refute_md "$COMMAND_MD" 'the command does not promise comment/resolve either' '`comment`'
+refute_md "$BOARD_MD" 'nor does the setup reference it split out from' '`comment`'
 
 # ── The summon — how the board wakes an idle session ──────────────────────────
 #
