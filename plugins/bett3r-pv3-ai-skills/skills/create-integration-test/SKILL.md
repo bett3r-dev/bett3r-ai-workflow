@@ -68,6 +68,17 @@ Consequence (a real incident): an integration test observed a genuine stale read
 
 > Best of all, make this drift **checkable**: a host-repo check that fails when the harness's wiring diverges from the composition root *undeclared* turns a silent trap into a build error — a defect whose signature is *absence* needs a gate, not a reader who remembers to look. Recommend it where the harness lives.
 
+**A boot hook fires under the other order here.** The harness calls `eventstore.start()` **before** modules load, so `onStarted` callbacks run *immediately and interleaved* with the declarations after them — the reverse of the real server. That makes this harness the **only** in-process gate covering that order (MemoryDb never calls `start()` at all, so hooks never fire there). See `ddd-patterns` → *`onStarted` is not a queue* for the guard it breaks and the drop it produces.
+
+## Driving a cron poll policy: use a real tick, not `fn( ports )`
+
+A `.standalone()` cron poll policy costs several harness runs to two traps, both of which read as "the test is broken" rather than "the test is wrong":
+
+1. **A bare main-thread `pollFn( ports )` call dispatches its command and the command never reaches the pipeline** — it returns a count, then a multi-minute gap, and nothing is processed. Drive it through a **real cron tick** instead: add the generic cronjobs module, seed an overdue subscription row, and `executeCommand( TickCronjob )` → `CronjobTriggered` → policy → the poll fn, so the work runs *inside* the pipeline execution context. The rule is about commands that must **flow through the pipeline**; a primitive that dispatches synchronously in-context can be driven directly.
+2. **Assert the observable the projector actually writes.** Where a projector writes only the compare *result* (a sync-status field, a `lastSyncedAt`), the raw external mirror lives on **aggregate state**, not the readmodel row — so `readmodelRow…providerData.stock === N` never matches, no matter how long you wait. Observe the poll via the status flip and the timestamp advance.
+
+Both burn expensive Postgres-harness cycles, and neither is discoverable from the poll's production code.
+
 ## Parallelism & isolation
 
 These suites parallelize safely **across files** — that's why the parallel integration script runs `--maxWorkers=4`.

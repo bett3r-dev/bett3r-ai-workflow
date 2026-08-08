@@ -561,6 +561,15 @@ The natural projector shape — `readById` → mutate a nested `jsonb` map → `
 
 **For additive-across-concurrent-writers semantics on a nested map:** use **dot-notation keys** (which get `mergeDeepRight`), an atomic increment / per-field CAS (below), or an explicit lock — never a full-nested-object `upsert`.
 
+#### A complete-state write needs `{ replace: true }`; removing a key needs `unset`
+
+"Rebuild the whole row from current state" is a common projector idiom — bootstrap on a genesis event, recompute on a lifecycle change. On the default merge it is **silently unable to remove a field**: a merge only adds and overwrites, never deletes, so keys present in the stored row but absent from the recomputed object survive. A resume that recomputed only the *enabled* flag definitions could not drop the `false`s a suspension had baked in, and eight nav sections stayed collapsed forever.
+
+- A write representing the **complete** state of a row (full rebuild / snapshot / re-projection) MUST pass **`{ replace: true }`**.
+- To clear a field, use **`unset( id, key, options? )`** (`pv3-types/src/database.ts`; Postgres `data #- '{…}'`, MemoryDb `dissocPath`). **`upsert` with `undefined` is a no-op** — a deep merge cannot drop a key. These are the two halves of "how do I remove something from a projected row".
+
+**MemoryDb-green is not Postgres-green — and here the harness cannot even express the bug.** MemoryDb's `upsert( id, data )` takes **no options argument at all**, so `{ replace: true }` is *silently ignored*; its object-valued upsert replaces subtrees regardless, so a MemoryDb test of a rebuild passes for the wrong reason and reassures in exactly the place it must not. **Prove a complete-state-with-removals write on the real adapter (testcontainer Postgres), or state in the PR that it is unproven.** Two sibling divergences deserve the same treatment: an **absent** field (`undefined !== 'x'` keeps the row in MemoryDb, while `NULL <> 'x'` is NULL and **drops** it in Postgres), and **`op:'contains'`**, which is array containment — it substring-matches a string field in MemoryDb and matches **nothing** in Postgres (six live admin search boxes were dead in production because of it).
+
 ### Cross-stream counters (multi-stream keyed readmodel)
 
 The per-stream in-order guarantee does **NOT** protect a readmodel whose key (e.g. `correlationId`) groups events from many streams — cross-stream order is not guaranteed, and read-then-write counters are a classic lost-update race. (A non-convergent *same-stream* projection still needs the version watermark for duplicates — see *Event delivery* above.)
@@ -682,6 +691,13 @@ Two route-level traps that 400 only at runtime (invisible to unit tests), typica
    })
    ```
 
+   Two refinements, because the rule as usually stated is both too loose and too absolute:
+
+   - **The schema must declare *the route's own* param**, matching `.withIdProperty(…)` where one is set. A route on `:documentId?` declaring `params: S.shape({ id: … })` is exactly as broken as declaring nothing — and just as invisible, because the plain GET keeps working and only the subscription fails. "Needs a params schema" reads as satisfied by any params schema.
+   - **It is a hardening, not an absolute.** A subscribable `:id?` route with **no** params schema works today on this PV3 version. Say so, because the over-absolute form is the more corrosive error: someone debugging an unrelated 400 seizes on a missing params schema as the root cause and "fixes" something that was never broken.
+
+   Greppable symptom either way: subscription `400 must NOT have additional properties: <param>`, with the plain GET unaffected — so it presents as *"live updates don't arrive but a refresh fixes it"*, which gets misattributed to realtime plumbing rather than route validation.
+
 2. **A base route with no custom `queryHandler` rejects a `filter` query param.** Only the `-search` variant — which declares `query: defaultQuerySchemas.query` and a `queryHandler` applying `params.filter` — accepts `filter`/`limit`/`offset`/`sort`. A *filtered* front-end query (e.g. `status:'running'`) MUST call `XSearch({ filter })`, not the base `X({ filter })`. Add the `-search` route whenever the FE needs filter/pagination; the base route is "get one by id / get all".
 
 ## Module Composition
@@ -700,6 +716,34 @@ export const create = async ( ports: Ports ) => {
   ports.eventsourcing.routeEventHandler( MyPolicy( ports ));
 };
 ```
+
+### `onStarted` is not a queue — a boot hook must be correct under **both** boot orders
+
+`createPort.onStarted` (`pv3/packages/pv3/src/ports/base.ts`) runs the callback **immediately** if the port has already started, and only queues it otherwise:
+
+```ts
+onStarted: ( fn ) => {
+  if ( instance.isStarted ) { runStartedCallback( fn ); return; }   // ← runs NOW
+  emitter.once( 'started', () => runStartedCallback( fn ));
+}
+```
+
+| boot order | who | `onStarted` |
+|---|---|---|
+| modules load → `eventstore.start()` | the real server (`setupPorts` → `setupServices` → `ports.eventstore.start()`) | callbacks **queued**, fired together once every declaration exists |
+| `start()` → modules load | the **Postgres integration harness**, and any lazy module load | each callback fires **immediately, interleaved** with the declarations after it |
+
+**Rule: code that reconciles a *set* inside a boot hook must tolerate declarations arriving while a reconcile is in flight.** A single-flight guard must **re-arm** — a dirty / `redrainRequested` flag that re-runs the loop — never `return` and drop the request. Under the second order a bare `if ( draining ) return` discards everything after the first declaration:
+
+```
+A declares → A's hook fires NOW → drain snapshots [A], awaits, yields
+B declares → B's hook fires NOW → drain sees `draining` → returns; B DROPPED
+C declares → same → C DROPPED
+```
+
+B and C never even *attempt* — no success log, no failure log, no metric. Two production cron subscriptions stopped registering, while the monolith was unaffected, `yarn test` was green across 399 suites, and a per-unit lift gate was 288/288 green: it probes one unit per process, so it never has two such policies sharing state.
+
+**Testing note.** The MemoryDb harness does not call `eventstore.start()`, so hooks never fire there; the **Postgres** harness does, and is the only in-process gate that exercises the start-first order. A regression test for this class must drive the *immediate* branch deliberately — a rig that collects callbacks and fires them later reproduces only the monolith order and passes on broken code. This inverts the usual intuition that integration tests are the slow, redundant tier: here they were the only tier with the coverage. (`create-policy`'s "register your cron subscription at boot" idiom is exactly this shape.)
 
 ## Dependency Injection
 
