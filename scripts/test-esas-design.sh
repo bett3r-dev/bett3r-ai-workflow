@@ -846,6 +846,18 @@ assert_md "$SKILL_MD" 'invariant 6: the two ways the watch can end are told apar
 assert_md "$SKILL_MD" 'two quiet timeouts close the channel, and out loud' \
   'stop re-arming and say so in one line'
 
+# The needle above pins the *announcement* and says nothing about the *count* —
+# and the count is the only part of this rule that is duplicated across
+# artifacts, so it is the only part that can drift. Changing the skill from two
+# quiet timeouts to three left the suite at 111 passed while
+# commands/design-multi.md still said "Two quiet timeouts end the channel": two
+# artifacts disagreeing about the bound, nothing red. Pin the number on both
+# sides, so the policy cannot move in one place alone.
+assert_md "$SKILL_MD" 'the bound is a SECOND consecutive quiet watch, not a third' \
+  'a second watch in a row'
+assert_md "$DESIGN_MULTI_MD" 'design-multi states the same bound as the skill' \
+  'Two quiet timeouts end the channel'
+
 # The second refusal source, and the stronger one: the wake is delivered wrapped
 # in a platform banner that declares itself NOT user input and not a response to
 # any pending question. It is emitted by the runtime, cannot be suppressed, and

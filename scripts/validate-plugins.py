@@ -11,7 +11,14 @@ So this checks the things whose failure mode is *absence*:
 
   1. Every entrypoint (commands/*.md, skills/**/SKILL.md, agents/*.md) opens
      with parseable YAML frontmatter carrying a non-empty `description`.
-  2. Every plugin.json / marketplace.json is valid JSON with its required keys,
+  2. No `description` exceeds the platform's ~1024-character cap. Skill
+     descriptions in these plugins are not summaries — they carry *standing
+     rules* (`esas-design`'s sync ordering, `esas-pending`'s never-a-trigger
+     rule) which work precisely because the description is what stays resident
+     in every session. Past the cap the tail is truncated, and truncation is
+     not an error: the file stays green in every suite while the rules that
+     were amputated read as present. Same failure shape as (1), one layer in.
+  3. Every plugin.json / marketplace.json is valid JSON with its required keys,
      and each marketplace `source` path resolves to a real plugin.
 
 Run locally:  python3 scripts/validate-plugins.py
@@ -31,7 +38,15 @@ PLUGINS = ROOT / "plugins"
 # closing fence, which yields an empty/unparseable block.
 FRONTMATTER = re.compile(r"\A---\r?\n(?!-)(.*?)\r?\n---\r?\n", re.DOTALL)
 
+# The platform truncates a frontmatter `description` at roughly this many
+# characters when loading it resident into a session. Warn well before the
+# edge, because the margin is what gets spent: a description at 95% is one
+# clarifying clause away from silently losing its last standing rule.
+DESCRIPTION_MAX = 1024
+DESCRIPTION_WARN = int(DESCRIPTION_MAX * 0.90)
+
 errors: list[str] = []
+warnings: list[str] = []
 checked = 0
 
 
@@ -70,8 +85,27 @@ def check_frontmatter(path: pathlib.Path) -> None:
         k.strip(): v.strip()
         for k, _, v in (line.partition(":") for line in body.splitlines() if line.strip() and not line.startswith((" ", "\t", "-")))
     }
-    if not keys.get("description"):
+    description = keys.get("description")
+    if not description:
         errors.append(f"{rel(path)}: frontmatter parses but has no non-empty `description` — it won't be discoverable.")
+        return
+
+    # Strip one layer of the quoting YAML requires when a description contains
+    # a `:` — the cap applies to the value, not to its quotes.
+    if len(description) >= 2 and description[0] == description[-1] and description[0] in "\"'":
+        description = description[1:-1]
+
+    n = len(description)
+    if n > DESCRIPTION_MAX:
+        errors.append(
+            f"{rel(path)}: `description` is {n} chars, over the ~{DESCRIPTION_MAX} cap — "
+            f"the last {n - DESCRIPTION_MAX} chars are silently truncated when loaded."
+        )
+    elif n >= DESCRIPTION_WARN:
+        warnings.append(
+            f"{rel(path)}: `description` is {n} chars, {DESCRIPTION_MAX - n} under the "
+            f"~{DESCRIPTION_MAX} cap — any addition risks truncating a standing rule."
+        )
 
 
 def check_manifest(path: pathlib.Path, required: list[str]) -> dict | None:
@@ -108,6 +142,11 @@ def main() -> int:
                     f"{rel(market_path)}: plugin `{entry.get('name')}` points at "
                     f"`{entry.get('source')}`, which has no .claude-plugin/plugin.json"
                 )
+
+    if warnings:
+        print(f"\n! {len(warnings)} warning(s):\n", file=sys.stderr)
+        for w in warnings:
+            print(f"  {w}", file=sys.stderr)
 
     if errors:
         print(f"\n✗ {len(errors)} problem(s) across {checked} artifact(s):\n", file=sys.stderr)
