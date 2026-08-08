@@ -16,7 +16,9 @@ Group issues touching the same skill/command/agent or proposing the same change.
 For each cluster, decide the concrete change to the artifact. Where a change is contentious or a genuine trade-off, surface it for the user rather than guessing.
 
 ## Step 4 — Open PRs
-For each agreed change: branch, make the edit, open a PR that **links the issues it closes** (`Closes #N`). **One PR per coherent change** (never one giant PR) so review stays tractable. Let the normal review pipeline (human and/or `/code-review`) gate the merge.
+For each agreed change: branch, make the edit, **bump the touched plugin's `.claude-plugin/plugin.json` `version`**, and open a PR that **links the issues it closes** (`Closes #N`). **One PR per coherent change** (never one giant PR) so review stays tractable. Let the normal review pipeline (human and/or `/code-review`) gate the merge.
+
+The bump is not bookkeeping and not optional: a plugin is copied into its version-keyed cache only when that string changes, so an unbumped edit merges cleanly and reaches nobody — which is exactly how two behaviour-changing commits once shipped to no one with every gate green (`docs/adr/ADR-001`). `scripts/check-plugin-version-bump.sh` now refuses the omission at PR time, and `plugins/<name>/README.md` counts as a touch, because it ships inside the payload.
 
 ## Step 5 — Audit the artifacts you touched
 **The backlog is not the whole to-do list.** Issues only contain what someone *noticed* — and the defects that rot a shared plugin fastest are the ones that produce no signal at all. `/evolve` is the process that *writes* these artifacts round after round, and the only one that looks at them regularly, so it is where drift gets caught.

@@ -562,7 +562,7 @@ if [ ! -s "$PREFLIGHT" ]; then
 else
   # Several verdicts share a line (`if ... then printf ...; else printf ...; fi`),
   # so this matches per occurrence, not per line. Getting that wrong is how the
-  # first draft of this check silently covered 2 of 15.
+  # first draft of this check silently covered 2 of 17.
   grep -o "printf '[a-z_]*: [a-z-]*" "$PREFLIGHT" | sed "s/^printf '//" | sort -u >"$TMP/verdicts"
   found=$( wc -l <"$TMP/verdicts" | tr -d ' ' )
   table=$( awk '/^# --- esas preflight ---/{on=1} /^# --- end esas preflight ---/{on=0;next} !on{print}' "$COMMAND_MD" )

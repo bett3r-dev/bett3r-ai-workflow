@@ -108,7 +108,7 @@ this*: what changed is already in the feed, which is the one place both of you
 agree on.
 
 What re-invokes you is a background watcher **exiting** on that file. `/design`
-says when it goes up; this is what it is. Arm it as a `Bash` call with
+and `/design-multi`'s Phase B say when it goes up; this is what it is. Arm it as a `Bash` call with
 `run_in_background`, from the repo root:
 
 ```sh

@@ -97,7 +97,7 @@ Orchestrator is the **sole writer** of `run.yaml`; agents write only `units/<id>
 - **Ground against the base start-multi will branch from** — the design reflects the code it will be built on; record `groundedBaseSha` for drift detection.
 - **Tracker once, then never** — the run is self-contained and resumable.
 - **The batch is where cross-ticket coherence happens** — per-ticket `/design` can't see the other tickets; this pass can. Unify terms, flag conflicts, kill duplicated scope there.
-- **The board carries Phase B's questions, never its answers.** Comments and `resolve`, one writer, one batch, a ticket-id prefix on every entry — and the layer they live in is named in the handoff for the user to delete, because a per-run command is borrowing a per-unit-of-work file.
+- **The board carries Phase B's questions, never its answers.** Comments and `resolve`, one writer, one batch, a ticket-id prefix on every entry, a watcher armed behind it so the answers can come back without a terminal turn — and the layer they live in is named in the handoff for the user to delete, because a per-run command is borrowing a per-unit-of-work file.
 - **No silent decisions** — auto-resolved and human-resolved alike ride into the ticket with rejected options and evidence.
 - **Glossary/ADR are durable and committed by the single writer; the design draft is ephemeral;** the resolved design in the ticket is what start-multi consumes.
 - **Confirm before writing to a ticket** — it's outward-facing and (for description appends) touches a shared artifact.
