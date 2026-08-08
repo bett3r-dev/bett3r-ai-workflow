@@ -40,6 +40,24 @@ jobs:
       # splitting them) while a deletion still fails loudly.
       - name: Check the absorbed facts are still in the corpus (needles)
         run: python3 scripts/check-needles.py
+      # GitHub's closing keywords bind to exactly one reference each, so
+      # `Closes #56 #62 #63 #78 #139` closes #56 and files the other four as
+      # ordinary mentions — they get a cross-reference link and stay open. There
+      # is nothing to see: the commit is well-formed, the PR reports MERGED, and
+      # every step above is green, because none of them reads a commit message.
+      # One PR here shipped seven such lines: 80 references, 7 closures, 73
+      # issues left open, found days later by someone counting the backlog. This
+      # is the reassuring-failing shape EVIDENCE.md §1 is about — the identical
+      # defect in an alarming check costs a minute.
+      #
+      # It reads the branch's commit messages *and* every .md, because the
+      # artifacts are where the syntax is taught: a command showing the bare list
+      # is the upstream of the malformed commit, not a copy of it. The gate runs
+      # its own positive control over built-in specimens before judging anything,
+      # so a regex edited into never matching fails loudly instead of reporting a
+      # clean tree in a clean tree's voice.
+      - name: Check issue-closing syntax (commit messages + examples)
+        run: python3 scripts/check-closes-syntax.py "origin/${{ github.base_ref || 'master' }}"
       # The shipped UserPromptSubmit hook runs on every prompt in every repo
       # where the plugin is enabled, and a non-zero exit blocks the prompt.
       # Run it under dash too — `sh` is dash on Debian/Ubuntu, bash on macOS.
