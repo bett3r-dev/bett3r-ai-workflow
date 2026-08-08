@@ -166,7 +166,15 @@ if [ "$status" -ne 0 ]; then
   printf '\n'
   printf 'A plugin is copied into the version-keyed cache only when its `version` changes.\n'
   printf 'Unbumped, the change lands in the repo and reaches nobody. Bump the plugin(s)\n'
-  printf 'named above (and the marketplace entry that pins them) and push again.\n\n'
+  # `marketplace.json` is named here as convention and explicitly *not* as a pin:
+  # its `plugins[]` entries carry name/source/description and no version at all,
+  # and the marketplace checkout refreshes by `git pull` regardless of
+  # `metadata.version`. This text is what someone reads at the exact moment they
+  # are failing this gate, so calling it a pin is how the next person bumps that
+  # field alone and cannot work out why nothing moved.
+  printf 'named above and push again. Bumping `.claude-plugin/marketplace.json` alongside\n'
+  printf 'is repo convention, not propagation: it pins no plugin version, and bumping it\n'
+  printf 'on its own ships nothing. See docs/adr/ADR-001.\n\n'
   exit 1
 fi
 
