@@ -583,13 +583,45 @@ function summarize(branch, { runs, marks, sessions, workDir }) {
   const weighted = tk.input + tk.cacheWrite * 1.25 + tk.cacheRead * 0.1 + tk.output * 5
 
   const cmdClasses = new Map()
-  for (const r of runs) for (const b of r.bashCalls) {
-    const cls = classifyCommand(b.cmd)
-    const c = cmdClasses.get(cls) ?? { cls, n: 0, ms: 0, slowest: 0 }
-    c.n++; c.ms += b.ms; c.slowest = Math.max(c.slowest, b.ms)
-    cmdClasses.set(cls, c)
+  const cmdByRole = new Map()
+  for (const r of runs) {
+    const role = shortRole(r.agentType)
+    for (const b of r.bashCalls) {
+      const cls = classifyCommand(b.cmd)
+      const c = cmdClasses.get(cls) ?? { cls, n: 0, ms: 0, slowest: 0 }
+      c.n++; c.ms += b.ms; c.slowest = Math.max(c.slowest, b.ms)
+      cmdClasses.set(cls, c)
+
+      const key = `${role} ${cls}`
+      const rc = cmdByRole.get(key) ?? { role, cls, n: 0, ms: 0 }
+      rc.n++; rc.ms += b.ms
+      cmdByRole.set(key, rc)
+    }
   }
-  const commands = [...cmdClasses.values()].sort((a, b) => b.ms - a.ms).slice(0, 12)
+  const commands = [...cmdClasses.values()].sort((a, b) => b.ms - a.ms)
+  const commandsByRole = [...cmdByRole.values()].sort((a, b) => b.ms - a.ms)
+
+  // One agent = one (role, model, effort) cell. Kept at this grain because the
+  // question "is the cheaper model good enough for the verifier?" cannot be
+  // answered from a role total that averages two models together.
+  const cellMap = new Map()
+  for (const r of runs) {
+    const key = `${shortRole(r.agentType)} ${r.model} ${r.effort}`
+    const c = cellMap.get(key) ?? {
+      role: shortRole(r.agentType), model: r.model, effort: r.effort,
+      runs: 0, active: 0, tool: 0, reason: 0, stalled: 0, calls: 0, apiCalls: 0,
+      added: 0, removed: 0, tokens: 0, output: 0, weighted: 0,
+    }
+    c.runs++; c.active += r.activeMs; c.tool += r.toolMs; c.reason += r.reasonMs
+    c.stalled += r.stalledMs; c.calls += r.toolCalls; c.apiCalls += r.apiCalls
+    c.added += r.linesAdded; c.removed += r.linesRemoved
+    const t = r.tokens
+    c.tokens += t.input + t.cacheWrite + t.cacheRead + t.output
+    c.output += t.output
+    c.weighted += t.input + t.cacheWrite * 1.25 + t.cacheRead * 0.1 + t.output * 5
+    cellMap.set(key, c)
+  }
+  const roleCells = [...cellMap.values()].sort((a, b) => b.active - a.active)
 
   const deadGaps = orch.flatMap(r => r.deadGaps).sort((a, b) => b.ms - a.ms).slice(0, 10)
 
@@ -628,7 +660,7 @@ function summarize(branch, { runs, marks, sessions, workDir }) {
     tokens: tk, tokenTotal: tokTotal, weightedTokens: Math.round(weighted),
     linesAdded: total.added, linesRemoved: total.removed,
     builds, firstPassGreen: overallFpg,
-    commands, deadGaps,
+    commands, commandsByRole, roleCells, deadGaps,
     models: [...new Set(runs.map(r => r.model))].filter(m => m !== 'unknown'),
     efforts: [...new Set(runs.map(r => r.effort))].filter(e => e !== 'unknown'),
     topRuns: [...agents].sort((a, b) => b.activeMs - a.activeMs).slice(0, 12).map(r => ({
@@ -811,6 +843,139 @@ function emit(summary) {
   return { file, index: INDEX }
 }
 
+/** Command classes that are the repo answering back, rather than the model working. */
+const CHECK_CLASSES = new Set(['build', 'test', 'typecheck', 'lint', 'generate', 'install'])
+
+/**
+ * Fleet-wide agent performance: how the agents themselves spend time, across
+ * every recorded run. Reads the run documents (not the index) because the index
+ * is deliberately one flat row per run and cannot carry a role breakdown.
+ */
+function agentsReport(sinceMs) {
+  const dir = join(STORE, 'runs')
+  if (!existsSync(dir)) { console.log('  no runs recorded yet — run with --emit first, or backfill.'); return }
+  const docs = []
+  for (const f of readdirSync(dir)) {
+    if (!f.endsWith('.json')) continue
+    try {
+      const d = JSON.parse(readFileSync(join(dir, f), 'utf8'))
+      if (sinceMs && d.runEnd < sinceMs) continue
+      docs.push(d)
+    } catch { /* skip an unreadable document rather than abort the report */ }
+  }
+  if (!docs.length) { console.log('  no runs in range.'); return }
+
+  const cells = new Map()
+  for (const d of docs) for (const c of (d.roleCells ?? [])) {
+    const key = `${c.role}|${c.model}|${c.effort}`
+    const a = cells.get(key) ?? { ...c, runs: 0, active: 0, tool: 0, reason: 0, stalled: 0, calls: 0, apiCalls: 0, added: 0, removed: 0, tokens: 0, output: 0, weighted: 0 }
+    for (const k of ['runs', 'active', 'tool', 'reason', 'stalled', 'calls', 'apiCalls', 'added', 'removed', 'tokens', 'output', 'weighted']) a[k] += c[k] ?? 0
+    cells.set(key, a)
+  }
+  const all = [...cells.values()]
+  if (!all.length) { console.log('  runs found, but none carry a role breakdown — re-emit them to populate it.'); return }
+
+  const fold = (list) => list.reduce((t, c) => {
+    for (const k of ['runs', 'active', 'tool', 'reason', 'stalled', 'calls', 'apiCalls', 'added', 'removed', 'tokens', 'output', 'weighted']) t[k] = (t[k] ?? 0) + (c[k] ?? 0)
+    return t
+  }, {})
+  const groupBy = (list, keyFn) => {
+    const m = new Map()
+    for (const c of list) {
+      const k = keyFn(c)
+      if (!m.has(k)) m.set(k, [])
+      m.get(k).push(c)
+    }
+    return m
+  }
+  const tokPerLine = (g) => g.added > 0 ? fmtTok(Math.round(g.weighted / g.added)) : '—'
+
+  console.log('')
+  console.log(`  AGENT PERFORMANCE — ${docs.length} run(s)${sinceMs ? ` since ${new Date(sinceMs).toISOString().slice(0, 10)}` : ''}`)
+  console.log('')
+
+  const total = fold(all)
+  console.log('  BY ROLE')
+  const byRole = [...groupBy(all, c => c.role).entries()]
+    .map(([role, list]) => ({ role, ...fold(list), models: [...new Set(list.map(c => c.model))], efforts: [...new Set(list.map(c => c.effort))] }))
+    .sort((a, b) => b.active - a.active)
+  console.log(table(['role', 'agents', 'active', 'share', 'tool', 'reason', 'stalled', 'calls', 'api', 'weighted tok', '+/- lines', 'tok/line'],
+    byRole.map(g => [g.role, g.runs, fmtDur(g.active), pct(g.active, total.active),
+      `${fmtDur(g.tool)} ${pct(g.tool, g.active)}`, `${fmtDur(g.reason)} ${pct(g.reason, g.active)}`,
+      fmtDur(g.stalled), g.calls, g.apiCalls, fmtTok(Math.round(g.weighted)),
+      `+${g.added}/-${g.removed}`, tokPerLine(g)])))
+  console.log(`  total: ${fmtDur(total.active)} active — ${fmtDur(total.tool)} tool (${pct(total.tool, total.active)}) · ${fmtDur(total.reason)} reasoning (${pct(total.reason, total.active)})`)
+  console.log('')
+
+  console.log('  BY MODEL')
+  const byModel = [...groupBy(all, c => c.model).entries()].map(([model, list]) => ({ model, ...fold(list) })).sort((a, b) => b.active - a.active)
+  console.log(table(['model', 'agents', 'active', 'share', 'tool', 'reason', 'calls', 'weighted tok', '+/- lines', 'tok/line'],
+    byModel.map(g => [g.model, g.runs, fmtDur(g.active), pct(g.active, total.active),
+      pct(g.tool, g.active), pct(g.reason, g.active), g.calls, fmtTok(Math.round(g.weighted)),
+      `+${g.added}/-${g.removed}`, tokPerLine(g)])))
+  console.log('')
+
+  console.log('  BY EFFORT')
+  const byEffort = [...groupBy(all, c => c.effort).entries()].map(([effort, list]) => ({ effort, ...fold(list) })).sort((a, b) => b.active - a.active)
+  console.log(table(['effort', 'agents', 'active', 'share', 'tool', 'reason', 'calls', 'weighted tok', '+/- lines', 'tok/line'],
+    byEffort.map(g => [g.effort, g.runs, fmtDur(g.active), pct(g.active, total.active),
+      pct(g.tool, g.active), pct(g.reason, g.active), g.calls, fmtTok(Math.round(g.weighted)),
+      `+${g.added}/-${g.removed}`, tokPerLine(g)])))
+  console.log('')
+
+  console.log('  ROLE × MODEL × EFFORT   (the cell that answers "is the cheaper model good enough here?")')
+  console.log(table(['role', 'model', 'effort', 'agents', 'active', 'tool', 'reason', 'calls', 'weighted tok', '+/- lines'],
+    all.sort((a, b) => b.active - a.active).slice(0, 20).map(c => [c.role, c.model, c.effort, c.runs,
+      fmtDur(c.active), pct(c.tool, c.active), pct(c.reason, c.active), c.calls,
+      fmtTok(Math.round(c.weighted)), `+${c.added}/-${c.removed}`])))
+  console.log('')
+
+  // repo checks — the part of tool time that is the repo answering, not the model
+  const cmdAgg = new Map()
+  for (const d of docs) for (const c of (d.commands ?? [])) {
+    const a = cmdAgg.get(c.cls) ?? { cls: c.cls, n: 0, ms: 0, slowest: 0 }
+    a.n += c.n; a.ms += c.ms; a.slowest = Math.max(a.slowest, c.slowest ?? 0)
+    cmdAgg.set(c.cls, a)
+  }
+  const cmds = [...cmdAgg.values()].sort((a, b) => b.ms - a.ms)
+  const checkMs = cmds.filter(c => CHECK_CLASSES.has(c.cls)).reduce((t, c) => t + c.ms, 0)
+  const cmdTotal = cmds.reduce((t, c) => t + c.ms, 0)
+
+  console.log('  REPO CHECKS   (summed per call — concurrent calls overlap, so this exceeds wall time)')
+  console.log(table(['class', 'check?', 'calls', 'total', 'share of shell', 'slowest single', 'avg'],
+    cmds.map(c => [c.cls, CHECK_CLASSES.has(c.cls) ? 'yes' : '', c.n, fmtDur(c.ms),
+      pct(c.ms, cmdTotal), fmtDur(c.slowest), fmtDur(c.ms / Math.max(1, c.n))])))
+  console.log(`  repo checks: ${fmtDur(checkMs)} of ${fmtDur(cmdTotal)} shell time (${pct(checkMs, cmdTotal)}) — ${pct(checkMs, total.active)} of all agent active time`)
+  // A class whose total is one blocked call is not a cost signal, it is an
+  // incident. Reported explicitly: a real 7.02h `git` call once made `git` look
+  // like 16% of all shell time, when the other 149 calls totalled 36 seconds.
+  for (const c of cmds) {
+    if (c.n > 1 && c.slowest > 0.5 * c.ms && c.slowest > 10 * 60_000) {
+      console.log(`  ⚠ "${c.cls}" is dominated by ONE call of ${fmtDur(c.slowest)} (${pct(c.slowest, c.ms)} of the class; other ${c.n - 1} calls total ${fmtDur(c.ms - c.slowest)}).`)
+      console.log('    A single call that long is a block — an interactive prompt, a pager, a waiting permission — not throughput to optimise.')
+    }
+  }
+  console.log('')
+
+  const roleCmd = new Map()
+  for (const d of docs) for (const c of (d.commandsByRole ?? [])) {
+    if (!CHECK_CLASSES.has(c.cls)) continue
+    const a = roleCmd.get(c.role) ?? { role: c.role, n: 0, ms: 0 }
+    a.n += c.n; a.ms += c.ms
+    roleCmd.set(c.role, a)
+  }
+  if (roleCmd.size) {
+    console.log('  WHO PAYS FOR THE CHECKS')
+    const byRoleMap = new Map(byRole.map(g => [g.role, g]))
+    console.log(table(['role', 'check calls', 'check time', 'of its tool time', 'of its active time'],
+      [...roleCmd.values()].sort((a, b) => b.ms - a.ms).map(c => {
+        const g = byRoleMap.get(c.role)
+        return [c.role, c.n, fmtDur(c.ms), g ? pct(c.ms, g.tool) : '—', g ? pct(c.ms, g.active) : '—']
+      })))
+    console.log('')
+  }
+}
+
 function aggregate(sinceMs) {
   if (!existsSync(INDEX)) { console.log('  no runs recorded yet — run with --emit first, or backfill.'); return }
   let rows = []
@@ -852,13 +1017,14 @@ function aggregate(sinceMs) {
 // ─────────────────────────────────────────────────────────── cli
 
 function parseArgs(argv) {
-  const o = { branch: null, emit: false, json: false, list: false, aggregate: false, since: null, quiet: false }
+  const o = { branch: null, emit: false, json: false, list: false, aggregate: false, agents: false, since: null, quiet: false }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--emit') o.emit = true
     else if (a === '--json') o.json = true
     else if (a === '--list') o.list = true
     else if (a === '--aggregate') o.aggregate = true
+    else if (a === '--agents') o.agents = true
     else if (a === '--quiet') o.quiet = true
     else if (a === '--since') o.since = argv[++i]
     else if (a === '--branch') o.branch = argv[++i]
@@ -887,6 +1053,7 @@ run-metrics — where a unit of work's time and tokens actually went
   branch            branch to report on (default: current git branch)
   --list            list branches seen in the transcripts
   --aggregate       trend across all recorded runs (reads the index)
+  --agents          fleet-wide AGENT performance: role x model x effort, and repo checks
   --emit            write the run to ~/.claude/bett3r-metrics/ and update the index
   --json            print the summary as JSON instead of tables
   --since <5d|2w|1m|ISO>   limit transcript scan / aggregation window
@@ -897,6 +1064,7 @@ function main() {
   const o = parseArgs(process.argv.slice(2))
   if (o.help) { console.log(HELP); return }
 
+  if (o.agents) { agentsReport(sinceToMs(o.since)); return }
   if (o.aggregate) { aggregate(sinceToMs(o.since)); return }
 
   if (o.list) {
