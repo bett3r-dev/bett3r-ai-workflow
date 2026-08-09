@@ -743,6 +743,48 @@
       "commit": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/evolve.md",
       "note": "Behavior that must leave a parent goes to a subagent, not a reference file — fresh context, dispatched at the moment it applies. Worktree provisioning left /start-multi this way."
+    },
+    {
+      "needle": "substituted for *hook* invocations only",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/run-report.md",
+      "note": "CLAUDE_PLUGIN_ROOT is unset in a command's bash block; it expands to empty and the failure reads as a missing file. Plugin executables go in bin/, which IS on PATH keyed by version."
+    },
+    {
+      "needle": "Every millisecond is classified, never subtracted",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/run-report.md",
+      "note": "Run timing cannot be last-minus-first: that once read 3,587 minutes for an agent that worked 52. Time is classified tool/reason/child/stalled so a parked session never counts as work."
+    },
+    {
+      "needle": "A unit of work is not a session",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/run-report.md",
+      "note": "/clear and /handoff scatter one branch across many sessions (one spanned 26), and one session covers many branches (one covered six). Transcript metrics join on git branch, and slice records by it."
+    },
+    {
+      "needle": "Each `/build` invocation is its own ledger",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/run-report.md",
+      "note": "Merging two /build passes over the same slices makes every slice look retried — a real branch read 0% first-pass-green when its two passes were 33% and 100%."
+    },
+    {
+      "needle": "A failure to measure must never block landing the work",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/verify-build.md",
+      "note": "The run-cost emit is the last step of /verify-build and is strictly advisory; a metrics error is reported in one line, never a reason to leave a PR unopened."
+    },
+    {
+      "needle": "One session is not one branch either",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/run-report.md",
+      "note": "A session that touched six branches reports all six as each other's work unless records are sliced by branch; three unrelated branches once reported byte-identical totals."
     }
   ]
 }

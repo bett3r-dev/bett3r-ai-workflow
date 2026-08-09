@@ -1,0 +1,17 @@
+#!/bin/sh
+# Launcher for scripts/run-metrics.mjs.
+#
+# It exists because of two facts that only bite at runtime:
+#
+#   * `CLAUDE_PLUGIN_ROOT` is substituted for *hook* invocations only, so a
+#     command's bash block cannot use it to find anything this plugin ships —
+#     it expands to empty and `node /scripts/run-metrics.mjs` fails looking
+#     like a missing file rather than a missing variable.
+#   * Every enabled plugin's `bin/` IS on `PATH`, keyed by version
+#     (…/plugins/cache/<marketplace>/<plugin>/<version>/bin). So a file placed
+#     here is callable by bare name, from any repo, and automatically resolves
+#     to the version the session actually loaded.
+#
+# The implementation stays a `.mjs` next door because it is ESM: a file with no
+# extension is read as CommonJS and its `import`s would be a syntax error.
+exec node "$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)/scripts/run-metrics.mjs" "$@"
