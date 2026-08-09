@@ -15,6 +15,19 @@ Group issues touching the same skill/command/agent or proposing the same change.
 ## Step 3 — Propose
 For each cluster, decide the concrete change to the artifact. Where a change is contentious or a genuine trade-off, surface it for the user rather than guessing.
 
+### Whether to split an artifact — decide this before deciding how
+
+`/evolve` grows artifacts by nature, so sooner or later one is "too big" and the reflex is to move a section into a reference file. That reflex is wrong about as often as it is right, and the failure is silent either way, so decide it deliberately.
+
+**The trade is attention against loading probability.** A long artifact dilutes: every rule in it competes with the whole file for finite attention, and the ones in the middle lose. A split concentrates what remains, but the extracted content is now read only if the pointer is followed — probability < 1, and nothing observable says which. Trade the first cost for the second only when the first is actually larger.
+
+- **There is a floor, and below it inlining wins outright.** A small parent has no dilution to relieve, so a split there spends loading probability and buys nothing. Measured case: a 468-word skill whose two references were 668 and 351 — the skill was *smaller than its own references combined*. Inlining them also exposed duplication that had been invisible while spread across files (3 files/1,487 words → 1 file/1,439). **A split you can delete beats a split you have to verify forever**, and both of those were passing their scenarios when they were deleted.
+- **Split by trigger, never by topic.** Content may leave only when its loading is gated on a condition something *already evaluates and acts on* — a verdict a preflight prints, a flag, a repo shape resolved at step 0. "Fleet mechanics" is a topic and makes an unsafe split; "this unit checks out 2+ repos" is a trigger and makes a safe one. A pointer sitting on a decision the reader is already making gets followed; one sitting in background prose does not.
+- **Explanation may be referenced. Behavior may not.** Ask what happens when the pointer is *not* followed. If the artifact still acts correctly and merely loses the *why*, the split is safe — that is exactly why `EVIDENCE.md` works, with every consumer keeping its own trigger inline. If not following it means the wrong thing happens, silently, a reference file is the wrong instrument.
+- **For behavior, use a subagent instead — it is a split with loading probability 1.** Fresh context, dispatched at the moment it applies, nothing competing with it. Worktree provisioning left `/start-multi` this way. What must *not* go: anything the parent is required to verify for itself (`/start-multi` keeps verifying the branch base, because "never trust an agent's ahead/behind" is precisely a prohibition on delegating that check).
+
+Record the parent's word count before and after in the PR, and remember that plugin-wide totals barely move — extraction relocates words rather than deleting them. Per-artifact load is the thing that changed; total size never was.
+
 ## Step 4 — Open PRs
 For each agreed change: branch, make the edit, **bump the touched plugin's `.claude-plugin/plugin.json` `version`**, and open a PR that **links the issues it closes**, repeating the keyword on every one: `Closes #56, closes #62, closes #63`. **One PR per coherent change** (never one giant PR) so review stays tractable. Let the normal review pipeline (human and/or `/code-review`) gate the merge.
 

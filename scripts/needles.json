@@ -715,6 +715,34 @@
       "commit": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/evolve.md",
       "note": "A split ships with its behavioral scenario, because every presence gate is corpus-wide by design and therefore green whether the pointer is ever opened or not. The pass that makes the split is the last moment anyone knows what the pointer was for."
+    },
+    {
+      "needle": "A split you can delete beats a split you have to verify forever",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/evolve.md",
+      "note": "The split floor: below it a split spends loading probability and buys no attention relief. A 468-word skill with 668+351-word references — both passing their scenarios — was inlined and the splits deleted."
+    },
+    {
+      "needle": "Split by trigger, never by topic",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/evolve.md",
+      "note": "Content may leave an artifact only when its loading is gated on a condition something already evaluates and acts on. 'Fleet mechanics' is a topic and splits unsafely; 'this unit checks out 2+ repos' is a trigger and splits safely."
+    },
+    {
+      "needle": "Explanation may be referenced. Behavior may not",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/evolve.md",
+      "note": "The test for whether a reference file is the right instrument: ask what happens when the pointer is NOT followed. Losing only the why is safe (EVIDENCE.md); silently doing the wrong thing is not."
+    },
+    {
+      "needle": "a split with loading probability 1",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/evolve.md",
+      "note": "Behavior that must leave a parent goes to a subagent, not a reference file — fresh context, dispatched at the moment it applies. Worktree provisioning left /start-multi this way."
     }
   ]
 }
