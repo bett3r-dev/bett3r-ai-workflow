@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "bett3r-pv3-ai-skills",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "PV3 DDD framework skills: scaffold event-sourced schemas, aggregates, policies, read models, modules, and tests following the PV3 AggregateBuilder/ReadmodelBuilder/PolicyBuilder patterns, plus a ddd-patterns reference. Reads each host repo's package names and paths from its `.esas.config.json`, so the same skills work in any PV3 repo — not just Teselly.",
   "author": {
     "name": "Tomas Ruiz",
