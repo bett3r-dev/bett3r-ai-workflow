@@ -129,7 +129,33 @@ The PR **body is the record**:
 <Critical/Medium findings and how resolved; or "clean">
 ```
 
-## Step 6 — Cleanup
+## Step 6 — Record what the run cost
+
+This is the last step that knows the unit of work is finished, so it is where the run is measured. One command, from the branch's worktree:
+
+```bash
+run-metrics --emit --quiet
+```
+
+(`run-metrics` is on `PATH` from this plugin's `bin/`. `${CLAUDE_PLUGIN_ROOT}` is **not** available in a command's bash block — it is substituted for hooks only.)
+
+It reconstructs the whole unit from the transcripts — every session the branch touched, across `/clear` and `/handoff` — and writes one document to `~/.claude/bett3r-metrics/runs/`, plus a row in `index.jsonl` keyed by (repo, branch). Re-running replaces that run's row rather than appending, so this is safe to repeat.
+
+Nothing here gates the PR. **A failure to measure must never block landing the work**: if the command errors, say so in one line and carry on to Step 7.
+
+Then paste the headline into the PR body, under the template above:
+
+```
+### Run cost
+elapsed <X>h · alive <Y>h (<duty>%) · <N> agents · <W> weighted tokens · +<A>/-<D> lines
+first-pass green: <G>  ·  plugin <version>@<sha>  ·  <model>, effort <effort>
+```
+
+Two lines, no tables — the PR is a record of the work, not a dashboard. `/run-report` renders the full breakdown on demand, and `/run-report --aggregate` compares this run against every previous one by plugin version.
+
+Report the duty cycle in your summary to the user **only when it is low and the dead time was not simply overnight** — otherwise it is noise. `DEAD GAPS` in the full report distinguishes the two.
+
+## Step 7 — Cleanup
 
 The ephemeral `.work/` (design.md, slices.yaml) has now been fully promoted (ADRs + PR body + per-slice commits). It is gitignored and may be discarded. Report the PR URL.
 
