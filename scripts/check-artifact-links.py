@@ -47,7 +47,7 @@ LINK = re.compile(r"""\[[^\]]*\]\(\s*<?([^)>\s]+)>?(?:\s+["'][^"']*["'])?\s*\)""
 FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 
 # Fenced blocks that are *template examples* rather than real documents. The
-# four relative links inside CONTEXT-FORMAT.md's `# Context Map` block show what
+# four relative links inside SKILL.md's `# Context Map` block show what
 # a generated CONTEXT-MAP.md should look like in a consuming repo — `./sales/`,
 # `./invoicing/` and friends are the reader's bounded contexts, not paths in
 # this repo. Making them resolve would mean rewriting the template to point at
@@ -58,7 +58,7 @@ FENCE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 # and if the block is renamed or removed the entry goes stale *loudly* (see
 # `stale allowlist` below) instead of quietly blinding a file forever.
 TEMPLATE_EXAMPLE_BLOCKS: dict[str, set[str]] = {
-    "plugins/bett3r-ai-workflow/skills/domain-modeling/CONTEXT-FORMAT.md": {"# Context Map"},
+    "plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md": {"# Context Map"},
 }
 
 EVIDENCE_REL = "plugins/bett3r-ai-workflow/EVIDENCE.md"

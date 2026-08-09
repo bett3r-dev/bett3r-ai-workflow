@@ -503,7 +503,7 @@
       "needle": "ADR-NNN-slug.md",
       "issue": null,
       "commit": "e41fcdc",
-      "was_in": "plugins/bett3r-ai-workflow/skills/domain-modeling/ADR-FORMAT.md",
+      "was_in": "plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md",
       "note": "The no-ADRs-yet default must match what vertical-slicing and verify-build render; it fires once per repo and sets a convention forever."
     },
     {

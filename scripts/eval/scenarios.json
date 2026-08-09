@@ -147,12 +147,10 @@
     {
       "id": "adr-numbering-reached",
       "why": "The highest-stakes rule behind any of these pointers. Duplicate ADR numbers are silent — different slugs mean different filenames, so nothing conflicts and both land — and one repo's namespace reached 22% duplicates this way. Every inbound ADR-0NN citation breaks permanently, and the cheap moment is before the number is used.",
-      "guards_split": "skills/domain-modeling/SKILL.md -> ADR-FORMAT.md",
+      "guards_split": "skills/domain-modeling/SKILL.md — ADR numbering, now inline",
       "artifact": "plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md",
       "prompt": "Read plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md. A decision in this session qualifies for an ADR. The repo already has ADRs under docs/adr/. Give me the exact steps to write it, including precisely how you determine its number and why that way.",
-      "must_open": [
-        "ADR-FORMAT.md"
-      ],
+      "must_open": [],
       "must_state": [
         [
           "git log --all"
@@ -163,17 +161,16 @@
           "only numbers that reached"
         ]
       ],
-      "must_not_state": []
+      "must_not_state": [],
+      "_calibration": "Written to guard a split that no longer exists: ADR-FORMAT.md and CONTEXT-FORMAT.md were inlined into SKILL.md and deleted. The parent was 468 words and its two references 668 and 351, so the split sat below the floor where splitting pays — it cost loading probability and bought no attention. must_open is empty because there is nothing left to open; loading probability is 1. Kept anyway, because the ADR numbering rule is high-stakes and silent when wrong, and asserting an INLINE rule is still a legibility regression check — it just is not evidence about a pointer any more. Note guards_split must not name the deleted files: check-eval-coverage.py reads every .md path in that field as a guarded target and correctly flags one the corpus no longer has."
     },
     {
       "id": "context-format-reached",
       "why": "CONTEXT.md is a glossary and nothing else; the format file is what keeps it from drifting into a spec or a scratchpad. The failure is cheap to fix but easy to start, and it compounds — a CONTEXT.md that has become a scratchpad stops being read.",
-      "guards_split": "skills/domain-modeling/SKILL.md -> CONTEXT-FORMAT.md",
+      "guards_split": "skills/domain-modeling/SKILL.md — glossary format, now inline",
       "artifact": "plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md",
       "prompt": "Read plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md. During a grill the user settles that 'Publication' is the right word for an item listed on an external sales channel, and that 'Listing' should not be used. Write exactly what goes into CONTEXT.md, in the exact format required, and say where the file lives.",
-      "must_open": [
-        "CONTEXT-FORMAT.md"
-      ],
+      "must_open": [],
       "must_state": [
         [
           "_avoid_"
@@ -182,7 +179,8 @@
           "publication"
         ]
       ],
-      "must_not_state": []
+      "must_not_state": [],
+      "_calibration": "Written to guard a split that no longer exists: ADR-FORMAT.md and CONTEXT-FORMAT.md were inlined into SKILL.md and deleted. The parent was 468 words and its two references 668 and 351, so the split sat below the floor where splitting pays — it cost loading probability and bought no attention. must_open is empty because there is nothing left to open; loading probability is 1. Kept anyway, because the ADR numbering rule is high-stakes and silent when wrong, and asserting an INLINE rule is still a legibility regression check — it just is not evidence about a pointer any more. Note guards_split must not name the deleted files: check-eval-coverage.py reads every .md path in that field as a guarded target and correctly flags one the corpus no longer has."
     },
     {
       "id": "aggregate-patterns-reached",
