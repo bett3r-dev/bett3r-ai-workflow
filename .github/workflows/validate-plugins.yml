@@ -40,6 +40,28 @@ jobs:
       # splitting them) while a deletion still fails loudly.
       - name: Check the absorbed facts are still in the corpus (needles)
         run: python3 scripts/check-needles.py
+      # The steps above all assert *presence*, corpus-wide and on purpose, so a
+      # rule stays free to move between artifacts. That tolerance is exactly what
+      # blinds them to a *split*: once a rule stops being inline and starts living
+      # behind a pointer, "the fact is still in the repo" stops answering the
+      # question, which is now whether the pointer is followed. That bill has been
+      # paid once — EVIDENCE.md shipped linked from 5 artifacts while needed by 8,
+      # every step above green, because both the link and its absence parse fine.
+      #
+      # scripts/eval/ answers it by running real headless sessions and asserting
+      # which file each one opened. It is deliberately NOT here: it consumes real
+      # usage, needs an authenticated `claude` CLI, and is non-deterministic. This
+      # is the CI-safe half — it runs no session, it only refuses a split that
+      # shipped with nothing guarding it, so the expensive run stays manual while
+      # an unguarded split cannot merge.
+      #
+      # Like check-closes-syntax.py it runs its own positive control over built-in
+      # specimens before judging anything, and treats a missing/empty scenarios
+      # file — or a corpus yielding zero splits while plainly having the materials
+      # for one — as an error. A coverage gate reporting full coverage of nothing
+      # is the exact reassuring-failing shape it exists to stop.
+      - name: Check every split has a behavioral scenario (eval coverage)
+        run: python3 scripts/check-eval-coverage.py
       # GitHub's closing keywords bind to exactly one reference each, so
       # `Closes #56 #62 #63 #78 #139` closes #56 and files the other four as
       # ordinary mentions — they get a cross-reference link and stay open. There

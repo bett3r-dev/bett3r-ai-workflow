@@ -708,6 +708,13 @@
       "commit": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/evolve.md",
       "note": "GitHub closes only the first issue after each Closes keyword. `Closes #56 #62 #63` closed #56 and left the rest open — 80 referenced issues became 7 closures and 73 stragglers, with the PR MERGED and CI green. Fails in the reassuring direction; the only tell is a backlog count."
+    },
+    {
+      "needle": "the same pass writes the eval scenario",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/evolve.md",
+      "note": "A split ships with its behavioral scenario, because every presence gate is corpus-wide by design and therefore green whether the pointer is ever opened or not. The pass that makes the split is the last moment anyone knows what the pointer was for."
     }
   ]
 }
