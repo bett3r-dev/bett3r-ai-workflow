@@ -3,7 +3,8 @@
   "defaults": {
     "runs": 3,
     "min_pass": 2,
-    "allowed_tools": "Read,Grep,Glob"
+    "allowed_tools": "Read,Grep,Glob",
+    "model": "claude-opus-5"
   },
   "scenarios": [
     {
@@ -12,10 +13,20 @@
       "guards_split": "commands/start-multi.md -> agents/provisioner.md",
       "artifact": "plugins/bett3r-ai-workflow/commands/start-multi.md",
       "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/start-multi.md. You are running it. You are at step 2: you have just cut a clean worktree for unit TV1-1900 at /tmp/run/wt/TV1-1900, branched off the pinned BASE, and the base check passed. List concretely and specifically every action you take next, before you dispatch the unit's pipeline agent. Name actual commands and actual filenames.",
-      "must_open": ["agents/provisioner.md"],
+      "must_open": [
+        "agents/provisioner.md"
+      ],
       "must_state": [
-        ["provisioner"],
-        ["claim", "spot-check", "spot check", "inconclusive", "verify"]
+        [
+          "provisioner"
+        ],
+        [
+          "claim",
+          "spot-check",
+          "spot check",
+          "inconclusive",
+          "verify"
+        ]
       ],
       "must_not_state": [],
       "_calibration": "The first version of this asserted the orchestrator would state `build:all` / the baseline filename. It opened provisioner.md 3/3 and failed the text assertion 3/3 — because that assertion encoded a PRE-split expectation. After the split the orchestrator is right not to recite the agent's internals; that is what delegating means. The build rule is now asserted where it lives, by `provisioner-states-its-own-rules`. A behavioral eval can be wrong about what correct looks like, and this one was."
@@ -28,9 +39,17 @@
       "prompt": "Read the agent file plugins/bett3r-ai-workflow/agents/provisioner.md. You are the provisioner. You have been handed unit TV1-1900, worktree /tmp/run/wt/TV1-1900, repo kind 'standard', run dir /tmp/run, scratchpad /tmp/scratch/TV1-1900. The worktree was reused from an earlier unit and already has a .work/ directory in it. Walk through exactly what you do, naming actual commands, and say what you report back.",
       "must_open": [],
       "must_state": [
-        ["build:all", "turbo build", "recursive"],
-        ["archive"],
-        ["known-baseline-failures"]
+        [
+          "build:all",
+          "turbo build",
+          "recursive"
+        ],
+        [
+          "archive"
+        ],
+        [
+          "known-baseline-failures"
+        ]
       ],
       "must_not_state": []
     },
@@ -42,10 +61,23 @@
       "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/start-multi.md. You are running it as the orchestrator. A unit's worktree has just been cut and its branch created from the pinned BASE. How do you establish that the branch is actually on the base you intended? State the exact command and say who runs it.",
       "must_open": [],
       "must_state": [
-        ["rev-list --count", "merge-base --is-ancestor"],
-        ["yourself", "orchestrator", "I run", "you run", "not the agent", "do not trust", "never trust"]
+        [
+          "rev-list --count",
+          "merge-base --is-ancestor"
+        ],
+        [
+          "yourself",
+          "orchestrator",
+          "I run",
+          "you run",
+          "not the agent",
+          "do not trust",
+          "never trust"
+        ]
       ],
-      "must_not_state": ["delegate this check to the provisioner"]
+      "must_not_state": [
+        "delegate this check to the provisioner"
+      ]
     },
     {
       "id": "board-setup-pointer-followed",
@@ -53,10 +85,18 @@
       "guards_split": "commands/design.md -> skills/esas-design/BOARD-SETUP.md",
       "artifact": "plugins/bett3r-ai-workflow/commands/design.md",
       "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/design.md. You are running /design in a repo that has a .esas/ directory. The board-mode preflight has just printed 'mcp: unregistered'. The design question is structural, so relevance passed. What exactly do you do now, and what do you tell the user? Be specific about any cost to them.",
-      "must_open": ["BOARD-SETUP.md"],
+      "must_open": [
+        "BOARD-SETUP.md"
+      ],
       "must_state": [
-        ["RESTART REQUIRED", "restart"],
-        ["mcpServers", ".mcp.json"]
+        [
+          "RESTART REQUIRED",
+          "restart"
+        ],
+        [
+          "mcpServers",
+          ".mcp.json"
+        ]
       ],
       "must_not_state": []
     },
@@ -66,10 +106,19 @@
       "guards_split": "commands/verify-build.md -> EVIDENCE.md",
       "artifact": "plugins/bett3r-ai-workflow/commands/verify-build.md",
       "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/verify-build.md. You are running /verify-build. The full test suite reported 'Tests: 0 total' and exited 0, and a slice's oracle is in a tier excluded from the default run. Is this branch green? Justify your answer using this flow's own definition of evidence, and say what you record.",
-      "must_open": ["EVIDENCE.md"],
+      "must_open": [
+        "EVIDENCE.md"
+      ],
       "must_state": [
-        ["inconclusive"],
-        ["never green", "not green", "never a baseline", "not a baseline"]
+        [
+          "inconclusive"
+        ],
+        [
+          "never green",
+          "not green",
+          "never a baseline",
+          "not a baseline"
+        ]
       ],
       "must_not_state": []
     },
@@ -81,8 +130,194 @@
       "prompt": "Read the agent file plugins/bett3r-ai-workflow/agents/executor.md. You are the executor. Your slice's entire deliverable is a new CI guard script that must fail when a forbidden pattern appears. You cannot get a natural RED, because before your slice there is nothing to run. What evidence do you produce that the guard actually works, and what exactly do you report?",
       "must_open": [],
       "must_state": [
-        ["mutation", "mutate", "break one production line", "break the production line"],
-        ["positive", "negative control", "control"]
+        [
+          "mutation",
+          "mutate",
+          "break one production line",
+          "break the production line"
+        ],
+        [
+          "positive",
+          "negative control",
+          "control"
+        ]
+      ],
+      "must_not_state": []
+    },
+    {
+      "id": "adr-numbering-reached",
+      "why": "The highest-stakes rule behind any of these pointers. Duplicate ADR numbers are silent — different slugs mean different filenames, so nothing conflicts and both land — and one repo's namespace reached 22% duplicates this way. Every inbound ADR-0NN citation breaks permanently, and the cheap moment is before the number is used.",
+      "guards_split": "skills/domain-modeling/SKILL.md -> ADR-FORMAT.md",
+      "artifact": "plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md",
+      "prompt": "Read plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md. A decision in this session qualifies for an ADR. The repo already has ADRs under docs/adr/. Give me the exact steps to write it, including precisely how you determine its number and why that way.",
+      "must_open": [
+        "ADR-FORMAT.md"
+      ],
+      "must_state": [
+        [
+          "git log --all"
+        ],
+        [
+          "directory listing",
+          "listing shows",
+          "only numbers that reached"
+        ]
+      ],
+      "must_not_state": []
+    },
+    {
+      "id": "context-format-reached",
+      "why": "CONTEXT.md is a glossary and nothing else; the format file is what keeps it from drifting into a spec or a scratchpad. The failure is cheap to fix but easy to start, and it compounds — a CONTEXT.md that has become a scratchpad stops being read.",
+      "guards_split": "skills/domain-modeling/SKILL.md -> CONTEXT-FORMAT.md",
+      "artifact": "plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md",
+      "prompt": "Read plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md. During a grill the user settles that 'Publication' is the right word for an item listed on an external sales channel, and that 'Listing' should not be used. Write exactly what goes into CONTEXT.md, in the exact format required, and say where the file lives.",
+      "must_open": [
+        "CONTEXT-FORMAT.md"
+      ],
+      "must_state": [
+        [
+          "_avoid_"
+        ],
+        [
+          "publication"
+        ]
+      ],
+      "must_not_state": []
+    },
+    {
+      "id": "aggregate-patterns-reached",
+      "why": "ddd-patterns became a hub plus six references; this is the most-used spoke. Its trigger row is the plain 'writing an aggregate' case, so if the trigger table works at all it works here — which makes this the canary for the whole hub.",
+      "guards_split": "ddd-patterns/SKILL.md -> AGGREGATES.md",
+      "artifact": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md",
+      "prompt": "Read plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md. I am adding a new PV3 aggregate with two command handlers, an invariant, and an idempotency check that reads existing state. What patterns and gotchas must I follow? Be specific and name the failure each one prevents.",
+      "must_open": [
+        "AGGREGATES.md"
+      ],
+      "must_state": [
+        [
+          "produces"
+        ],
+        [
+          "idempotency",
+          "operation_in_progress"
+        ]
+      ],
+      "must_not_state": []
+    },
+    {
+      "id": "delivery-contract-reached",
+      "why": "DELIVERY.md is the one reference deliberately kept standalone rather than filed under Policies or Read Models, because a policy, a read model AND a non-PV3 webhook all bind to it. This asserts the widest-audience trigger actually fires; if it does not, two of its three audiences never see the contract.",
+      "guards_split": "ddd-patterns/SKILL.md -> DELIVERY.md",
+      "artifact": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md",
+      "prompt": "Read plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md. I am writing a consumer that can be handed the same event twice. I was going to dedup by storing the highest global event position I have seen and ignoring anything at or below it. Is that correct? Answer precisely and say what breaks.",
+      "must_open": [
+        "DELIVERY.md"
+      ],
+      "must_state": [
+        [
+          "per-stream",
+          "per stream"
+        ],
+        [
+          "global position"
+        ]
+      ],
+      "must_not_state": []
+    },
+    {
+      "id": "policy-patterns-reached",
+      "why": "Policy failures are the ones that re-emit commands — a fan-out restarted from the top re-issues every event, and a soft-deleted aggregate is not protected by invariants.stateExists(). The blast radius is external side effects, not just a wrong projection.",
+      "guards_split": "ddd-patterns/SKILL.md -> POLICIES.md",
+      "artifact": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md",
+      "prompt": "Read plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md. I am writing a PV3 policy that reacts to one event by dispatching a command per line item, and it can be redelivered halfway through. How do I make that safe? Name the specific mechanism and what happens if I get it wrong.",
+      "must_open": [
+        "POLICIES.md"
+      ],
+      "must_state": [
+        [
+          "redeliver",
+          "replay",
+          "partial"
+        ],
+        [
+          "idempotenc",
+          "already applied",
+          "no-op",
+          "recorded progress",
+          "appliedtargetkeys",
+          "natural key",
+          "progress from aggregate state"
+        ]
+      ],
+      "must_not_state": [],
+      "_calibration": "First version required one of four narrow phrasings of the partial-progress mechanism. It opened POLICIES.md 3/3 and passed must_state only 1/3 — not because the split failed, but because the model states the same correct idea many ways: 'per-command idempotency', 'withIdempotencyCheck', 'no-op when already applied', 'the source aggregate's own recorded progress'. The assertion was testing phrasing, not comprehension. Broadened to the concept. This is the second scenario where the ASSERTION, not the artifact, was at fault — must_open is the discriminating half and must_state should confirm the idea landed, not pin a wording."
+    },
+    {
+      "id": "readmodel-patterns-reached",
+      "why": "The read-model gotchas are the ones that reach production silently — op:'contains' on a default B-tree index left six live admin search boxes dead, and an upsert that cannot remove a key left eight nav sections collapsed forever. All green in tests.",
+      "guards_split": "ddd-patterns/SKILL.md -> READMODELS.md",
+      "artifact": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md",
+      "prompt": "Read plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md. I am writing a PV3 read model whose projector rebuilds a nested object on each event, and I need a query route that filters on a field inside it. What must I know before writing it? Name the concrete failures.",
+      "must_open": [
+        "READMODELS.md"
+      ],
+      "must_state": [
+        [
+          "replace: true",
+          "replace"
+        ],
+        [
+          "index",
+          "b-tree",
+          "gin"
+        ]
+      ],
+      "must_not_state": []
+    },
+    {
+      "id": "schema-evolution-reached",
+      "why": "The smallest reference (377 words) and the sharpest failure: a PR scoped as a 'pure rename' rehydrated the aggregate to accounts[\"undefined\"] — replay silently broken, and the replay path usually has no test to go red. Small references are the easiest to skip past.",
+      "guards_split": "ddd-patterns/SKILL.md -> SCHEMAS.md",
+      "artifact": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md",
+      "prompt": "Read plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md. I want to rename a field on a persisted event — it is just a rename, the type is unchanged. Is that safe? Say exactly what I have to do and what breaks if I treat it as a rename.",
+      "must_open": [
+        "SCHEMAS.md"
+      ],
+      "must_state": [
+        [
+          "upcaster",
+          "schema evolution",
+          "version"
+        ],
+        [
+          "replay",
+          "rehydrat"
+        ]
+      ],
+      "must_not_state": []
+    },
+    {
+      "id": "module-boot-reached",
+      "why": "The boot-order rule cost two production cron subscriptions that stopped registering, while 399 suites and a 288/288 lift gate stayed green. A single-flight guard that returns instead of re-arming is invisible to every mechanical gate the repo has.",
+      "guards_split": "ddd-patterns/SKILL.md -> MODULES.md",
+      "artifact": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md",
+      "prompt": "Read plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md. I am registering subscriptions from a module's onStarted boot hook and want a single-flight guard so concurrent calls do not double-register. Sketch it and tell me what I must be careful about.",
+      "must_open": [
+        "MODULES.md"
+      ],
+      "must_state": [
+        [
+          "boot order",
+          "both boot orders",
+          "start-first",
+          "started first"
+        ],
+        [
+          "re-arm",
+          "rearm",
+          "redrainrequested",
+          "queue"
+        ]
       ],
       "must_not_state": []
     }

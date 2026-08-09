@@ -44,18 +44,36 @@ orchestrator. Without it, this suite would happily report green on a corpus that
 had delegated everything, because every "did it follow the pointer" question
 would still answer yes. A detector never seen to fire is not evidence of calm.
 
+**The model is pinned, in `defaults.model`.** Left to the CLI default it is a
+silent variable: a scenario dropping from 3/3 to 1/3 would be ambiguous between
+"the artifact drifted" and "the default model changed", and only the first is
+visible, so only the first gets blamed. Every verdict prints the model it ran on.
+
+Overriding it is the *useful* move, not a fallback. The plugin's own subagents
+(`executor`, `verifier`, `test-runner`, `provisioner`) do not necessarily run on
+the strongest model, so **a rule only the strongest model follows is a rule that
+breaks in a cheaper subagent.** Re-running a scenario with `--model` turns this
+suite into a legibility measure rather than only a regression check.
+
 ## Why this is not in CI
 
-It costs real money and real minutes (roughly $0.20 and 30-60s per run, so a
-full pass is a few dollars), it needs an authenticated `claude` CLI, and it is
-non-deterministic — three properties that make a required PR check actively
-harmful. Run it deliberately: before merging a split, and after changing any
-artifact that carries a pointer.
+It consumes real usage and real minutes (30-60s per session), it needs an
+authenticated `claude` CLI, and it is non-deterministic — three properties that
+make a required PR check actively harmful. The static half of the contract lives
+in `scripts/check-eval-coverage.py`, which *is* CI-safe: it asserts every split
+has a scenario without running one. Run this one deliberately: before merging a
+split, and after changing any artifact that carries a pointer.
+
+Note the reported cost is the CLI's own `total_cost_usd`, which is a notional
+API-equivalent figure. On a subscription-authenticated CLI nothing is billed at
+that rate — it consumes usage limits instead — so read it as a relative measure
+of how heavy a pass is, not as an invoice.
 
     python3 scripts/eval/run-behavioral-eval.py                     # everything
     python3 scripts/eval/run-behavioral-eval.py --scenario provisioner-reached
     python3 scripts/eval/run-behavioral-eval.py --dry-run           # free; prints prompts
     python3 scripts/eval/run-behavioral-eval.py --runs 1            # cheap smoke
+    python3 scripts/eval/run-behavioral-eval.py --model claude-haiku-4-5-20251001
 
 Exit code is non-zero if any scenario falls below its threshold.
 """
@@ -86,7 +104,7 @@ def load() -> tuple[dict, list[dict]]:
     return data.get("defaults", {}), scenarios
 
 
-def run_once(scenario: dict, defaults: dict) -> dict:
+def run_once(scenario: dict, defaults: dict, model: str | None) -> dict:
     """One headless session. Returns what it opened, what it said, what it cost."""
     tools = scenario.get("allowed_tools", defaults.get("allowed_tools", "Read,Grep,Glob"))
     cmd = [
@@ -94,6 +112,13 @@ def run_once(scenario: dict, defaults: dict) -> dict:
         "--output-format", "stream-json", "--verbose",
         "--allowedTools", tools,
     ]
+    # The model is pinned, never inherited. Unpinned, a scenario dropping from
+    # 3/3 to 1/3 is ambiguous between "the artifact drifted" and "the CLI's
+    # default model changed" — and the second is invisible, so the first gets
+    # blamed. A result is only comparable to the run before it if this is the
+    # same. It is printed with every verdict for the same reason.
+    if model:
+        cmd += ["--model", model]
     try:
         proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=600)
     except subprocess.TimeoutExpired:
@@ -156,9 +181,11 @@ def main() -> int:
     ap.add_argument("--runs", type=int, help="override runs per scenario")
     ap.add_argument("--dry-run", action="store_true", help="print prompts and assertions, spend nothing")
     ap.add_argument("--jobs", type=int, default=4, help="concurrent sessions (default 4)")
+    ap.add_argument("--model", help="override the pinned model (e.g. to test legibility on a cheaper one)")
     args = ap.parse_args()
 
     defaults, scenarios = load()
+    model = args.model or defaults.get("model")
     if args.scenario:
         scenarios = [s for s in scenarios if s["id"] == args.scenario]
         if not scenarios:
@@ -171,7 +198,7 @@ def main() -> int:
             print(f"  must_open: {s.get('must_open', [])}")
             print(f"  must_state: {s.get('must_state', [])}")
             print(f"  prompt: {s['prompt'][:300]}…")
-        print(f"\n{len(scenarios)} scenario(s); nothing was run.")
+        print(f"\n{len(scenarios)} scenario(s); nothing was run. model would be: {model or '<CLI default — UNPINNED>'}")
         return 0
 
     jobs: list[tuple[dict, int]] = []
@@ -179,11 +206,12 @@ def main() -> int:
         n = args.runs or s.get("runs", defaults.get("runs", 3))
         jobs.extend((s, i) for i in range(n))
 
-    print(f"running {len(jobs)} session(s) across {len(scenarios)} scenario(s), {args.jobs} at a time…\n")
+    print(f"running {len(jobs)} session(s) across {len(scenarios)} scenario(s), "
+          f"{args.jobs} at a time, on {model or '<CLI default — UNPINNED, results not comparable>'}\n")
     results: dict[str, list] = {s["id"]: [] for s in scenarios}
     total_cost = 0.0
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        futures = {pool.submit(run_once, s, defaults): (s, i) for s, i in jobs}
+        futures = {pool.submit(run_once, s, defaults, model): (s, i) for s, i in jobs}
         for fut in as_completed(futures):
             s, _ = futures[fut]
             outcome = fut.result()
@@ -213,7 +241,8 @@ def main() -> int:
                 if why:
                     print(f"      - {'; '.join(why)}")
 
-    print(f"\ncost: ${total_cost:.2f}")
+    print(f"\nmodel: {model or '<CLI default — UNPINNED>'}    reported cost: ${total_cost:.2f}"
+          "  (notional API-equivalent; a subscription CLI consumes usage, not dollars)")
     if failed_scenarios:
         print(
             f"\n✗ {len(failed_scenarios)} scenario(s) below threshold.\n\n"
