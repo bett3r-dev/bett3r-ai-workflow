@@ -14,6 +14,7 @@ Reconstructs a unit of work from Claude Code's own transcripts. Nothing is instr
 | `<branch>` | report that branch |
 | `--list` | branches on disk, most recent first — use when you don't recall the exact name |
 | `--aggregate` | the trend across every recorded run, grouped by plugin version |
+| `--agents` | **agent** performance across every run: role, model, effort, and what the repo checks cost |
 | `--emit` | also record the run to `~/.claude/bett3r-metrics/` (what `/verify-build` does) |
 | `--since <5d\|2w\|1m>` | limit the transcript scan (or the aggregation window) |
 
@@ -39,6 +40,16 @@ Print the tables, then say what they mean. The point of the report is the tweak 
 2. **First-pass green**, per build invocation. Each retry costs a whole extra executor pass, so this is the largest single lever on total cost. Read it per invocation — never across a branch that ran `/build` twice.
 3. **tool vs reason**, per role. A role at ~95% reason is thinking, not waiting on your machine; speeding up the build won't touch it. A role heavy in `tool` is bounded by commands, and `WHERE COMMAND TIME WENT` names which.
 4. **Weighted tokens per line landed**. The efficiency number. Compare it against `--aggregate`, not against intuition.
+
+### When the question is about the agents, not the run
+
+`--aggregate` answers *"how are my runs trending?"*. `--agents` answers *"how are my agents performing?"* — a different cut, and usually the more actionable one:
+
+- **BY ROLE** — where active time goes, split tool vs reasoning, with `tok/line` per role.
+- **BY MODEL** / **BY EFFORT** — the same split, discriminated. Read these two together with role: a model's `tok/line` is mostly a statement about *which roles ran on it*, not about the model. Only the **ROLE × MODEL × EFFORT** table controls for that, which is why it exists.
+- **REPO CHECKS** — how much of shell time is the repo answering back (`build`, `test`, `typecheck`, `lint`, `generate`, `install`) rather than the model working, and **WHO PAYS FOR THE CHECKS** attributes it per role.
+
+A class dominated by one very long call is flagged rather than left in the total. **A single multi-hour call is a block — an interactive prompt, a pager, a waiting permission — not throughput to optimise**, and treating it as cost sends you tuning something that was never slow.
 
 ## Step 3 — Name the lever, or say there isn't one
 
