@@ -162,12 +162,21 @@ than as a bug in the half that caused it:
    minutes later — so the loop carries its own deadline, above. And a watch the
    user has overtaken by saying "look at the board" in the terminal is now
    waiting for a press that would answer an answered question: kill it, rather
-   than leave a process polling a directory nobody is designing in.
-6. **Echo the exit reason — `SUMMONED` or `TIMEOUT`.** From the outside the two
-   are one event: you wake with a background task that finished. Printing which
-   one ended the loop is the difference between *the user pressed the button*
-   and *nobody was there for half an hour*, and at 3am that is the whole
-   diagnosis.
+   than leave a process polling a directory nobody is designing in. `TaskStop`
+   ends the process before its own `printf` can run, so it is silent by
+   construction — say so yourself, in the turn that stops it ("watcher killed:
+   answered via terminal"), rather than leaving the exit unreported. Skipping
+   this is what makes a kill and a crash look identical from outside: both are
+   a background task that stopped without a line to show for it.
+6. **Echo the exit reason — `SUMMONED`, `TIMEOUT`, or `KILLED`.** From the
+   outside these are one event: you wake (or move on) with a background task
+   that stopped. `SUMMONED` and `TIMEOUT` echo themselves from inside the loop;
+   `KILLED` cannot, since the process that would print it is the one being
+   stopped, so invariant 5's self-report is what stands in for it. Naming which
+   one ended the watch is the difference between *the user pressed the button*,
+   *nobody was there for half an hour*, and *the user answered some other way*
+   — three states that a silent stop collapses into an unmarked one, and at
+   3am that collapse is the whole missing diagnosis.
 
 A `TIMEOUT` exit is not a press, and it is the one wake the invariants above do
 not already govern. Re-arm it once — half an hour of silence is a user reading,
@@ -372,3 +381,28 @@ then D" is strictly harder to read than the same shape drawn — but prose is
 still right for a single fact, a yes/no answer, or a recommendation with no
 shape to it. One fence per comment: a wall of stacked diagrams is as unreadable
 as the wall of prose it replaced.
+
+**When prose is still right, break it up — a single dense paragraph is not the
+default.** A comment that names a state, a recommendation, and a constraint is
+three things, not one: give each its own numbered section (`1. The Problem`,
+`2. The Recommendation`, `3. The Constraint` — name them for what's actually
+in this comment, not literally these words) with its own short paragraphs or
+bullets underneath, rather than running everything together with em-dashes
+into one block. Nest sub-points as bullets under the sentence they belong to
+instead of splicing them into it — three parenthetical states read easier as
+three list items than as one sentence carrying all three.
+
+**Bold the load-bearing words inside each sentence, not whole labels at the
+start of one.** A bolded lead-in (`**RECOMMEND:**`) marks where to start
+reading but says nothing on its own; bolding the actual claim inside the
+sentence (*tolerate absence only where it cannot escalate the document
+class*) means a reader skimming bold-only still gets the idea, and reading the
+unbolded rest is opt-in elaboration, not the only place the point lives. Apply
+this within a section's own prose, not as a substitute for the section break
+above — the two techniques stack: numbered/bulleted structure for shape, bold
+for the one sentence in each part that carries it.
+
+The test is whether a tired reader can skim the section headers and bolded
+phrases alone and get the shape of the comment before reading a full sentence;
+if the whole thing has to be read start to finish to find the recommendation,
+it is one paragraph pretending to be several.
