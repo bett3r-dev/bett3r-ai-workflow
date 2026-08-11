@@ -360,3 +360,15 @@ read as the truth. Say what you tried, quote what it said, and let them decide.
 sticky it concerns, and `resolved: false` is the shared to-decide list. Prefer a
 node anchor — the spine couplings (`handled-by`, `produces`, `issues`) usually
 draw no line, so a comment anchored there has nowhere to show.
+
+**When a comment explains a problem of logic — a sequence of steps, a branch, a
+race, an ordering — favor a diagram over prose.** The comment panel renders
+fenced ` ```mermaid ` blocks as flowcharts and sequence diagrams inline, not as
+a code block. A branch or a race is what `flowchart TD` is for; a multi-party
+exchange (who calls what, in what order, waiting on what) is what
+`sequenceDiagram` is for. Reach for one whenever the shape of the problem is the
+thing under discussion — a paragraph describing "A happens, then either B or C,
+then D" is strictly harder to read than the same shape drawn — but prose is
+still right for a single fact, a yes/no answer, or a recommendation with no
+shape to it. One fence per comment: a wall of stacked diagrams is as unreadable
+as the wall of prose it replaced.
