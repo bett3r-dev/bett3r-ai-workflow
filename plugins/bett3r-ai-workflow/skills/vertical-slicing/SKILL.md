@@ -67,6 +67,7 @@ slices:
     behavior: "<the one observable behavior, end to end, in the ubiquitous language>"
     oracle: "<the test that proves it — what it asserts>"
     gates: ["<project invariant the verifier must confirm>", ...]
+    model: sonnet                  # OPTIONAL. Present only on mechanical slices; absent means opus.
     jira: TICKET-NNN               # only when published as a sub-task (--publish)
   - id: 2
     name: "..."
@@ -74,7 +75,7 @@ slices:
     depends_on: []                 # independent of slice 1 → can run in parallel
 ```
 
-`passes` flags + git commits **are** the build progress. There is no separate progress doc. `touches: [paths]` may be added as a hint, but lead with `behavior`.
+`passes` flags + git commits **are** the build progress. There is no separate progress doc. `touches: [paths]` may be added as a hint, but lead with `behavior`. `model:` routes the slice's executor — set it only where the implementation is genuinely mechanical, and never on the tracer bullet, which is by construction the slice whose seam nobody has proven yet.
 
 ## Anti-patterns
 

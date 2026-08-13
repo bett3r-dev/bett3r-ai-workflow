@@ -318,6 +318,31 @@
         ]
       ],
       "must_not_state": []
+    },
+    {
+      "id": "build-routes-models-per-dispatch",
+      "why": "The model-routing policy is inline in /build and costs nothing to read past — and reading past it is silent: every dispatch still works, on the most expensive model available, which is exactly what it looked like before the policy existed. Nothing observable distinguishes 'routed to opus deliberately' from 'never routed'. This is also the scenario that guards the scope-check dispatch, a behaviour delegation (a split with loading probability 1) rather than a reference file.",
+      "guards_split": "commands/build.md -> agents/scope-check.md (behaviour delegated to a subagent, not to a reference file)",
+      "artifact": "plugins/bett3r-ai-workflow/commands/build.md",
+      "prompt": "Read plugins/bett3r-ai-workflow/commands/build.md. You are running it. Slice 3 of 5 is marked `model: sonnet` in .work/slices.yaml and its executor has just reported COMPLETED with a clean RED. State concretely every agent you dispatch next, and for each one name the model you dispatch it on and why.",
+      "must_open": [],
+      "must_state": [
+        [
+          "scope-check"
+        ],
+        [
+          "verifier"
+        ],
+        [
+          "opus"
+        ],
+        [
+          "sonnet",
+          "haiku"
+        ]
+      ],
+      "must_not_state": [],
+      "_calibration": "must_open is deliberately empty: the routing lives inline in build.md, so there is no pointer to follow. What is asserted is that both gate agents are named AND that a model is attached to each dispatch — an answer that dispatches the verifier without naming opus has read the step and skipped the policy, which is the exact failure."
     }
   ]
 }

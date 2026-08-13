@@ -39,6 +39,8 @@ Present the proposed slices as a numbered list. For each: **title**, **blocked-b
 
 Write the approved slices (the `vertical-slicing` skill's schema): `id`, `name`, `passes: false`, `depends_on`, `behavior`, `oracle` (the test that proves it), `gates` (the project invariants the verifier must confirm). Record the ADR path and branch. Lead each slice with behavior; `touches` (files) is an optional hint only.
 
+**Route each slice to a model.** Add `model: sonnet` to the slices whose implementation is *mechanical* — scaffolding an artifact from a framework skill, config or wiring, a test-only or guard-only slice, a prefactor that is a mechanical move. Leave the field **absent** on everything else, which `/build` reads as `opus`: the tracer bullet, any slice touching an invariant or a seam two slices must agree on, and anything the design was thin about. This is the only place in the flow that knows which slices are hard, and an unrouted `slices.yaml` sends the whole build through the most expensive model available. When in doubt, leave it absent — the cost of an over-routed slice is one retry, and `/build` re-dispatches those on `opus` and reports them so the next plan can be marked correctly.
+
 ## Step 6 — `--publish` (optional): Jira sub-tasks
 
 Only when `--publish` is passed. For each approved slice, in dependency order (blockers first, so real ids can be referenced), create a **Jira sub-task** under the ticket via the Atlassian MCP. Use the repo's sub-task type (for Teselly: **`Subtarea`**). Body template:
