@@ -1,10 +1,12 @@
 ---
-description: Fleet orchestrator — drive N work units (tickets) through the full flow in parallel, one git worktree each. Resumable, decision-logged into PRs, opened ready for review.
+description: Fleet orchestrator — drive N work units (tickets) through the full flow unattended, one git worktree each (in parallel where safe, serially where not). Resumable, decision-logged into PRs, opened ready for review.
 ---
 
-# /start-multi — parallel delivery across worktrees
+# /start-multi — unattended delivery across worktrees
 
-Drive a **list of work units** through the standard flow in parallel, isolating each in its own git worktree. You (the main session) are the **orchestrator**: you dispatch, verify git state with your own commands, collect escalations, and resume. You do **not** implement.
+Drive a **list of work units** through the standard flow **unattended**, isolating each in its own git worktree. You (the main session) are the **orchestrator**: you dispatch, verify git state with your own commands, collect escalations, and resume. You do **not** implement.
+
+**Unattended is the goal; parallel is only the preferred means.** Read this correction literally, because the command is routinely described the other way round and the mistake changes behaviour: an agent that believes parallelism is the point treats a serialized run as a degraded one, pushes `--max-parallel` past what the machine can hold, or reports failure when a wave has to collapse to one lane. The contract this command actually makes is that a human hands it N units and does not have to sit with it — every human moment is either batched (escalations, step 4) or pre-answered (a resolved design, step 0). **Running the units one after another satisfies that contract in full.** Parallelism is a throughput optimisation on top, taken where isolation, memory and dependencies allow, dropped without apology where they don't (`--serial`, `--max-parallel 1`, a dep chain that is one long wave, a fleet already at swap). Wall-clock is the thing being traded; unattendedness is not tradeable.
 
 Run state lives in `.work/multi/<run-id>/run.yaml` — ephemeral, gitignored, and the **resumable** source of truth. Re-running the same set resumes it.
 
@@ -18,7 +20,7 @@ Work-unit ids (+ optional descriptions), then flags.
 | `--max-parallel N` | Cap concurrent unit agents (default conservative — see Principles). |
 | `--no-pr` | Stop after local per-slice commits; don't push / open PRs. |
 | `--gate-design` | Pause after `design` on **every** unit (default: only design-heavy ones). |
-| `--serial` | No cross-unit parallelism; run each unit's pipeline yourself, dispatching the real `executor`/`verifier`/`test-runner` agents. The rigor path. |
+| `--serial` | No cross-unit parallelism; run each unit's pipeline yourself, dispatching the real `executor`/`verifier`/`test-runner` agents. The rigor path — **still unattended**, just slower. |
 | `--keep-worktrees` · `--fresh` · `--run-id <id>` | Teardown / resume-state controls. |
 
 ## Per-unit pipeline
@@ -110,6 +112,7 @@ Orchestrator is the **sole writer** of `run.yaml`; agents write only `units/<id>
 - **Off the freshly-fetched default branch, verified by you.** Never trust an agent's ahead/behind ("74 ahead" was really 74 *behind*). `--dry-run` previews the resolved bases.
 - **Tracker once, then never** — the run is self-contained and resumable.
 - **Deps in run.yaml** (from `--deps` / one question), not tracker links.
+- **Unattended is the contract; parallel is the optimisation.** Every human moment is batched or pre-answered. A run that ends up fully serialized has met the contract — do not treat it as a failure mode, and never buy throughput with an unbatched stop.
 - **Parallel by wave (capped), sequential across deps;** stacked children wait for the committed parent.
 - **Mind the two axes.** Each unit's `build` may itself parallelize independent slices — the across-unit and within-unit axes **multiply**, so keep `--max-parallel` conservative and respect the host repo's sandbox/disk limits.
 - **Never clobber a dirty worktree; tear down only what this run created.**
