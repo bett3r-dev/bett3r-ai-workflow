@@ -785,6 +785,55 @@
       "commit": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/run-report.md",
       "note": "A session that touched six branches reports all six as each other's work unless records are sliced by branch; three unrelated branches once reported byte-identical totals."
+    },
+    {
+      "needle": "292k tokens of context per turn",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/agents/executor.md",
+      "note": "Measured on a real fleet run: executors averaged 292k tokens of context per turn across 1,801 calls, and cache reads were 97% of the run's raw token bill. A gate log read once is re-sent every remaining turn, so redirecting output to a file and reading the tail is a cost rule, not only an exit-code rule."
+    },
+    {
+      "needle": "Name a model on every dispatch",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
+      "note": "An unnamed model is not a neutral default — it is the session's, the most expensive one available, silently applied to a role that may need none of it."
+    },
+    {
+      "needle": "never downgrade this one",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
+      "note": "The verifier stays on opus: it is the only gate positioned to catch a confidently-wrong oracle, and it is ~11% of a run's cost, so there is nothing to win by cheapening it."
+    },
+    {
+      "needle": "`mis-routed` (too cheap a model)",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
+      "note": "Every retry is classified before it is dispatched (oracle-wrong / design-silent / ripple / invariant / mis-routed / flake). First-pass green is already measured; the rate alone names no fix, the classification is what turns it into a change to /plan or to a slice's gates."
+    },
+    {
+      "needle": "absent means opus",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/skills/vertical-slicing/SKILL.md",
+      "note": "The optional per-slice `model:` field routes the executor. /plan is the only step that knows which slices are mechanical; an unrouted slices.yaml sends the whole build through the most expensive model available."
+    },
+    {
+      "needle": "A lane inherits your model",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "note": "A unit agent runs a whole pipeline in one context — the longest-lived in the flow — and its children inherit the session model unless the brief states the routing. Effort cannot be routed at all; it is a pre-flight decision made once for every lane."
+    },
+    {
+      "needle": "Splitting is not a token optimisation",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/evolve.md",
+      "note": "An artifact's own text is 1-4% of a typical agent's per-turn context (~210k measured); cache reads were 97% of raw tokens. Split for attention, which is scarce; if the stated reason is cost, the lever is elsewhere."
     }
   ]
 }

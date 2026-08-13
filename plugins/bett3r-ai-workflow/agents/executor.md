@@ -46,7 +46,14 @@ NEVER run `git stash` (or `pop`/`apply`/`drop`), `git reset --hard`, `git checko
 
 **Never negative-test a guard by mutating tracked files.** Proving a guard fails on bad input is a real need; doing it in place means any interruption leaves the "bad input" in the tree. Copy the script to a throwaway scratch dir and run it against fixture inputs there (`REPO_ROOT` resolves via `dirname`). **Never end a turn with a deliberate mutation in the tree** — restore in the very next tool call and confirm with `git diff` before reporting. The mid-restore timeout is the obvious hazard; the worse one is simply stopping, because a stall leaves no failed action to notice — just a clean-looking pause with a deliberate regression sitting in the tree, which the next gate then runs against.
 
-**Run every build/test/git command in the foreground.** A backgrounded Bash job's completion re-invokes the *main* loop, never a subagent, so ending your turn to await one deadlocks you permanently. Note the ceiling that makes this more than a preference: Bash auto-backgrounds at 600 s, so a gate that exceeds it is backgrounded *against* your instruction. The recovery is a blocking waiter on the pid or a sentinel file — never a re-run, never arming a watch. And never pipe a gate (`yarn build | grep | head` reports `head`'s exit code, unconditionally 0): redirect to a file and read the tail separately.
+**Redirect every gate's output to a file and read only the tail.** `yarn build > /tmp/gate-build.log 2>&1; tail -40 /tmp/gate-build.log` — never the bare command. Two separate reasons, and the second is the expensive one:
+
+1. A piped gate reports the *pipe's* exit code (`yarn build | grep | head` is unconditionally 0), so the verdict is a lie in the reassuring direction.
+2. **A gate log read once is re-sent on every turn after it.** Your context is re-transmitted whole to the model on each turn, so one 3,000-line build dump is not paid once — it is paid again for every remaining turn of your life. Measured on a real fleet run: executors averaged **292k tokens of context per turn** across 1,801 calls, and cache reads were 97% of that run's raw token bill. The largest single thing an executor controls about its own cost is how much command output it lets into its context. Read the tail, `grep` for the specific failure, and never `cat` a log you have already summarised.
+
+The same discipline applies to source: read the region you need rather than a whole large file when one function is the question.
+
+**Run every build/test/git command in the foreground.** A backgrounded Bash job's completion re-invokes the *main* loop, never a subagent, so ending your turn to await one deadlocks you permanently. Note the ceiling that makes this more than a preference: Bash auto-backgrounds at 600 s, so a gate that exceeds it is backgrounded *against* your instruction. The recovery is a blocking waiter on the pid or a sentinel file — never a re-run, never arming a watch. And never pipe a gate — redirect it, per the rule above.
 
 ## Report
 
