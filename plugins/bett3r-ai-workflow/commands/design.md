@@ -194,7 +194,17 @@ If the ticket has a `design-multi:resolved:vN` block (grep the token — it is e
 
 ## Step 2 — Grill (using the `grill` + `domain-modeling` skills)
 
-Run the interview: walk every branch of the decision tree, one question at a time (under board mode the independent forks batch to the canvas and only the dependent ones stay serial — the `grill` skill's split), each with your recommended answer; resolve dependencies between decisions before moving on. While you do:
+Run the interview: walk every branch of the decision tree, one question at a time (under board mode the independent forks batch to the canvas and only the dependent ones stay serial — the `grill` skill's split), each with your recommended answer; resolve dependencies between decisions before moving on.
+
+**Every fork you put to the user is presented picture → scenarios → per-option walk** (the `grill` skill's *Presenting a fork* section owns the shape; this is where it is mandatory):
+
+1. **The concrete full picture** of what the fork is about — the surface, today's behaviour, who calls it, what would change. Two option labels are not a question; the user cannot tell from them whether you are discussing the same thing they are.
+2. **The scenarios this fork has to cover**, enumerated — the normal path plus the ones that discriminate between the answers (retry, concurrent edit, empty set, crash between two steps, replay).
+3. **Each scenario walked per option** as a use case + timeline with an outcome line, diverging step marked. Where the fork has N options, do all three steps **per option**; where it is a yes/no, both sides get walked.
+
+This is not reserved for data-flow forks — it is how a fork is asked. Under board mode it is what goes **into the comment**: the terminal keeps the one-line map, the picture, scenarios and walks live on the anchored comment. Where every scenario walks identically across the options, there is no fork — resolve it yourself and record it as an autonomous decision.
+
+While you interview:
 
 - **Sharpen the language** — challenge terms against the glossary, propose canonical terms for fuzzy ones, stress-test relationships with concrete edge-case scenarios, and **cross-reference claims against the code**.
 - **Update `CONTEXT.md` inline** the moment a term resolves (glossary only — no implementation detail).
