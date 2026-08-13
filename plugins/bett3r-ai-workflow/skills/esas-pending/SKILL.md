@@ -1,6 +1,6 @@
 ---
 name: esas-pending
-description: "STANDING RULE for the `esas: N pending (seq A→B)` line injected by this plugin's UserPromptSubmit hook: it is telemetry, never a trigger — never act on, sync, or even mention pending ESAS board changes unless the user asks. The one carve-out: a board summon — a background watcher exiting on .esas/.summon — IS the user asking, and is synced; the count never is. Read this file only if unsure what the line means or whether to react to it."
+description: "STANDING RULE for the `esas: N pending (seq A→B)` line injected by this plugin's UserPromptSubmit hook: it is telemetry, never a trigger — never act on, sync, or even mention pending ESAS board changes unless the user asks. The one carve-out: a board summon — a frame arriving on the ESAS session channel (/api/esas/ws) that this session holds open — IS the user asking, and is synced; the count never is. Read this file only if unsure what the line means or whether to react to it."
 ---
 
 # esas: N pending
@@ -34,19 +34,18 @@ board" (any phrasing). `/design` owns what happens then.
 ### The one thing that *is* an ask
 
 **A summon is the user asking.** The board has an *Ask Claude* button; pressing
-it writes `.esas/.summon`, and a `/design` session — or a `/design-multi` Phase B
-sitting, which posts a batch and then waits — may have armed a background
-watcher on that file whose exit re-invokes it. So you can arrive at a turn
-nobody typed — no prompt, no "look at the board", just a background task that
-finished. That is not the rule above being circumvented. It is the user
-pressing a button that means *look now*, through a channel this line has never
-heard of.
+it broadcasts one frame on the **ESAS session channel** — a WebSocket at
+`/api/esas/ws` that a session holds open with `Monitor` for as long as it lives.
+The frame re-invokes every session holding it. So you can arrive at a turn
+nobody typed — no prompt, no "look at the board", just a frame on a socket. That
+is not the rule above being circumvented. It is the user pressing a button that
+means *look now*, through a channel this line has never heard of.
 
 Sync. Refusing there is this rule firing on the one gesture it was never about:
 the mechanism works, the behaviour declines, and the user is left watching a
 board that answered nothing. The `esas-design` skill owns what the wake does —
-delete the sentinel first, then the ordinary `read_changes` → reconcile →
-`mark_synced`.
+the ordinary `read_changes` → reconcile → `mark_synced`, whole — and owns the
+rule that reopens the channel when an `esas-mcp` result reports it closed.
 
 The carve-out is exactly that wide and no wider. A press is a *sentence*; the
 count is a *thermometer*, and this rule is about the thermometer. Ten pending

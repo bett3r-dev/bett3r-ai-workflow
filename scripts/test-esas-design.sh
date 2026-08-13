@@ -303,17 +303,23 @@ fi
 
 printf '\nthe board probe (GET /api/esas/status)\n'
 
-# $1 = the repoPath to answer with, $2 = 'pretty' to space the JSON out.
+# $1 = the repoPath to answer with, $2 = 'pretty' to space the JSON out,
+# $3 = the `sessions` count (how many sessions hold `/api/esas/ws` open).
 # The default separators match the board's `JSON.stringify(status)` byte for
 # byte — a stub that merely looks like the real answer is how a reader passes
-# its own tests and fails against the thing it reads.
+# its own tests and fails against the thing it reads. `sessions` is in the body
+# for the same reason: the board grew the field with the session channel, and a
+# stub still answering the old three-field status would let a reader that
+# breaks on the fourth stay green here.
 start_stub_board(){
   rm -f "$TMP/port"
   python3 -c '
 import json, sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 separators = (", ", ": ") if len(sys.argv) > 2 and sys.argv[2] == "pretty" else (",", ":")
-body = json.dumps({"repoPath": sys.argv[1], "gitSha": "deadbee", "lastSeq": 7},
+sessions = int(sys.argv[3]) if len(sys.argv) > 3 else 0
+body = json.dumps({"repoPath": sys.argv[1], "gitSha": "deadbee", "lastSeq": 7,
+                   "sessions": sessions},
                   separators=separators).encode()
 class H(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -332,7 +338,7 @@ srv = HTTPServer(("127.0.0.1", 0), H)
 sys.stdout.write("%d\n" % srv.server_port)
 sys.stdout.flush()
 srv.serve_forever()
-' "$1" "${2:-compact}" >"$TMP/port" 2>/dev/null &
+' "$1" "${2:-compact}" "${3:-0}" >"$TMP/port" 2>/dev/null &
   BOARD_PID=$!
   i=0
   while [ ! -s "$TMP/port" ] && [ "$i" -lt 100 ]; do
@@ -365,7 +371,7 @@ design: absent
 ops: absent
 mcp: registered
 board: serving
-  status: {"repoPath":"'"$TMP/work"'","gitSha":"deadbee","lastSeq":7}' \
+  status: {"repoPath":"'"$TMP/work"'","gitSha":"deadbee","lastSeq":7,"sessions":0}' \
       "$BOARD_PORT"
   fi
   stop_stub_board
@@ -386,7 +392,7 @@ design: absent
 ops: absent
 mcp: registered
 board: serving
-  status: {"repoPath": "'"$TMP/work"'", "gitSha": "deadbee", "lastSeq": 7}' \
+  status: {"repoPath": "'"$TMP/work"'", "gitSha": "deadbee", "lastSeq": 7, "sessions": 0}' \
       "$BOARD_PORT"
   fi
   stop_stub_board
@@ -406,7 +412,7 @@ design: absent
 ops: absent
 mcp: registered
 board: other-repo
-  status: {"repoPath":"/somewhere/else","gitSha":"deadbee","lastSeq":7}' \
+  status: {"repoPath":"/somewhere/else","gitSha":"deadbee","lastSeq":7,"sessions":0}' \
       "$BOARD_PORT"
   fi
   stop_stub_board
@@ -857,49 +863,88 @@ refute_md "$BOARD_MD" 'nor does the setup reference it split out from' '`comment
 
 # ── The summon — how the board wakes an idle session ──────────────────────────
 #
-# The board can now ask a session to look *now* (esas PR #12, ADR-008): a button
-# writes `.esas/.summon`, a background watcher armed by `/design` exits on it,
-# and that exit re-invokes an otherwise idle session. Every rule below has a
-# failure behind it that shows up as "the wake is broken" rather than as a bug in
-# the half that caused it, so each is pinned as its own needle. A summary
-# sentence survives a smoothed-away invariant; these do not.
+# The board asks a session to look *now* (esas ADR-014): the button broadcasts
+# one frame on a WebSocket at `/api/esas/ws`, and a session holding that socket
+# open with `Monitor` is re-invoked by its arrival.
+#
+# This replaced a `.esas/.summon` sentinel and a background shell watcher, and
+# the replacement is the reason four of the six invariants below are *gone*
+# rather than reworded: *delete the sentinel first*, *re-arm while forks are
+# open*, *self-bound the watch* and *echo the exit reason* were all consequences
+# of an **edge-triggered-once** wake. A persistent socket is level-triggered —
+# no file to delete, no exit to re-arm after, no deadline to bound, no reason to
+# echo. So the refutes below are load-bearing in the way the assertions are: a
+# skill that still tells a model to poll for a file that nothing writes sends it
+# to arm a watcher that can never fire, and everything else stays green.
+#
+# What survives is the two rules that were never about the transport. Each is
+# pinned as its own needle, because a summary sentence survives a smoothed-away
+# invariant and these do not.
 
-printf '\nskills/esas-design — the summon gesture\n'
+printf '\nskills/esas-design — the summon gesture (the session channel)\n'
 
-assert_md "$SKILL_MD" 'invariant 1: the sentinel goes before the feed is read' \
-  'Delete the sentinel before `read_changes`'
-assert_md "$SKILL_MD" 'invariant 2: the watch is re-armed while forks are still open' \
-  'Re-arm while any anchored fork is still `resolved: false`'
-assert_md "$SKILL_MD" 'invariant 3: a wake with nothing new is a normal outcome' \
+# The sentinel is gone from esas outright — no route writes it, and `raiseSummon`
+# no longer exists — so any surviving mention here is an instruction to watch a
+# file that will never appear.
+refute_md "$SKILL_MD" 'the sentinel path is gone, not softened' '.esas/.summon'
+refute_md "$SKILL_MD" 'and so is the shell watcher that polled for it' 'until [ -f'
+refute_md "$SKILL_MD" 'no exit reason survives — a held socket has no exit' 'SUMMONED'
+refute_md "$PENDING_MD" 'the sibling skill does not name the sentinel either' '.esas/.summon'
+refute_md "$BOARD_MD" 'nor does the setup file' '.esas/.summon'
+refute_md "$DESIGN_MULTI_MD" 'nor does design-multi' '.esas/.summon'
+
+# The wake itself: the route, the tool call that holds it, and the flag that
+# makes the holding session-scoped rather than turn-scoped.
+assert_md "$SKILL_MD" 'the channel route, spelled as esas spells it' '/api/esas/ws'
+assert_md "$SKILL_MD" 'the full ws URL the session dials' 'ws://127.0.0.1:3727/api/esas/ws'
+assert_md "$SKILL_MD" 'the wake is held open with Monitor, not polled for' 'Monitor({ ws:'
+assert_md "$SKILL_MD" 'and it is persistent, which is what makes it session-scoped' 'persistent: true'
+assert_md "$SKILL_MD" 'the frame carries a type and a timestamp and nothing else' \
+  '{"type":"summon","at":<epoch ms>}'
+
+# Two invariants, and the count is stated so a later edit cannot quietly grow
+# the list back without the prose disagreeing with itself.
+assert_md "$SKILL_MD" 'the list is two long, and says so' '**Two invariants.**'
+assert_md "$SKILL_MD" 'invariant 1: a wake with nothing new is a normal outcome' \
   'Tolerate an empty wake'
-assert_md "$SKILL_MD" 'invariant 4: nothing is proposed off a half-answered fork' \
+assert_md "$SKILL_MD" 'invariant 2: nothing is proposed off a half-answered fork' \
   'Never propose from partial answers'
-assert_md "$SKILL_MD" 'invariant 5: the loop bounds itself, and dies if the sync arrives another way' \
-  'Self-bound the watcher, and `TaskStop` it'
-assert_md "$SKILL_MD" 'invariant 6: the two ways the watch can end are told apart' \
-  '`SUMMONED` or `TIMEOUT`'
+# The cross-reference elsewhere in the file numbers this invariant, and a stale
+# ordinal pointing into a two-item list is the exact defect this change exists
+# to remove. Pinned on the pointer, not on the list.
+assert_md "$SKILL_MD" 'the map/questions section points at the right ordinal' \
+  "the summon's second"
+refute_md "$SKILL_MD" 'and no stale ordinal survives from the six-item list' \
+  "the summon's fourth"
 
-# The path the six invariants leave open: nothing above says what a wake on
-# TIMEOUT *does*, and invariant 2 read literally re-arms it every time — a
-# session with open forks and an absent user then wakes every thirty minutes
-# for as long as the session lives, each wake a full turn spent on an empty
-# room. One re-arm is grace; the second quiet timeout ends the channel, and it
-# ends out loud because the failure invariant 2 guards against was always the
-# silence, never the stopping.
-assert_md "$SKILL_MD" 'two quiet timeouts close the channel, and out loud' \
-  'stop re-arming and say so in one line'
+# ── Self-healing: how a deaf session finds out it is deaf ─────────────────────
+#
+# `Monitor`'s watch ends when the socket closes and it has no auto-reconnect, so
+# a board restart leaves a session deaf with nothing on either side saying so.
+# The recovery is a notice `esas-mcp` attaches to every tool result while the
+# channel is shut — a cross-repo contract copied verbatim from
+# `esas-mcp/src/session-channel-notice.ts`, whose header states the three
+# consumer rules pinned below. Each has a real failure behind it: branching on
+# the prose breaks at the next rewording, rebuilding the URL reopens a channel
+# to nothing on a moved board while reporting success, and reading silence as
+# health acts on a state the notice never claims.
 
-# The needle above pins the *announcement* and says nothing about the *count* —
-# and the count is the only part of this rule that is duplicated across
-# artifacts, so it is the only part that can drift. Changing the skill from two
-# quiet timeouts to three left the suite at 111 passed while
-# commands/design-multi.md still said "Two quiet timeouts end the channel": two
-# artifacts disagreeing about the bound, nothing red. Pin the number on both
-# sides, so the policy cannot move in one place alone.
-assert_md "$SKILL_MD" 'the bound is a SECOND consecutive quiet watch, not a third' \
-  'a second watch in a row'
-assert_md "$DESIGN_MULTI_MD" 'design-multi states the same bound as the skill' \
-  'Two quiet timeouts end the channel'
+printf '\nskills/esas-design — reopening a closed channel\n'
+
+assert_md "$SKILL_MD" 'the notice key, spelled as esas-mcp spells it' 'esasSessionChannel'
+assert_md "$SKILL_MD" 'the one code to branch on' 'SESSION_CHANNEL_CLOSED'
+assert_md "$SKILL_MD" 'the notice arrives as an extra content block on a tool result' \
+  'extra text content block'
+assert_md "$SKILL_MD" 'the channel is reopened unasked, not offered' \
+  'without being asked'
+assert_md "$SKILL_MD" 'consumer rule: branch on the code, never the message' \
+  'Branch on `code`, never on `message`'
+assert_md "$SKILL_MD" 'consumer rule: dial the ws field, never rebuild the URL' \
+  'do not reconstruct it'
+assert_md "$SKILL_MD" 'consumer rule: a missing notice means nothing to do' \
+  'A missing notice means *nothing to do*'
+assert_md "$SKILL_MD" 'and the three silent states are named, so absence is never read as health' \
+  'are **all silent**'
 
 # The second refusal source, and the stronger one: the wake is delivered wrapped
 # in a platform banner that declares itself NOT user input and not a response to
@@ -1021,29 +1066,27 @@ assert_md "$DESIGN_MULTI_MD" 'an answered fork is resolved in the pass that fold
 assert_md "$DESIGN_MULTI_MD" 'the flat thread is a ceiling to fall back from, not one to design around' \
   'Above roughly fifteen open forks, keep the whole list in the terminal'
 
-# The turn that posts the batch is the turn that ends by arming the summon, and
-# this is the file where that was missing: `/design` says when the watch goes up
-# for a single design, while Phase B — post N tickets' forks, then wait — is the
-# strongest case for it the flow has, with nothing saying so. Unarmed, the
-# board's **Ask Claude** button implies a channel nobody is listening on: the
-# press raises the sentinel and no watcher exits on it. Pinned needle-per-rule
-# like the invariants themselves, because the four halves fail differently — the
-# wrong moment spends a wake on nobody, a second watch over a live one costs one
-# nobody asked for, a watch never re-armed ends the sitting in silence, and a
-# watch always re-armed answers an empty room every timeout for as long as the
-# forks stay open. The fifth needle is this command's own: Phase A dispatches N
-# agents and not one of them arms anything, for the same reason not one of them
-# writes the batch.
-assert_md "$DESIGN_MULTI_MD" 'the batch turn ends by arming, so the button has a listener' \
-  'after you post the batch, as the last thing you do before going idle'
-assert_md "$DESIGN_MULTI_MD" 'a second watch over a live one buys a wake nobody asked for' \
-  'One armed watch at a time'
-assert_md "$DESIGN_MULTI_MD" 'a batch is answered in bursts, so the watch survives the first press' \
-  'Re-arm after each wake'
-assert_md "$DESIGN_MULTI_MD" 'an absent user does not cost a wake every timeout for the rest of the run' \
+# Phase B posts N tickets' forks and then waits, which makes it the strongest
+# case in the flow for the board's **Ask Claude** button having somebody on the
+# other end. With the channel shut the press reaches nobody *and leaves nothing
+# behind*, so the sitting ends in silence with the canvas still full of open
+# questions. The timing rules that used to live here are deliberately gone
+# rather than restated: they were properties of a watcher that had to be armed
+# on the right turn and re-armed after every wake, and a socket held for the
+# life of the session has neither. What is pinned is what still fails — the
+# channel being open at all, the burst-answering the persistence buys, and this
+# command's own rule that Phase A's N agents open nothing, for the same reason
+# not one of them writes the batch.
+assert_md "$DESIGN_MULTI_MD" 'the sitting holds the channel open, so the button has a listener' \
+  'Hold the summon channel open across the sitting'
+assert_md "$DESIGN_MULTI_MD" 'and it names the route it holds, as esas spells it' \
+  'ws://127.0.0.1:3727/api/esas/ws'
+assert_md "$DESIGN_MULTI_MD" 'a batch is answered in bursts, and one socket serves every press' \
+  'the user presses once per burst'
+assert_md "$DESIGN_MULTI_MD" 'the orchestrator opens it, as it posts the batch — never an agent' \
+  'no agent opens anything'
+refute_md "$DESIGN_MULTI_MD" 'no re-arming policy survives a persistent socket' \
   'Two quiet timeouts end the channel'
-assert_md "$DESIGN_MULTI_MD" 'the orchestrator arms it, as it posts the batch — never an agent' \
-  'no agent arms anything'
 
 # Teardown is the one thing in this slice nothing downstream does for you.
 # `/start-multi` branches into worktrees that have no `.esas/` at all, and the
@@ -1057,26 +1100,85 @@ assert_md "$DESIGN_MULTI_MD" 'the handoff names the layer the run leaves behind'
 assert_md "$DESIGN_MULTI_MD" 'and it is the user who deletes it, never you' \
   'never delete the files yourself'
 
-# ── The four cross-repo contracts ─────────────────────────────────────────────
+# ── The cross-repo contracts ──────────────────────────────────────────────────
 #
-# The sentinel path, the route that raises it, the handoff link and the port are
-# spelled in esas@master — `esas-store`'s `paths.ts`/`summon.ts`, the board's
-# `summon-route.ts` and `query-url.ts` — and nothing links the two repos at build
-# time, so a paraphrase on this side is a silent break with a full green suite on
-# both. esas pins all four there; this is the other half of the pin.
+# Every string below is spelled in esas@master and nothing links the two repos
+# at build time, so a paraphrase on this side is a silent break with a full
+# green suite on both. esas pins them there; this is the other half of the pin.
 #
-# `3727` is already in the command, which is the point rather than a gap: this
-# one is green the day it is written, because it guards drift rather than
-# introducing behaviour. It is asserted here beside its three siblings so the
-# four are maintained as one contract instead of four coincidences.
+# The sentinel path that used to head this list is gone from both sides. What
+# replaced it is the channel route, and the two keys of the notice that reopens
+# it — `SESSION_CHANNEL_ROUTE` in the board's `session-channel.ts`, and
+# `SESSION_CHANNEL_NOTICE_KEY`/`_CODE` in `esas-mcp/src/session-channel-notice.ts`.
+# The port, the status route and the channel route now have **one** definition
+# over there, in `esas-store/src/board-endpoints.ts`, which both the board and
+# `esas-mcp` import rather than re-typing; the skill says so, and that sentence
+# is pinned too, because "which file owns this string" is what a reader on this
+# side has no way to check.
+#
+# Several of these are green the day they are written, which is the point rather
+# than a gap: they guard drift rather than introduce behaviour. They are
+# asserted together so the set is maintained as one contract instead of as
+# coincidences.
 
-printf '\nthe four cross-repo contracts (spelled as esas@master spells them)\n'
+printf '\nthe cross-repo contracts (spelled as esas@master spells them)\n'
 
-assert_md "$SKILL_MD" 'the sentinel the watcher waits on' '.esas/.summon'
-assert_md "$SKILL_MD" 'the route the board raises it through' '/api/esas/board/summon'
+assert_md "$SKILL_MD" 'the session channel the wake arrives on' '/api/esas/ws'
+assert_md "$SKILL_MD" 'the press route the button POSTs to' '/api/esas/board/summon'
 assert_md "$SKILL_MD" 'the handoff link that opens the board on the open questions' \
   '?openComments=1&author=ai'
+assert_md "$SKILL_MD" 'the notice key an esas-mcp result carries while the channel is shut' \
+  'esasSessionChannel'
+assert_md "$SKILL_MD" 'the one code that notice carries' 'SESSION_CHANNEL_CLOSED'
+assert_md "$SKILL_MD" 'the port, named beside the rest of the contract' '3727'
+assert_md "$SKILL_MD" 'and where the port, the status route and the channel route are defined once' \
+  'esas-store/src/board-endpoints.ts'
 assert_md "$COMMAND_MD" 'the port the board claims strictly' '3727'
+assert_md "$BOARD_MD" 'the status field that says whether anybody would hear the button' \
+  'sessions'
+
+# ── The SessionStart hook ─────────────────────────────────────────────────────
+#
+# The other half of moving the arming from a command to a session. `/design`
+# armed the old watcher, so it died at every session boundary and the recovery
+# was the human remembering to ask; a `SessionStart` hook fires for every
+# session in the repo, resumed ones included. Its behaviour is executed by
+# scripts/test-hooks.sh — the cases where it must stay silent are the ones that
+# matter, and they need a stub board. What is pinned *here* is that it exists
+# and is wired, because a hook the runtime never loads fails silently and looks
+# exactly like a hook that decided to say nothing.
+
+printf '\nthe SessionStart hook (arming, at t=0, with no human in the loop)\n'
+
+SESSION_HOOK="$PLUGIN/hooks/esas-session-channel.sh"
+HOOKS_JSON="$PLUGIN/hooks/hooks.json"
+
+if [ ! -f "$SESSION_HOOK" ]; then
+  fail 'the SessionStart hook ships' "no file at $SESSION_HOOK"
+else
+  pass 'the SessionStart hook ships'
+  assert_md "$SESSION_HOOK" 'it bails on line 2 when there is no design layer here' \
+    '[ -d "${CLAUDE_PROJECT_DIR:-.}/.esas" ] || exit 0'
+  assert_md "$SESSION_HOOK" 'it probes the board rather than assuming one' '/api/esas/status'
+  assert_md "$SESSION_HOOK" 'it emits the Monitor call, which is the whole instruction' \
+    'persistent: true'
+fi
+
+if [ ! -f "$HOOKS_JSON" ]; then
+  fail 'hooks/hooks.json exists' "no file at $HOOKS_JSON"
+else
+  if grep -q '"SessionStart"' "$HOOKS_JSON"; then
+    pass 'hooks.json registers a SessionStart hook'
+  else
+    fail 'hooks.json registers a SessionStart hook' "no \"SessionStart\" key in $HOOKS_JSON"
+  fi
+  if grep -q 'CLAUDE_PLUGIN_ROOT}/hooks/esas-session-channel.sh' "$HOOKS_JSON"; then
+    pass 'and points it at the shipped script via ${CLAUDE_PLUGIN_ROOT}'
+  else
+    fail 'and points it at the shipped script via ${CLAUDE_PLUGIN_ROOT}' \
+      "not found in $HOOKS_JSON"
+  fi
+fi
 
 printf '\n'
 if [ "$failed" -gt 0 ]; then
