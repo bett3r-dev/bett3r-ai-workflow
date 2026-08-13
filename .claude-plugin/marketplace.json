@@ -7,7 +7,7 @@
   },
   "metadata": {
     "description": "Bett3r internal AI development tooling: the project-agnostic vertical-slice workflow plus the PV3 DDD framework skills.",
-    "version": "0.20.0"
+    "version": "0.21.0"
   },
   "plugins": [
     {
