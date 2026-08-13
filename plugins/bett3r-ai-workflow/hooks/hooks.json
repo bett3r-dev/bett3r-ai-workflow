@@ -1,6 +1,18 @@
 {
-  "description": "ESAS design-board telemetry: puts the pending-edit count in front of a prompt while the user has unsynced board changes. Inert in every repo without a .esas/ directory.",
+  "description": "ESAS design-board hooks: puts the pending-edit count in front of a prompt while the user has unsynced board changes, and tells a session at t=0 to open the board's summon channel when a board is serving this repo and nobody is holding it. Both are inert in every repo without a .esas/ directory.",
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/esas-session-channel.sh"],
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [

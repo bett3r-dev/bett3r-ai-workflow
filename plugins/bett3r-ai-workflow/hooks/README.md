@@ -77,6 +77,42 @@ the prompt.
 Tested by `scripts/test-hooks.sh` at the repo root, against fixtures produced by
 the real `@bett3r-dev/esas-store` (see `scripts/fixtures/esas-pending/README.md`).
 
+## esas-session-channel.sh — arming the board's summon channel
+
+A `SessionStart` hook that prints one instruction: open the ESAS **session
+channel** with `Monitor({ ws: { url: 'ws://127.0.0.1:<port>/api/esas/ws' },
+persistent: true })`. That socket is how the board's *Ask Claude* button reaches
+an idle session (esas ADR-014); the gesture itself is
+`skills/esas-design/SKILL.md`, and this hook only says *now would be the time*.
+
+**Why a hook exists at all** is the whole reason the mechanism was rewritten.
+The channel it replaced was a shell watcher armed by the `/design` command, so
+its arming died at every session boundary — a resume, a `/handon`, any other
+session in the repo — and the recovery was the human remembering to ask.
+`SessionStart` fires for **every** session in the repo, resumed ones included,
+so the channel can go up at t=0 with nobody asked.
+
+It obeys `esas-pending.sh`'s two rules for the same reason (no per-directory
+matcher, so it runs at the start of every session in every repo): **line 2 is
+the whole program** — `[ -d "${CLAUDE_PROJECT_DIR:-.}/.esas" ] || exit 0` — and
+**every path exits 0**, silently, including a missing `curl`.
+
+**Silence is the behaviour under test.** It speaks in exactly one state: a board
+answering `GET /api/esas/status` on `${ESAS_BOARD_PORT:-3727}`, serving **this**
+checkout (`repoPath` matched in both JSON spellings and both the logical and
+physical spelling of the project root), and reporting `sessions: 0`. Nothing on
+the port, a board serving another checkout, `sessions >= 1`, and a board with no
+`sessions` field at all (unknown, never zero) are **all silent** — `.esas/`
+existing is deliberately *not* sufficient, or every unrelated session in a
+designing repo would open a socket it will never use.
+
+What it does **not** cover: a board restarted later in the session, which
+`SessionStart` has already run past. That is recovered by the
+`esasSessionChannel` notice `esas-mcp` attaches to every tool result while the
+channel is shut. This hook buys t=0 only.
+
+Tested by `scripts/test-hooks.sh`, against a stub board on an ephemeral port.
+
 ## Fallback: installing the hook by hand
 
 The plugin mechanism above is verified, so this is **not** needed in a normal

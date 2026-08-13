@@ -273,7 +273,195 @@ else
   pass "absent .esas costs nothing: 50 runs in ${elapsed}s"
 fi
 
-# ── The mechanism: how the plugin declares the hook ──────────────────────────
+# ── The SessionStart hook (hooks/esas-session-channel.sh) ────────────────────
+#
+# The second hook in this plugin, and the one whose *silence* is the behaviour
+# under test. It tells a session to open the board's summon channel, and it must
+# say that in exactly one state — a board on the port, serving THIS checkout,
+# reporting `sessions: 0`. Every other state is silence, because an instruction
+# to dial a port is wrong in all of them: nothing there means dial a dead
+# address, a foreign board means attach this session to somebody else's design,
+# and `sessions >= 1` means somebody already holds it.
+#
+# So the negative cases carry the weight here. A hook that printed
+# unconditionally would pass a suite that only checked the positive one, and
+# would then fire in every session in every repo with a `.esas/`.
+#
+# The board is a python stub on an ephemeral port rather than the real one on
+# :3727: the assertion is about how the hook *reads* an answer, and binding a
+# fixed port would make the verdict a property of what happens to be running on
+# this machine.
+
+printf '\nesas-session-channel hook (SessionStart)\n'
+
+SESSION_HOOK="$PLUGIN/hooks/esas-session-channel.sh"
+
+session_board_pid=''
+# $1 = repoPath to answer with, $2 = the sessions count, $3 = 'pretty' to space
+# the JSON. Compact is the board's own `JSON.stringify` spelling; the spaced
+# variant exists because which checkout a board serves is not a question about
+# how it serialises the answer.
+start_session_board(){
+  rm -f "$TMP/sport"
+  python3 -c '
+import json, sys
+from http.server import BaseHTTPRequestHandler, HTTPServer
+separators = (", ", ": ") if len(sys.argv) > 3 and sys.argv[3] == "pretty" else (",", ":")
+fields = {"repoPath": sys.argv[1], "gitSha": "deadbee", "lastSeq": 7}
+if sys.argv[2] != "omit":
+    fields["sessions"] = int(sys.argv[2])
+body = json.dumps(fields, separators=separators).encode()
+class H(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/api/esas/status":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        else:
+            self.send_response(404)
+            self.end_headers()
+    def log_message(self, *a):
+        pass
+srv = HTTPServer(("127.0.0.1", 0), H)
+sys.stdout.write("%d\n" % srv.server_port)
+sys.stdout.flush()
+srv.serve_forever()
+' "$1" "$2" "${3:-compact}" >"$TMP/sport" 2>/dev/null &
+  session_board_pid=$!
+  i=0
+  while [ ! -s "$TMP/sport" ] && [ "$i" -lt 100 ]; do
+    i=$(( i + 1 ))
+    sleep 0.05 2>/dev/null || sleep 1
+  done
+  SESSION_BOARD_PORT=$( tr -d ' \n' <"$TMP/sport" 2>/dev/null )
+}
+
+stop_session_board(){
+  [ -n "$session_board_pid" ] && kill "$session_board_pid" 2>/dev/null
+  wait "$session_board_pid" 2>/dev/null
+  session_board_pid=''
+}
+
+# Runs the hook in a work dir that has (or has not) a `.esas/`, against a given
+# port. stdin closed, exactly as the prompt hook is run above.
+run_session_hook(){
+  swork="$TMP/swork"
+  rm -rf "$swork"; mkdir -p "$swork"
+  [ "$1" = 'no-esas' ] || mkdir -p "$swork/.esas"
+  CLAUDE_PROJECT_DIR="$swork" ESAS_BOARD_PORT="$2" "$HOOK_SH" "$SESSION_HOOK" \
+    >"$TMP/sout" 2>"$TMP/serr" </dev/null
+  session_status=$?
+}
+
+# assert_session <esas|no-esas> <port> <speaks|silent> <description>
+assert_session(){
+  run_session_hook "$1" "$2"
+  sout=$( cat "$TMP/sout" )
+  serr=$( cat "$TMP/serr" )
+  if [ "$session_status" -ne 0 ]; then
+    fail "$4" "exit status $session_status — every path must exit 0" "stderr: $serr"
+  elif [ -n "$serr" ]; then
+    fail "$4" "wrote to stderr at session start" "stderr: $serr"
+  elif [ "$3" = silent ] && [ -n "$sout" ]; then
+    fail "$4" "expected silence, got: $sout"
+  elif [ "$3" = speaks ] && [ -z "$sout" ]; then
+    fail "$4" 'expected the arming instruction, got silence'
+  else
+    pass "$4"
+  fi
+}
+
+if [ ! -f "$SESSION_HOOK" ]; then
+  fail 'hooks/esas-session-channel.sh ships' "no file at $SESSION_HOOK"
+elif ! command -v python3 >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then
+  fail 'the SessionStart cases need python3 and curl' 'one of them is missing on this machine'
+else
+  # Line 2, the whole program most of the time. No design layer, no probe — and
+  # this is the state every fleet worktree and every unrelated repo is in.
+  assert_session 'no-esas' 1 silent 'no .esas/ at all: silent, and nothing is probed'
+
+  # A `.esas/` with nothing on the port. The board is user-launched, so this is
+  # the ordinary state of a designing repo, and the one where an unconditional
+  # print would tell every session to dial a dead address.
+  assert_session 'esas' 1 silent 'a design layer but no board: silent'
+
+  swork="$TMP/swork"
+  rm -rf "$swork"; mkdir -p "$swork/.esas"
+  physical_swork=$( CDPATH= cd -- "$swork" && pwd -P )
+
+  # The one state that speaks.
+  start_session_board "$physical_swork" 0
+  if [ -z "$SESSION_BOARD_PORT" ]; then
+    fail 'a stub board comes up for the SessionStart cases' 'the stub never printed a port'
+  else
+    run_session_hook 'esas' "$SESSION_BOARD_PORT"
+    case $( cat "$TMP/sout" ) in
+      *"ws://127.0.0.1:$SESSION_BOARD_PORT/api/esas/ws"*)
+        pass 'this checkout, sessions 0: it names the exact ws URL to open' ;;
+      *)
+        fail 'this checkout, sessions 0: it names the exact ws URL to open' \
+          "actual: [$( cat "$TMP/sout" )]" ;;
+    esac
+    case $( cat "$TMP/sout" ) in
+      *'persistent: true'*) pass 'and the Monitor call it emits is persistent' ;;
+      *) fail 'and the Monitor call it emits is persistent' "actual: [$( cat "$TMP/sout" )]" ;;
+    esac
+  fi
+  stop_session_board
+
+  # Same state, spaced JSON. How a board serialises its answer is not a fact
+  # about whether anyone is listening on it.
+  start_session_board "$physical_swork" 0 pretty
+  if [ -n "$SESSION_BOARD_PORT" ]; then
+    assert_session 'esas' "$SESSION_BOARD_PORT" speaks \
+      'a spaced status body from this checkout still arms'
+  fi
+  stop_session_board
+
+  # Somebody is already holding the channel. Arming a second is a wake nobody
+  # needs, in a session that may not be designing at all.
+  start_session_board "$physical_swork" 1
+  if [ -n "$SESSION_BOARD_PORT" ]; then
+    assert_session 'esas' "$SESSION_BOARD_PORT" silent \
+      'a channel someone already holds (sessions 1): silent'
+  fi
+  stop_session_board
+
+  # A board on the port serving somebody else. This is the gate that makes
+  # `.esas/` insufficient: without it every session in a repo whose port
+  # happens to be held opens a socket to a stranger's design.
+  start_session_board "/somewhere/else" 0
+  if [ -n "$SESSION_BOARD_PORT" ]; then
+    assert_session 'esas' "$SESSION_BOARD_PORT" silent \
+      "another checkout's board reporting zero sessions: silent"
+  fi
+  stop_session_board
+
+  # An older board answers a perfectly valid status with no `sessions` field.
+  # Absent is unknown, never zero — it serves no channel to open.
+  start_session_board "$physical_swork" omit
+  if [ -n "$SESSION_BOARD_PORT" ]; then
+    assert_session 'esas' "$SESSION_BOARD_PORT" silent \
+      'a board with no `sessions` field is unknown, never zero: silent'
+  fi
+  stop_session_board
+
+  # No curl: the probe cannot be made, so there is nothing to say. Reporting
+  # anything here would be a guess printed into every session.
+  rm -rf "$swork"; mkdir -p "$swork/.esas"
+  session_hook_sh=$( command -v "$HOOK_SH" )
+  out=$( env -i PATH=/nonexistent CLAUDE_PROJECT_DIR="$swork" "$session_hook_sh" "$SESSION_HOOK" \
+         2>"$TMP/serr" </dev/null )
+  if [ -n "$out" ] || [ -s "$TMP/serr" ]; then
+    fail 'without curl it says nothing, quietly' "stdout: [$out] stderr: [$( cat "$TMP/serr" )]"
+  else
+    pass 'without curl it says nothing, quietly'
+  fi
+fi
+
+# ── The mechanism: how the plugin declares the hooks ─────────────────────────
 #
 # The script working is worth nothing if Claude Code never runs it, and that
 # failure is silent. `<plugin>/hooks/hooks.json` is loaded automatically (it is
@@ -291,6 +479,9 @@ if [ ! -f "$HOOKS_JSON" ]; then
 else
   pass 'hooks/hooks.json exists (the path Claude Code auto-loads)'
   assert_json 'it declares a UserPromptSubmit hook' '"UserPromptSubmit"'
+  assert_json 'it declares a SessionStart hook' '"SessionStart"'
+  assert_json 'and points that one at its shipped script too' \
+    'CLAUDE_PLUGIN_ROOT}/hooks/esas-session-channel.sh'
   assert_json 'it sets an explicit timeout of 5s' '"timeout": *5'
   assert_json 'it points at the shipped script via ${CLAUDE_PLUGIN_ROOT}' 'CLAUDE_PLUGIN_ROOT}/hooks/esas-pending.sh'
   if python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$HOOKS_JSON" 2>/dev/null; then
