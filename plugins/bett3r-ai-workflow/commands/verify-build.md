@@ -18,7 +18,7 @@ Read `.work/slices.yaml` and `.work/design.md`. All slices should be `passes: tr
 
 ## Step 2 — Run the gate
 
-**The host repo declares what "green" means; you discover it.** Follow the [full-gate](../skills/full-gate/SKILL.md) skill for the discovery order (`.claude/gate.sh`, then a fallback that must be reported as one), the `GATE-STEP:` output contract, and the four ways a green read is wrong. Do not restate them here and do not hardcode `yarn test` — a repo whose routine gate is `yarn test` + `yarn test:integration` + `yarn generate-all` + `yarn lint` cannot be served by a guess.
+**The host repo declares what "green" means; you discover it.** Follow the [full-gate](../skills/full-gate/SKILL.md) skill for the discovery order (`.claude/gate.mjs`, then `.claude/gate.sh`, then a fallback that must be reported as one), the `GATE-STEP:` output contract, and the four ways a green read is wrong. Do not restate them here and do not hardcode `yarn test` — a repo whose routine gate is `yarn test` + `yarn test:integration` + `yarn generate-all` + `yarn lint` cannot be served by a guess.
 
 Which mode you run depends on whether this unit is landing on its own:
 

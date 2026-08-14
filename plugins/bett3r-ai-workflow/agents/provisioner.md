@@ -65,7 +65,7 @@ integrationBranch: int/<run-id>
 gateDeferred: true
 ```
 
-This is the one signal that tells the lane's `/verify-build` it is **not** landing on its own: it runs `.claude/gate.sh --fast` and leaves the full gate to `/merge-multi`, which runs it once on the integration branch — the only tree where cross-unit breakage exists at all.
+This is the one signal that tells the lane's `/verify-build` it is **not** landing on its own: it runs the host repo's gate in `--fast` mode and leaves the full gate to `/merge-multi`, which runs it once on the integration branch — the only tree where cross-unit breakage exists at all.
 
 It has to be a **file in the worktree**, not a line in the lane's brief. A lane that is `/clear`ed, handed off, or resumed by a fresh agent loses the brief and keeps the file; the failure mode of losing it is N full gate runs where one was wanted, which is slow but survivable, and the failure mode of a *stale* one inherited from a previous run is a PR that silently claims a deferral to a fleet that no longer exists. Step 2's archive-and-scrub covers the second — this file is one of the `.work/` artifacts that must not survive into a different run.
 

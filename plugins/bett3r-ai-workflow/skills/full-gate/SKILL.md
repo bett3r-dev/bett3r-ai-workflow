@@ -11,14 +11,18 @@ So the host repo declares its own gate, and the flow discovers it.
 
 ## The convention
 
-`.claude/gate.sh` at the host repo root, executable, accepting exactly one argument:
+**`.claude/gate.mjs`** at the host repo root, run as `node .claude/gate.mjs <mode>`, accepting exactly one argument:
 
 | Invocation | Contains | Who runs it |
 |---|---|---|
-| `.claude/gate.sh --fast` | The cheap structural checks — typically `build` + `typecheck`. Seconds-to-a-minute. | Every `/verify-build`, per unit. |
-| `.claude/gate.sh --full` | Everything the repo wants run before code lands: tests, integration tests, codegen drift, lint, plus everything `--fast` covers. | Once per landing — `/verify-build` outside a fleet, `/merge-multi` on the integration branch. |
+| `node .claude/gate.mjs --fast` | The cheap structural checks — typically `build` + `typecheck`. Seconds-to-a-minute. | Every `/verify-build`, per unit. |
+| `node .claude/gate.mjs --full` | Everything the repo wants run before code lands: tests, integration tests, codegen drift, lint, plus everything `--fast` covers. | Once per landing — `/verify-build` outside a fleet, `/merge-multi` on the integration branch. |
 
-`--full` is a superset of `--fast`. A repo with nothing worth splitting may ignore the argument and run the same thing either way; say so in a comment at the top of the script.
+`--full` is a superset of `--fast`. A repo with nothing worth splitting may ignore the argument and run the same thing either way; say so in a comment at the top of the file.
+
+**Node, not bash, and the reason is a contributor, not a preference.** This is the one flow artifact each host repo authors itself and each contributor runs directly, and a `.sh` makes a working Git Bash or WSL a precondition for running the repo's own gate on Windows. Node is already present in any repo this flow runs in, and `spawnSync(..., { shell: true })` resolves `yarn` → `yarn.cmd` for free. A `.claude/gate.sh` is still accepted (see discovery) — a repo that already has one need not rewrite it — but a **new** one is `.mjs`.
+
+Two things this does not buy, worth saying so nobody over-claims it downstream: the gate script being cross-platform says nothing about the commands it *invokes* (a `gate.mjs` wrapping a bash `local-gate.sh` is portable in form only), and the flow's own commands assume a POSIX shell throughout. Portability here is about not *adding* to that, not about having removed it.
 
 ### The output contract
 
@@ -35,45 +39,60 @@ GATE-STEP: <name> PASS|FAIL|SKIP|INCONCLUSIVE  <detail>
 
 `SKIP` is for a step the repo deliberately does not run in this mode. `INCONCLUSIVE` is for a step that ran but proved nothing — zero tests collected, an all-skipped env-gated tier, a suite that died at collection. **Neither is a pass**, and the flow must surface both by name rather than folding them into a summary count.
 
-### Example — a `.claude/gate.sh`
+### Example — a `.claude/gate.mjs`
 
-```sh
-#!/usr/bin/env bash
-# --fast: build + typecheck.  --full: everything below.
-set -uo pipefail
-MODE="${1:---full}"; FAILED=0
+```js
+#!/usr/bin/env node
+// --fast: build + typecheck.  --full: everything below.
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-step() {  # step <name> <cmd...>
-  local name="$1"; shift
-  local log; log="$(mktemp)"
-  "$@" >"$log" 2>&1; local rc=$?
-  local detail; detail="$(grep -E '^(Tests|Test Suites):' "$log" | tr '\n' ' ')"
-  [ -z "$detail" ] && detail="exit $rc"
-  if [ $rc -eq 0 ]; then echo "GATE-STEP: $name PASS  $detail"
-  else echo "GATE-STEP: $name FAIL  $detail  (log: $log)"; FAILED=$((FAILED+1)); fi
+const mode = process.argv[2] ?? '--full'
+const tmp = mkdtempSync(join(tmpdir(), 'gate-'))
+let failed = 0
+
+const step = (name, cmd) => {
+  // shell:true so `yarn` resolves to yarn.cmd on Windows.
+  const r = spawnSync(cmd, { shell: true, encoding: 'utf8' })
+  const out = `${r.stdout ?? ''}${r.stderr ?? ''}`
+  const log = join(tmp, `${name.replace(/\W+/g, '-')}.log`)
+  writeFileSync(log, out)
+  const summary = out.split('\n').filter(l => /^(Tests|Test Suites):/.test(l)).join(' · ')
+  const detail = summary || `exit ${r.status}`
+  if (r.status === 0) console.log(`GATE-STEP: ${name} PASS  ${detail}`)
+  else { console.log(`GATE-STEP: ${name} FAIL  ${detail}  (log: ${log})`); failed++ }
 }
 
-step build     yarn build
-step typecheck yarn typecheck
-if [ "$MODE" = "--full" ]; then
-  step test             yarn test
-  step test:integration yarn test:integration
-  step generate-drift   yarn generate-all
-  step lint             yarn lint
-fi
-[ $FAILED -eq 0 ] && echo "GATE: PASS" || echo "GATE: FAIL $FAILED step(s)"
-exit $FAILED
+step('build', 'yarn build')
+step('typecheck', 'yarn typecheck')
+if (mode === '--full') {
+  step('test', 'yarn test')
+  step('test:integration', 'yarn test:integration')
+  step('generate-drift', 'yarn generate-all')
+  step('lint', 'yarn lint')
+}
+
+console.log(failed === 0 ? 'GATE: PASS' : `GATE: FAIL ${failed} step(s)`)
+process.exit(failed)
 ```
+
+Note what `spawnSync` buys beyond portability: there is **no pipeline**, so there is no exit code to lose. The piped-exit-code lie below is a property of shell pipelines, and this shape cannot express it.
 
 A repo that already has an aggregate script keeps it — the convention file is then a three-line wrapper that adds the `GATE-STEP:` lines around it, not a reimplementation.
 
 ## Discovery, in order
 
-1. `.claude/gate.sh` in the host repo root → run it. This is the only case where the verdict is fully structured.
-2. No such file: fall back to the repo's own aggregate script if one is obvious from `package.json` (`gate`, `check`, `ci`, `validate`), then to `test`. **Say in the report that you fell back and to what** — an inferred gate is a weaker claim than a declared one.
-3. Nothing found → **INCONCLUSIVE**, reported as such. Never silently skip, and never let "no gate found" read as "gate passed."
+1. **`.claude/gate.mjs`** → `node .claude/gate.mjs <mode>`.
+2. **`.claude/gate.sh`** → `sh .claude/gate.sh <mode>`. Accepted for repos that already have one. Invoke it through `sh`/`bash` rather than relying on the executable bit, which does not survive some Windows checkouts.
 
-When you fall back, also **offer to write `.claude/gate.sh`** — one round-trip with the user now removes the guess from every future run of every flow command in this repo.
+Either of the two is a fully structured verdict. Failing both:
+
+3. Fall back to the repo's own aggregate script if one is obvious from `package.json` (`gate`, `check`, `ci`, `validate`), then to `test`. **Say in the report that you fell back and to what** — an inferred gate is a weaker claim than a declared one.
+4. Nothing found → **INCONCLUSIVE**, reported as such. Never silently skip, and never let "no gate found" read as "gate passed."
+
+When you fall back, also **offer to write `.claude/gate.mjs`** — one round-trip with the user now removes the guess from every future run of every flow command in this repo.
 
 ## Reading the verdict
 
@@ -91,7 +110,7 @@ Everything below is [EVIDENCE.md](../../EVIDENCE.md) §1 — *a verdict is evide
 Whatever consumes this skill records, verbatim:
 
 ```
-.claude/gate.sh --full on <branch> @ <sha>
+node .claude/gate.mjs --full on <branch> @ <sha>
   build            PASS
   typecheck        PASS
   test             PASS  Test Suites: 57 passed, 57 total · Tests: 812 passed, 812 total
