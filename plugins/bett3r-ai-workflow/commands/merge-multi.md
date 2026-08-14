@@ -58,7 +58,7 @@ Follow `run.yaml`'s waves — a stacked child after its parent. Merge each unit 
 
 **3 — Run the full gate, once, on integration.**
 
-Per the [full-gate](../skills/full-gate/SKILL.md) skill: `.claude/gate.sh --full` on `int/<run-id>`, verdict read from the `GATE-STEP:` lines and baseline-diffed against the default branch. Read that skill for the discovery order and the four ways a green read is wrong; do not re-derive them here.
+Per the [full-gate](../skills/full-gate/SKILL.md) skill: `.claude/gate.sh --full` on `int/<run-id>`, verdict read from the `GATE-STEP:` lines and baseline-diffed against the default branch. Read that skill for the discovery order and the four ways a green read is wrong; do not re-derive them here. They are all [EVIDENCE.md](../EVIDENCE.md) §1 — *a verdict is evidence only about what it actually executed* — and this is the one run in the whole fleet that certifies the assembled tree, so a misread here is unbacked by anything downstream.
 
 A red gate is **fixed on integration**, not deferred. If a failure traces cleanly to one unit and the fix is more than a line, push the fix to that unit's branch and re-merge — that keeps the unit PR an honest record of its own work. Otherwise fix on integration and name the unit in the commit message. Do not open the integration PR over a red gate; an integration branch that looks landed and is red is the worst state this flow can produce, because the fleet is torn down and nobody owns it.
 
