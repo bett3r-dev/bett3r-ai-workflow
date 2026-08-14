@@ -16,7 +16,18 @@ Optional ticket id. Default: the active work in `.work/slices.yaml`.
 
 Read `.work/slices.yaml` and `.work/design.md`. All slices should be `passes: true` and committed (`git log` shows one commit per slice). If slices remain unpassed, stop: "Slices N… not yet green — run `/build` first."
 
-## Step 2 — Whole-PR coherence review
+## Step 2 — Run the gate
+
+**The host repo declares what "green" means; you discover it.** Follow the [full-gate](../skills/full-gate/SKILL.md) skill for the discovery order (`.claude/gate.sh`, then a fallback that must be reported as one), the `GATE-STEP:` output contract, and the four ways a green read is wrong. Do not restate them here and do not hardcode `yarn test` — a repo whose routine gate is `yarn test` + `yarn test:integration` + `yarn generate-all` + `yarn lint` cannot be served by a guess.
+
+Which mode you run depends on whether this unit is landing on its own:
+
+- **`.work/fleet-lane.yaml` exists** (written by the `provisioner`; this unit is one lane of a `/start-multi` fleet) → run **`--fast`** only. The full gate is hoisted to `/merge-multi`, which runs it once on the run's integration branch — the only tree where cross-unit breakage exists at all. Record in the PR body: *"Full gate deferred to the fleet gate, run `<runId>`."* That line is load-bearing: without it the PR reads as fully certified.
+- **No marker** (a single `/start` flow) → run **`--full`**, baseline-diffed. Its report block goes into the PR body under **Verification**, verbatim, counts included.
+
+A `FAIL` blocks Step 6 — do not open the PR over a red gate. A `SKIP` or `INCONCLUSIVE` step does not block, but is named in the PR body; silence there reads as coverage. This is the numbered step that *produces* the verdict the sweeps below assume — before it existed, the full suite appeared only as a cell inside a conditional sweep table and a section on how to interpret a run nobody was obliged to make.
+
+## Step 3 — Whole-PR coherence review
 
 **Resolve the true base first — don't trust `master`/`origin/master` by default.** Under `/start-multi`'s worktree fleet, a per-ticket branch is cut from an *integration* branch that hasn't merged to `master` yet, so the branch's true fork point is that integration branch, not `master`. Diffing against a stale `master` silently inflates the scope (a real case: 509 files / +68k/−46k instead of ~67 files) and the coherence review runs against the wrong diff — a *silent* scope error, no command errors. Before reviewing:
 
@@ -55,17 +66,17 @@ A recurring trait makes several of them hard to see: **the broken code is code t
 | a later slice **removes a protection** an earlier slice made unnecessary | state the two sets — what the earlier slice actually covers, what the removal is applied to — and the difference. Non-empty difference *is* the finding | one slice made *one* watched file degrade safely; the next stopped holding **all three**, and the third was still client-fatal |
 | asserts **why** a guarantee holds by naming a framework mechanism | verify the claim against framework source-of-truth **before it reaches the PR body**; correct it in place | an oracle and comment credited a deep merge; the guarantee actually came from an outbox `concurrency:1` and was topology-dependent. Behaviour green, stated reason wrong |
 | carries **skipped / `xfail` / tracer** blocks citing a blocker | re-validate each rationale against `HEAD` — a later slice may have fixed the cited blocker, leaving the path uncovered and the comment lying | a tracer bypassed a "P0" that a later commit on the same branch had already fixed |
-| — (always) **cross-slice composition** | enumerate the invariants / cursors / floors more than one slice touches; reason about each **pairwise** interaction, especially where one slice *advances* what another *reads* or *trims* against. Run the full suite over the whole diff | a by-position refill and a stream trim were each correct and composed into a silent-drop window |
+| — (always) **cross-slice composition** | enumerate the invariants / cursors / floors more than one slice touches; reason about each **pairwise** interaction, especially where one slice *advances* what another *reads* or *trims* against (the gate from Step 2 covers the whole diff; this row is about *why* it is green) | a by-position refill and a stream trim were each correct and composed into a silent-drop window |
 | — (always) **`Bin` in the diff-stat** on a hand-authored source path | treat as a hard finding, not noise. `git diff --numstat` emits `-\t-\t<path>`; locate with `grep -aPn '[\x00-\x08\x0e-\x1f]'` | a NUL sentinel in a `.ts` string literal compiled, passed 8/8 integration tests, and made the whole file's diff unreviewable on a diff-is-the-deliverable ticket. Earlier tell: **`grep` returning nothing on a file you just edited** is a binary-classification symptom, not an answer — run `file` |
 
-### The full-suite verdict is a baseline diff, not an exit code
+### The gate's verdict, and the sweeps that outlive it
 
-The sweeps assume you can trust the word "green." Four ways the read is wrong, in ascending subtlety:
+The sweeps assume you can trust the word "green." How to read a gate's verdict — the piped-exit-code lie, the run that executed nothing, the green *partial* inventory, and the baseline diff against an already-red base — now lives once in the [full-gate](../skills/full-gate/SKILL.md) skill, and Step 2 has already produced that verdict. Read it there; do not re-derive it per sweep.
 
-- **A pass/fail read from a *piped* exit code is a lie.** `yarn test | tail -30` reports `tail`'s status; a 33-suite-red run surfaces as exit `0`. Read jest's own summary (`| grep -E '^(Tests|Test Suites):|^FAIL'`) or preserve the status (`set -o pipefail`, `${PIPESTATUS[0]}`). Same for a **background job**: capture the tool's exit into the log — a trailing `echo` makes the completion notification report the wrapper's exit, not the gate's.
-- **A run that executed nothing reports green.** `Tests: 0 total`, an all-skipped env-gated tier, or a suite that died at collection all exit 0 — and an env-gated tier prints `PASS` while never running. **Inconclusive, never green and never a baseline** (§1). Where the plan names a tier excluded from the default run, either **run it** or state in the PR body that it was not run and why; a slice's `passes:` flag records the default run, which skipped it.
-- **A green *partial* inventory reads as full coverage.** Harder to notice than zero, because the run looks substantial. `find` the repo's test files by its naming convention and compare against the runner's reported file count; a material gap means the `include` config is wrong or tiers are opt-in — resolve which files were skipped and run them explicitly. (A root glob that predated a monorepo move silently excluded 33 of 57 suites; every prior "green" on that branch was vacuous for them.)
-- **"All green" is the wrong bar when the base is already red.** The sound verdict is a **baseline diff**: against the true base resolved above, capture the failing-suite *set* on base and on `HEAD` and diff the **names**. `PASS→FAIL` is a regression; already-red-on-base is pre-existing — name it and move on; test-*count* jitter inside an already-red suite is noise. Compare **by file, not by total** — totals hide an equal-and-opposite swap. If the base run reports 0 tests the baseline is unusable and must be repaired before the PR body says anything about flips. When HEAD is *fully* green with a parsed summary, the base-side run is unnecessary — zero flips are possible — so skip the worktree+install; only a red HEAD needs the base set.
+Two things that verdict does **not** cover, and that stay here:
+
+- **Tiers the repo excludes from `--full` on purpose.** A slice's `passes:` flag records the default run, which skipped them. Where the plan names such a tier — env-gated integration suites, e2e, anything needing testcontainers — either run it explicitly, or state in the PR body that it was not run and why.
+- **The composition question.** The gate proves the assembled tree is green; it says nothing about *why*, and a green tree with a silent-drop window in it is exactly the case the composition row above exists to catch.
 
 Apply the `critique` skill's tone throughout: substance over compliments, no hedging, every finding specific and actionable with a concrete fix. For an assembled feature that crosses a non-trivial architectural seam, run a focused `critique --lens arch,ops` pass over the diff and fold its verdict into the findings below.
 
@@ -73,13 +84,13 @@ Apply the `critique` skill's tone throughout: substance over compliments, no hed
 
 **Disprove every Critical/High before propagating it.** A plausible-sounding Critical that's actually a false positive is *more* expensive than a missed nit — "fixing" it introduces a regression. Before reporting or acting on any Critical/High finding, attempt to **disprove** it: (a) read the actual call site — not the diff hunk in isolation; (b) run a `git blame` / base-branch check — "is this pre-existing on the base, not introduced by this PR? Y/N"; (c) construct a concrete failing input that reproduces it. Drop or downgrade any Critical that can't survive all three. (Real miss: 3 of 4 reported Criticals on TV1-1950 were false positives — a truthy `'0'` misread as falsy, a verbatim-from-`master` pre-existing line, and a "double increment" that was load-bearing for restart determinism — each would have introduced a bug if "fixed"; the git-blame check alone kills two of them.)
 
-Surface findings by severity (Critical / Medium / Low). Fix Critical/Medium before opening the PR (small fixes inline or a follow-up slice). For anything left open, state your recommendation and why it can ship unresolved. This review is **not** committed to a file — its conclusions go into the PR body (Step 5).
+Surface findings by severity (Critical / Medium / Low). Fix Critical/Medium before opening the PR (small fixes inline or a follow-up slice). For anything left open, state your recommendation and why it can ship unresolved. This review is **not** committed to a file — its conclusions go into the PR body (Step 6).
 
-## Step 3 — Dev verification checklist
+## Step 4 — Dev verification checklist
 
 Produce a single **developer verification checklist**: the things a human should manually confirm that the automated slice tests do **not** cover — UI/UX, a browser smoke for a user journey, anything environment-specific. One lean list. (No separate QA plan.) This goes in the PR body, not a committed file.
 
-## Step 4 — Finalize the durable record
+## Step 5 — Finalize the durable record
 
 - **ADR(s):** ensure the decisions from `.work/design.md` that aren't recoverable from code are captured as committed ADR(s) in the repo's ADR location. Commit them if not already.
   - **Never take the next number from a directory listing** — it shows only numbers that reached *your* branch, and numbers on unmerged siblings, open PRs and other stacks are already claimed. Scan every ref: `git log --all --name-only --pretty=format: | grep -oE 'ADR-[0-9]+' | sort -u | tail -5`, then go above it. This is the last point where a collision is still cheap: a rename after merge breaks every inbound `ADR-0NN` citation permanently.
@@ -89,9 +100,9 @@ Produce a single **developer verification checklist**: the things a human should
 - **Promote the design:** the design narrative + conclusions from `.work/design.md` become the **PR description** — they are *not* committed as a standalone doc.
 - **If the PR adds an enforcement mechanism** (a CI gate, lint rule, schema check, hook), state **which commit is its first live proof** — or, if none is, say why. A gate that never fired is indistinguishable from a gate that cannot fire.
 
-## Step 5 — Open the PR (the system of record)
+## Step 6 — Open the PR (the system of record)
 
-Push the branch and open the PR **ready for review, not a draft** (compose the repo's `create-pr` flow if it has one, overriding any draft default it carries; otherwise `gh pr create --base <resolved-base>`, which opens a review-ready PR — do **not** pass `--draft`, and pass the base resolved in Step 2, not a hardcoded `master`). **Verify the created PR's base after the fact:** `gh pr create` succeeds silently even when it targets the wrong ref, so confirm the PR's `changed_files`/`commits` roughly match the local `git log <base>..HEAD` count/diffstat. If they don't, retarget with `gh pr edit --base <true-base>`.
+Push the branch and open the PR **ready for review, not a draft** (compose the repo's `create-pr` flow if it has one, overriding any draft default it carries; otherwise `gh pr create --base <resolved-base>`, which opens a review-ready PR — do **not** pass `--draft`, and pass the base resolved in Step 3, not a hardcoded `master`). **Verify the created PR's base after the fact:** `gh pr create` succeeds silently even when it targets the wrong ref, so confirm the PR's `changed_files`/`commits` roughly match the local `git log <base>..HEAD` count/diffstat. If they don't, retarget with `gh pr edit --base <true-base>`.
 
 **"PR opened" is not "done" — report its mergeability.** Re-fetch and compare `origin/<default>` against the base you branched from: a merge by anyone outside this work invalidates the pin, and the cost lands at the worst moment, with gates green and the PR declared ready. Read `gh pr view --json mergeable,mergeStateStatus` after a short settle (GitHub returns `UNKNOWN` for a few seconds after a push) and say so. The remedy for a conflict is rebasing **this branch, in its own worktree** — safe, and not to be confused with the real prohibitions (never modify the default branch or another unit's branch; never rewrite history something is stacked on).
 
@@ -120,7 +131,9 @@ The PR **body is the record**:
 - ...
 
 ### Verification
-<the dev checklist from Step 3>
+<the Step 2 gate report block, verbatim — or "Full gate deferred to the fleet gate, run `<runId>`." plus the `--fast` result>
+
+<the dev checklist from Step 4>
 
 ### Decisions
 - ADR-NNN — <title>
@@ -129,7 +142,7 @@ The PR **body is the record**:
 <Critical/Medium findings and how resolved; or "clean">
 ```
 
-## Step 6 — Record what the run cost
+## Step 7 — Record what the run cost
 
 This is the last step that knows the unit of work is finished, so it is where the run is measured. One command, from the branch's worktree:
 
@@ -141,7 +154,7 @@ run-metrics --emit --quiet
 
 It reconstructs the whole unit from the transcripts — every session the branch touched, across `/clear` and `/handoff` — and writes one document to `~/.claude/bett3r-metrics/runs/`, plus a row in `index.jsonl` keyed by (repo, branch). Re-running replaces that run's row rather than appending, so this is safe to repeat.
 
-Nothing here gates the PR. **A failure to measure must never block landing the work**: if the command errors, say so in one line and carry on to Step 7.
+Nothing here gates the PR. **A failure to measure must never block landing the work**: if the command errors, say so in one line and carry on to Step 8.
 
 Then paste the headline into the PR body, under the template above:
 
@@ -155,7 +168,7 @@ Two lines, no tables — the PR is a record of the work, not a dashboard. `/run-
 
 Report the duty cycle in your summary to the user **only when it is low and the dead time was not simply overnight** — otherwise it is noise. `DEAD GAPS` in the full report distinguishes the two.
 
-## Step 7 — Cleanup
+## Step 8 — Cleanup
 
 The ephemeral `.work/` (design.md, slices.yaml) has now been fully promoted (ADRs + PR body + per-slice commits). It is gitignored and may be discarded. Report the PR URL.
 
