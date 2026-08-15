@@ -149,17 +149,25 @@ def check_links(path: pathlib.Path) -> set[pathlib.Path]:
 
 
 def artifact_for(name: str) -> pathlib.Path:
-    """`/foo` is a command, a bare name is an agent — the two artifact kinds
-    EVIDENCE.md's manifest line names."""
+    """`/foo` is a command; a bare name is an agent, or a skill when no agent of
+    that name exists — the three artifact kinds EVIDENCE.md's manifest line names.
+    A skill carries the shared facts to whichever command loads it, so it is a
+    consumer in exactly the same sense an agent is."""
     plugin = ROOT / "plugins" / "bett3r-ai-workflow"
     if name.startswith("/"):
         return plugin / "commands" / f"{name[1:]}.md"
-    return plugin / "agents" / f"{name}.md"
+    agent = plugin / "agents" / f"{name}.md"
+    skill = plugin / "skills" / name / "SKILL.md"
+    return agent if agent.is_file() or not skill.is_file() else skill
 
 
 def name_for(path: pathlib.Path) -> str:
     """The inverse: how the manifest line must spell this artifact."""
-    return f"/{path.stem}" if path.parent.name == "commands" else path.stem
+    if path.parent.name == "commands":
+        return f"/{path.stem}"
+    if path.name == "SKILL.md":
+        return path.parent.name
+    return path.stem
 
 
 def check_evidence_contract(linkers: dict[pathlib.Path, set[pathlib.Path]]) -> int:
@@ -214,7 +222,7 @@ def check_evidence_contract(linkers: dict[pathlib.Path, set[pathlib.Path]]) -> i
     # Otherwise a consumer is added and the file's own account of itself goes stale.
     declared_paths = {p.resolve() for p in declared}
     for path in sorted(linkers):
-        if path.parent.name not in ("commands", "agents"):
+        if path.parent.name not in ("commands", "agents") and path.name != "SKILL.md":
             continue
         if evidence.resolve() not in linkers[path]:
             continue

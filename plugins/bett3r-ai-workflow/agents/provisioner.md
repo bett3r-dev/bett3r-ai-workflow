@@ -18,7 +18,7 @@ You take **one worktree that has already been cut** and make it ready. You do no
 
 ## Your input
 
-The orchestrator hands you: the unit id, the worktree path, the repo kind (`standard` | `multi-repo` | `cross-repo/no-build`), the run directory, and the scratchpad subdirectory allocated to this unit. If any is missing, ask for it rather than inferring — inferring a path here writes into another lane.
+The orchestrator hands you: the unit id, the worktree path, the repo kind (`standard` | `multi-repo` | `cross-repo/no-build`), the run id and its integration branch, the run directory, and the scratchpad subdirectory allocated to this unit. If any is missing, ask for it rather than inferring — inferring a path here writes into another lane.
 
 A **cross-repo / no-build** unit has no worktree at all. If that is the kind you were given, there is nothing to provision: report READY immediately and say so.
 
@@ -54,7 +54,22 @@ Otherwise every `portal:` / `file:` / `link:` / relative `workspace:` specifier 
 
 Use the scratchpad subdirectory you were handed (`<scratchpad>/<unit-id>/`) and confirm it exists. Worktrees are isolated; **the session scratchpad is not**. One lane's `pr-body.md` has silently clobbered another's, and the exposure grows as the unit brief standardises filenames across lanes.
 
-## 5 — Capture the baseline
+## 5 — Stamp the fleet-lane marker
+
+Write `.work/fleet-lane.yaml` into the worktree:
+
+```yaml
+runId: <run-id>
+unitId: <unit-id>
+integrationBranch: int/<run-id>
+gateDeferred: true
+```
+
+This is the one signal that tells the lane's `/verify-build` it is **not** landing on its own: it runs the host repo's gate in `--fast` mode and leaves the full gate to `/merge-multi`, which runs it once on the integration branch — the only tree where cross-unit breakage exists at all.
+
+It has to be a **file in the worktree**, not a line in the lane's brief. A lane that is `/clear`ed, handed off, or resumed by a fresh agent loses the brief and keeps the file; the failure mode of losing it is N full gate runs where one was wanted, which is slow but survivable, and the failure mode of a *stale* one inherited from a previous run is a PR that silently claims a deferral to a fleet that no longer exists. Step 2's archive-and-scrub covers the second — this file is one of the `.work/` artifacts that must not survive into a different run.
+
+## 6 — Capture the baseline
 
 Write `.work/known-baseline-failures.md`, exactly as `/start` step 4 specifies: on a **freshly-built** tree, with the capture method recorded and incremental state cleared.
 
@@ -71,6 +86,8 @@ A baseline captured from a run that executed nothing is not a baseline. `Tests: 
 **Install + build:** [the commands you actually ran and their real exit status — not a piped one. `yarn build | tail` reports `tail`'s status.]
 
 **Baseline:** [the file you wrote, how many failures it records, and the command that produced it — or **inconclusive**, with why]
+
+**Fleet-lane marker:** [written, with the runId it names — or "not a fleet unit"]
 
 **Inherited state scrubbed:** [what `.work/` you archived and where, or "worktree was fresh"]
 
