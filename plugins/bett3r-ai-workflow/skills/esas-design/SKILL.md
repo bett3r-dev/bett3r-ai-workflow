@@ -389,6 +389,24 @@ sticky it concerns, and `resolved: false` is the shared to-decide list. Prefer a
 node anchor — the spine couplings (`handled-by`, `produces`, `issues`) usually
 draw no line, so a comment anchored there has nowhere to show.
 
+**A comment that asks a fork is written under `grill`'s literal headings** —
+`**The Problem:**` (what is undecided), `**Use Case:**` (one concrete case, named
+cast, that shows why it bites), `**Options:**` (laid out so the divergence is
+visible on sight — a per-scenario timeline or diagram where the fork is about how
+data moves, never a trade-off paragraph), `**Recommendation:**` (your answer and
+one line of why). The board is the surface with *room* for that shape, which is
+the whole reason the questions moved here; a comment that arrives as a paragraph
+of prose spends the room and delivers the same wall the terminal did.
+
+**Restate every reference you name, at every mention, inside the comment
+itself.** A comment is read cold, out of order, days later, in a thread that may
+hold other tickets' questions — so a bare `TV1-1234`, `R1`, `ADR-7` or an element
+id is an address the reader cannot resolve without leaving the panel. Write
+`**TV1-1234** (*outbox redelivery drops the version watermark*)` and `**R1**
+(*no local dedup store may be load-bearing*)`. `grill`'s *Presenting a fork*
+owns this rule; it binds harder here than in the terminal, because the terminal
+at least has the scrollback the restatement substitutes for.
+
 **When a comment explains a problem of logic — a sequence of steps, a branch, a
 race, an ordering — favor a diagram over prose.** The comment panel renders
 fenced ` ```mermaid ` blocks as flowcharts and sequence diagrams inline, not as

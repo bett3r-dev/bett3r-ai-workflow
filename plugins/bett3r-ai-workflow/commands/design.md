@@ -202,6 +202,8 @@ Run the interview: walk every branch of the decision tree, one question at a tim
 2. **The scenarios this fork has to cover**, enumerated — the normal path plus the ones that discriminate between the answers (retry, concurrent edit, empty set, crash between two steps, replay).
 3. **Each scenario walked per option** as a use case + timeline with an outcome line, diverging step marked. Where the fork has N options, do all three steps **per option**; where it is a yes/no, both sides get walked.
 
+Write it under `grill`'s literal headings — **The Problem** / **Use Case** / **Options** / **Recommendation** — and **restate every reference at every mention** (`TV1-1234` (*what it is*), `R1` (*what it is*)), never a bare id. Bold the load-bearing claim in each paragraph so a skim of bold-only gives the fork and your recommendation.
+
 This is not reserved for data-flow forks — it is how a fork is asked. Under board mode it is what goes **into the comment**: the terminal keeps the one-line map, the picture, scenarios and walks live on the anchored comment. Where every scenario walks identically across the options, there is no fork — resolve it yourself and record it as an autonomous decision.
 
 While you interview:

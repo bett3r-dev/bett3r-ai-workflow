@@ -43,15 +43,33 @@ Where the repo has a `.esas/` and `/design` has put board mode on, the map gains
 
 Three defaults, all of them direct user feedback, all of them otherwise re-taught every session that starts here. `/design` and `critique` inherit them.
 
-- **Never re-reference a label you coined earlier without restating it.** "Option b3", "scenario A", "the hybrid" — labels accumulate across a long interview and become unfollowable ( *"it is very hard for me to follow you… I start to lose track"* ). Carry a descriptive title alongside the label every time: *"b3 (throw and record the oversell separately)"*.
+- **Never name a reference without restating what it is — every time, no exceptions.** This covers *both* the labels you coined ("option b3", "scenario A", "the hybrid") *and* the identifiers that came from outside (ticket keys, requirement/risk numbers, ADR ids, board element names, file paths used as shorthand). An identifier is an address, not a meaning: the user is not holding your numbering, and by fork 6 they are not holding theirs either ( *"it is very hard for me to follow you… I start to lose track"* ). Carry a short descriptive title in parentheses at **every** mention, not just the first:
+  - *"in **TV1-1234** (*outbox redelivery drops the version watermark*) we already…"*
+  - *"this is relevant for **R1** (*no local dedup store may be load-bearing*)"*
+  - *"**b3** (*throw and record the oversell separately*) still holds here"*
+
+  The restatement is the point, so keep it to the few words that say what the thing *is* — a second identifier ("R1 (see above)", "TV1-1234 (the ticket)") restates nothing and is the failure this rule names.
 - **A timeline with a concrete named cast beats prose.** Define the cast once — real product names, SKUs, amounts — then walk it step by step per scenario as an indented timeline with an outcome line. This is mandatory where a fork is about **how data moves**; a previously-lost explanation landed immediately on being relabelled this way.
 - **Picture → scenarios → per-option walk. Every fork put to the user, not only the data-flow ones.** The shape is fixed, in this order:
   1. **The full picture, concretely.** Before any option, say what we are actually talking about: the surface, the current behaviour, who calls it, what exists on disk today and what would change. A fork stated only as its two labels asks the user to reconstruct the subject from the answer — and they cannot check whether you and they are even discussing the same thing.
   2. **The scenarios this fork has to cover**, named and enumerated up front — the normal path plus the ones that actually discriminate (the retry, the concurrent edit, the empty set, the crash between two steps). This list is the *reason* the fork exists; a fork whose scenarios are all identical across the options is not a fork, it is a preference, and should be resolved by you.
   3. **Each scenario walked per option, as a use case + timeline with an outcome line.** Not a trade-off paragraph *about* the options — the actual steps, with the diverging step marked and what the user ends up with. Where there are N options, that is the N walks side by side or stacked; where the fork is a yes/no, it is the two.
 
+  **Write it under these literal headings, in this order** — the shape above is *what* to say; these are the words to say it under, so every fork in every session reads the same and the user never has to re-ask for the format:
+
+  ```
+  **The Problem:** one short statement of what is actually undecided.
+  **Use Case:** one concrete case that shows why it bites — named cast, real values.
+  **Options:** the options laid out so the divergence is visible on sight — a
+    side-by-side/stacked per-scenario timeline where the fork is about how data
+    moves, the per-option scenario walks otherwise. Never a trade-off paragraph.
+  **Recommendation:** your answer, and one line of why.
+  ```
+
+  Rename a heading only when it would be a lie for this fork; do not drop one because the fork "is simple" — a simple fork answers all four in one line each, which is cheaper to read, not more expensive.
+
   Prose comparison is the failure this replaces: it is self-consistent by construction, so it reads as settled whichever way you happen to lean, and it hides the one scenario where the recommendation is wrong. The walks are what let the user answer from *their* intent rather than ratifying yours — and they routinely make the answer obvious to **you** first, at which point the fork was never one. Keep each walk to the steps that differ; the user will ask for more.
-- **Bold the key idea at the start of each paragraph** in long output, so the reader can skim the spine and descend only where they want to.
+- **Bold the load-bearing claim in every paragraph you write — this is a hard default, not a flourish.** Unstructured output is the single most-repeated complaint about this interview: a fork delivered as a wall of even prose is *"a huge block of unstructured text that is hard for me to follow"*, and the user's only lever is to re-ask for structure instead of answering the question. Bold the actual claim inside the sentence (*tolerate absence only where it cannot escalate the document class*), not a bare lead-in label (`**RECOMMEND:**`) that says nothing on its own. The test: skimming **bold-only** must give the shape of the fork and your recommendation before a single full sentence is read. Structure and bold stack — headings and numbered parts for shape, bold for the one sentence in each part that carries it.
 
 **And where a fork concerns the behaviour of the flow, a skill, or a command this session is itself running: the session is a participant, not an observer.** In-session behaviour is evidence about the **loaded version**, never about the design question, and an absence in the running session is never an argument for or against adding something. State which version produced any observation offered as evidence, and let the user weigh whether they *want* the capability independently of whether it currently works.
 
