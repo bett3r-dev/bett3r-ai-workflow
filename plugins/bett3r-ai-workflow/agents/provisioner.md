@@ -69,13 +69,15 @@ This is the one signal that tells the lane's `/verify-build` it is **not** landi
 
 It has to be a **file in the worktree**, not a line in the lane's brief. A lane that is `/clear`ed, handed off, or resumed by a fresh agent loses the brief and keeps the file; the failure mode of losing it is N full gate runs where one was wanted, which is slow but survivable, and the failure mode of a *stale* one inherited from a previous run is a PR that silently claims a deferral to a fleet that no longer exists. Step 2's archive-and-scrub covers the second — this file is one of the `.work/` artifacts that must not survive into a different run.
 
-## 6 — Capture the baseline
+## 6 — Record the base — do NOT run the suite
 
-Write `.work/known-baseline-failures.md`, exactly as `/start` step 4 specifies: on a **freshly-built** tree, with the capture method recorded and incremental state cleared.
+Write `.work/known-baseline-failures.md` exactly as `/start` step 4 specifies: the base **sha and branch**, and **"not captured — capture on demand"**. Seconds, no test run.
 
-Paying for this once here beats N lanes paying in parallel — and a **wrong shared baseline is worse than none**, because lanes then either chase failures that were never theirs or wave through real new ones as pre-existing cover.
+**The eager capture is withdrawn** (2026-08-24). The argument for it was "paying once here beats N lanes paying in parallel" — but the base side of a baseline diff is only needed when a lane's `HEAD` is **red**, and a fleet's lanes are usually green. Paying once per *worktree* to serve the minority case is the same unbounded cost one level down. A lane that goes red captures the base side then, for **its red suites by name**.
 
-A baseline captured from a run that executed nothing is not a baseline. `Tests: 0 total`, an all-skipped tier, or a suite that died at collection all exit 0 — record that as **inconclusive** and say so in your report; never as an empty failure set.
+Two things that do not change: a **wrong shared baseline is worse than none** (lanes then chase failures that were never theirs, or wave real ones through as pre-existing cover), and a capture from a run that executed nothing is not a baseline — `Tests: 0 total`, an all-skipped tier, or a suite that died at collection all exit 0. If you do capture on demand and get that, record **inconclusive** and say so in your report; never an empty failure set.
+
+**Your build in step 1 is still mandatory.** It is what makes the worktree *ready* — unrelated to the baseline, and the thing that stops "40 of 57 files collected zero tests" being misread as a broken baseline.
 
 ## Report
 
@@ -84,6 +86,8 @@ A baseline captured from a run that executed nothing is not a baseline. `Tests: 
 **Worktree:** [path, and the repo kind you provisioned]
 
 **Install + build:** [the commands you actually ran and their real exit status — not a piped one. `yarn build | tail` reports `tail`'s status.]
+
+**Baseline:** [recorded base sha + "not captured (on demand)". If you captured one anyway because something was already red, say which suites and by what method.]
 
 **Baseline:** [the file you wrote, how many failures it records, and the command that produced it — or **inconclusive**, with why]
 

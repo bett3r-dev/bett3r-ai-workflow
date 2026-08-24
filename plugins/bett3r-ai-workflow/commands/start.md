@@ -24,16 +24,18 @@ Create a branch off the current branch. Name it from the ticket id + a slug (e.g
 
 Create `.work/ and add it to .gitignore` if it is missing. It holds `design.md` and `slices.yaml` — ephemeral, never committed.
 
-## Step 4 — Capture the baseline → `.work/known-baseline-failures.md`
+## Step 4 — Record the base, do NOT run the suite
 
-Record the typecheck/test failures that are **already** on the base, and **how they were captured**. Cheap once here; otherwise every later step re-derives it, and under a fleet every lane pays for it in parallel.
+Write `.work/known-baseline-failures.md` with the base **sha and branch**, and the line **"not captured — capture on demand"**. That is the whole step. It costs seconds.
 
-Two rules, because a wrong baseline is worse than none — a lane either chases errors that are not its own or, in the dangerous direction, treats real new errors as pre-existing cover:
+**Do not run the test suite or a full typecheck here.** A baseline is the *base-side* half of a diff, and that half is only ever needed when `HEAD` comes up **red**. When `HEAD` is green with parsed counts, zero `PASS→FAIL` flips are possible and the base-side run was pure cost — see [full-gate](../skills/full-gate/SKILL.md) § "Reading the verdict", which already says exactly this. Capturing eagerly pays it on every unit of every run to serve the minority case.
+
+**Capture on demand instead, and narrowly.** The first time a step sees a red `HEAD`, capture the base side **only for the suites that are red** — by name, not the whole tier — and append them here with the method used. Two rules then apply, because a wrong baseline is worse than none (a lane either chases failures that were never its own or, in the dangerous direction, waves real ones through as pre-existing cover):
 
 - **Capture on a freshly built tree.** When the toolchain cannot resolve a package's `.d.ts`, the failure cascades into ordinary-looking `TS2345`/`TS2322`/`TS2339` in every importing file — indistinguishable by inspection from genuine type errors. So *"filter out the known-noise code and trust the remainder"* is not a safe protocol: the remainder is contaminated by the same cause. (Measured once: `134 × TS6305 + 24 "real"` became `0 + 1` after re-emitting declarations.) A baseline taken with unresolved-dependency errors present is inflated and must not be published.
-- **An incremental typechecker under-reports on a second run** — it re-checks almost nothing. Clear the incremental state for a comparable full count.
+- **An incremental typechecker under-reports on a second run** — it re-checks almost nothing. Clear the incremental state for the suites you are capturing, or the count is not comparable.
 
-Later steps compare **by file, not by total**: a total hides an equal-and-opposite swap.
+Later steps compare **by file, not by total**: a total hides an equal-and-opposite swap. An absent baseline is not a claim that the base is green — it is the absence of a claim, and the file says so in those words so nobody reads the empty file as an empty failure set.
 
 ## Step 5 — (optional) Pull ticket context
 
@@ -45,6 +47,6 @@ If a ticket id is given and a tracker MCP is available (Jira/GitHub), fetch the 
 
 ## Principles
 
-- Thin. The branch, the baseline and `.work/` are all `start` produces.
+- Thin. The branch, the recorded base sha and `.work/` are all `start` produces — **no test run**.
 - `.work/` is gitignored and disposable; git is the record.
 

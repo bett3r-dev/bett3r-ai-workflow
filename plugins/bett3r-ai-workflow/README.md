@@ -6,7 +6,7 @@ A Claude Code plugin that encodes a **vertical-slice, dual-gated development flo
 
 | Phase | Command | What it does |
 |-------|---------|--------------|
-| Start | `/bett3r-ai-workflow:start` | Thin: branch + ephemeral `.work/` scaffold. |
+| Start | `/bett3r-ai-workflow:start` | Thin: branch + ephemeral `.work/` scaffold. **No test run** — the baseline records the base sha and is captured on demand, only if a `HEAD` comes up red. |
 | Design | `/bett3r-ai-workflow:design` | Grill the design while sharpening the domain model → reviewable `.work/design.md` (md + mermaid). |
 | Plan | `/bett3r-ai-workflow:plan` | Cut the design into **vertical slices** (tracer bullet first, prefactor first), review, → `.work/slices.yaml`. `--publish` also creates Jira sub-tasks. |
 | Build | `/bett3r-ai-workflow:build` | Per slice: **executor → test gate → verifier gate → commit**. |
@@ -31,6 +31,8 @@ ESAS board mode: in a repo with a `.esas/`, **`/design`** opens a second surface
 ## The gate is the host repo's, not the plugin's
 
 `yarn test` is a guess, and the plugin no longer makes it. A host repo declares its own validation gate as **`.claude/gate.mjs`** (Node, so a Windows contributor needs no bash to run their own repo's gate; an existing `.claude/gate.sh` is still accepted), taking `--fast` (build + typecheck — the inner loop) or `--full` (everything that must be true before code lands: tests, integration tests, codegen drift, lint), and printing one `GATE-STEP: <name> PASS|FAIL|SKIP|INCONCLUSIVE <detail>` line per step so a caller can read *which* step failed and with what counts. The **`full-gate`** skill carries the contract, an example script, the discovery fallback, and the four ways a "green" read is wrong.
+
+A repo may also declare a **scoped** middle mode as its no-argument default — whole-repo structural checks, then only the suites and guards its diff touches — for the human inner loop. The flow never selects it: a scoped verdict certifies a diff and its importers, not the tree.
 
 Where it runs: `/verify-build` runs `--full` for a single unit of work, or `--fast` when the unit is one lane of a fleet (the `provisioner` stamps `.work/fleet-lane.yaml` to say so). The full gate is then hoisted to `/merge-multi`, which runs it once on the assembled integration branch — the only tree where cross-unit breakage exists at all, and N−1 fewer full runs than gating every lane.
 
