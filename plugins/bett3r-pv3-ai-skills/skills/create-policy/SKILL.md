@@ -4,7 +4,16 @@ description: Scaffold an event-driven policy that reacts to events and triggers 
 
 # Skill: Create Policy
 
-Scaffold a PV3 policy that reacts to domain events and triggers side effects or commands.
+Write the parts of a PV3 policy that the design graph cannot determine.
+
+**If this policy exists in `.esas/design.json`, run
+[`scaffold-from-design`](../scaffold-from-design/SKILL.md) FIRST.** It generates the file, the
+builder wiring, the event namespace destructure, the placement and the registration line, and it
+derives the node id the ESAS extractor will read back — so the proposal converges instead of
+drifting into a phantom. What it leaves is exactly this skill's subject: handler bodies, the
+dependency declaration, and redelivery safety.
+
+Only write the whole file by hand when the policy is **not** in the design layer.
 
 **Read [`ddd-patterns` → POLICIES.md](../ddd-patterns/POLICIES.md) before writing the file** — partial-progress redelivery, multi-command fan-out replay-safety, reconcile-by-natural-key, dependency declaration, policy placement, and the gateway ACL two-step. **If the handler dispatches more than one command, accumulates, or calls anything external, read [DELIVERY.md](../ddd-patterns/DELIVERY.md) too**: a policy is a consumer, the outbox is at-least-once, and the dedup rules (per-stream version watermark, never global position; `isRedelivery` is a replay hint, not a dedup gate) are stated there.
 
@@ -24,6 +33,9 @@ The framework packages `@bett3r-dev/pv3-types`, `@bett3r-dev/jsonschema-definer`
 `ports` module are PV3 framework — identical in every PV3 repo — and appear verbatim below.
 
 ## Pattern
+
+`scaffold-from-design` emits this shape for a designed policy — read it to know what you are
+filling in, not to retype it. Write it out only for a policy with no design node.
 
 ```typescript
 import { extractIdFromEventStream } from '@bett3r-dev/pv3';
@@ -61,21 +73,33 @@ export const MyPolicy = ( ports: Ports ) => {
 };
 ```
 
-## File Location
+## File Location and Placement — computed, not chosen
+
+> A policy belongs in the **subdomain whose state it changes** — the module of the aggregate its
+> `createCommand` / `executeCommand` targets — not the subdomain that emits its trigger event.
 
 ```
 <serverPath>/src/modules/<module-name>/<entity-or-purpose>.policy.ts
 ```
 
-## Policy Placement
+`scaffold-from-design` resolves this from the graph (`issues` → `handled-by`) and puts the file
+there, so **do not choose a directory by hand for a designed policy** — and above all do not move
+one to sit beside the other policies subscribing to the same event. That is the canonical
+misplacement, it is confirmed repeatedly, and it is exactly what the rule above exists to prevent.
 
-A policy belongs in the **subdomain whose state it changes**, not in the subdomain that emits the trigger event.
+Two cases still need your judgment:
 
-**Rule:** If the policy's `createCommand`/`executeCommand` targets aggregate X, the policy file lives in X's module directory. Confirmed misplacement pattern: agent places the policy near existing policies that subscribe to the *same event*, even when the aggregate it mutates lives in a different module.
+- **The scaffolder blocked on placement** — the policy issues into two different modules, or its
+  target handler does not exist in code yet. A cross-module policy is a design question; take it
+  to the board rather than picking a module to unblock yourself.
+- **A hand-written policy** (not in the design layer). Apply the rule yourself. Check: does
+  `createCommand` / `executeCommand` target an aggregate in this module? If not, the file is in
+  the wrong place. Importing the trigger event's *schema* across modules from
+  `<domainEventsPackageName>` is always allowed and is not a reason to move the file.
 
-**Check before creating a policy file:** Does `createCommand` / `executeCommand` target an aggregate in the same module? If not, move the file to the aggregate's module. Import the trigger event's *schema* from the domain package (`<domainEventsPackageName>`) — always allowed across modules.
-
-*Example:* A policy reacting to `Accounts/UserAccountAdded` to provision a `SalesChannelIntegration` → `src/modules/sales-channels-integrations/`, not `src/modules/identity/`.
+*Example:* a policy reacting to `Accounts/UserAccountAdded` to provision a
+`SalesChannelIntegration` lives in `src/modules/sales-channels-integrations/`, not
+`src/modules/identity/`.
 
 ## Registering a Cronjob Subscription
 
@@ -144,6 +168,11 @@ In the module's `index.ts`:
 ```typescript
 ports.eventsourcing.routeEventHandler( MyPolicy( ports ));
 ```
+
+`scaffold-from-design` emits this as a fragment alongside the file — **place it**. An unregistered
+policy compiles, typechecks, and is never wired to the event bus: it simply never fires, which is
+indistinguishable from a handler bug and is the most common way a finished-looking policy does
+nothing.
 
 ## Process Manager Pattern
 

@@ -33,6 +33,13 @@ Apply the patterns from these sibling skills (`create-schema`, `create-aggregate
 
 ## Generation Order
 
+**Step 0 — if this module's artifacts are in `.esas/design.json`, run
+[`scaffold-from-design`](../scaffold-from-design/SKILL.md) first**, scoped to the slice's
+`designs:` ids. It collapses steps 3–5 below into filling in generated files, and it is the only
+way the module's artifacts converge to `satisfied` on the board. The steps below then read as
+*what to fill*, in the same order. For a module with no design nodes, start at step 1.
+
+
 Generate components in this exact order (each step depends on the previous):
 
 ### Step 1: Schemas (the domain package)

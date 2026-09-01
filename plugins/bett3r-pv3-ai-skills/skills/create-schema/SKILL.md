@@ -8,6 +8,16 @@ Scaffold type definitions, event schemas, and aggregate schemas for a PV3 DDD mo
 
 **Read [`ddd-patterns` → SCHEMAS.md](../ddd-patterns/SCHEMAS.md) before writing the files** — the `jsonschema-definer` conventions, the two-file domain split, the event factory shape, and (load-bearing on any *existing* module) why renaming or removing a persisted field is schema evolution, not a rename.
 
+**The scaffolder cannot help here, and that is structural.** An ESAS node carries a label, a
+subdomain and a resource key — it has **no fields**. So every schema is hand-written, and a
+scaffolded artifact does not compile until you write it: `<Name>CommandSchema` for a generated
+command fragment, `<Name>EventSchema` for a generated event fragment, `<Name>ReadmodelSchema` /
+`<Name>ReadmodelType` for a generated read model. Those names are not suggestions — the generated
+files already import them, so they are the contract.
+
+Run this skill straight after [`scaffold-from-design`](../scaffold-from-design/SKILL.md); it is
+the first item in every generated file's `STILL OWED` block.
+
 ## Project configuration
 
 This skill resolves the following placeholders from your repo's `.esas.config.json`:

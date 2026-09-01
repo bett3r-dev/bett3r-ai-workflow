@@ -10,17 +10,39 @@ It is the **framework half** of the flow. Pair it with [`bett3r-ai-workflow`](..
 (the project-agnostic methodology: start → design → plan → build → verify-build → capture-learnings).
 A PV3 repo installs both; a non-PV3 repo installs just the workflow plugin.
 
+## The mechanical pass, and what's left after it
+
+The design graph already fixes an artifact's file path, builder wiring, event names, placement,
+registration — and the **node id the ESAS extractor will read back**. `scaffold-from-design`
+generates that half with a tested program
+([`@bett3r-dev/esas-pv3-scaffold`](https://github.com/bett3r-dev/eventstorming--visual-editor)),
+so it is derived rather than retyped.
+
+That is not about typing speed. It is about **convergence**: a hand-written artifact that drifts by
+one word in a label reads back as a different node, the design's proposal never flips to
+`satisfied`, and the board reports a phantom forever — while the code compiles and the tests pass.
+
+Everything the graph cannot carry stays here, in the `create-*` skills, because an ESAS node has a
+label, a subdomain and a resource key and **no fields**. Schemas, invariants, handler bodies,
+projections, stream strategy and idempotency are hand-written, and the generator refuses to guess
+any of them. Each generated file states its own `STILL OWED` list.
+
+The generator also refuses rather than guessing a **location**, and rather than silently dropping a
+projection it cannot resolve. Those refusals are findings — a design question surfacing as a
+scaffold block — not obstacles to route around by hand-placing the file.
+
 ## Skills
 
 | Skill | What it scaffolds |
 |-------|-------------------|
-| `create-schema` | Event/value-object/aggregate/command/readmodel schemas (jsonschema-definer) + events. |
+| `scaffold-from-design` | **Run first.** The mechanical half of a slice's designed artifacts, slice-scoped: whole files for policies/read models, fragments for a command on an existing aggregate, a new event, and every registration line. |
+| `create-schema` | Event/value-object/aggregate/command/readmodel schemas (jsonschema-definer) + events. Never generated — a node carries no fields — so this is the first `STILL OWED` item of every scaffolded artifact. |
 | `create-aggregate` | An `AggregateBuilder` aggregate: event reducers + command handlers + scope invariants. |
-| `create-policy` | A `PolicyBuilder` policy that reacts to events and drives downstream commands (replay-safe). |
-| `create-readmodel` | A `ReadmodelBuilder` projection: projectors + authenticated, scoped queries. |
+| `create-policy` | The judgment half of a `PolicyBuilder` policy: handler bodies, dependency declaration, replay safety. Placement and wiring come from the scaffolder. |
+| `create-readmodel` | The judgment half of a `ReadmodelBuilder` projection: what each projector writes, queries, indexes, scope. |
 | `create-tests` | Given/When/Then unit tests for aggregates, policies, and read models. |
 | `create-integration-test` | A full-pipeline in-process integration suite (command → … → readmodel) via the harness. |
-| `create-module` | Orchestrates all of the above to scaffold a complete bounded-context module. |
+| `create-module` | Orchestrates all of the above — starting from the scaffolder — to build a complete bounded-context module. |
 | `ddd-patterns` | The PV3 DDD pattern reference — the framework conventions, gotchas, and hard-won lessons the `create-*` skills assume. (Model-invoked, not always-on.) |
 | `event-storming-to-spec` | Turns event-storming output (Mermaid / structured text) into a PV3 DDD specification that feeds `create-module`. |
 | `miro-to-mermaid` | Extracts event-storming artifacts from a Miro board into structured Mermaid flowcharts. Requires a host-repo Miro frame-data fetcher (see the skill's Step 1). |

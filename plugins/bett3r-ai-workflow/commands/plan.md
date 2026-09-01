@@ -37,7 +37,23 @@ Present the proposed slices as a numbered list. For each: **title**, **blocked-b
 
 ## Step 5 — Write `.work/slices.yaml`
 
-Write the approved slices (the `vertical-slicing` skill's schema): `id`, `name`, `passes: false`, `depends_on`, `behavior`, `oracle` (the test that proves it), `gates` (the project invariants the verifier must confirm). Record the ADR path and branch. Lead each slice with behavior; `touches` (files) is an optional hint only.
+Write the approved slices (the `vertical-slicing` skill's schema): `id`, `name`, `passes: false`, `depends_on`, `behavior`, `oracle` (the test that proves it), `gates` (the project invariants the verifier must confirm), `designs` (the design node ids it delivers, when the unit has a design layer). Record the ADR path and branch. Lead each slice with behavior; `touches` (files) is an optional hint only.
+
+**Record which design elements each slice delivers.** If the unit has a design layer
+(`.esas/design.json` — an ESAS board session), add a `designs:` list to each slice naming the
+**node ids** it builds. This is what lets `/build` scaffold *slice-scoped* instead of dumping the
+whole design's stubs into the tracer bullet's commit, and it is the only place in the flow that
+knows the mapping: by `/build` the design file is just a blob, and a slice title is not something
+to reverse-engineer an id set from. Omit the field for a unit with no design layer — an absent
+`designs:` means "nothing designed here", which `/build` reads correctly; a *wrong* one scaffolds
+the wrong artifacts. Ids look like `{subdomain}_{abbrev}_{slug}`, e.g.
+`sales_pol_buyer-invoice-preference-send-policy`; take them from the design file rather than
+composing them by hand, since the slug rule is not obvious.
+
+**Order the slices so a scaffolded artifact's host exists first.** A command is generated into the
+aggregate or system that handles it, so a slice proposing both must build the handler before the
+command — otherwise the scaffolder blocks, correctly, and the slice stalls on a dependency the
+plan could have expressed. Same for an event and the module that owns its namespace.
 
 **Route each slice to a model.** Add `model: sonnet` to the slices whose implementation is *mechanical* — scaffolding an artifact from a framework skill, config or wiring, a test-only or guard-only slice, a prefactor that is a mechanical move. Leave the field **absent** on everything else, which `/build` reads as `opus`: the tracer bullet, any slice touching an invariant or a seam two slices must agree on, and anything the design was thin about. This is the only place in the flow that knows which slices are hard, and an unrouted `slices.yaml` sends the whole build through the most expensive model available. When in doubt, leave it absent — the cost of an over-routed slice is one retry, and `/build` re-dispatches those on `opus` and reports them so the next plan can be marked correctly.
 

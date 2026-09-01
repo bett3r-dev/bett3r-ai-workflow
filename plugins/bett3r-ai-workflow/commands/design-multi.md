@@ -108,6 +108,8 @@ Ticket ids (+ optional descriptions), then flags.
 > Designs resolved and written to the tickets. Run `/start-multi <ids>` — it detects the resolved designs and runs `design` as a verification **second pass**, not a fresh grill, so the fleet stays unattended unless the code has drifted.
 >
 > This run's questions are still on the board, in a design layer that belongs to a single unit of work. When you are done reading them, delete `.esas/design.json`, `.esas/design.json.bak`, `.esas/ops.jsonl` and `.esas/.claude-cursor` — nothing downstream does it, and the next design in this repo will otherwise open on this run's leftovers.
+>
+> **Not before the unit is built in THIS checkout.** `/build`'s scaffold step reads `design.json` to generate the artifacts the design already fixes, so deleting it early turns every designed artifact back into hand-written work — silently, since a missing design layer is a legitimate state. It is safe to delete now for units heading into `/start-multi`, whose worktrees carry no design layer by design; it is not safe if you are about to run `/plan` and `/build` here.
 
 ## Decisions → the ticket's resolved-design block
 Every decision — auto-resolved in Phase A **and** resolved by you in Phase B — rides into the ticket's resolved-design block **with its rejected options and the evidence** that settled it. This is the design-multi analogue of start-multi's "decisions → PR body + ADRs": an unattended `/start-multi` pickup must be able to see *why*, never inherit a silent choice.

@@ -40,6 +40,27 @@ Never write `run.yaml`, another unit's files, another worktree, or — in a repo
 with a `.esas/` — the design layer. Your worktree has no `.esas/` and
 `ESAS_DIR_MISSING` is the correct answer, not a setup problem.
 
+`/build`'s **scaffold step** reads that layer, and reading is not writing — so
+the `provisioner` hands you a **read-only snapshot** at
+`.work/design-snapshot/` (`design.json`, `graph.json`, `manifest.yaml`) and the
+scaffolder is pointed at it with `--design` / `--graph`. Generated files still
+land in your worktree.
+
+Three things about it:
+
+- **It is a copy, and nothing flows back.** Edits to it reach no board. If the
+  design is wrong, that is an escalation to the orchestrator, not a file to fix
+  here.
+- **Check `manifest.yaml`'s `sourceSha` against your base commit before
+  trusting it.** A snapshot from a different tree is wrong about what exists —
+  it will call artifacts already real that you do not have. On a mismatch,
+  hand-write and say so.
+- **No snapshot is a normal state**, not a setup failure: the run may have had
+  no design layer, or the provisioner refused to carry a stale one. Then every
+  designed artifact is hand-written through the repo's `create-*` skills. Say
+  which path you took in your report, so a scaffolded run and a hand-written
+  one stay distinguishable.
+
 ## Dispatching your own children
 
 **`Agent` with `run_in_background: false`.** Only `Agent` honours it.

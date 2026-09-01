@@ -295,6 +295,26 @@ Three things to say out loud when you do it:
 Reclassify only what the user called a correction. A proposal you happen to
 believe is already implemented is a question for them, not a move to make.
 
+## A label is a code-identity contract
+
+A proposed node's id is derived from `(subdomain, type, label)`, and `/build`'s
+scaffold step generates the artifact from that id — its export name, its file
+name, and the module it lands in. So on the board a label is not a caption:
+
+- **Renaming a proposal renames the code that has not been written yet.** Say
+  so before you `modify` one. After the artifact exists, a board rename and a
+  code rename are two halves of one change, and doing only the first makes the
+  design stop converging: the proposal never flips to `satisfied`, and the
+  board reports a phantom artifact forever while the code compiles and the
+  tests pass. Nothing goes red — this is a failure you only find by looking.
+- **The subdomain is part of the id too**, so re-homing a proposal is the same
+  kind of edit, not a filing decision.
+- **Draw the edges the scaffolder reads.** A proposed policy with no `issues`
+  edge cannot be placed (its module is the one whose state it changes), and a
+  proposed command with no `handled-by` edge has no file to live in. Both are
+  refused rather than guessed — which is the board telling you a question is
+  still open, and is worth answering there rather than in the code.
+
 ## The two restarts
 
 - **Pulled esas mid-session?** Then restart the session **and** the board. The
@@ -318,6 +338,17 @@ two. In a worktree, design in `.work/design.md` and leave the board alone.
 One design session per checkout, likewise. If `status` warns that another
 session is designing here, say so — two sessions sharing one cursor lose each
 other's syncs quietly.
+
+**A read-only snapshot is not a board.** A fleet lane may carry
+`.work/design-snapshot/` — a copy of `design.json` + `graph.json` that
+`/build`'s scaffold step reads. That changes nothing here: it is two documents,
+not a session; no esas tool points at it, nothing written there reaches the
+board, and `ESAS_DIR_MISSING` remains the right answer in that worktree. The
+rule is about **writing** the layer and about session identity, and a copy has
+neither. If a lane finds the design wrong, that is an escalation to the
+orchestrator — never an edit made there and never a `.esas/` created to make
+the tools work.
+
 
 ## Writing and reading
 
