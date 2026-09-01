@@ -4,9 +4,19 @@ description: Scaffold an event-driven read model (projection) for querying. Use 
 
 # Skill: Create Readmodel
 
-Scaffold a PV3 read model that projects events into a queryable collection.
+Write the parts of a PV3 read model that the design graph cannot determine.
 
-**Read [`ddd-patterns` → READMODELS.md](../ddd-patterns/READMODELS.md) before writing the file** — projector read-modify-write and `{ replace: true }`, cross-stream counters, brand-new-row bootstrap, GIN indexes for array fields, subscriptions and `databaseSessionMode`, cross-subdomain read boundaries, and the query-route traps. **If the projection is not a pure last-write-wins `upsert`** (it appends, increments, or exposes intermediate state), also read [DELIVERY.md](../ddd-patterns/DELIVERY.md) for the duplicate/ordering contract it must survive.
+**If this read model exists in `.esas/design.json`, run
+[`scaffold-from-design`](../scaffold-from-design/SKILL.md) FIRST.** It generates the file, the
+`ReadmodelBuilder` wiring, one projector stub per `projected-to` event grouped by its owning
+events namespace, the collection name, and the registration line. What it leaves is this skill's
+subject: what each projection actually writes, the queries, the indexes, and read-scope.
+
+It also **refuses** rather than emitting a read model whose projected event it cannot resolve to a
+namespace — a projection silently dropped at generation time is a read model that compiles, serves
+queries, and is missing rows forever.
+
+Only write the whole file by hand when the read model is **not** in the design layer.
 
 ## Project configuration
 
@@ -26,6 +36,9 @@ The framework packages `@bett3r-dev/pv3-types`, `@bett3r-dev/jsonschema-definer`
 `ports` module are PV3 framework — identical in every PV3 repo — and appear verbatim below.
 
 ## Pattern
+
+`scaffold-from-design` emits this shape for a designed read model — read it to know what you are
+filling in, not to retype it. Write it out only for a read model with no design node.
 
 ```typescript
 import S from '@bett3r-dev/jsonschema-definer';
@@ -131,6 +144,11 @@ All inline — no separate service file, no controller file.
 
 ## Registration
 
+`scaffold-from-design` emits this as a fragment alongside the file — **place it**. An unregistered
+read model compiles, typechecks, and projects nothing; the rows simply never appear, which reads
+as a projection bug rather than a missing line.
+
+
 In the module's `index.ts`:
 
 ```typescript
@@ -138,6 +156,11 @@ ports.eventsourcing.routeEventHandler( MyReadmodel( ports ));
 ```
 
 ## Collection Naming
+
+For a designed read model the scaffolder takes the collection name from the node's `resourceKey`
+when the board carries one, and derives it otherwise — check it against the convention below
+before the first deploy, because renaming a collection after it holds rows is a migration.
+
 
 Follow the pattern: `{domain}_{entity}_readmodel`
 

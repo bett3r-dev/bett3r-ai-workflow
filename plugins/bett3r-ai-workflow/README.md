@@ -56,6 +56,7 @@ This plugin ships the **roles and methodology**. The **domain knowledge** stays 
 
 - The `verifier` reads `${CLAUDE_PROJECT_DIR}/.claude/rules/` for the host repo's invariants.
 - The `executor` uses whatever framework skills the host repo provides (e.g. the `bett3r-pv3-ai-skills` plugin's `create-aggregate`).
+- **Where a design graph fixes an artifact mechanically, `/build` generates it before the executor runs** (step 0), scoped to the slice's `designs:` node ids. The flow stays framework-agnostic: it looks for a design scaffolder and skips the step when the repo has none. What the generator refuses to guess — a location, a payload, an invariant — is surfaced as a design question rather than filled in, because a scaffold block is a finding about the design, not an obstacle in the build.
 
 A PV3 repo installs this **plus** `bett3r-pv3-ai-skills`; a non-PV3 repo installs just this.
 

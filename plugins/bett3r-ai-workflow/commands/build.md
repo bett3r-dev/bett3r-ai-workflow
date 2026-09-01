@@ -41,6 +41,31 @@ Two things that make model choice cheaper than it looks to get wrong: a downgrad
 
 For each slice, in order, in a **fresh agent context**:
 
+0. **Scaffold what the design already fixed** — *only when the slice has a `designs:` list and the
+   host repo ships a design scaffolder* (in a PV3 repo, the `scaffold-from-design` skill). Skip
+   this step entirely otherwise; most repos have no design layer and this is not a gap in them.
+
+   Run it **scoped to this slice's `designs:` ids**, never un-scoped: an un-scoped run writes the
+   whole design's stubs into whichever slice happens to run first, which buries the tracer bullet
+   in unreachable code and defeats the point of slicing. Dry-run first, then write.
+
+   **You** run it, not the executor, for two reasons. A blocked item is a *design* question — a
+   new subdomain with no home, a policy issuing into two modules, a command whose handler does not
+   exist yet — and those are surfaced to the user or taken to the board, which an executor in a
+   fresh context is not positioned to do. And the scaffold report is context the executor needs:
+   pass it in verbatim, including the fragments it must place and the `STILL OWED` items, so it
+   starts from what exists rather than rediscovering it.
+
+   **A block is not a reason to hand-write the artifact.** The refusal *is* the finding — a
+   scaffolder that declines to guess a location has told you something the graph could not answer.
+   Overriding it by hand discards the only signal that a decision is missing. If the block is that
+   a handler does not exist yet, that is a slice-ordering defect: say so, and either reorder or
+   ESCALATE.
+
+   Generated files are **not** the slice's deliverable. They compile to stubs; the oracle still
+   has to go RED first (step 1). A slice that is green immediately after scaffolding has an oracle
+   asserting the stub.
+
 1. **Implement** — dispatch the `executor` agent **on the model this slice routes to** (above) with: the slice (`behavior`, `oracle`, `gates`, intended files), the ticket, and the host project directory. The executor reads the repo's own rules/skills. Instruct it to work **RED → GREEN**: write the oracle test first, **run it and confirm it FAILS** for the right reason (the behavior is genuinely absent — not a typo, missing import, or compile error), *then* implement the minimal code to make it pass. It must report the RED evidence (the failure it saw before implementing).
 
    **If the slice's deliverable is a test or a guard** (no new production behavior, so no natural RED is available): **mutation-test it instead.** Revert or corrupt one production line at a time and report, per mutation, **which assertion failed, with what values, and which consumers the mutation reached** — a predicate claimed as single-source-of-truth must fail at least one test per declared consumer, and a shortfall is the finding, because a second inline copy of the rule is mutation-blind. A guard asserting an *absence* also ships a positive and a negative control, and pins its traversal if it walks a tree. Report the mutation table where RED evidence would go. This is not optional rigor: RED→GREEN is the anti-tautology gate, and for this slice type it is **structurally unavailable** — which is exactly the type whose entire value is "does this assertion actually bite?"
@@ -74,7 +99,7 @@ For each slice, in order, in a **fresh agent context**:
 
 When a slice passes both gates:
 
-1. **Scope check** — `git status --short`; the changed/deleted tracked files must match the slice's intended outputs (+ expected generated artifacts). Any out-of-scope change → stop and surface it (do **not** commit through contamination). Never use `git stash`/`reset --hard`/`checkout --`/`restore`/`clean` to "clean up" — the stash stack is repo-global.
+1. **Scope check** — `git status --short`; the changed/deleted tracked files must match the slice's intended outputs (+ expected generated artifacts, including anything step 0's scaffold wrote — those are in scope for this slice by construction, and a scaffolded file left *unfilled* is the finding, not a scope violation). Any out-of-scope change → stop and surface it (do **not** commit through contamination). Never use `git stash`/`reset --hard`/`checkout --`/`restore`/`clean` to "clean up" — the stash stack is repo-global.
 2. **Commit** only the slice's files. Compose the message following the **host repo's commit convention** — use its `/commit` command's format if it has one (typically `type(scope): summary` in the imperative, plus the ticket reference and any required trailer/sign-off). Identify the slice so the per-slice history stays legible, e.g.:
    ```
    feat(<scope>): <slice behavior, imperative, lowercase>
@@ -91,7 +116,7 @@ One commit per slice. Git is the record — per-slice commits are **crash insura
 
 ## Step 5 — Done
 
-When all targeted slices are `passes: true` and committed, report: slices completed, the commit per slice, the **model each slice ran on**, the **retry tally by cause**, and any ESCALATEd items, **plus any out-of-`yarn test` suites flagged as un-run** (from the ripple check in Step 3).
+When all targeted slices are `passes: true` and committed, report: slices completed, the commit per slice, the **model each slice ran on**, the **retry tally by cause**, any **design elements the scaffolder blocked on** (these are open design questions, not build noise — they outlive the run), and any ESCALATEd items, **plus any out-of-`yarn test` suites flagged as un-run** (from the ripple check in Step 3).
 
 **Verify the carry-forward against HEAD before handing it to `/verify-build` — do not assert it from memory.** The summary's carry-forward note (which file rippled, which suite went red) is what `/verify-build`'s signature-ripple sweep builds on; a wrong file named there can hide real breakages. Re-check every named file against `HEAD` (it is actually the red/affected one) before writing it. (Real miss: TV1-1969's summary named only one of three broken suites and mis-attributed it — the real recovery-semantics break was in a different file.) Then:
 
@@ -100,6 +125,7 @@ When all targeted slices are `passes: true` and committed, report: slices comple
 ## Principles
 
 - Dispatch to agents; don't implement. Each agent gets a fresh context.
+- **Generate what is derivable; reserve judgment for what isn't.** Where a design graph fixes an artifact's identity, wiring and placement, deriving them mechanically is not a shortcut — it is what makes the design *converge*, because a hand-written artifact that drifts by one word in a label reads back as a different element and the board reports a phantom forever. What a graph cannot carry — payloads, invariants, handler bodies — is never guessed at.
 - **Name a model on every dispatch.** An unnamed model is not a neutral default — it is the session's, which is the most expensive one available, silently applied to a role that may need none of it.
 - **Context length is the bill, not thinking depth.** On a measured fleet run, cache reads were **97% of raw tokens** and 68% of the cost-weighted total; output was 11%. What makes a run expensive is how much context each turn re-sends, so the levers that matter are: keep command output out of agent contexts (redirect + `tail`), keep agent lifetimes short, and don't retry. Speeding up the repo's own commands is *not* one of them — build/test/typecheck/generate/lint together were 12% of agent active time.
 - **Both gates, every slice.** Never commit on the test alone — the verifier catches what tests can't. Never drop the verifier to save tokens; that's the corner that ships defects.

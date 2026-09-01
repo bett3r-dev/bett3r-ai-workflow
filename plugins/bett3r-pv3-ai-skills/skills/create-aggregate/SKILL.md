@@ -8,6 +8,15 @@ Scaffold an event-sourced aggregate using PV3's `AggregateBuilder`.
 
 **Read [`ddd-patterns` → AGGREGATES.md](../ddd-patterns/AGGREGATES.md) before writing the file.** It is this skill's reference half: command-handler options, `idempotency.check` semantics, transactional side-writes and the UNIQUE-constraint lock, event-namespace coverage, system/admin-only and tenant-but-not-row-scoped aggregates, lifecycle status guards, and the idempotency-predicate null-safety bug. Changing an *existing* aggregate's fields also means [SCHEMAS.md](../ddd-patterns/SCHEMAS.md) → *Renaming a persisted field*.
 
+**What the scaffolder does and does not do here.** It never generates an aggregate file — an
+aggregate's reducers and invariants are judgment, and there is nothing in the graph to derive them
+from. But a **new command on an aggregate that already exists** is generated, as a fragment: the
+`commandBuilder()` block with its `.withSchema(...)` and `.produces([...])`, for you to place
+inside `.withCommands({…})`. What it deliberately does not guess is the part that matters most —
+the handler body, the invariants, the idempotency check, and any stream override. A generated
+command declaration that emits its event unconditionally is correct **only** for the simplest
+case; read [AGGREGATES.md](../ddd-patterns/AGGREGATES.md) before assuming yours is one.
+
 ## Project configuration
 
 Resolve these placeholders from the `.esas.config.json` at your repo root:
