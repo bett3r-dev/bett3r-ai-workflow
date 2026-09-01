@@ -193,6 +193,26 @@ Say three things out loud:
   error names the alternative, and the correction still applies in the design
   layer.
 
+## A label is a code-identity contract
+
+A proposed node's id is derived from `(subdomain, type, label)`, and `/build`'s
+scaffold step generates the artifact from that id — its export name, its file
+name, and the module it lands in. So on the board a label is not a caption:
+
+- **Renaming a proposal renames the code that has not been written yet.** Say
+  so before you `modify` one. After the artifact exists, a board rename and a
+  code rename are two halves of one change, and doing only the first makes the
+  design stop converging: the proposal never flips to `satisfied`, and the
+  board reports a phantom artifact forever while the code compiles and the
+  tests pass. Nothing goes red — this is a failure you only find by looking.
+- **The subdomain is part of the id too**, so re-homing a proposal is the same
+  kind of edit, not a filing decision.
+- **Draw the edges the scaffolder reads.** A proposed policy with no `issues`
+  edge cannot be placed (its module is the one whose state it changes), and a
+  proposed command with no `handled-by` edge has no file to live in. Both are
+  refused rather than guessed — which is the board telling you a question is
+  still open, and is worth answering there rather than in the code.
+
 ## The two restarts
 
 - **Pulled esas mid-session?** Restart the session **and** the board. The MCP

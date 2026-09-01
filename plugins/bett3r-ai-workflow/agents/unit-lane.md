@@ -40,6 +40,13 @@ Never write `run.yaml`, another unit's files, another worktree, or — in a repo
 with a `.esas/` — the design layer. Your worktree has no `.esas/` and
 `ESAS_DIR_MISSING` is the correct answer, not a setup problem.
 
+The same follows for `/build`'s **scaffold step**: with no design layer it does
+not run, so every designed artifact in your slices is written by hand through
+the repo's `create-*` skills. That is the expected path in a lane, not degraded
+mode — do not copy a `.esas/` in to enable it. Say in your report that the slice
+was hand-written rather than scaffolded, so the difference stays visible when
+the run is compared against a single-unit one.
+
 ## Dispatching your own children
 
 **`Agent` with `run_in_background: false`.** Only `Agent` honours it.

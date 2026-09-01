@@ -41,9 +41,19 @@ Two things that make model choice cheaper than it looks to get wrong: a downgrad
 
 For each slice, in order, in a **fresh agent context**:
 
-0. **Scaffold what the design already fixed** — *only when the slice has a `designs:` list and the
-   host repo ships a design scaffolder* (in a PV3 repo, the `scaffold-from-design` skill). Skip
-   this step entirely otherwise; most repos have no design layer and this is not a gap in them.
+0. **Scaffold what the design already fixed** — *only when the slice has a `designs:` list, the
+   checkout has a readable `.esas/design.json` + `.esas/graph.json`, and the host repo ships a
+   design scaffolder* (in a PV3 repo, the `scaffold-from-design` skill).
+
+   **When any of those is missing, skip the step and say which one** — in the slice's summary, not
+   silently. Most repos have no design layer and that is not a gap in them, but the three absences
+   mean different things and a silent skip makes them indistinguishable:
+   - *no `designs:`* — this slice delivers nothing designed, **or** the plan predates the field;
+   - *no `.esas/`* — expected in a **fleet lane** (a `/start-multi` worktree deliberately has no
+     design layer, because that layer is scoped to one unit of work and a run spans N). The slice's
+     artifacts are hand-written through the `create-*` skills, and that is the correct outcome, not
+     a setup failure to repair. Do not create `.esas/` in a worktree to unblock this;
+   - *no scaffolder* — the repo's framework has none.
 
    Run it **scoped to this slice's `designs:` ids**, never un-scoped: an un-scoped run writes the
    whole design's stubs into whichever slice happens to run first, which buries the tracer bullet
