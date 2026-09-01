@@ -28,8 +28,8 @@ and fails a guard later. The rule is mechanical (below), so it is computed, not 
 
 | Need | Check |
 |---|---|
-| `.esas/design.json` exists | the unit ran `/design`; the file is per-unit and gitignored |
-| `.esas/graph.json` is current | re-extract if the working tree has moved since the design |
+| a readable `design.json` | `.esas/design.json` in a normal checkout; `.work/design-snapshot/design.json` in a fleet lane |
+| a `graph.json` matching **this tree** | same two locations. In a lane, check `manifest.yaml`'s `sourceSha` against your base commit first |
 | the slice names its design nodes | `designs:` in `.work/slices.yaml` — written by `/plan` |
 
 If the slice has **no `designs:` field**, this slice delivers nothing from the design layer, or
@@ -39,7 +39,14 @@ artifacts is worse than scaffolding none. Say so and write by hand.
 ## Step 1 — Dry run, always first
 
 ```bash
+# normal checkout — reads this repo's own .esas/
 npx esas-pv3-scaffold --repo "$PWD" --nodes <the slice's designs: ids, comma-separated>
+
+# fleet lane — reads the read-only snapshot the provisioner left
+npx esas-pv3-scaffold --repo "$PWD" \
+  --design .work/design-snapshot/design.json \
+  --graph  .work/design-snapshot/graph.json \
+  --nodes  <ids>
 ```
 
 Writes nothing. Prints what it *would* create, the fragments it will not write, and anything
@@ -56,10 +63,28 @@ Exit codes: `0` nothing blocked · `1` the design or graph could not be read, or
 an id the design no longer contains (a stale plan — re-check `slices.yaml` against the board) ·
 `3` something was blocked.
 
+### In a fleet lane, verify the snapshot first
+
+A worktree has no `.esas/` — the design layer belongs to one unit of work while a run spans N, and
+a lane must never write it. The `provisioner` therefore leaves a **read-only copy** in
+`.work/design-snapshot/`, and reading it is not writing the layer.
+
+**Compare `manifest.yaml`'s `sourceSha` to your base commit before using it.** A snapshot cut from
+a different tree is wrong about what exists: it will report artifacts as already real that this
+tree does not have, and anchor fragments in files that are not here. Neither is visible in the
+output. On a mismatch, hand-write the artifacts and say why.
+
+**Never create a `.esas/` in a worktree** to make this work. Nothing written in a lane reaches the
+board; if the design itself is wrong, escalate to the orchestrator.
+
 ## Step 2 — Write
 
+Re-run the **same command** as step 1 with `--write` added — including
+`--design` / `--graph` if you needed them there. Dropping them writes nothing in a lane, because
+there is no `.esas/` to fall back to.
+
 ```bash
-npx esas-pv3-scaffold --repo "$PWD" --nodes <ids> --write
+npx esas-pv3-scaffold --repo "$PWD" [--design … --graph …] --nodes <ids> --write
 ```
 
 **Only files are written. Fragments never are.** A file is emitted only when its host file does

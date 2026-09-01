@@ -41,18 +41,33 @@ Two things that make model choice cheaper than it looks to get wrong: a downgrad
 
 For each slice, in order, in a **fresh agent context**:
 
-0. **Scaffold what the design already fixed** — *only when the slice has a `designs:` list, the
-   checkout has a readable `.esas/design.json` + `.esas/graph.json`, and the host repo ships a
-   design scaffolder* (in a PV3 repo, the `scaffold-from-design` skill).
+0. **Scaffold what the design already fixed** — *only when the slice has a `designs:` list, a
+   readable design layer is reachable (this checkout's own `.esas/`, or — in a fleet lane — the
+   snapshot below), and the host repo ships a design scaffolder* (in a PV3 repo, the
+   `scaffold-from-design` skill).
 
-   **When any of those is missing, skip the step and say which one** — in the slice's summary, not
-   silently. Most repos have no design layer and that is not a gap in them, but the three absences
-   mean different things and a silent skip makes them indistinguishable:
+   **In a fleet lane, read the snapshot instead.** A worktree has no `.esas/` — that layer is
+   scoped to one unit of work while a run spans N, and a lane must never write it — so the
+   `provisioner` copies `design.json` + `graph.json` into `.work/design-snapshot/` and the
+   scaffolder is pointed at them (`--design` / `--graph`). Emitted paths still resolve against the
+   worktree. **Never create a `.esas/` in a worktree to enable this.**
+
+   **Re-check the snapshot's sha before trusting it.** `manifest.yaml` records the sha its
+   `graph.json` was extracted from; if that is not this worktree's base commit, the graph is wrong
+   about what exists — it will call artifacts already real that this tree does not have, or anchor
+   a fragment in a file that is not here, and neither shows up in the output. On a mismatch, skip
+   the step and say so. The provisioner checks this at cut time; you check it again because a lane
+   can outlive the tree it was cut from.
+
+   **When the step cannot run, skip it and say which reason** — in the slice's summary, not
+   silently. Most repos have no design layer and that is not a gap in them, but the absences mean
+   different things and a silent skip makes them indistinguishable:
    - *no `designs:`* — this slice delivers nothing designed, **or** the plan predates the field;
-   - *no `.esas/`* — expected in a **fleet lane** (a `/start-multi` worktree deliberately has no
-     design layer, because that layer is scoped to one unit of work and a run spans N). The slice's
-     artifacts are hand-written through the `create-*` skills, and that is the correct outcome, not
-     a setup failure to repair. Do not create `.esas/` in a worktree to unblock this;
+   - *no design layer and no snapshot* — the run had none to carry, or the provisioner refused to
+     carry a stale one. The slice's artifacts are hand-written through the `create-*` skills; that
+     is a correct outcome, not a setup failure to repair;
+   - *snapshot sha ≠ this worktree's base* — a lying snapshot; hand-write, and report it, because
+     it means the fleet was cut from a moving tree;
    - *no scaffolder* — the repo's framework has none.
 
    Run it **scoped to this slice's `designs:` ids**, never un-scoped: an un-scoped run writes the

@@ -54,7 +54,61 @@ Otherwise every `portal:` / `file:` / `link:` / relative `workspace:` specifier 
 
 Use the scratchpad subdirectory you were handed (`<scratchpad>/<unit-id>/`) and confirm it exists. Worktrees are isolated; **the session scratchpad is not**. One lane's `pr-body.md` has silently clobbered another's, and the exposure grows as the unit brief standardises filenames across lanes.
 
-## 5 — Stamp the fleet-lane marker
+## 5 — Carry the design layer in, read-only (only if the run has one)
+
+A lane must never *write* the design layer, and a worktree must never hold a
+`.esas/` — that layer is scoped to one unit of work while a run spans N, and
+creating one here would enrol a throwaway tree in a live board session. Reading
+is a different act, and `/build`'s scaffold step only reads. So the lane gets a
+**snapshot**, in `.work/` where it already owns its ephemera, and never a
+`.esas/`.
+
+Do this only when the **main checkout** has both `.esas/design.json` and
+`.esas/graph.json`. Otherwise skip it and say so — it is a normal state.
+
+**First, verify the snapshot would tell the truth.** `graph.json` describes
+whatever tree it was extracted from. If that is not this worktree's base commit,
+it is wrong about what exists: the scaffolder will report artifacts as already
+real that the lane does not have, or anchor a fragment in a file that is not
+there. Neither failure is visible in the output.
+
+So compare the main checkout's `HEAD` against the run's pinned base sha, and
+check `git status --porcelain` there for **tracked** modifications.
+
+- **Match, clean tree** → write the snapshot.
+- **Anything else** → **do not write it.** Report the mismatch with both shas.
+  A lane with no snapshot hand-writes its artifacts, which is correct and
+  survivable; a lane with a lying snapshot generates code against a tree that
+  does not exist, which is neither.
+
+Copy **exactly two files**, and nothing else, into
+`<worktree>/.work/design-snapshot/`:
+
+```
+.esas/design.json  →  .work/design-snapshot/design.json
+.esas/graph.json   →  .work/design-snapshot/graph.json
+```
+
+**Never copy `ops.jsonl`, `board.json`, `design.json.bak` or `.claude-cursor`.**
+Those are live *session* state — cursors, an op log, board geometry — and a copy
+of them in a worktree is an invitation for something to treat the lane as a
+participant in the session and write back. The two documents above are the only
+ones the scaffolder reads.
+
+Alongside them write `.work/design-snapshot/manifest.yaml`:
+
+```yaml
+sourceSha: <main checkout HEAD at copy time>
+sourceRepo: <absolute path of the main checkout>
+copiedAt: <ISO-8601>
+readOnly: true          # the lane reads this; nothing writes back to the board
+```
+
+The sha is the point of the manifest: it is what lets a later reader re-check
+that this snapshot still describes the tree it is being used against, rather
+than trusting that it did at cut time.
+
+## 6 — Stamp the fleet-lane marker
 
 Write `.work/fleet-lane.yaml` into the worktree:
 
@@ -69,7 +123,7 @@ This is the one signal that tells the lane's `/verify-build` it is **not** landi
 
 It has to be a **file in the worktree**, not a line in the lane's brief. A lane that is `/clear`ed, handed off, or resumed by a fresh agent loses the brief and keeps the file; the failure mode of losing it is N full gate runs where one was wanted, which is slow but survivable, and the failure mode of a *stale* one inherited from a previous run is a PR that silently claims a deferral to a fleet that no longer exists. Step 2's archive-and-scrub covers the second — this file is one of the `.work/` artifacts that must not survive into a different run.
 
-## 6 — Record the base — do NOT run the suite
+## 7 — Record the base — do NOT run the suite
 
 Write `.work/known-baseline-failures.md` exactly as `/start` step 4 specifies: the base **sha and branch**, and **"not captured — capture on demand"**. Seconds, no test run.
 
@@ -92,6 +146,8 @@ Two things that do not change: a **wrong shared baseline is worse than none** (l
 **Baseline:** [the file you wrote, how many failures it records, and the command that produced it — or **inconclusive**, with why]
 
 **Fleet-lane marker:** [written, with the runId it names — or "not a fleet unit"]
+
+**Design snapshot:** [written, with the sourceSha it records — or **not written**, with which reason: the main checkout has no design layer, or its sha/cleanliness did not match the run's base. If not written, say plainly that this lane's designed artifacts will be hand-written, so the difference is visible in the run's report rather than discovered in the diff.]
 
 **Inherited state scrubbed:** [what `.work/` you archived and where, or "worktree was fresh"]
 

@@ -339,6 +339,17 @@ One design session per checkout, likewise. If `status` warns that another
 session is designing here, say so — two sessions sharing one cursor lose each
 other's syncs quietly.
 
+**A read-only snapshot is not a board.** A fleet lane may carry
+`.work/design-snapshot/` — a copy of `design.json` + `graph.json` that
+`/build`'s scaffold step reads. That changes nothing here: it is two documents,
+not a session; no esas tool points at it, nothing written there reaches the
+board, and `ESAS_DIR_MISSING` remains the right answer in that worktree. The
+rule is about **writing** the layer and about session identity, and a copy has
+neither. If a lane finds the design wrong, that is an escalation to the
+orchestrator — never an edit made there and never a `.esas/` created to make
+the tools work.
+
+
 ## Writing and reading
 
 **Batch.** Arrays in, one write, one op out. Ten proposals in one `propose` is
