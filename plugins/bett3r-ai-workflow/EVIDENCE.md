@@ -1,6 +1,6 @@
 # What counts as evidence
 
-Referenced by `/build`, `/verify-build`, `/merge-multi`, `/design`, `/design-multi`, `/start-multi`, the `full-gate` skill and the `executor` / `verifier` / `test-runner` / `provisioner` agents. Those artifacts carry the **triggers** — the greppable condition each one must watch for. This file carries the four facts every trigger falls out of, so they are stated once instead of nine times.
+Referenced by `/build`, `/verify-build`, `/merge-multi`, `/design`, `/design-2`, `/design-multi`, `/design-multi-2`, `/start-multi`, the `full-gate` skill and the `executor` / `verifier` / `test-runner` / `provisioner` / `unit-lane` agents. Those artifacts carry the **triggers** — the greppable condition each one must watch for. This file carries the four facts every trigger falls out of, so they are stated once instead of nine times.
 
 That line is a **manifest, not prose**: `scripts/check-artifact-links.py` parses it and enforces the backlink in both directions, because this file shipped linked from 5 artifacts while needed by 8 — the stated risk of putting shared facts in one place is that a reference is only as good as the reference being followed. Add a consumer to that line when you add the link, or the gate fails.
 
