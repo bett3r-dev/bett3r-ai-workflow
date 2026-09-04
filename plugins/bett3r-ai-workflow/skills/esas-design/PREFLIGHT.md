@@ -1,8 +1,8 @@
-# ESAS board preflight (used by /design-2)
+# ESAS board preflight (used by /design)
 
 The capability half of the board-mode gate: what is actually on disk in this
 checkout. It reports facts and decides nothing. Run it from the repo root, then
-read the verdict table below. `/design-2` owns the relevance half.
+read the verdict table below. `/design` owns the relevance half.
 
 ### Gate 2 — capability: what is actually on disk
 

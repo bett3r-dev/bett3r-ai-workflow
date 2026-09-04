@@ -1,6 +1,6 @@
 ---
 name: unit-lane
-description: (experimental, used by /start-multi-2) Drives one work unit's whole pipeline — start → design → plan → build → verify-build — inside its own provisioned worktree, and reports back to the fleet orchestrator. Dispatch once per unit.
+description: (used by /start-multi) Drives one work unit's whole pipeline — start → design → plan → build → verify-build — inside its own provisioned worktree, and reports back to the fleet orchestrator. Dispatch once per unit.
 tools:
   - Read
   - Write

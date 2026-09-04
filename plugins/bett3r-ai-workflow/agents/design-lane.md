@@ -1,6 +1,6 @@
 ---
 name: design-lane
-description: (experimental, used by /design-multi-2) Runs the code-answerable half of /design for ONE ticket, read-only — grounds it, verifies it against the code, drafts and auto-resolves the decision tree, critiques it, and emits a draft with its open forks fully framed. Dispatch once per ticket.
+description: (used by /design-multi) Runs the code-answerable half of /design for ONE ticket, read-only — grounds it, verifies it against the code, drafts and auto-resolves the decision tree, critiques it, and emits a draft with its open forks fully framed. Dispatch once per ticket.
 tools:
   - Read
   - Glob
@@ -34,7 +34,7 @@ around a non-constraint reads exactly like one shaped around a real one.
    `CONTEXT.md` (locate via `.esas.config.json` `domainEventsPath`, per
    `domain-modeling`).
 
-2. **Verify the ticket against the code** — `/design-2`'s step-1 protocol in
+2. **Verify the ticket against the code** — `/design`'s step-1 protocol in
    full. Stale tickets are the norm; **where ticket and code disagree the code
    wins, and the draft says so.** Two rules bite harder here than in an attended
    design, because nothing downstream re-derives your work: **quote every symbol
@@ -50,7 +50,7 @@ around a non-constraint reads exactly like one shaped around a real one.
    that settled it. No silent decisions.
 
 4. **Emit** the draft to `<run>/units/<id>.design-draft.md` and update
-   `<id>.state.yaml`. Shape: `/design-2`'s doc (problem · resolved decision tree
+   `<id>.state.yaml`. Shape: `/design`'s doc (problem · resolved decision tree
    · seams/flow Mermaid · test seams · risks · unspecified seams · scope · file
    overlap with siblings) **plus two sections**:
 
