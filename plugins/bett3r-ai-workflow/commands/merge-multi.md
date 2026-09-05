@@ -54,11 +54,15 @@ Follow `run.yaml`'s waves — a stacked child after its parent. Merge each unit 
 - Hand-authored additive files: splice **complete** units. A marker-strip breaks on array tails and interleaves two partial blocks at their shared prefix.
 - Check for `*.orig` residue before committing. A `.ts.orig` is not compiled, so it passes every gate invisibly.
 
+**A pinned counter touched by N units is RECOMPUTED, never picked.** For any monotonic pin several units moved — tier counts, node-registry census, deployment-unit counts, topology ratchets — every branch's value is correct on its own base and wrong on the merged tree, so there is no side to take: `ours`/`theirs` ships a wrong pin the suite then *enforces*, surfacing as an authorization defect rather than a merge defect. Write `base + Σ (each unit's delta measured against its own base)` — `run.yaml`'s step-8 report carries the addends — and verify by **running the suite**, which prints the received length, not by the merge being clean. One fleet's correct value (704) appeared on no branch.
+
 **Record every resolution as you make it** — which units, which file, what was kept and what was dropped, and why. This is the one part of what lands that nobody reviewed: the reviewer approved unit diffs, and what ships is those diffs *plus* your resolutions. It goes in the integration PR body (step 5) and it is the only section there allowed to be verbose.
 
 **3 — Run the full gate, once, on integration.**
 
 Per the [full-gate](../skills/full-gate/SKILL.md) skill: `node .claude/gate.mjs --full` (or the repo's `.claude/gate.sh`) on `int/<run-id>`, verdict read from the `GATE-STEP:` lines and baseline-diffed against the default branch. Read that skill for the discovery order and the four ways a green read is wrong; do not re-derive them here. They are all [EVIDENCE.md](../EVIDENCE.md) §1 — *a verdict is evidence only about what it actually executed* — and this is the one run in the whole fleet that certifies the assembled tree, so a misread here is unbacked by anything downstream.
+
+The verdict names the ref it ran at and therefore **which units it covers** — the assembled tree covers every merged unit; a unit excluded with `--only` is not covered and is named as such. (Before the hoist, a deep gate run once on a mid-stack branch was reasoned to cover its ancestors and silently excluded the one parallel unit — which was the one that failed lift-readiness at merge.)
 
 A red gate is **fixed on integration**, not deferred. If a failure traces cleanly to one unit and the fix is more than a line, push the fix to that unit's branch and re-merge — that keeps the unit PR an honest record of its own work. Otherwise fix on integration and name the unit in the commit message. Do not open the integration PR over a red gate; an integration branch that looks landed and is red is the worst state this flow can produce, because the fleet is torn down and nobody owns it.
 
