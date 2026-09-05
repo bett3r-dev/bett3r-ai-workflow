@@ -229,7 +229,7 @@ RelatedEntityAssigned: async ( event ) => {
 
 ### Search with pagination
 
-Requires `schemas` with query/params/response and a `queryHandler`.
+Requires `schemas` with query/params/response and a `queryHandler` — **the default handler drops `offset` and returns no count**, so a paginated list cannot be built on it. Decide this when declaring the read model. And a read model with **no `.withQuery` at all** is unreadable by any server-side code (policies, rules, sibling modules) — state in the header whether it is queryable or analytics-only.
 
 ### Count-only query
 
