@@ -68,6 +68,10 @@ So it is **false-positive-free — never set on a genuine first delivery** — a
 
 **Decision rule:** drop duplicates correctly in all cases → per-stream version watermark (`isRedelivery` doesn't help — false on (a)/(b)). Only avoid re-firing a non-idempotent effect on operator replay → `isRedelivery`. Both → both; they compose.
 
+### A thrown error is classified by HTTP STATUS, not by error type
+
+`pv3-library-outbox-manager/eventProcessing.ts` retries a rejected handler only when its status is in `defaultRetryableStatuses = [ 408, 429, 502, 503, 504 ]`. Everything else — resolved as `e.status || 500` — is **critical**: poison event, per-stream quarantine, recoverable only through the admin `retry-stream` endpoint. **A plain `Error` has no status, resolves to 500, and is therefore NOT retry-eligible**; throwing one "so the outbox retries" quarantines the stream, the opposite of what it looks like. To get a retry (projection lag, dependency down) throw an error carrying a retryable status, e.g. `ServiceUnavailableError` → 503. To fail terminally with a clear diagnostic, throw `BadRequestError`. There is no third option where a plain `Error` retries — and a critical status quarantines **that stream only**; other streams on the split keep flowing.
+
 ### TL;DR for a consumer author
 
 1. **Assume at-least-once** — the same event can arrive again.
@@ -75,6 +79,7 @@ So it is **false-positive-free — never set on a genuine first delivery** — a
 3. **Dedup with a per-stream version watermark, not global position — and 2xx duplicates.**
 4. **Make external side effects idempotent** — commit the watermark *with* the effect, or use a dedup key.
 5. **`isRedelivery` is a replay *hint*, not dedup** — true only on operator replay (c); false on (a)/(b).
+6. **A retry is a status, not an error class** — throw a 503-class error for transient failure; a plain `Error` is a poison event.
 
 ### Redelivery-safe external effects: the A/B/C layer model
 

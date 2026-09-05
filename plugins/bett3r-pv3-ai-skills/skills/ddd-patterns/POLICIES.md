@@ -30,6 +30,11 @@ export const MyPolicy = ( ports: Ports ) => {
 - Always pass `correlationId` and `causationId` for tracing
 - Cross-service commands go through the client library (`<clientLibraryPackageName>`)
 - Registration: `ports.eventsourcing.routeEventHandler( MyPolicy( ports ));`
+- **One `PolicyBuilder` per `*.policy.ts` file.** PV3 derives the registration name from the **filename**, so a second builder in the same file is refused at boot and never registers — with `build`, `typecheck` and its own unit suite all green, because the tests call the handler directly. **`generate-all` is the only gate that proves a policy, route or capability is REGISTERED**: verify by the generated `route-config.json` entry, never by a passing suite.
+
+### Dispatch has an authorization axis, not only a module-boundary one
+
+The escape hatches from "a policy dispatches one command" are usually chosen by module boundary — in-process `executeCommand` same-module, client library cross-module. They also differ on **who the caller is**: `executeCommand` carries no principal of its own, so a command with an auth invariant (`GenerateInvoice` throws when `!user`) is **unreachable from a system-triggered policy** through it, whatever the module. `CronjobTriggered` and its kin carry **no tenant and no user by construction**, so a cron policy fanning out through `executeCommand` fails every dispatch at first real run — not at build, not in a unit test with a hand-made context. Dispatch through the client library with explicit per-call auth headers, and **take the tenant from the aggregate's own record, never from ambient context**: for a cross-tenant system principal a selection bug invoices the wrong tenant, and an externally authorised artifact cannot be taken back.
 
 ### Partial-progress redelivery: derive policy progress from aggregate state
 

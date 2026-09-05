@@ -216,6 +216,22 @@ ALTER TABLE <table> DROP COLUMN IF EXISTS <snake_case_field> CASCADE;
 
 Reference shape: an existing readmodel calling `ensureIndex` with `{ strategy: 'gin' }`.
 
+### `.withQuery` decides what the server can read, and the default handler cannot page
+
+- **A read model with no `.withQuery` cannot be read by any server-side code** — no policy, no rule, no sibling module. Analytics-shaped projections (Cube-only tables) routinely lack it while looking exactly like a general-purpose ledger. `grep -n withQuery <readmodel>` **before** designing a read against a projection, and state in a new read model's header whether it is queryable server-side or analytics-only.
+- **The default query handler is not paginatable**: it computes an `offset` and drops it, and returns a bare array with no count. A read model backing a paginated list needs its own `queryHandler` with a count — decide that when declaring the read model, not when the list screen discovers it.
+- **A `.withQuery` declared with no `schemas` still accepts the full `filter` / `sort` / `limit` / `select` grammar over the wire.** Declare schemas when the intent is a narrower surface.
+
+### Changing a read model's key property — three Postgres-only consequences; MemoryDb passes all three
+
+Re-keying a collection from `id` to a scoped `rowKey` (or any move of `idProperty`) is green in memory and wrong in Postgres, and the wrongness is a **missing row**, never an error:
+
+1. **The upsert key is the only thing that stamps `idProperty`** — both adapters write `{ ...data, [idProperty]: id }`. A projector that patches a subset (`upsert( streamId, { stock } )`) never wrote `id` because the key supplied it; after the move a row *created* by that partial patch has no `id` at all — unfindable by natural id, and invisible to every account-filtered read if the same projector was the only writer of `accountId`. Every partial-patch projector must write its natural id (and tenant) explicitly, asserted by a **row count** for the natural id — a read-back stays green through this.
+2. **A pushed-down `{ field: 'id' }` filter resolves to the PRIMARY KEY column**, not the document property: `translateFilter` short-circuits any field equal to `idProperty` onto the PK. After a re-key that column holds the scoped key, so the filter compares a natural id against it and returns `[]`. MemoryDb reads the property and works. Match in memory, or filter on a different field.
+3. **`ensureIndex(['id'])` registers the PK column as the accessor for the path `id`**, on the assumption the PK *is* `data->>'id'`. False after a re-key; sorts and selects on `id` then silently read the scoped key. Drop that index when `id` is no longer the key.
+
+The consumer sweep this change owes outside the module is `/verify-build`'s: a read model's table is often a shared fixture for suites in unrelated subsystems.
+
 ### Query-route gotchas: subscribable base routes need a `params` schema; base routes reject `filter`
 
 Two route-level traps that 400 only at runtime (invisible to unit tests), typically hit when a front-end first subscribes to / filters a correlation-keyed batch readmodel:

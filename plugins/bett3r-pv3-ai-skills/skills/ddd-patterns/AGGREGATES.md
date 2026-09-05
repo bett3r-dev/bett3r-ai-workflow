@@ -57,7 +57,9 @@ commandBuilder()
 
 The client library (`<clientLibraryPackageName>`) is fully typed. Never use `any` for its inputs/outputs; **never cast command bodies as `as any`**. If types don't match, either the type definitions are wrong (fix them) or the client library is stale (`yarn generate-all`). Casting hides regressions silently.
 
-**In-process calls — no explicit auth headers:** with `createBackend({ baseUrl: '' }, ports.endpoints.fetch)`, do NOT pass `x-auth-account-id` / `x-auth-user-id` as the third argument — the ALS-backed `setExecutionContextProvider` wired in `setupPorts.ts` injects them (and overwrites explicit ones). **Exception:** ALS only propagates within the same async context chain; code that detaches (account-scoped ALS in a rules-execution policy, `setImmediate`, external pool callbacks) may need explicit headers — verify whether `setupPorts.ts` wires ALS for the calling context before removing them.
+**In-process calls — no explicit auth headers:** with `createBackend({ baseUrl: '' }, ports.endpoints.fetch)`, do NOT pass `x-auth-account-id` / `x-auth-user-id` — the ALS-backed `setExecutionContextProvider` wired in `setupPorts.ts` injects them. Code that detaches from the async chain (account-scoped ALS in a rules-execution policy, `setImmediate`, external pool callbacks) may need explicit headers — verify whether `setupPorts.ts` wires ALS for the calling context first.
+
+**Explicit headers SUPPRESS injection, they do not lose to it — and "explicit" means the PER-CALL argument, not `defaultHeaders`.** `resolveAuthHeaders( baseHeaders, explicitHeaders, ctx )` (client library `src/base/SSE.ts`) opts the call out of injection when its **second** parameter carries either auth key; call sites fill that with the per-call headers. The third argument of `create()` / `requests()` becomes `defaultHeaders` and is never inspected. So `queries.X( params, { 'x-auth-account-id': … } )` suppresses injection (no `context.user`, scopes non-authoritative); `createBackend( cfg, fetch, { 'x-auth-account-id': … } )` with no per-call header lets injection **run**, binds the caller's capability map, and a capability missing from that map is **authoritative-empty** — `{ op: 'in', value: [] }`, **zero rows with no error**. Two lanes once reached opposite verdicts on the same site because each read a different shape. Probe trap: a harness with no `setExecutionContextProvider` wired emits `{}` on every hop and mimics non-exposure exactly — wire the provider before believing a header-emission probe.
 
 ### Transactional Side-Writes
 
@@ -134,6 +136,8 @@ Rules:
    ```
 
 ### Event-only metadata fields
+
+**A reducer's second parameter is already the payload**, invoked as `( state, event.data, event.metadata )`. The prevailing parameter name `event` misleads: `{ ...state, ...event }` there is correct and spreads only the payload — not an envelope-fold bug, and reviewers flag it as one every time. Name the parameter `data` in new code; the real defect to look for is `event.data` inside a reducer, which is `undefined` and projects nothing.
 
 When an event carries a field for downstream projectors (e.g. `totalInBatch`) but not for aggregate state, do **not** `{ ...event }` in the reducer — that leaks the field into state and either fails strict schema validation or silently diverges from `AggregateSchema`. Destructure it out:
 
