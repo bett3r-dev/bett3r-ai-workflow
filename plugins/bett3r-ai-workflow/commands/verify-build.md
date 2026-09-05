@@ -97,6 +97,7 @@ Produce a single **developer verification checklist**: the things a human should
   - **Check uniqueness against the merge target, not the branch.** The failure shape is a *filename* difference with a *number* collision, which no git mechanism surfaces — different names never conflict, so both land.
   - **Re-resolve every path and symbol the ADR cites** before committing it. A wrong `file:line` in an ADR outlives the PR and misleads whoever reads it next (§3) — one shipped citing a path that did not exist as written, an abbreviation having dropped a directory.
   - If a composition finding traces to text the design or an existing ADR *also* asserts, **amending that text is part of the fix**, not a follow-up — otherwise the next reader re-derives the bug from the record.
+  - **If this work discovered a rule that's true beyond this ticket** (a framework rule, a decomposition heuristic, a flow-methodology finding), it needs a stated destination, not just prose in the narrative above: put it in an ADR's optional **Principle** section (`domain-modeling`'s ADR template), or, if it's about the flow/a shared skill rather than this feature, route it via `/capture-learnings` instead. Reasoning left only in the PR narrative is exactly the shape that gets lost — the PR body itself is promoted from `.work/design.md` and discarded once this PR merges.
 - **Promote the design:** the design narrative + conclusions from `.work/design.md` become the **PR description** — they are *not* committed as a standalone doc.
 - **If the PR adds an enforcement mechanism** (a CI gate, lint rule, schema check, hook), state **which commit is its first live proof** — or, if none is, say why. A gate that never fired is indistinguishable from a gate that cannot fire.
 
@@ -136,7 +137,7 @@ The PR **body is the record**:
 <the dev checklist from Step 4>
 
 ### Decisions
-- ADR-NNN — <title>
+- ADR-NNN — <title> (+ Principle, if the ADR states one)
 
 ### Coherence review
 <Critical/Medium findings and how resolved; or "clean">
