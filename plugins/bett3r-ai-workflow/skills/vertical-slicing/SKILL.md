@@ -44,13 +44,17 @@ Do **not** defer invariants to "a later slice" — every invariant belongs on it
 - **Name in the ubiquitous language.** Use the bounded context's `CONTEXT.md` vocabulary, and respect ADRs in the area. A slice title should read as a domain behavior, not an implementation task.
 - **Describe behavior, not implementation.** Say what the slice does end-to-end; avoid file paths and code snippets — they go stale. *Exception:* a decision-rich snippet from a prototype (a state machine, reducer, schema, or type shape) that encodes a decision more precisely than prose — inline just the decision-bearing bits, noted as from a prototype.
 
-## Each slice carries its own oracle
+## Each slice carries its own oracle — at the layer where its claim lives
 
 Every slice declares the **test** that proves it (its oracle) and a `passes` flag. The slice is "done" only when that test is green **and** the verifier confirms the project's invariants — the dual gate. Then it is committed (one commit per slice).
 
+**An oracle for a write-side guarantee asserts that guarantee's own artifact.** Where the behavior names convergence, idempotency, exactly-once, ordering or dedup, the assertion is on the event stream, the event count or the version — never on a read-model row or a query result, because the projection's own `upsert` dedups independently and passes a non-convergent implementation green. "The same message twice yields ONE row" was satisfied by an implementation that wrote a fresh random stream per delivery; asserting the **stream set across the whole eventstore** caught two wrong mechanisms before implementation, one of them a silent cross-tenant collapse. A thin complete path still asserts at the layer its claim lives.
+
+**A declaration-only slice needs a named oracle too.** A purely additive vocabulary or type slice compiles, breaks nothing, and passes every gate vacuously; the answer to *"what test fails if this slice is wrong?"* is a test pinned to **existing** behavior — round-trip the inputs the only live producer supplies today — which is falsifiable without changing anything.
+
 ## Review the breakdown before building
 
-Present the proposed slices as a numbered list (title · blocked-by · behavior) and confirm with the user: is the granularity right, are the dependencies correct, should any merge or split? Iterate to approval before writing `slices.yaml` or publishing — the slice boundaries are the highest-leverage decision in the build.
+`/plan` step 4 owns the review — numbered list, granularity, dependencies, merge/split — and its unattended branch. The slice boundaries are the highest-leverage decision in the build.
 
 ## `.work/slices.yaml`
 
