@@ -63,12 +63,14 @@ Three things about it:
 
 ## Dispatching your own children
 
-**`Agent` with `run_in_background: false`.** Only `Agent` honours it.
-`SendMessage` cannot be made synchronous, so a lane that resumes a child that
-way is **idle, not working** until the orchestrator resumes it — a fix pass must
-be a fresh `Agent` dispatch, accepting the lost context. The same backgrounded
-call that is safe for the orchestrator is unsafe for you, because its resumes
-notify the top-level session and yours do not.
+**Have the child's result in hand before you proceed — never end a turn on
+"waiting".** Do not assume a dispatch flag makes `Agent` synchronous: check the
+tool's actual schema in your harness, and where no such flag exists (it has been
+absent in every harness observed since 2026-08 — three lanes independently
+rediscovered this, one by deadlocking) block on the child's completion
+notification. Never `SendMessage` a child you are waiting on — that leaves you
+**idle, not working**, because its resumes notify the top-level session and yours
+do not; a fix pass is a fresh `Agent` dispatch, accepting the lost context.
 
 **Name the model on every dispatch** — an unnamed child inherits the session's,
 which is the most expensive one available. Your brief carries the routing;
@@ -100,6 +102,16 @@ applies; ruling it out explicitly is a valid outcome."* Honour the difference �
 a design shaped around a non-constraint reads exactly like one shaped around a
 real one. Treat recon as a **hint**: confirm it still reproduces at your base
 before building on it, since it may be inherited from an earlier same-wave lane.
+A sibling fact also carries **where it exists** — `PRESENT ON YOUR BASE` or
+`ON A SIBLING BRANCH ONLY`; only the first may be imported, the second is coded
+to as a seam. An environment claim, even one from a completed sibling lane,
+arrives with the command that produced it: re-run the command, not the verdict.
+
+**Your snapshot is your only source of truth, so check it is whole.** If
+`units/<id>.ticket.md` contains a truncation marker (`truncated`, `[...]`,
+`elided`) or ends before the resolved block's last section, **stop and report** —
+never build from what you have. A truncated file reads exactly like a complete
+short ticket.
 
 If a probe needs credentials you may not have (a private registry, an org-scoped
 read, anything behind SSO), do not guess the answer — turn the question into a
@@ -113,6 +125,21 @@ claimed / released** — a reserved-but-unused number leaves a permanent hole, a
 three lanes once picked the same `ADR-057` under different filenames: no
 conflict, clean merge, one number meaning three things. Never derive a number
 yourself. Prefer amending an existing ADR where one covers the ground.
+
+**A pinned counter you move is reported as a DELTA with the base you measured
+it from** — never the final number, and never a sibling's number, which is
+right on its base and wrong on yours. The merge computes `base + Σ deltas`.
+
+## Every resumed task starts by checking whose tree this is
+
+Before any edit on a resumed task — not only at startup — run
+`git rev-parse --abbrev-ref HEAD` in your worktree and **STOP if it is not your
+brief's branch.** The orchestrator may have recycled your worktree onto another
+unit between your report and its follow-up; git gives no warning, and the only
+tell is a file you meant to edit "not existing". Two seconds converts a silent
+cross-lane write into an immediate stop. If it happens, do not check your branch
+out over the sibling's: land your commit from a throwaway `git worktree add`
+under your scratchpad and remove it after.
 
 ## Gates and escalation
 
@@ -129,6 +156,20 @@ capture is a blocker, not a clean one.
 Escalate — do not guess — when a fork the design does not answer blocks you.
 Write the escalation into your state file with a recommendation and one line of
 why; the orchestrator batches it with the others into a single human pass.
+
+**A slice whose premise proves false is a respected outcome, not a lane
+failure** — `/build` says what you ship instead (the slice's gate without its
+body, or a ratchet). Report the premise as false with file, line and commit;
+never adapt the slice until it fits.
+
+**`BLOCKED: worktree reclaimed` has a benign twin.** Real reclamation is mass
+tracked deletions of root config (`jest.config.js`, `.yarnrc.yml`, `.swcrc`,
+`dockerfile`); a couple of files going dirty-then-clean is usually your own
+commit landing while a child worked — `git log -1 -- <file>` before declaring it.
+
+**Your final report pastes `.work/learnings.md` verbatim.** The orchestrator
+rescues the file too, but the report is the copy that survives a worktree
+deleted out from under the run.
 
 ## Your PR
 

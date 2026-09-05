@@ -34,6 +34,10 @@ Fixed once here, or paid N times in parallel by lanes that each get it wrong ind
 
 **Re-emit composite `build/*.d.ts`.** A worktree whose branch was switched leaves phantom `TS6305` cascades that a transpile-only build never surfaces.
 
+**Stage the gitignored-but-required local config too.** A fresh worktree gets `*.enc.*` and no decrypted sibling, and `generate-all` then dies **naming an unrelated connector** (`ValidationError at Mercadolibre … value: { webhookPath, appId, … }` — every field except the missing secret), which sends a lane into the connector's code. For every `*.enc.*` whose decrypted sibling exists in the source checkout and not here, copy it (it is gitignored — confirm with `git check-ignore` — so it never enters the diff) or run the repo's decrypt task.
+
+**Probe every test tier the run requires, and record a verdict — not only the build toolchain.** You already check `sops` / `age` / `local.yaml`; do the same for each tier the acceptance bar names (live channel suites, e2e, anything with external credentials): are its env vars present (`env | grep`), is its tooling on `PATH` (`which kubectl`), is its credential broker reachable (one request, timestamped)? Write `RUNNABLE` / `UNRUNNABLE (<reason>)` / `INTERMITTENT` per tier into `.work/known-baseline-failures.md`. Three lanes once discovered three unrunnable tiers at PR time, each separately; and a tier that was `RUNNABLE` at provision and red at build is **presumed environmental until proven otherwise** — one suite went 10/10 green twice, then 17/17 red with no code change when the broker's token store emptied. Seconds, not minutes: this stops at "could this tier run", never "does it pass".
+
 ## 2 — Scrub what the worktree inherited
 
 **Archive (never delete) a reused worktree's `.work/`.**
@@ -141,9 +145,11 @@ Two things that do not change: a **wrong shared baseline is worse than none** (l
 
 **Install + build:** [the commands you actually ran and their real exit status — not a piped one. `yarn build | tail` reports `tail`'s status.]
 
-**Baseline:** [recorded base sha + "not captured (on demand)". If you captured one anyway because something was already red, say which suites and by what method.]
+**Baseline:** [recorded base sha + "not captured (on demand)". If you captured one anyway because something was already red, say which suites, by what command — or **inconclusive**, with why.]
 
-**Baseline:** [the file you wrote, how many failures it records, and the command that produced it — or **inconclusive**, with why]
+**Test tiers:** [one line per required tier — `RUNNABLE` / `UNRUNNABLE (<reason>)` / `INTERMITTENT`, with the probe that decided it]
+
+**Local config staged:** [which decrypted files you copied, or "none needed"]
 
 **Fleet-lane marker:** [written, with the runId it names — or "not a fleet unit"]
 
