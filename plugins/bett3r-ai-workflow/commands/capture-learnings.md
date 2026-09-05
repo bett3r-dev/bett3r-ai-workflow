@@ -65,6 +65,8 @@ Routing key: **where does this learning's source-of-truth live?**
 
 Propose the target; the user can redirect. **Default to local/memory when ambiguous** — a wrong-repo issue is worse than a local note. A learning may have two homes.
 
+**Before writing to `.claude/rules/<x>.md` or `.claude/skills/<x>/`, check whether `<x>` is the name of an installed plugin skill** (it appears in the skills list as `<plugin>:<x>`). If it is, the concept is plugin-owned and the local file is a **shadow** — usually a pre-extraction copy that has kept growing (887 lines beside the plugin's 132) and therefore *looks* more authoritative than the thing that owns it. Writing there succeeds, commits cleanly, and strands the learning in one repo: propagation is dead and nothing later notices. File the issue in the owning plugin instead. The check has to be performed, not assumed: in one host repo `ddd-patterns` collides and `code-style` genuinely is host-owned.
+
 ## Step 4 — File plugin-owned learnings
 
 Resolve the repo from the plugin's `plugin.json` `repository` (else `origin`). **Dedupe first** — `gh issue list --label ai-learning --search "<keywords>"`; comment on a near-duplicate rather than re-filing. Then auto-compose and create — **one confirm, no form to fill**:
@@ -107,7 +109,7 @@ Report: each learning filed with its destination, **each candidate dropped with 
 
 ## Principles
 - **The bar is the feature.** Filing less is the point; a session that files nothing is a normal outcome.
-- **Route by ownership** — don't dump everything locally; that's how propagation dies.
+- **Route by ownership** — don't dump everything locally; that's how propagation dies. A host-repo `.claude/rules` file named after a plugin skill is a shadow, not the source of truth.
 - **Amend before you append.** A bullet per session is how a coherent artifact becomes a list.
 - **True everywhere, or only here and now?** A local workaround is a bug report about your machine.
 - **A failure whose signature is absence needs a gate, not a paragraph.**
