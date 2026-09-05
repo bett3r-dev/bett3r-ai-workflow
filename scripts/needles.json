@@ -297,11 +297,11 @@
       "note": "The falsification table — the verifier's required output shape, covering the design docs' claims and not only the diff's."
     },
     {
-      "needle": "parseAmountToMinorUnits",
+      "needle": "paraphrased identifier is indistinguishable from a real one",
       "issue": null,
       "commit": "b332053",
       "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
-      "note": "Quote symbols as the source spells them — a paraphrased identifier is indistinguishable from a real one until you grep."
+      "note": "Quote symbols as the source spells them — a paraphrased identifier is indistinguishable from a real one until you grep. (Re-pinned 2026-09-05: the constraint-shaped rewrite in 1aa0c3c kept the fact and dropped the literal — the earlier needle was `parseAmountToMinorUnits`.)"
     },
     {
       "needle": "5 files / 7 call expressions",
@@ -311,18 +311,18 @@
       "note": "State what a count counts, never 'five call sites'. Restated in design-multi and EVIDENCE §3."
     },
     {
-      "needle": "gh api /orgs/<org>/packages",
+      "needle": "mechanism* behind a stated rationale",
       "issue": null,
       "commit": "b332053",
       "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
-      "note": "Check the mechanism behind a ticket's rationale: a package 'blocked on publishing 1.4.0' had never been published at any version."
+      "note": "Check the mechanism behind a ticket's rationale: a package 'blocked on publishing 1.4.0' had never been published at any version. (Re-pinned 2026-09-05: the constraint-shaped rewrite in 1aa0c3c kept the fact and dropped the literal — the earlier needle was `gh api /orgs/<org>/packages`.)"
     },
     {
-      "needle": "prose fitting is not the claim being true",
+      "needle": "not that its prose fits",
       "issue": null,
       "commit": "b332053",
       "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
-      "note": "The second pass verifies a resolved block's reasoning, not that its cited sites still read as quoted — zero drift reads as nothing to check."
+      "note": "The second pass verifies a resolved block's reasoning, not that its cited sites still read as quoted — zero drift reads as nothing to check. (Re-pinned 2026-09-05: the constraint-shaped rewrite in 1aa0c3c kept the fact and dropped the literal — the earlier needle was `prose fitting is not the claim being true`.)"
     },
     {
       "needle": "unspecified seams",
@@ -710,11 +710,11 @@
       "note": "GitHub closes only the first issue after each Closes keyword. `Closes #56 #62 #63` closed #56 and left the rest open — 80 referenced issues became 7 closures and 73 stragglers, with the PR MERGED and CI green. Fails in the reassuring direction; the only tell is a backlog count."
     },
     {
-      "needle": "the same pass writes the eval scenario",
+      "needle": "writes the eval scenario in the same pass",
       "issue": null,
       "commit": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/evolve.md",
-      "note": "A split ships with its behavioral scenario, because every presence gate is corpus-wide by design and therefore green whether the pointer is ever opened or not. The pass that makes the split is the last moment anyone knows what the pointer was for."
+      "note": "A split ships with its behavioral scenario, because every presence gate is corpus-wide by design and therefore green whether the pointer is ever opened or not. The pass that makes the split is the last moment anyone knows what the pointer was for. (Re-pinned 2026-09-05: the constraint-shaped rewrite in 1aa0c3c kept the fact and dropped the literal — the earlier needle was `the same pass writes the eval scenario`.)"
     },
     {
       "needle": "A split you can delete beats a split you have to verify forever",
@@ -822,11 +822,11 @@
       "note": "The optional per-slice `model:` field routes the executor. /plan is the only step that knows which slices are mechanical; an unrouted slices.yaml sends the whole build through the most expensive model available."
     },
     {
-      "needle": "A lane inherits your model",
+      "needle": "Effort is a pre-flight decision",
       "issue": null,
       "commit": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/start-multi.md",
-      "note": "A unit agent runs a whole pipeline in one context — the longest-lived in the flow — and its children inherit the session model unless the brief states the routing. Effort cannot be routed at all; it is a pre-flight decision made once for every lane."
+      "note": "A unit agent runs a whole pipeline in one context — the longest-lived in the flow — and its children inherit the session model unless the brief states the routing. Effort cannot be routed at all; it is a pre-flight decision made once for every lane. (Re-pinned 2026-09-05: the constraint-shaped rewrite in 1aa0c3c kept the fact and dropped the literal — the earlier needle was `A lane inherits your model`.)"
     },
     {
       "needle": "Splitting is not a token optimisation",
