@@ -119,6 +119,7 @@ An ADR can be a single paragraph. The value is recording *that* a decision was m
 - **Status** (`proposed | accepted | deprecated | superseded by ADR-NNNN`) — when decisions get revisited
 - **Considered Options** — when the rejected alternatives are worth remembering
 - **Consequences** — when non-obvious downstream effects need calling out
+- **Principle** — the rule this decision generalizes to, *if any*, stated so it is true away from this ticket: no ticket ids, no local identifiers. An ADR records *what we decided here*; this is the only place that records *what we now know in general* — a PV3 framework rule, a decomposition heuristic, a flow-methodology finding. Omit unless the decision genuinely generalizes (most don't); a `Principle` that just restates the decision isn't earning its place. `verify-build`'s PR-body template carries the same field for exactly this reason.
 
 ## When to offer an ADR — all three must be true
 
