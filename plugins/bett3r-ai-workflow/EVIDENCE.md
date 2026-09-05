@@ -58,10 +58,14 @@ The same silence bites at every step boundary. Each pipeline step runs in a **se
 
 ## Probe hygiene
 
-Everything above rests on probes being trustworthy. Three ways a read-only probe returns a clean, plausible, wrong answer — all on the default macOS shell and grep, none of them machine-local:
+Everything above rests on probes being trustworthy. Seven ways a read-only probe returns a clean, plausible, wrong answer — all on the default macOS shell and grep, none of them machine-local:
 
-- `--include` placed **after** the path operands: BSD `getopt` stops parsing options at the first operand, so the flag becomes a filename. Prints nothing, exits 0, nothing on stderr. Flags first.
-- An **unquoted** glob flag (`--include=*.ts`): zsh expands it before `grep` sees it, and aborts the whole command.
-- A `cd` inside a compound command **persists into later calls**, silently invalidating every relative path afterwards. Use absolute paths, `git -C <path>`, or a subshell — `( cd X && … )`.
+- `--include` placed **after** the path operands: BSD `getopt` stops parsing options at the first operand, so the flag becomes a filename. Prints nothing, exits 0, nothing on stderr. Flags first — and **a zero-hit grep with an `--include` filter is not evidence of absence until the filter has matched at least one file** (the template was `.html`, the filter said `.hbs`, and the defect it "ruled out" affected 100% of a document class).
+- An **unquoted** glob flag (`--include=*.ts`): zsh expands it before `grep` sees it, and aborts the whole command. Re-fired in 5 of 10 lanes in one run despite being documented — write `--include="*.ts"` inline wherever a brief tells an agent to grep.
+- A `cd` inside a compound command **persists into later calls**, silently invalidating every relative path afterwards — an unqualified `cat >> decisions.md` created a new file in the repo root and printed "updated". Use absolute paths, `git -C <path>`, or a subshell — `( cd X && … )`.
+- **`$?` after a pipeline or a redirect-then-echo is the last command's**, not the tool's: `yarn gate > log; echo "EXIT: $?"` printed 0 under a log ending `GATE FAILED`. Capture `rc=$?` on its own line, or `${PIPESTATUS[0]}`, and judge on the tool's printed verdict.
+- **`find -maxdepth N` silently excludes deeper paths**; an empty result from a depth-bounded find is inconclusive, exactly like `Tests: 0 total`. Do not bound an existence probe.
+- **An unquoted heredoc (`<<PY`) lets the shell expand backticks inside the script**, so every backticked identifier is substituted before Python sees it, five `str.replace` calls match nothing, and the script prints its success message. `<<'PY'`; and when a command should affect N things, print N and check it.
+- **`cat` on a large file defeats itself** — the output is persisted to a file and a 2 KB preview returned, and re-reading *that* persists again; an agent grounds on the preview believing it read the whole thing. A known-large artifact is a `Read` or a windowed `sed -n` after an index pass (`grep -n '^##'`), never a `cat`; and a source grep that walks `build/` or a checked-in `dist/` returns an unusable bundle dump.
 
-None of these looks like an error, and the first fails in the reassuring direction with every ordinary tell intact — the glob quoted, the flag spelled right, the command reading perfectly. The positive control from §1 is what catches all three.
+None of these looks like an error, and most fail in the reassuring direction with every ordinary tell intact — the glob quoted, the flag spelled right, the command reading perfectly. The positive control from §1 is what catches them; a count of hits is not a positive control, and a count is never a finding until each hit is classified.
