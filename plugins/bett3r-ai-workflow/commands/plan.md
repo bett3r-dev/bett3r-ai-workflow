@@ -23,6 +23,14 @@ Read `.work/design.md` (if absent: "No design found. Run `/design` first."). Rea
 
 Cut the design into tracer-bullet vertical slices, each a thin but COMPLETE path through every layer it touches, independently verifiable. **Slice 1 is the tracer bullet** through the riskiest gate-less seam from the design's risk section. Name each slice in the ubiquitous language; describe **behavior, not file paths**.
 
+**A slice is cuttable only when everything it names resolves at the base.** Before a slice is written:
+
+- **Resolve every node, API, helper or symbol it tells the executor to adopt** against the integration base (`git show <BASE>:<path>` or a repo-wide grep) and **record the resolving path in the slice**. A symbol that does not resolve is not a gap the lane fills by inventing it — the slice becomes a dependency on the track that owns it. Four of seven lanes in one fleet found their slice's premise false in under a minute each, on symbols a grep at cut time would have shown absent, and one slice's rewrite would have *introduced* the bug it claimed to fix.
+- **Where the oracle says "the existing suite", confirm the file exists and record its path.** Three slices once named suites that did not exist (the rules had pin JSON, no `.test.ts`), which turned a "run the tests" slice into a "write the tests" slice mid-flight and changed its size.
+- **A gate text carries the OBLIGATION, never the derived fact.** "Assert the stream name at build time and cite where it comes from" — not "shares the `InboundMessages-<id>` stream" (it did not exist); "grep every declaration site and report the count you observed" — not "declared in THREE places" (there were four, and the fourth was a closed-enum runtime defect); "cite the in-repo source for any external-standard claim" — not an observation number from memory. A specific-looking claim in a gate is the one an executor is least likely to re-check.
+- **Enumerate the host repo's build-enforced guards the slice's file set can trip, as gates** — a nav-taxonomy drift check that fires on a two-of-three-file edit, a phrasing-uniqueness guard, a census that test fixtures alone can move. An unbriefed guard reads as a mysterious mid-slice failure and costs a retry.
+- **Slice order follows oracle-provability, not the ticket's deploy sequence.** A ticket that ships the new mechanism first and deletes the old one later is describing production risk; a slice whose oracle asserts the new behaviour while the old policy is still registered is structurally red (both restore → double). Put the deletion before the oracle run, or split the oracle so each slice asserts only what is provable with both live — and record the deploy sequence in the PR body, not the slice order.
+
 ## Step 4 — Review the breakdown with the user
 
 Present the proposed slices as a numbered list. For each: **title**, **blocked-by**, and the **behavior** it delivers. Ask:
