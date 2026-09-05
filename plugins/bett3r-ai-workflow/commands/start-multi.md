@@ -110,7 +110,7 @@ units:
 
 ## Principles
 - **The orchestrator owns what no lane can see** — numbering, cross-lane dedup, base drift, sibling overlap, provisioning, addressing, the diamond merge. Each is invisible from inside a unit *by construction*, so none can be delegated by writing a better brief. **This is also the file's own scope rule: a line that a lane could learn belongs in `unit-lane`, not here.**
-- **Recon is a hint, not a fact.** Compute anything base-sensitive against the pinned BASE (`git show <BASE>:<path>`), never a working-dir grep whose HEAD drifts from it.
+- **Recon is a hint, not a fact.** Compute anything base-sensitive against the pinned BASE (`git show <BASE>:<path>`), never a working-dir grep whose HEAD drifts from it. Every handed-down fact is a claim with a provenance and an expiry — [EVIDENCE.md](../EVIDENCE.md) §3.
 - **Tracker once, then never.** Deps live in `run.yaml`, not in tracker links.
 - **Unattended is the contract; parallel is the optimisation.** Never buy throughput with an unbatched stop.
 - **Never clobber a dirty worktree; tear down only what this run created.**
