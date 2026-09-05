@@ -99,8 +99,19 @@ first, and a swallowed step 5 leaves a complete draft instead of nothing.
 - **You cannot ask.** A question you would have asked becomes an open fork,
   framed as above. Never guess the user's intent to close a fork yourself.
 - **You may lack credentials** for some probes (private registries, org-scoped
-  reads, anything behind SSO). Do not guess the answer: **flag the probe, name
-  the fallback** — turn the question into a rule the build checks at land time.
+  reads, anything behind SSO). Do not guess the answer — but **establish that
+  the credential is actually absent before deferring**: grep the repo for
+  `*.crt` / `*.key` / `*.pem`, `scripts/<vendor>/`, `.env*` templates and
+  sandbox config, and check whether the vendor SDK is already a dependency.
+  Sandbox credentials are routinely committed *so that they can be used*; five
+  "needs a named human" forks in one run were answerable with a certificate
+  sitting in `scripts/arca/`, and deferring them would have shipped a deliberate
+  outage designed to guard a question that took one HTTP call. **Found** →
+  park it as an **orchestrator-runnable probe**, with the whole dependency
+  chain named (a "one call" probe that needs a credentials tool first is not
+  one call from a cold start). **Genuinely absent** → turn the question into a
+  rule the build checks at land time, naming *which* credential is missing and
+  who holds it, never "a human".
 
 ## Learnings
 
