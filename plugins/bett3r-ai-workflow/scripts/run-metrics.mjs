@@ -327,7 +327,157 @@ function extractPhaseMarks(rows) {
     if (raw === 'clear') { marks.push({ t, phase: null, raw }); continue }
     if (PIPELINE.includes(raw)) marks.push({ t, phase: raw, raw })
   }
+  // A subagent (a fleet lane) has no slash commands: it invokes the pipeline
+  // through the Skill tool, so that call is its phase mark.
+  for (const r of rows) {
+    if (r.type !== 'assistant' || !Array.isArray(r.message?.content) || !r.timestamp) continue
+    for (const c of r.message.content) {
+      if (c.type !== 'tool_use' || c.name !== 'Skill') continue
+      const raw = String(c.input?.skill ?? '').replace(/^\//, '').replace(/^bett3r-ai-workflow:/, '')
+      const t = Date.parse(r.timestamp)
+      if (PIPELINE.includes(raw) && Number.isFinite(t)) marks.push({ t, phase: raw, raw })
+    }
+  }
+  marks.sort((a, b) => a.t - b.t)
   return marks
+}
+
+// ─────────────────────────────────────────────────────────── fleet lanes
+
+/**
+ * A `/start-multi` lane is a subagent of the ORCHESTRATOR's session. Its
+ * transcript lives under that session (`<orchestrator-session>/subagents/
+ * agent-<id>.jsonl`), and every record in it carries the orchestrator's
+ * `gitBranch` and `cwd`, not the worktree's — so discovery by branch finds
+ * nothing for a fleet unit, and every lane once reported "not measured". The
+ * run's `agents.yaml` is the only thing that maps a unit to its agent id.
+ *
+ * The run dir is found from the worktree itself: `.work/fleet-lane.yaml`
+ * names the run id, and the run dir is `.work/multi/<runId>/` in the main
+ * checkout (`git rev-parse --git-common-dir` → its parent). `--fleet <dir>`
+ * overrides both.
+ */
+function fleetRunDirs(explicit, cwd) {
+  const dirs = []
+  if (explicit) dirs.push(explicit)
+  const git = (args) => { try { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() } catch { return null } }
+  const marker = join(cwd, '.work', 'fleet-lane.yaml')
+  if (existsSync(marker)) {
+    const text = readFileSync(marker, 'utf8')
+    // the provisioner stamps the run dir; lane checkouts are often sibling
+    // clones, not git worktrees, so the git-common-dir fallback can miss.
+    const rd = text.match(/^\s*runDir:\s*(\S+)/m)
+    if (rd) dirs.push(rd[1].replace(/^['"]|['"]$/g, ''))
+    const m = text.match(/^\s*runId:\s*(\S+)/m)
+    const common = git(['rev-parse', '--path-format=absolute', '--git-common-dir'])
+    if (m && common) dirs.push(join(common, '..', '.work', 'multi', m[1]))
+  }
+  // a plain checkout that hosted the orchestrator: every run under it
+  const multi = join(cwd, '.work', 'multi')
+  if (existsSync(multi)) for (const d of readdirSync(multi)) dirs.push(join(multi, d))
+  return [...new Set(dirs)].filter(d => existsSync(join(d, 'agents.yaml')))
+}
+
+/** Parse the flow-style `- { k: v, ... }` rows of agents.yaml without a yaml dependency. */
+function readAgentsYaml(runDir) {
+  const text = readFileSync(join(runDir, 'agents.yaml'), 'utf8')
+  const out = { lanes: [], provisioners: [] }
+  let section = null
+  for (const line of text.split('\n')) {
+    const h = line.match(/^(\w+):\s*$/)
+    if (h) { section = h[1]; continue }
+    const row = line.match(/^\s*-\s*\{(.*)\}\s*$/)
+    if (!row || !section || !(section in out)) continue
+    const obj = {}
+    for (const kv of row[1].split(/,\s*(?=\w+:)/)) {
+      const m = kv.match(/^\s*(\w+):\s*(.*?)\s*$/)
+      if (m) obj[m[1]] = m[2].replace(/^['"]|['"]$/g, '')
+    }
+    out[section].push(obj)
+  }
+  return out
+}
+
+/** Every `subagents/agent-<id>.jsonl` on disk, keyed by id — one scan, reused. */
+let agentIndex = null
+function locateAgent(agentId) {
+  if (!agentIndex) {
+    agentIndex = new Map()
+    for (const proj of readdirSync(PROJECTS)) {
+      const pd = join(PROJECTS, proj)
+      let sessions
+      try { sessions = readdirSync(pd) } catch { continue }
+      for (const s of sessions) {
+        const sd = join(pd, s, 'subagents')
+        if (!existsSync(sd)) continue
+        for (const f of readdirSync(sd)) {
+          const m = f.match(/^agent-(.+)\.jsonl$/)
+          if (m) agentIndex.set(m[1], join(sd, f))
+        }
+      }
+    }
+  }
+  return agentIndex.get(agentId) ?? null
+}
+
+/**
+ * Resolve `branch` (a unit branch, or a unit id) to its lane through the fleet
+ * run dirs. Returns null when it is not a fleet unit.
+ */
+function findFleetLane(branch, { fleet = null, cwd = process.cwd() } = {}) {
+  for (const runDir of fleetRunDirs(fleet, cwd)) {
+    const y = readAgentsYaml(runDir)
+    const lane = y.lanes.find(l => l.branch === branch || l.unitId === branch)
+    if (!lane) continue
+    const file = lane.agentId ? locateAgent(lane.agentId) : null
+    if (!file) continue
+    const provIds = [...y.provisioners.filter(p => p.unitId === lane.unitId).map(p => p.agentId), lane.provisionerId].filter(Boolean)
+    const provisioners = [...new Set(provIds)].map(locateAgent).filter(Boolean)
+    return { runDir, lane, file, provisioners }
+  }
+  return null
+}
+
+/**
+ * A lane's transcript is the unit's main thread. Its children (executor,
+ * verifier, test-runner…) are siblings in the same `subagents/` dir, linked by
+ * `meta.toolUseId` ⇔ the lane's own `Agent` tool_use ids — followed recursively,
+ * since a lane's `/build` may nest further. No branch filtering: every record
+ * carries the orchestrator's branch, which is the whole reason we are here.
+ */
+function collectFleetUnit({ lane, file, provisioners }) {
+  const readMeta = (p) => { const mp = p.replace(/\.jsonl$/, '.meta.json'); try { return existsSync(mp) ? JSON.parse(readFileSync(mp, 'utf8')) : {} } catch { return {} } }
+  const dir = join(file, '..')
+  const siblings = readdirSync(dir).filter(f => f.endsWith('.jsonl')).map(f => join(dir, f))
+  const byToolUse = new Map()
+  for (const p of siblings) { const m = readMeta(p); if (m.toolUseId) byToolUse.set(m.toolUseId, p) }
+
+  const runs = [], marks = [], seen = new Set()
+  const sid = basename(join(dir, '..'))
+  const visit = (p, meta) => {
+    if (seen.has(p)) return
+    seen.add(p)
+    const rows = readJsonl(p)
+    const a = analyzeRun(rows, meta)
+    if (!a) return
+    a.sessionId = sid; a.agentId = basename(p, '.jsonl'); a.file = p
+    runs.push(a)
+    for (const r of rows) {
+      if (r.type !== 'assistant' || !Array.isArray(r.message?.content)) continue
+      for (const c of r.message.content) {
+        if (c.type === 'tool_use' && SPAWN_TOOLS.has(c.name) && byToolUse.has(c.id)) {
+          const child = byToolUse.get(c.id)
+          visit(child, readMeta(child))
+        }
+      }
+    }
+    return rows
+  }
+  const laneRows = visit(file, { ...readMeta(file), agentType: 'orchestrator', laneRole: 'unit-lane' })
+  if (laneRows) marks.push(...extractPhaseMarks(laneRows))
+  for (const p of provisioners) visit(p, readMeta(p))
+
+  return { runs, marks, sessions: [{ sessionId: sid, file: join(dir, '..') + '.jsonl' }], workDir: lane.worktree ?? null }
 }
 
 /**
@@ -1017,10 +1167,11 @@ function aggregate(sinceMs) {
 // ─────────────────────────────────────────────────────────── cli
 
 function parseArgs(argv) {
-  const o = { branch: null, emit: false, json: false, list: false, aggregate: false, agents: false, since: null, quiet: false }
+  const o = { branch: null, emit: false, json: false, list: false, aggregate: false, agents: false, since: null, quiet: false, fleet: null }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--emit') o.emit = true
+    else if (a === '--fleet') o.fleet = argv[++i]
     else if (a === '--json') o.json = true
     else if (a === '--list') o.list = true
     else if (a === '--aggregate') o.aggregate = true
@@ -1057,6 +1208,9 @@ run-metrics — where a unit of work's time and tokens actually went
   --emit            write the run to ~/.claude/bett3r-metrics/ and update the index
   --json            print the summary as JSON instead of tables
   --since <5d|2w|1m|ISO>   limit transcript scan / aggregation window
+  --fleet <run-dir> a /start-multi run dir (.work/multi/<run-id>) whose agents.yaml
+                    maps the branch (or unit id) to its lane agent. Found automatically
+                    from a lane worktree's .work/fleet-lane.yaml, or from ./.work/multi.
   --quiet           suppress the scan progress line
 `
 
@@ -1079,14 +1233,25 @@ function main() {
   const branch = o.branch ?? currentBranch()
   if (!branch) { console.error('No branch given and not inside a git repo. Pass one, or use --list.'); process.exit(2) }
 
-  const files = findSessions(branch, { since: sinceToMs(o.since), quiet: o.quiet || o.json })
-  if (!files.length) {
-    console.error(`No transcripts found for branch "${branch}". Try --list to see what is on disk.`)
-    process.exit(1)
+  const quiet = o.quiet || o.json
+  // A fleet unit's transcript is a subagent of the orchestrator's session and is
+  // stamped with the orchestrator's branch — resolve it through the run dir first.
+  const lane = findFleetLane(branch, { fleet: o.fleet })
+  let collected, reportBranch = branch
+  if (lane) {
+    reportBranch = lane.lane.branch ?? branch
+    if (!quiet) console.error(`  fleet unit ${lane.lane.unitId} — lane agent ${lane.lane.agentId} from ${lane.runDir}`)
+    collected = collectFleetUnit(lane)
+  } else {
+    const files = findSessions(branch, { since: sinceToMs(o.since), quiet })
+    if (!files.length) {
+      console.error(`No transcripts found for branch "${branch}". Try --list to see what is on disk.`)
+      console.error('A /start-multi unit lives under the orchestrator session: run this from the lane worktree, or pass --fleet <.work/multi/<run-id>>.')
+      process.exit(1)
+    }
+    collected = collectRun(branch, files)
   }
-
-  const collected = collectRun(branch, files)
-  const summary = summarize(branch, collected)
+  const summary = summarize(reportBranch, collected)
   if (!summary) { console.error('Transcripts found but nothing timestamped in them.'); process.exit(1) }
 
   if (o.json) console.log(JSON.stringify(summary, null, 2))

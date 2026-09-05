@@ -118,10 +118,13 @@ Write `.work/fleet-lane.yaml` into the worktree:
 
 ```yaml
 runId: <run-id>
+runDir: <absolute path of .work/multi/<run-id> in the orchestrator's checkout>
 unitId: <unit-id>
 integrationBranch: int/<run-id>
 gateDeferred: true
 ```
+
+`runDir` is what lets `run-metrics` find this unit at all: a lane's transcript is a subagent of the orchestrator's session, stamped with the orchestrator's branch, and the run's `agents.yaml` is the only map from unit to agent id. Lane checkouts are usually sibling clones, not git worktrees, so the path cannot be derived — stamp it.
 
 This is the one signal that tells the lane's `/verify-build` it is **not** landing on its own: it runs the host repo's gate in `--fast` mode and leaves the full gate to `/merge-multi`, which runs it once on the integration branch — the only tree where cross-unit breakage exists at all.
 
