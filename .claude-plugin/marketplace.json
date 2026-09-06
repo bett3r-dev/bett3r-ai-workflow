@@ -7,7 +7,7 @@
   },
   "metadata": {
     "description": "Bett3r internal AI development tooling: the project-agnostic vertical-slice workflow plus the PV3 DDD framework skills.",
-    "version": "0.27.0"
+    "version": "0.28.0"
   },
   "plugins": [
     {
@@ -19,6 +19,11 @@
       "name": "bett3r-pv3-ai-skills",
       "source": "./plugins/bett3r-pv3-ai-skills",
       "description": "PV3 DDD framework skills: generate designed artifacts' mechanical half from the ESAS design graph, then fill schemas, aggregates, policies, read models and tests by hand, with a ddd-patterns reference. Reads each host repo's packages/paths from .esas.config.json."
+    },
+    {
+      "name": "bett3r-knowledge-store",
+      "source": "./plugins/bett3r-knowledge-store",
+      "description": "Knowledge-store capture overlay for the flow: two hooks attach to the two moments worth recording \u2014 artifacts are captured synchronously right before `git worktree remove` destroys them, and a freshly-opened PR is captured and queued for extraction, detached. The base flow plugin stays store-agnostic; a repo with no executable `.knowledge-store/capture` is byte-for-byte unaffected."
     }
   ]
 }

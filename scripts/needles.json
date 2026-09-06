@@ -834,6 +834,41 @@
       "commit": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/evolve.md",
       "note": "An artifact's own text is 1-4% of a typical agent's per-turn context (~210k measured); cache reads were 97% of raw tokens. Split for attention, which is scarce; if the stated reason is cost, the lever is elsewhere."
+    },
+    {
+      "needle": "The base flow plugin stays store-agnostic",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-knowledge-store/README.md",
+      "note": "The coupling invariant behind the whole knowledge-store overlay: it is a third plugin with its own hooks.json and zero edits to any existing command, because store logic inside /verify-build would be carried by every repo that will never run a store. See docs/adr/ADR-002."
+    },
+    {
+      "needle": "artifacts are about to be destroyed",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-knowledge-store/README.md",
+      "note": "The capture hook keys on worktree teardown, never on `merged`. The ticket asked for `the command that closes the PR` and no such command exists — /verify-build OPENS PRs, and gh pr merge / --delete-branch / git branch -d / git push --delete return zero matches across the base plugin. A matcher aimed at merge would have fired never."
+    },
+    {
+      "needle": "893 files across 6 repos",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-knowledge-store/README.md",
+      "note": "The measured threat model: the .work/ census was 893 files across 6 repos and 101 nine hours later, because one fleet worktree holding 818 files was torn down mid-run, destroying ~30 *.design-draft.md / *.open-forks.md files with nothing capturing them. It fired during its own design run."
+    },
+    {
+      "needle": "there is no command-level matcher in the platform",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-knowledge-store/README.md",
+      "note": "hooks.json's `matcher` selects on the TOOL NAME only. A design table rendering the matcher as `runtime command matches git worktree remove` describes a mechanism that does not exist; written in as a regex it matches no tool and fires never. All discrimination happens inside the hook, on tool_input.command, tokenised — not by substring, because tool_input.description is agent-written prose."
+    },
+    {
+      "needle": "a double capture free",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-knowledge-store/README.md",
+      "note": "The capture natural key is a pure function of the invocation (the worktree path as written, or the PR URL gh printed). Nothing time-, run- or session-derived may enter it: a key carrying a timestamp makes every re-run a new record and the idempotence claim false. The oracle asserts byte-identical argv across two runs."
     }
   ]
 }
