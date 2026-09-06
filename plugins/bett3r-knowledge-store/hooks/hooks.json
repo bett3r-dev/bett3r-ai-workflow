@@ -1,0 +1,31 @@
+{
+  "description": "Knowledge-store capture overlay. A PreToolUse hook captures a worktree's artifacts synchronously, immediately before a `git worktree remove` destroys them; a PostToolUse hook captures a freshly-opened PR and kicks extraction, detached. Both are inert — one `test`, then gone — in every repo without an executable `.knowledge-store/capture`, and both exit 0 on every path, because a PreToolUse hook's exit 2 cancels the user's command.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/ks-capture-teardown.sh"],
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/ks-capture-pr.sh"],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

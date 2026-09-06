@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "bett3r-knowledge-store",
+  "version": "0.1.0",
+  "description": "Knowledge-store capture overlay for the bett3r-ai-workflow flow. Two hooks attach to the two moments worth recording: artifacts are captured synchronously right before `git worktree remove` destroys them, and a freshly-opened PR is captured and queued for extraction, detached. Ships no command and no skill — the base flow plugin stays store-agnostic, and a repo with no executable `.knowledge-store/capture` is byte-for-byte unaffected.",
+  "author": {
+    "name": "Tomas Ruiz",
+    "email": "tomasruizr@gmail.com"
+  },
+  "repository": "https://github.com/bett3r-dev/bett3r-ai-workflow",
+  "keywords": [
+    "knowledge-store",
+    "hooks",
+    "capture",
+    "overlay",
+    "worktree",
+    "esas"
+  ]
+}
