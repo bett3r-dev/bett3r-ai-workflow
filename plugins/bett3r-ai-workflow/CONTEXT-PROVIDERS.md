@@ -21,8 +21,10 @@ in `skills/esas-pending/SKILL.md` that governs it says:
 
 That is a surface this codebase built, found to be an interruption, and then suppressed by
 standing rule. It arrives *beside* the reasoning, at a moment nobody chose, carrying no way to be
-acted on — so the only safe rule was to ignore it. **Do not rebuild it.** A hook also cannot reach
-the place the contribution has to land: it fires around a tool call, and Step 3 is reasoning.
+acted on — so the only safe rule was to ignore it. **Do not rebuild it.** There is also a hard limit, and it is the constraint that forced this seam into the base plugin
+rather than an overlay: **a hook cannot enter Step 3's reasoning.** It fires around a tool call,
+and an MCP call cannot see the slash command at all — but the place a contribution has to land is a
+fork in an interview.
 
 The insertion that works needs no new ritual at all, which is the entire argument for it.
 Contributions arrive in **Step 1 (Ground)** as part of a retrieval the session is already making,

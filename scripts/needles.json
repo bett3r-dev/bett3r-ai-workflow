@@ -834,6 +834,34 @@
       "commit": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/evolve.md",
       "note": "An artifact's own text is 1-4% of a typical agent's per-turn context (~210k measured); cache reads were 97% of raw tokens. Split for attention, which is scarce; if the stated reason is cost, the lever is elsewhere."
+    },
+    {
+      "needle": "A marker that survives a new `/start` is worse than no marker",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/start.md",
+      "note": "Seam A (ESAS-94). Every `.work/` observable is accumulating residue that is never erased, so a `/design` re-run mid-build was indistinguishable from `/build`. The clearing is the load-bearing half, not the writing: absent, you know you do not know; stale, you are confidently wrong about which work item you are on."
+    },
+    {
+      "needle": "zero providers is the normal case",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
+      "note": "Seam B (ESAS-94). The `/design` Step 1 extension point ships no provider. The no-provider path must be SILENT, not merely harmless — a seam that announces itself in every repo not using it has become the interruption it was designed to avoid, which is exactly how the `esas-pending.sh` hook failed."
+    },
+    {
+      "needle": "telemetry, never a trigger",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/skills/esas-pending/SKILL.md",
+      "note": "The standing rule suppressing the UserPromptSubmit count hook, re-pinned by ESAS-94 because ADR-003 and CONTEXT-PROVIDERS.md now both quote it as the MEASURED EVIDENCE for rejecting hook injection as a context-delivery mechanism. This codebase built that surface, found it an interruption, and suppressed it; the quote is load-bearing in three artifacts now, so losing it loses the reason a rejected option stays rejected."
+    },
+    {
+      "needle": "a hook cannot enter Step 3's reasoning",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/CONTEXT-PROVIDERS.md",
+      "note": "ADR-003 (ESAS-94). The hard limit that forced two seams into the BASE plugin rather than an overlay: a hook fires around a tool call, an MCP call cannot see the slash command, and the place a contribution must land is a fork in an interview. Without this, the next reader re-proposes the overlay-only design that cannot work."
     }
   ]
 }
