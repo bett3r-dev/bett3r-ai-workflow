@@ -120,6 +120,28 @@ jobs:
           sh scripts/test-esas-design.sh
           PREFLIGHT_SH=dash sh scripts/test-esas-design.sh
           PREFLIGHT_SH=bash sh scripts/test-esas-design.sh
+
+  # These two are a SEPARATE JOB on purpose, not tidiness. Steps inside a job
+  # run sequentially and fail-fast, so the first red step ends the job and every
+  # step after it reports `skipped` — which, on a run already headlined `fail`,
+  # is indistinguishable from passing without opening the step list. That bill
+  # has been paid: `test-esas-design.sh` sat red on master for five pushes and
+  # silently removed the version gate below — the ADR-001 release contract, the
+  # most load-bearing check on a plugin PR — from two real PRs, whose lanes each
+  # correctly reported "the only failure is the known baseline". Which gates a
+  # red step eats depends only on their order in this file, never on what the
+  # diff touched. A reviewer who has to remember to open the step list is not a
+  # control; a sibling job is.
+  version-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The version gate below diffs this branch against its merge base, and
+          # the default depth-1 checkout has no base ref to resolve — the gate
+          # would error instead of judging. This is the one failure invisible on
+          # a laptop, where every ref is already on disk.
+          fetch-depth: 0
       # Every step above reads the source tree. This one reads the *diff*,
       # because the failure it guards is not in any file: a plugin is copied into
       # the version-keyed cache only when its `version` string changes, so a
