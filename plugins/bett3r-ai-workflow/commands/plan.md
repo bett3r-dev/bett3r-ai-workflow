@@ -11,6 +11,12 @@ Optional ticket id. Flags: `--publish` (also create Jira sub-tasks).
 
 ---
 
+## Step 0 — Read your brief, if there is one
+
+**If `.work/lane.yaml` exists, read it before anything else.** It is this unit's whole brief — written into the worktree from the outside — and it is where your inputs come from, not the caller. Take from it: the ticket, `adrAllocations` (the ADR number a slice's `adr:` field takes, already reserved for this lane), and `modelRouting`, which is what `model:` on a slice must agree with. Its **absence is a valid state** (a single `/start` flow has no brief), so say which of the two you ran under rather than defaulting silently: a missing brief and a unit that legitimately has none are indistinguishable, and that is exactly how a lane runs on the wrong defaults with nothing red.
+
+Never accept these facts at the invocation instead. A step that learns a fact from whoever called it is a step **the other caller cannot run** — the per-step surface exists so that a step invoked on its own, by a caller it never spoke to, behaves identically.
+
 ## Step 1 — Read the design
 
 **Record the mode first.** Overwrite `.work/mode.yaml` with `mode: plan` and the current work item before reading anything else — full rewrite, never an append, so the marker names the command running now instead of the one that ran last on this branch.

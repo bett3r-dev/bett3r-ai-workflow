@@ -766,18 +766,6 @@ present "$UNIT_LANE_MD" '`/verify-build` | `step=verify-build`' 'unit-lane seque
 present "$UNIT_LANE_MD" 'through `lane-step`' \
   'unit-lane takes each outcome from the LANE-STEP: contract, not from the step'\''s prose'
 
-# The seam the sequence surfaced, and the reason it needs an assertion rather
-# than a sentence: `/start` deletes `.work/lane.yaml` unconditionally
-# (`commands/start.md` Step 3 — asserted in Seam D above, as [SEAM 2]), and
-# `/start` is step 1 of the very sequence above. Slice 3 reasoned about "a
-# `/start` on your own branch", which is not a lane; nobody wrote down that the
-# LANE runs `/start` too. Uncarried, steps 2-5 run with no brief and
-# `/verify-build` finds no `gateDeferred`, so it runs the FULL gate — silently,
-# and once per lane. This is the caller-side mitigation; the durable fix is in
-# `start.md` and is not this slice's to make.
-present "$UNIT_LANE_MD" 'Copy the brief aside before you run `/start` and restore it immediately after' \
-  'unit-lane carries its brief across the step that deletes it'
-
 # ONE parser. Slice 2 wrote the parse rule inside this oracle because nothing
 # consumed the line; this slice makes `unit-lane` the reader, and a reference
 # copy left standing beside the production one is drift nothing can see —
@@ -860,6 +848,58 @@ for f in "$START_MD" "$DESIGN_MD" "$PLAN_MD" "$BUILD_MD" "$VERIFY_BUILD_MD"; do
   present "$f" 'as the **final** line' \
     "$( basename "$f" .md ) tells the model the marker must be the LAST line"
 done
+
+printf '\nSeam G — every step READS the lane brief\n\n'
+# ---------------------------------------------------------------------------
+#
+# The mirror of Seam F, and it shipped in the same asymmetric state: the brief
+# was a file that only `/verify-build` read, so the other four ran on whatever
+# the caller told them. Measured on master at 5e391d2: start 2 refs (the DELETE,
+# not a read), design 0, plan 0, build 0, verify-build 1.
+#
+# Worse than the emitting gap, because that one produced `infra` -- retried, and
+# loud eventually -- while this one produces a green run that did MORE work than
+# asked and reports success: `/verify-build` keys `--fast` on `gateDeferred:
+# true`, so a lane whose brief never arrived runs the FULL gate, silently, once
+# per lane. Nothing errors, because "no lane brief" is a legitimate state for the
+# single-unit flow: a missing brief and a unit that has none are the same
+# observation.
+#
+# One assertion per command, for Seam F's reason: losing a SINGLE reader is the
+# silent failure, and a corpus-wide count stays green at 4 of 5.
+# `/start` is deliberately NOT in this loop: it names the file in order to DELETE
+# it, so a bare filename needle is green on the state this seam exists to reject.
+# Its reader assertion is the scrub exemption below -- the one clause whose
+# absence actually costs a lane its brief. Two needles over one fact would make
+# each other unkillable.
+for f in "$DESIGN_MD" "$PLAN_MD" "$BUILD_MD"; do
+  present "$f" 'Read your brief, if there is one' \
+    "$( basename "$f" .md ) opens by reading its own brief"
+done
+# `/verify-build`'s own reader assertion is not repeated here: Seam D already
+# needles the `gateDeferred` clause it reads, and a second needle over the same
+# clause would make both unkillable.
+
+# The scrub exemption in `/start`, which is the durable half of the fix and the
+# reason the caller-side mitigation could be deleted. Needled on the CONDITION,
+# not on the word "exemption": an unconditional delete with the word next to it
+# is exactly the regression this asserts against.
+present "$START_MD" 'leave `.work/lane.yaml` alone when its `worktree:` is this tree' \
+  '/start does not scrub a brief that names this worktree and this branch'
+
+# And that the mitigation is GONE from the caller. Seam E asserted its presence
+# while the coupling was real; asserting the absence now is what stops it being
+# reinstated "to be safe" -- two mechanisms for one fact, one of which nothing
+# exercises.
+if grep -qF 'Copy the brief aside before you run' "$UNIT_LANE_MD"; then
+  fail 'unit-lane no longer carries the caller-side brief workaround' \
+       'the copy-aside mitigation is still in unit-lane.md, but /start now scopes its delete' \
+       'two mechanisms for one fact; the caller-side one is the coupling the per-step surface removes.'
+else
+  pass 'unit-lane no longer carries the caller-side brief workaround'
+fi
+present "$UNIT_LANE_MD" 'The brief half now lives in the commands too' \
+  'unit-lane invokes each step bare, passing neither brief nor pointer'
 
 # And that the local sequencer no longer supplies the emitting half at the
 # invocation. That workaround was correct while the commands were silent and is
