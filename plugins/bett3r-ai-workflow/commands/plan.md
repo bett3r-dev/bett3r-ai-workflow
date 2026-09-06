@@ -13,6 +13,8 @@ Optional ticket id. Flags: `--publish` (also create Jira sub-tasks).
 
 ## Step 1 — Read the design
 
+**Record the mode first.** Overwrite `.work/mode.yaml` with `mode: plan` and the current work item before reading anything else — full rewrite, never an append, so the marker names the command running now instead of the one that ran last on this branch.
+
 Read `.work/design.md` (if absent: "No design found. Run `/design` first."). Read the relevant `CONTEXT.md` so slice names use the **ubiquitous language**, and respect existing ADRs in the area you're touching.
 
 ## Step 2 — Look for prefactoring
