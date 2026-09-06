@@ -1,3 +1,7 @@
 # Ephemeral per-unit-of-work scratch space (design.md, slices.yaml).
 # Git is the record; .work/ is disposable.
 .work/
+
+# Python byte-compile byproducts (a .pyc under __pycache__ is not a runnable module)
+__pycache__/
+*.pyc

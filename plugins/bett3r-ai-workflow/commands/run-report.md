@@ -17,7 +17,7 @@ Reconstructs a unit of work from Claude Code's own transcripts. Nothing is instr
 | `--agents` | **agent** performance across every run: role, model, effort, and what the repo checks cost |
 | `--emit` | also record the run to `~/.claude/bett3r-metrics/` (what `/verify-build` does) |
 | `--since <5d\|2w\|1m>` | limit the transcript scan (or the aggregation window) |
-| `--fleet <run-dir>` | resolve a `/start-multi` unit (branch or unit id) through that run's `agents.yaml` — automatic from a lane worktree's `.work/fleet-lane.yaml` or from `./.work/multi/` |
+| `--fleet <run-dir>` | resolve a `/start-multi` unit (branch or unit id) through that run's `agents.yaml` — automatic from a lane worktree's `.work/lane.yaml` or from `./.work/multi/` |
 
 ---
 
@@ -33,7 +33,7 @@ The script does all the parsing and arithmetic. **Do not recompute any of it by 
 
 If it reports no transcripts for the branch, run `--list` and check the name; a branch reachable in git is not necessarily one you did work on in this tool.
 
-**A fleet unit is not found by branch, by construction.** A `/start-multi` lane runs as a subagent of the *orchestrator's* session, so its transcript sits under that session and every record in it carries the orchestrator's branch and cwd, not the worktree's — every lane once reported "no transcripts found". The script resolves it through the run's `agents.yaml` instead (unit → lane agent id → `subagents/agent-<id>.jsonl`, plus the lane's children by tool-use id and its provisioner), found from the lane worktree's `.work/fleet-lane.yaml` `runDir`, from `./.work/multi/` in the orchestrator's checkout, or from `--fleet`. A lane invokes the pipeline through the Skill tool, not slash commands, so its phase windows come from those calls — a lane that ran the whole pipeline in its own context shows one window and says so.
+**A fleet unit is not found by branch, by construction.** A `/start-multi` lane runs as a subagent of the *orchestrator's* session, so its transcript sits under that session and every record in it carries the orchestrator's branch and cwd, not the worktree's — every lane once reported "no transcripts found". The script resolves it through the run's `agents.yaml` instead (unit → lane agent id → `subagents/agent-<id>.jsonl`, plus the lane's children by tool-use id and its provisioner), found from the lane worktree's `.work/lane.yaml` `runDir`, from `./.work/multi/` in the orchestrator's checkout, or from `--fleet`. A lane invokes the pipeline through the Skill tool, not slash commands, so its phase windows come from those calls — a lane that ran the whole pipeline in its own context shows one window and says so.
 
 ## Step 2 — Read the four numbers that carry the decision
 

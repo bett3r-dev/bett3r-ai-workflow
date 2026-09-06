@@ -1,0 +1,16 @@
+#!/bin/sh
+# Launcher for scripts/lane-step-parse.py — the LANE-STEP:v1 verdict reader.
+#
+# Same two runtime facts that put `run-metrics` here, and the same shape:
+#
+#   * `CLAUDE_PLUGIN_ROOT` is substituted for *hook* invocations only, so a
+#     command's or agent's bash block cannot use it to find anything this plugin
+#     ships — it expands to empty and the failure reads as a missing file rather
+#     than a missing variable.
+#   * Every enabled plugin's `bin/` IS on `PATH`, keyed by version. So a lane
+#     calls `lane-step` by bare name, from any worktree, and gets the parser
+#     belonging to the plugin version its session actually loaded.
+#
+# The implementation stays a `.py` next door so the parse rule is one readable
+# file with the contract quoted in it, not a shell regex.
+exec python3 "$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)/scripts/lane-step-parse.py" "$@"

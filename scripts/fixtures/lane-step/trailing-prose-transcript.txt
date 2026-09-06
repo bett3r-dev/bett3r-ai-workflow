@@ -1,0 +1,5 @@
+The gate is green and both slices are committed.
+
+LANE-STEP:v1 step=verify-build outcome=success slices=2/2 commits=2
+
+Actually, hold on — the PR body still needs the decision log, let me add it.

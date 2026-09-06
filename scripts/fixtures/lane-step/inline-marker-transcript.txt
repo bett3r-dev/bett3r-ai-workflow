@@ -1,0 +1,4 @@
+Working the plan step now.
+
+The gate came back red on slice 1 and I could not get past it, so nothing is
+committed. To be explicit about how a caller would learn that: the step printed LANE-STEP:v1 step=plan outcome=gate-red slices=0/4 commits=0

@@ -352,7 +352,7 @@ function extractPhaseMarks(rows) {
  * nothing for a fleet unit, and every lane once reported "not measured". The
  * run's `agents.yaml` is the only thing that maps a unit to its agent id.
  *
- * The run dir is found from the worktree itself: `.work/fleet-lane.yaml`
+ * The run dir is found from the worktree itself: `.work/lane.yaml`
  * names the run id, and the run dir is `.work/multi/<runId>/` in the main
  * checkout (`git rev-parse --git-common-dir` → its parent). `--fleet <dir>`
  * overrides both.
@@ -361,7 +361,7 @@ function fleetRunDirs(explicit, cwd) {
   const dirs = []
   if (explicit) dirs.push(explicit)
   const git = (args) => { try { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() } catch { return null } }
-  const marker = join(cwd, '.work', 'fleet-lane.yaml')
+  const marker = join(cwd, '.work', 'lane.yaml')
   if (existsSync(marker)) {
     const text = readFileSync(marker, 'utf8')
     // the provisioner stamps the run dir; lane checkouts are often sibling
@@ -1210,7 +1210,7 @@ run-metrics — where a unit of work's time and tokens actually went
   --since <5d|2w|1m|ISO>   limit transcript scan / aggregation window
   --fleet <run-dir> a /start-multi run dir (.work/multi/<run-id>) whose agents.yaml
                     maps the branch (or unit id) to its lane agent. Found automatically
-                    from a lane worktree's .work/fleet-lane.yaml, or from ./.work/multi.
+                    from a lane worktree's .work/lane.yaml, or from ./.work/multi.
   --quiet           suppress the scan progress line
 `
 

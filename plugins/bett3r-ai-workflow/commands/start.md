@@ -24,7 +24,9 @@ Create a branch off the current branch. Name it from the ticket id + a slug (e.g
 
 Create `.work/ and add it to .gitignore` if it is missing. It holds `design.md` and `slices.yaml` — ephemeral, never committed.
 
-**Then clear and rewrite `.work/mode.yaml`.** This is the load-bearing half of the marker, not a formality: everything else in `.work/` — `design.md`, `slices.yaml`, `passes:`, `design-snapshot/`, `fleet-lane.yaml` — is residue that accumulates and is never erased, so a workspace left over from the previous branch reads exactly like the current one's. Delete any existing `.work/mode.yaml` outright and write a fresh one; never merge with, patch, or preserve a field from what was there. A marker that survives a new `/start` is worse than no marker, because it is confidently wrong about which work item you are on.
+**Then clear and rewrite `.work/mode.yaml`, and clear `.work/lane.yaml`.** This is the load-bearing half of the marker, not a formality: everything else in `.work/` — `design.md`, `slices.yaml`, `passes:`, `design-snapshot/` — is residue that accumulates and is never erased, so a workspace left over from the previous branch reads exactly like the current one's. Delete any existing `.work/mode.yaml` or `.work/lane.yaml` outright and write a fresh `mode.yaml`; never merge with, patch, or preserve a field from what was there. A marker that survives a new `/start` is worse than no marker, because it is confidently wrong about which work item you are on.
+
+`.work/lane.yaml` is deleted and **not** rewritten here: it is a lane's whole brief, written into a provisioned worktree from the outside, and a `/start` on your own branch is not a lane. A stale one left behind claims a deferral — of the full gate, to a run that no longer exists — and the claim is silent, which is worse than the residue. **One file means one scrub path**; two brief files means two, and a scrub can miss one.
 
 ```yaml
 mode: start          # start | design | plan | build — the command that wrote this, nothing else
