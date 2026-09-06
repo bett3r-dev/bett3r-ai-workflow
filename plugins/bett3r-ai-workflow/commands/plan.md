@@ -40,6 +40,7 @@ Present the proposed slices as a numbered list. For each: **title**, **blocked-b
 - Does the granularity feel right (too coarse / too fine)?
 - Are the dependencies correct?
 - Should any slices merge or split?
+- **For every contract this unit introduces, which slice writes it and which slice reads it?** A unit that ships one side is green by construction, and no single slice's gate can see it (`vertical-slicing`, anti-patterns). Answer it in the unattended branch too — it is answerable from the slice list alone.
 
 **Iterate until the user approves.** Do not write `slices.yaml` or publish until approved.
 
