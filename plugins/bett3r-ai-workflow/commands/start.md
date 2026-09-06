@@ -58,6 +58,14 @@ If a ticket id is given and a tracker MCP is available (Jira/GitHub), fetch the 
 
 > Branch `<name>` ready. Run `/design` to grill and model the work.
 
+## Step 7 — Report the outcome
+
+End your output with this line, at column 0, as the **final** line — nothing after it, not even a closing remark, and no trailing punctuation (`success.` is a value in no vocabulary, and a step that punctuates its marker reports no verdict at all):
+
+    LANE-STEP:v1 step=start outcome=<success|blocked-on>
+
+`success` when the branch exists and `.work/` is scaffolded. `blocked-on` when there is no resolvable work item, or the branch cannot be cut from the base — a lane with no work item has nothing to design. This step runs no suite (Step 4), so it never reports `gate-red`. Never emit `infra`: its signal is the line's **absence**, which costs nothing from a step being killed underneath. The format contract — attributes, the parse rule, `:vN` — is stated once in [unit-lane](../agents/unit-lane.md); do not restate it here.
+
 ## Principles
 
 - Thin. The branch, the recorded base sha, `.work/` and a cleared `.work/mode.yaml` are all `start` produces — **no test run**.

@@ -823,6 +823,52 @@ else
        'two parsers nothing runs together drift, and the fixtures certify the wrong one.'
 fi
 
+printf '\nSeam F — every step EMITS its LANE-STEP: line\n\n'
+# ---------------------------------------------------------------------------
+#
+# Seam E asserts that `unit-lane` READS the contract. This asserts the other
+# half WRITES it, and the two halves need separate assertions for the reason
+# this seam exists at all: the contract shipped reader-only. A spec, a parser,
+# a reader and a uniqueness guard all landed green while `LANE-STEP` appeared
+# ZERO times in the five commands -- measured with a control string (`Step`)
+# returning 6-16 hits per file, so the probe was known-good and the absence
+# real. Nothing could notice, because a reader-only contract passes every gate
+# a reader-only contract can pass: the tests exercise the half that exists, and
+# the specified degrade path (no marker -> `infra`) is indistinguishable from a
+# step that simply never emits. Every step would have read as `infra` forever,
+# and `infra` is retried, so a fleet would have looped rather than failed.
+#
+# One assertion per command, not one over the corpus. Losing a SINGLE emitter is
+# the silent failure -- four steps report, one is permanently `infra`, and the
+# run still produces a PR. A corpus-wide count would stay green at 4 of 5.
+#
+# The needle is the command's own `step=` value inside a marker line, which is
+# the emitter's payload and is not written anywhere else in these files.
+present "$START_MD"        'LANE-STEP:v1 step=start'        '/start emits its LANE-STEP: line'
+present "$DESIGN_MD"       'LANE-STEP:v1 step=design'       '/design emits its LANE-STEP: line'
+present "$PLAN_MD"         'LANE-STEP:v1 step=plan'         '/plan emits its LANE-STEP: line'
+present "$BUILD_MD"        'LANE-STEP:v1 step=build'        '/build emits its LANE-STEP: line'
+present "$VERIFY_BUILD_MD" 'LANE-STEP:v1 step=verify-build' '/verify-build emits its LANE-STEP: line'
+
+# The producer here is a MODEL, whose stdout also carries its own prose about
+# the marker, so "print the line" is not enough -- it has to be the final line
+# with nothing after it. ADR-004 names this as the trade it accepted and the
+# parse rule as the mitigation; the emitter has to carry the other side of it.
+# A closing remark after the marker reads as NO verdict, not a stale one, and
+# that is `infra`, and `infra` is retried.
+for f in "$START_MD" "$DESIGN_MD" "$PLAN_MD" "$BUILD_MD" "$VERIFY_BUILD_MD"; do
+  present "$f" 'as the **final** line' \
+    "$( basename "$f" .md ) tells the model the marker must be the LAST line"
+done
+
+# And that the local sequencer no longer supplies the emitting half at the
+# invocation. That workaround was correct while the commands were silent and is
+# a liability now: a lane that keeps reminding each step to emit is a lane whose
+# steps a SCHEDULER cannot run, which is the exact coupling the per-step surface
+# exists to remove.
+present "$UNIT_LANE_MD" 'The emitting half now lives in the commands' \
+  'unit-lane no longer patches the emitting half in at the invocation'
+
 printf '\n'
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"

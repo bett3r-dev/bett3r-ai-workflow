@@ -69,18 +69,21 @@ so nothing below may be a rule only you know.
 
 The design rule is that a step finds what it needs in `.work/lane.yaml` and
 ends by printing its `LANE-STEP:` line — both so that a step invoked on its own,
-by a caller it never spoke to, behaves identically. **Neither half is written
-into `commands/*.md` yet.** Today only `/verify-build` reads the brief, and no
-command emits the marker, so you must supply both at the invocation:
+by a caller it never spoke to, behaves identically. **The emitting half now
+lives in the commands**: each of the five ends with a *Report the outcome* step
+naming its own line, so you invoke them plainly and read what comes back.
 
-    /build — read .work/lane.yaml for your brief, and end your output with
-    your LANE-STEP:v1 line, nothing after it
+    /build
 
-Do not read that as licence to become the steps' source of truth. What you pass
-is a pointer to the file and a reminder of the contract, never the brief's
-contents restated — a step that learns a fact from you is a step the other
-caller cannot run. A step that is not asked prints no marker, and you will read
-it, correctly and uselessly, as `infra`.
+The brief half is not there yet — only `/verify-build` reads `.work/lane.yaml`
+on its own — so for the other four, pass the **pointer** at the invocation:
+
+    /plan — read .work/lane.yaml for your brief
+
+Never the brief's contents restated. A step that learns a fact from you is a
+step the other caller cannot run, and that is the whole reason the emitting half
+moved out of this file: a rule only the local sequencer knows is a rule the
+scheduler does not have.
 
 **Step 1 destroys your brief; carry it across.** `/start` deletes
 `.work/lane.yaml` outright and does not rewrite it (`commands/start.md`, Step 3),
