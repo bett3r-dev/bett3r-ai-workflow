@@ -37,6 +37,8 @@ Read the ticket, then the relevant bounded context's `CONTEXT.md` (locate via `.
 
 Treat the glossary as **evidence to verify, not ground truth**.
 
+**Then collect context contributions, if this repo declares any.** Step 1 is a declared extension point: an optional, repo-local **context provider** may contribute items to the grounding, and items that survive become ordinary Step 3 forks carrying their verbatim source span. The base plugin ships no provider and **zero providers is the normal case** — with none declared, do not go looking, do not mention that an extension point was consulted, and this step behaves exactly as it did before. A provider that errors, times out or returns nothing **never fails `/design`**: note the degrade beside "grounding degraded" and continue. The full contract — the shape of a contribution, why a hook was rejected on this repo's own measured evidence, and why this is `/design` only — is [CONTEXT-PROVIDERS.md](../CONTEXT-PROVIDERS.md).
+
 ### The ticket is evidence, not spec
 
 Stale tickets are the norm — in one 4-ticket run three descriptions were stale and a fourth's premise was false. Verifying costs minutes and is what the design-first gate is *for*. **Where the ticket and the code disagree, the code wins, and the doc says so.** The general discipline — quote symbols as the source spells them, state what a count counts, treat a uniqueness claim as a probe, name the corpus you searched, `mtime` is not provenance — is [EVIDENCE.md](../EVIDENCE.md) §3 and is not repeated here. What follows is the **order** of probes, because each layer is cheap and the ones above it re-frame everything below.
