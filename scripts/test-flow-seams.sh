@@ -222,15 +222,124 @@ present "$PROVIDERS_MD" 'esas-pending.sh' \
 
 # Neither seam may mention a knowledge store: the base flow plugin stays
 # store-agnostic and the store adapts to the flow, never the reverse. This is
-# the coupling invariant, and it is asserted rather than trusted.
-for f in "$PROVIDERS_MD" "$DESIGN_MD" "$START_MD" "$PLAN_MD" "$BUILD_MD"; do
-  if grep -qiE 'knowledge store|knowledge-store' "$f"; then
-    fail "${f##*/} stays store-agnostic" \
-         'mentions a knowledge store — the base flow plugin must carry no consumer knowledge.'
-  else
-    pass "${f##*/} stays store-agnostic"
+# the coupling invariant, and it is asserted as a TABLE of (seam file x
+# forbidden consumer term) rather than one hard-coded grep over five hard-coded
+# file variables. Adding a seam file, or a second forbidden consumer, is a row
+# added to one of the two lists below — never a second grep elsewhere.
+#
+# COUPLING_SEAM_FILES may be overridden by the environment (one "label|path"
+# row per line) so a mutation test can point this same check at a scratch
+# copy of the plugin tree without ever touching the tracked seam files.
+COUPLING_SEAM_FILES=${COUPLING_SEAM_FILES:-"CONTEXT-PROVIDERS.md|$PROVIDERS_MD
+design.md|$DESIGN_MD
+start.md|$START_MD
+plan.md|$PLAN_MD
+build.md|$BUILD_MD"}
+
+# COUPLING_FORBIDDEN_TERMS may likewise be overridden, one term per line.
+# Terms are combined into a single case-insensitive alternation.
+COUPLING_FORBIDDEN_TERMS=${COUPLING_FORBIDDEN_TERMS:-"knowledge store
+knowledge-store"}
+
+coupling_regex=$( printf '%s' "$COUPLING_FORBIDDEN_TERMS" | tr '\n' '|' )
+coupling_regex=${coupling_regex%|}
+
+# The two lists above are environment INPUTS, which is what makes this guard
+# executable against a scratch tree — and also what makes it neuterable.
+# `${VAR:-default}` catches an EMPTY override but never a WRONG one: a terms
+# list naming something that appears nowhere, or a table truncated to one row,
+# leaves every surviving row "passing" against nothing and prints a green tally
+# byte-identical to a real full pass. A detector that can be silenced without
+# saying so is not a detector. So the table asserts itself against a hard-coded
+# floor before it is used; these two lists are deliberately NOT overridable.
+#
+# The floor is keyed on LABELS, not paths, because pointing the table at a
+# scratch copy of the plugin tree is the supported use: paths move, the five
+# seams they name do not.
+COUPLING_REQUIRED_LABELS='CONTEXT-PROVIDERS.md
+design.md
+start.md
+plan.md
+build.md'
+COUPLING_REQUIRED_TERMS='knowledge store
+knowledge-store'
+
+# Blank rows are dropped once, here, so that the row count the loop reconciles
+# against is the same number of rows the loop actually sees.
+printf '%s\n' "$COUPLING_SEAM_FILES" | grep -v '^[[:space:]]*$' > "$TMP/coupling-seam-files"
+coupling_rows=$( wc -l < "$TMP/coupling-seam-files" | tr -d ' ' )
+printf '%s\n' "$COUPLING_FORBIDDEN_TERMS" | grep -v '^[[:space:]]*$' > "$TMP/coupling-terms"
+
+if [ "$coupling_rows" -gt 0 ]; then
+  pass "coupling table is non-empty ($coupling_rows rows)"
+else
+  fail 'coupling table is non-empty' \
+       'COUPLING_SEAM_FILES yielded no rows: the coupling invariant would assert nothing and still exit green.'
+fi
+
+cut -d'|' -f1 "$TMP/coupling-seam-files" > "$TMP/coupling-labels"
+coupling_missing_labels=
+while IFS= read -r want; do
+  grep -Fxq "$want" "$TMP/coupling-labels" || coupling_missing_labels="$coupling_missing_labels $want"
+done <<EOF
+$COUPLING_REQUIRED_LABELS
+EOF
+if [ -z "$coupling_missing_labels" ]; then
+  pass 'coupling table still covers all five known seam files'
+else
+  fail 'coupling table still covers all five known seam files' \
+       "missing rows for:$coupling_missing_labels" \
+       'a truncated COUPLING_SEAM_FILES silently stops checking the seams it dropped.'
+fi
+
+coupling_missing_terms=
+while IFS= read -r want; do
+  grep -Fxiq "$want" "$TMP/coupling-terms" || coupling_missing_terms="$coupling_missing_terms '$want'"
+done <<EOF
+$COUPLING_REQUIRED_TERMS
+EOF
+if [ -z "$coupling_missing_terms" ]; then
+  pass 'coupling table still forbids all known consumer terms'
+else
+  fail 'coupling table still forbids all known consumer terms' \
+       "missing terms:$coupling_missing_terms" \
+       'a substituted COUPLING_FORBIDDEN_TERMS makes every row pass against a term no file contains.'
+fi
+
+# Written to a file rather than piped into the while loop below: a pipe would
+# run the loop in a subshell, and the passed/failed counters it updates would
+# be lost the moment the subshell exits.
+coupling_asserted=0
+while IFS='|' read -r label path rest; do
+  coupling_asserted=$(( coupling_asserted + 1 ))
+  # A malformed row must be RED, never skipped and never green. A row with no
+  # separator parses as label=<the whole path>, path=<empty>, and a grep
+  # against an empty path merely errors — which would otherwise fall through
+  # to the else branch and emit pass() for a file that was never read.
+  if [ -z "$label" ] || [ -z "$path" ] || [ -n "$rest" ]; then
+    fail "coupling row is well-formed: '$label${path:+|}$path'" \
+         'each row must be exactly "label|path" — this one is not, so its seam file was never checked.'
+    continue
   fi
-done
+  if [ ! -f "$path" ]; then
+    fail "$label stays store-agnostic" \
+         "no such file: $path — the row names a seam that does not exist, so nothing was checked."
+    continue
+  fi
+  if grep -qiE "$coupling_regex" "$path"; then
+    fail "$label stays store-agnostic" \
+         'mentions a forbidden consumer term — the base flow plugin must carry no consumer knowledge.'
+  else
+    pass "$label stays store-agnostic"
+  fi
+done < "$TMP/coupling-seam-files"
+
+if [ "$coupling_asserted" -eq "$coupling_rows" ]; then
+  pass "every coupling row was asserted ($coupling_asserted/$coupling_rows)"
+else
+  fail 'every coupling row was asserted' \
+       "asserted $coupling_asserted of $coupling_rows rows — a row was skipped, and a skipped row is a seam nobody checked."
+fi
 
 # Scope: /design only, with the three rejections recorded.
 present "$PROVIDERS_MD" 'Scope: `/design` only' 'the seam is scoped to /design'
