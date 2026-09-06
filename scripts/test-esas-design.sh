@@ -55,6 +55,7 @@ ROOT=$( CDPATH= cd -- "$( dirname -- "$0" )/.." && pwd )
 PLUGIN="$ROOT/plugins/bett3r-ai-workflow"
 COMMAND_MD="$PLUGIN/commands/design.md"
 BOARD_MD="$PLUGIN/skills/esas-design/BOARD-SETUP.md"
+PREFLIGHT_MD="$PLUGIN/skills/esas-design/PREFLIGHT.md"
 SKILL_MD="$PLUGIN/skills/esas-design/SKILL.md"
 PENDING_MD="$PLUGIN/skills/esas-pending/SKILL.md"
 GRILL_MD="$PLUGIN/skills/grill/SKILL.md"
@@ -111,29 +112,36 @@ pass(){
   printf '  \033[32m✓\033[0m %s\n' "$1"
 }
 
-# ── The preflight, extracted from the command that ships it ───────────────────
+# ── The preflight, extracted from the artifact that ships it ──────────────────
 #
 # Sentinel comments rather than "the first ```sh block", so re-ordering the
 # document cannot silently point this suite at different code.
+#
+# The block used to live inline in commands/design.md and moved to
+# skills/esas-design/PREFLIGHT.md in 1b0691f, when the corpus was split. This
+# suite kept reading the old path and reported the block as MISSING for every
+# commit since — 15 behavioural assertions below had no preflight to run, and
+# said so in a voice indistinguishable from "the preflight is broken". Follow
+# the split; do not re-inline the block to satisfy the oracle.
 
 PREFLIGHT="$TMP/preflight.sh"
 
 printf '\npreflight extraction\n'
 
-if [ ! -f "$COMMAND_MD" ]; then
-  fail 'commands/design.md exists' "no file at $COMMAND_MD"
+if [ ! -f "$PREFLIGHT_MD" ]; then
+  fail 'skills/esas-design/PREFLIGHT.md exists' "no file at $PREFLIGHT_MD"
 else
   awk '/^# --- esas preflight ---/{on=1} on{print} /^# --- end esas preflight ---/{on=0}' \
-    "$COMMAND_MD" >"$PREFLIGHT"
+    "$PREFLIGHT_MD" >"$PREFLIGHT"
   if [ ! -s "$PREFLIGHT" ]; then
-    fail 'the preflight block is delimited by its sentinels in commands/design.md' \
+    fail 'the preflight block is delimited by its sentinels in skills/esas-design/PREFLIGHT.md' \
       'expected a block between `# --- esas preflight ---` and `# --- end esas preflight ---`'
   elif ! grep -q '^# --- end esas preflight ---' "$PREFLIGHT"; then
     fail 'the preflight block is closed by its end sentinel' 'opening sentinel found, closing one missing'
   elif ! "$PREFLIGHT_SH" -n "$PREFLIGHT" 2>"$TMP/err"; then
     fail 'the shipped preflight block parses as POSIX sh' "$( cat "$TMP/err" )"
   else
-    pass 'the preflight block extracts from commands/design.md and parses'
+    pass 'the preflight block extracts from skills/esas-design/PREFLIGHT.md and parses'
   fi
 fi
 
@@ -588,7 +596,7 @@ else
   # first draft of this check silently covered 2 of 17.
   grep -o "printf '[a-z_]*: [a-z-]*" "$PREFLIGHT" | sed "s/^printf '//" | sort -u >"$TMP/verdicts"
   found=$( wc -l <"$TMP/verdicts" | tr -d ' ' )
-  table=$( awk '/^# --- esas preflight ---/{on=1} /^# --- end esas preflight ---/{on=0;next} !on{print}' "$COMMAND_MD" )
+  table=$( awk '/^# --- esas preflight ---/{on=1} /^# --- end esas preflight ---/{on=0;next} !on{print}' "$PREFLIGHT_MD" )
   missing=''
   while IFS= read -r literal; do
     [ -n "$literal" ] || continue
@@ -706,17 +714,17 @@ assert_md "$BOARD_MD" 'both surfaces feed /plan' '`design.json` (structure)'
 printf '\ncommands/design.md — the relevance gate\n'
 
 assert_md "$COMMAND_MD" 'the gate is derived from the tree, not from a flag or a work kind' \
-  'armed by what the drafted decision tree names'
+  'Classify by the tree in front of you, not the label on the ticket'
 assert_md "$COMMAND_MD" 'it names the artifact kinds that arm it' \
-  'a command, an event, an aggregate, a policy, a read model, or a coupling'
-assert_md "$COMMAND_MD" 'relevance and capability are kept apart, in those words' \
-  'Capability asks whether a board is possible; relevance asks whether it is warranted'
+  'commands, events, policies, read models, aggregates'
+assert_md "$BOARD_MD" 'relevance and capability are kept apart, in those words' \
+  'and **capability**, the preflight'"'"'s verdicts'
 assert_md "$COMMAND_MD" 'the gate is answered before the preflight runs, never after' \
   'Relevance runs before the preflight'
 assert_md "$COMMAND_MD" 'on a no there is no board output at all — not a quieter one' \
-  'say nothing at all about boards'
+  'On a no, say nothing at all'
 assert_md "$COMMAND_MD" 'a design that turns structural late is not locked out by its opening' \
-  'arm mid-interview at the first artifact-touching fork'
+  'turns structural at fork 4 arms then'
 
 # Pinned on its own, and the load-bearing pin of this section: the gate asks for
 # a judgement, and no suite here can tell a right call from a wrong one (design
@@ -795,9 +803,9 @@ assert_md "$BOARD_MD" 'the offer carries the link to the open questions, not to 
 # `repoPath` is already in the command — the preflight matches the probe's
 # answer on it — so the field name alone would pass without the row saying
 # anything. The needles carry the row's own words instead.
-assert_md "$COMMAND_MD" 'the other-repo verdict names which repo holds the port' \
+assert_md "$PREFLIGHT_MD" 'the other-repo verdict names which repo holds the port' \
   'Name the repo that holds it'
-assert_md "$COMMAND_MD" 'and says where that name is read from' \
+assert_md "$PREFLIGHT_MD" 'and says where that name is read from' \
   'the `repoPath` in the `status:` line'
 
 printf '\nskills/esas-design — the D5 gestures\n'
@@ -826,24 +834,24 @@ fi
 # instead of saying so. So the anti-pattern is asserted as literally as the
 # gesture: a skill that describes `remove` and omits "do not rename it
 # RETRACTED" has not covered this.
-assert_md "$SKILL_MD" 'the body carries the withdrawal gesture' 'Scrap that, I was wrong'
+assert_md "$SKILL_MD" 'the body carries the withdrawal gesture' 'scrap that, I was wrong'
 assert_md "$SKILL_MD" 'it says a proposal-only element is withdrawn, not flagged removed' 'withdrawn'
 assert_md "$SKILL_MD" 'it names the label workaround as the thing not to do' 'RETRACTED'
 assert_md "$SKILL_MD" 'it warns the comment thread dies with the withdrawn proposal' 'The thread goes with it'
 assert_md "$SKILL_MD" 'it warns a withdrawal is not undo-able from the board' 'not undo-able'
 assert_md "$SKILL_MD" 'it separates withdrawing from reclassifying' 'this was never right'
 assert_md "$SKILL_MD" 'a stuck refusal is reported, never routed around with another verb' \
-  'never a reason to reach for a *different* verb'
+  'A refused verb is a fact to report'
 
 assert_md "$SKILL_MD" 'the body carries the reclassify gesture' 'that rename is a correction'
 assert_md "$SKILL_MD" 'it warns that a reclassify dirties a git-tracked file' '.esas.overrides.json'
 assert_md "$SKILL_MD" 'it warns the diff may be reformatting, not content' 'whitespace'
 assert_md "$SKILL_MD" 'it names the refusal a reclassify can hit' 'RECLASSIFY_WOULD_BE_STALE'
 assert_md "$SKILL_MD" 'pulling esas mid-session means restarting the session and the board' \
-  'restart the session **and** the board'
+  'Restart the session **and** the board'
 assert_md "$SKILL_MD" 'the fleet rule: board collaboration is main-checkout-only' 'main checkout'
 assert_md "$SKILL_MD" 'a worktree answers ESAS_DIR_MISSING and that is correct' 'ESAS_DIR_MISSING'
-assert_md "$SKILL_MD" 'the refused batch is retried whole, never probed item by item' 'never item by item'
+assert_md "$SKILL_MD" 'the refused batch is retried whole, never probed item by item' 'Never item by item'
 assert_md "$SKILL_MD" 'it points at the sibling skill for the hook line' 'esas-pending'
 
 # Scope guard, asserted rather than trusted: `comment` and `resolve` ship as
@@ -904,7 +912,7 @@ assert_md "$SKILL_MD" 'the frame carries a type and a timestamp and nothing else
 
 # Two invariants, and the count is stated so a later edit cannot quietly grow
 # the list back without the prose disagreeing with itself.
-assert_md "$SKILL_MD" 'the list is two long, and says so' '**Two invariants.**'
+assert_md "$SKILL_MD" 'the list is two long, and says so' '**Two invariants:**'
 assert_md "$SKILL_MD" 'invariant 1: a wake with nothing new is a normal outcome' \
   'Tolerate an empty wake'
 assert_md "$SKILL_MD" 'invariant 2: nothing is proposed off a half-answered fork' \
@@ -934,15 +942,15 @@ printf '\nskills/esas-design — reopening a closed channel\n'
 assert_md "$SKILL_MD" 'the notice key, spelled as esas-mcp spells it' 'esasSessionChannel'
 assert_md "$SKILL_MD" 'the one code to branch on' 'SESSION_CHANNEL_CLOSED'
 assert_md "$SKILL_MD" 'the notice arrives as an extra content block on a tool result' \
-  'extra text content block'
+  'carries an extra text block'
 assert_md "$SKILL_MD" 'the channel is reopened unasked, not offered' \
-  'without being asked'
+  'then and there, unasked'
 assert_md "$SKILL_MD" 'consumer rule: branch on the code, never the message' \
   'Branch on `code`, never on `message`'
 assert_md "$SKILL_MD" 'consumer rule: dial the ws field, never rebuild the URL' \
   'do not reconstruct it'
 assert_md "$SKILL_MD" 'consumer rule: a missing notice means nothing to do' \
-  'A missing notice means *nothing to do*'
+  'A missing notice means nothing to do'
 assert_md "$SKILL_MD" 'and the three silent states are named, so absence is never read as health' \
   'are **all silent**'
 
@@ -955,7 +963,7 @@ assert_md "$SKILL_MD" 'and the three silent states are named, so absence is neve
 # well-meaning edit smooths away first: it reads like a caveat and is load-
 # bearing.
 assert_md "$SKILL_MD" 'the not-user-input banner on the wake is not a refusal' \
-  'the notification is not the answer'
+  'the notification is the doorbell'
 
 # The contradiction that would deadlock the whole gesture: `esas-pending` carries
 # "never sync unless the user asks", and the summon arrives through a channel
@@ -985,11 +993,11 @@ assert_md "$PENDING_MD" 'and it stays narrow — the pending count is still tele
 printf '\nskills/esas-design — the map and the questions\n'
 
 assert_md "$SKILL_MD" 'the split itself, in the words the design gives it' \
-  'the terminal carries the map, the board carries the questions'
+  'terminal carries the map, the board carries the questions'
 assert_md "$SKILL_MD" 'independent forks batch to the canvas, dependent ones stay serial' \
   'Batch the independent forks to the board; serialize the dependent ones'
 assert_md "$SKILL_MD" 'the duplication question is dissolved, not policed' \
-  'Neither surface is a second copy of the other'
+  'Neither surface is a copy of the other'
 
 # ── skills/grill — the map half, pinned here on purpose ───────────────────────
 #
@@ -1052,17 +1060,17 @@ assert_md "$GRILL_MD" 'the standing rule survives the map: no picker, ever' \
 printf '\ncommands/design-multi — Phase B on the canvas\n'
 
 assert_md "$DESIGN_MULTI_MD" 'Phase B writes two verbs and no others' \
-  '`comment` and `resolve` are the only verbs Phase B writes'
+  '`comment` and `resolve` are the only verbs'
 assert_md "$DESIGN_MULTI_MD" 'the other verbs are refused for ADR-001, not for taste' \
-  'scopes the design layer to one unit of work'
+  'The design layer is scoped to one unit of work'
 assert_md "$DESIGN_MULTI_MD" 'the orchestrator is the sole writer of the batch, as it is of run.yaml' \
-  'No agent writes to the design layer'
+  'no agent writes to the design layer'
 assert_md "$DESIGN_MULTI_MD" 'every comment says which ticket it belongs to' \
   'Prefix every comment with its ticket id'
 assert_md "$DESIGN_MULTI_MD" 'the prefix does a fields work because the store has no field' \
-  'one flat chronological list per anchor'
+  'one flat list per anchor'
 assert_md "$DESIGN_MULTI_MD" 'an answered fork is resolved in the pass that folds it back' \
-  'Folding an answer back resolves its comment'
+  'Resolve each comment as its fork is answered'
 assert_md "$DESIGN_MULTI_MD" 'the flat thread is a ceiling to fall back from, not one to design around' \
   'Above roughly fifteen open forks, keep the whole list in the terminal'
 
@@ -1082,9 +1090,9 @@ assert_md "$DESIGN_MULTI_MD" 'the sitting holds the channel open, so the button 
 assert_md "$DESIGN_MULTI_MD" 'and it names the route it holds, as esas spells it' \
   'ws://127.0.0.1:3727/api/esas/ws'
 assert_md "$DESIGN_MULTI_MD" 'a batch is answered in bursts, and one socket serves every press' \
-  'the user presses once per burst'
+  'Hold the summon channel open across the sitting'
 assert_md "$DESIGN_MULTI_MD" 'the orchestrator opens it, as it posts the batch — never an agent' \
-  'no agent opens anything'
+  'opened as you post'
 refute_md "$DESIGN_MULTI_MD" 'no re-arming policy survives a persistent socket' \
   'Two quiet timeouts end the channel'
 
@@ -1133,7 +1141,7 @@ assert_md "$SKILL_MD" 'the one code that notice carries' 'SESSION_CHANNEL_CLOSED
 assert_md "$SKILL_MD" 'the port, named beside the rest of the contract' '3727'
 assert_md "$SKILL_MD" 'and where the port, the status route and the channel route are defined once' \
   'esas-store/src/board-endpoints.ts'
-assert_md "$COMMAND_MD" 'the port the board claims strictly' '3727'
+assert_md "$PREFLIGHT_MD" 'the port the board claims strictly' '3727'
 assert_md "$BOARD_MD" 'the status field that says whether anybody would hear the button' \
   'sessions'
 
