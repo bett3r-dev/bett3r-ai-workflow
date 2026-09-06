@@ -121,6 +121,22 @@ jobs:
           PREFLIGHT_SH=dash sh scripts/test-esas-design.sh
           PREFLIGHT_SH=bash sh scripts/test-esas-design.sh
 
+      # `bin/check-skill-shadows` runs in HOST repos, not here — it compares a
+      # repo's `.claude/` against the plugins actually installed on that machine,
+      # which this runner has none of. So what CI can gate is the detector
+      # itself, and that is the half that needs gating: it guards a failure whose
+      # only signature is absence (a local skill and a plugin skill of the same
+      # name both load, neither errors, and the staler local one wins), so it is
+      # the sole thing that would ever report one — and a detector that has
+      # quietly stopped detecting is indistinguishable from a clean fleet of
+      # repos. The suite drives it over throwaway host repos and plugin trees,
+      # and includes the mutation: edited into never matching, it must exit 2
+      # with SELF-CHECK FAILED rather than report a clean repo.
+      - name: Test the shadow detector (throwaway host repos)
+        run: |
+          sh scripts/test-skill-shadows.sh
+          SHADOW_PY=python3 sh scripts/test-skill-shadows.sh
+
   # These two are a SEPARATE JOB on purpose, not tidiness. Steps inside a job
   # run sequentially and fail-fast, so the first red step ends the job and every
   # step after it reports `skipped` — which, on a run already headlined `fail`,

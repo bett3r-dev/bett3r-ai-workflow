@@ -1,0 +1,259 @@
+#!/usr/bin/env python3
+"""Refuse a repo-local artifact that shadows an installed plugin artifact.
+
+Both surfaces are live in the same session. The session's artifact listing shows
+the repo-local one **unprefixed** (`create-aggregate`) and the plugin one
+**prefixed** (`bett3r-pv3-ai-skills:create-aggregate`), and nothing in either
+name says which is authoritative. Asked to "use the create-module skill", an
+agent may load either.
+
+Every consequence is quiet:
+
+  * A fix applied to the plugin never reaches a repo whose local copy shadows
+    it, and a fix applied to the local copy never reaches any other repo.
+  * The copies diverge, because nobody keeps N pairs in sync by hand, and the
+    divergence is invisible until behaviour differs.
+  * The local copy is usually the *older* one and usually the *longer* one — it
+    kept growing after the extraction — so it reads as the more authoritative of
+    the two while being the stale one.
+
+This is the failure whose signature is **absence**. Both files parse. Both
+load. Neither errors. Nothing anywhere goes red. One host repo carried ten such
+pairs for months; its own cleanup commit recorded what it cost: *"the bare
+(local, staler) name is what won resolution. DDD work was being done against
+outdated copies while the plugin looked installed."* It was found by a hand
+audit, twice, months apart — which is not a control.
+
+**What it compares against is the INSTALLED plugin, not a marketplace checkout.**
+`installed_plugins.json` names each plugin's version-keyed `installPath`, and
+that is the tree the session actually loads. A source checkout of the same
+plugin is a different corpus and routinely a different version (EVIDENCE.md §3:
+*the source tree is not the shipped artifact*). Point `--plugin-root` at a
+source tree only when you mean to ask a different question, and it will say so.
+
+Run it in a host repo:
+
+    check-skill-shadows                 # judges ./.claude
+    check-skill-shadows /path/to/repo
+    check-skill-shadows --list          # what is installed; judges nothing
+
+Exit 0 clean, 1 on any shadow, 2 when it could not judge — a distinction that
+matters, because "no plugins installed" must never read as "no shadows".
+
+Oracle: scripts/test-skill-shadows.sh in the bett3r-ai-workflow repo.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# What counts as a collision.
+#
+# Keyed by the directory a host repo puts them in, valued by how the artifact's
+# name is derived and which plugin surfaces it can collide with. Skills and
+# rules are folded together on purpose: a repo-local `.claude/rules/<x>.md` is
+# auto-loaded by path, so it shadows a plugin *skill* named `<x>` exactly as a
+# local skill dir would — that is the shape `ddd-patterns.md` had, and a check
+# that only compared like-for-like directories would have missed it.
+# ---------------------------------------------------------------------------
+
+LOCAL_SURFACES = (
+    # (host dir, how to enumerate, which plugin kinds it can shadow)
+    ("skills", "dirs", ("skills",)),
+    ("commands", "files", ("commands",)),
+    ("agents", "files", ("agents",)),
+    ("rules", "files", ("skills",)),
+)
+
+# Specimens for the positive control. (local kind, name, plugin kinds present)
+# -> must the detector call it a shadow? A detector that has never been seen to
+# fire is not evidence of a clean repo.
+SPECIMENS: tuple[tuple[str, str, tuple[str, ...], bool], ...] = (
+    ("skills", "critique", ("skills",), True),
+    ("commands", "build", ("commands",), True),
+    ("agents", "verifier", ("agents",), True),
+    # The path-auto-load case: a local *rule* named after a plugin *skill*.
+    ("rules", "ddd-patterns", ("skills",), True),
+    # Must NOT fire: no plugin artifact of a kind this surface can shadow.
+    ("skills", "e2e-instrument", (), False),
+    ("commands", "diagnose", ("skills",), False),
+    # A rule named after a plugin *command* is not a collision — commands are
+    # invoked as `/name`, rules are never addressed by name at all.
+    ("rules", "code-style", ("commands",), False),
+)
+
+
+def die(msg: str, code: int = 2) -> None:
+    sys.stderr.write(f"check-skill-shadows: {msg}\n")
+    raise SystemExit(code)
+
+
+def config_dir() -> Path:
+    return Path(os.environ.get("CLAUDE_CONFIG_DIR") or (Path.home() / ".claude"))
+
+
+def read_installed(explicit_roots: list[str]) -> tuple[dict[str, dict[str, set[str]]], str]:
+    """Return {plugin_name: {kind: {artifact names}}} and a line naming the corpus.
+
+    Reads installed_plugins.json by default, because that file names the tree
+    the session actually loads. --plugin-root overrides it and the corpus line
+    says so, so a report can never be mistaken for one about installed state.
+    """
+    if explicit_roots:
+        roots = [(Path(r).expanduser(), Path(r).name, "source tree") for r in explicit_roots]
+        return collect(roots), "source tree(s): " + ", ".join(str(r[0]) for r in roots)
+
+    manifest = config_dir() / "plugins" / "installed_plugins.json"
+    if not manifest.is_file():
+        die(f"no installed-plugin manifest at {manifest} — nothing to compare against.\n"
+            f"    Pass --plugin-root <dir> to judge against a checkout instead.")
+
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        die(f"cannot read {manifest}: {exc}")
+
+    roots: list[tuple[Path, str, str]] = []
+    for key, entries in (data.get("plugins") or {}).items():
+        for entry in entries or []:
+            path = entry.get("installPath")
+            if not path:
+                continue
+            roots.append((Path(path), key.split("@", 1)[0], entry.get("version", "?")))
+
+    if not roots:
+        # An empty manifest is not a clean bill of health. Say so and exit 2:
+        # "nothing installed" and "nothing shadowed" are different claims, and
+        # collapsing them is exactly the reassuring-failing shape this exists
+        # to stop.
+        die(f"{manifest} lists no installed plugins — this check has no corpus and judged nothing.")
+
+    return collect(roots), f"{len(roots)} installed plugin(s) per {manifest}"
+
+
+def collect(roots: list[tuple[Path, str, str]]) -> dict[str, dict[str, set[str]]]:
+    out: dict[str, dict[str, set[str]]] = {}
+    for root, name, version in roots:
+        if not root.is_dir():
+            # A manifest entry pointing at a tree that is gone: the plugin is
+            # not loadable, so it cannot be shadowed. Note it, do not fail.
+            sys.stderr.write(f"  note: {name} {version} — installPath is missing ({root}); skipped.\n")
+            continue
+        kinds: dict[str, set[str]] = {}
+        kinds["skills"] = {p.parent.name for p in root.glob("skills/*/SKILL.md")}
+        kinds["commands"] = {p.stem for p in root.glob("commands/*.md")}
+        kinds["agents"] = {p.stem for p in root.glob("agents/*.md")}
+        out[f"{name}@{version}"] = kinds
+    return out
+
+
+def local_artifacts(claude_dir: Path) -> dict[str, set[str]]:
+    found: dict[str, set[str]] = {}
+    for surface, how, _ in LOCAL_SURFACES:
+        d = claude_dir / surface
+        if not d.is_dir():
+            found[surface] = set()
+            continue
+        if how == "dirs":
+            found[surface] = {p.name for p in d.iterdir() if p.is_dir()}
+        else:
+            found[surface] = {p.stem for p in d.glob("*.md") if p.stem != "README"}
+    return found
+
+
+def find_shadows(local: dict[str, set[str]], plugins: dict[str, dict[str, set[str]]]):
+    shadows = []
+    for surface, _, shadowable in LOCAL_SURFACES:
+        for name in sorted(local.get(surface, ())):
+            for plugin, kinds in plugins.items():
+                for kind in shadowable:
+                    if name in kinds.get(kind, ()):
+                        shadows.append((surface, name, plugin, kind))
+    return shadows
+
+
+def self_check() -> None:
+    """Drive the detector over SPECIMENS before it judges anything real."""
+    for surface, name, present_kinds, expected in SPECIMENS:
+        local = {s: set() for s, _, _ in LOCAL_SURFACES}
+        local[surface] = {name}
+        plugins = {"specimen@0": {k: {name} for k in present_kinds}}
+        got = bool(find_shadows(local, plugins))
+        if got != expected:
+            die(f"SELF-CHECK FAILED on {surface}/{name} (plugin kinds {present_kinds or '()'}): "
+                f"expected {'a shadow' if expected else 'no shadow'}, got the opposite.\n"
+                f"    The detector is broken; every clean report it prints is worthless.", 2)
+
+
+def main(argv: list[str]) -> int:
+    args = argv[1:]
+    plugin_roots: list[str] = []
+    listing = False
+    target = "."
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--plugin-root":
+            i += 1
+            if i >= len(args):
+                die("--plugin-root needs a directory")
+            plugin_roots.append(args[i])
+        elif a == "--list":
+            listing = True
+        elif a in ("-h", "--help"):
+            sys.stdout.write(__doc__ or "")
+            return 0
+        elif a.startswith("-"):
+            die(f"unknown option {a}")
+        else:
+            target = a
+        i += 1
+
+    self_check()
+    plugins, corpus = read_installed(plugin_roots)
+
+    if listing:
+        for plugin, kinds in sorted(plugins.items()):
+            total = sum(len(v) for v in kinds.values())
+            print(f"{plugin}: {total} artifact(s) — " + ", ".join(
+                f"{len(v)} {k}" for k, v in sorted(kinds.items()) if v) or "none")
+        print(f"\ncorpus: {corpus}")
+        return 0
+
+    repo = Path(target).expanduser().resolve()
+    claude_dir = repo / ".claude"
+    if not claude_dir.is_dir():
+        print(f"✓ {repo}: no .claude/ directory — nothing local can shadow a plugin.")
+        return 0
+
+    local = local_artifacts(claude_dir)
+    shadows = find_shadows(local, plugins)
+    counted = sum(len(v) for v in local.values())
+
+    if shadows:
+        print(f"\033[31m✗\033[0m {repo}: {len(shadows)} repo-local artifact(s) shadow an installed plugin.\n")
+        for surface, name, plugin, kind in shadows:
+            where = f".claude/{surface}/{name}" + ("/" if surface == "skills" else ".md")
+            print(f"  {where}")
+            print(f"      shadows {plugin} {kind[:-1]} `{name}`")
+        print("\nBoth are live in the same session, the local one unprefixed and the plugin one")
+        print("prefixed, and nothing in either name says which is authoritative. Decide which")
+        print("surface owns each and DELETE the loser — leaving both live is N chances to edit")
+        print("the copy nobody loads. If the local copy has diverged, fold what is worth keeping")
+        print("into the plugin first, then delete it here.")
+        print(f"\ncorpus: {corpus}")
+        return 1
+
+    print(f"\033[32m✓\033[0m {repo}: {counted} repo-local artifact(s), none shadowing an installed plugin.")
+    print(f"  self-check: {len(SPECIMENS)} specimens "
+          f"({sum(1 for s in SPECIMENS if s[3])} must fire, {sum(1 for s in SPECIMENS if not s[3])} must not)")
+    print(f"  corpus: {corpus}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
