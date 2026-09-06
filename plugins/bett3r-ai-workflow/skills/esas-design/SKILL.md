@@ -64,7 +64,10 @@ Those go up in **one** `comment` call and get answered in any order — that is
 the entire payoff of a canvas, since a serial question posted to a board is just
 a slower terminal. A dependent fork cannot go up at all: its *wording* does not
 exist yet, so posting it posts your guess at what the user is about to say,
-under your name, and an answered guess resolves a fork nobody asked.
+under your name, and an answered guess resolves a fork nobody asked. It is
+the summon's second invariant — *never propose from partial answers* —
+pointed at asking instead of proposing: the same dependency edge, one step
+earlier.
 
 `resolve` each comment as its fork is answered. `resolved: false` is the shared
 to-decide list, and it is the only state the two surfaces share.
