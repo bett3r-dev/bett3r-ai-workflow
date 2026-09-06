@@ -458,44 +458,31 @@ PY
   fi
 fi
 
-# --- executed: the parse rule, against the decoy corpus ---
+# --- executed: the parse rule, THROUGH ITS PRODUCTION IMPLEMENTATION ---
 #
-# The rule under test, written once here, is the contract's: LAST line-anchored
-# match, and it must be the final line (trailing blank lines tolerated — the
-# `design-multi` precedent is deliberately tolerant of transport mangling).
+# Until this slice nothing consumed the line, so this file carried its own
+# reference copy of the rule. That copy is gone. `unit-lane` now reads a step's
+# verdict through the shipped `bin/lane-step`, and two implementations that
+# nothing runs side by side are drift no test can see: the fixtures would go on
+# proving the rule about a parser production had stopped using. So every fixture
+# below drives the same entrypoint a lane invokes, and each mutation it kills is
+# a mutation of the thing that actually runs.
+#
 # Exit 3 means NO VERDICT, which the reader reads as `infra`.
-cat > "$TMP/lane-step-parse.py" <<'PY'
-import re, sys
-lines = open(sys.argv[1], encoding="utf-8").read().split("\n")
-while lines and not lines[-1].strip():
-    lines.pop()
-# Column 0 is enforced ONCE, by `match()` (which anchors at position 0). A
-# leading `^` here as well would be redundant, and a redundant anchor is
-# unkillable: with both present, `inline-marker-transcript.txt` stays green
-# under either mutation alone, so neither clause is load-bearing. One anchor,
-# and swapping it for `search()` turns that fixture red.
-token = re.compile(r"LANE-STEP:v(\d+)((?:\s+[A-Za-z_][A-Za-z0-9_]*=\S+)+)\s*$")
-hits = [i for i, line in enumerate(lines) if token.match(line)]
-if not hits:
-    sys.exit(3)
-i = hits[-1]
-if i != len(lines) - 1:
-    sys.exit(3)
-print(lines[i].strip())
-PY
+LANE_STEP="$PLUGIN/bin/lane-step"
 
 lane_decoy="$LANE_STEP_FIXTURES/decoy-transcript.txt"
 if [ ! -f "$lane_decoy" ]; then
   fail 'the decoy transcript fixture exists' "no such file: $lane_decoy"
 else
-  got=$( "$MARKER_PY" "$TMP/lane-step-parse.py" "$lane_decoy" 2>"$TMP/err" )
-  want='LANE-STEP:v1 step=build outcome=success slices=3/3 commits=3'
+  got=$( "$LANE_STEP" "$lane_decoy" 2>"$TMP/err" )
+  want=$( printf 'step=build\noutcome=success\nslices=3/3\ncommits=3' )
   if [ "$got" = "$want" ]; then
     pass 'the parse rule returns the real last line, not the prose or the fenced example'
   else
     fail 'the parse rule returns the real last line, not the prose or the fenced example' \
-         "got:  ${got:-<no verdict>}" \
-         "want: $want" \
+         "got:  $( printf '%s' "${got:-<no verdict>}" | tr '\n' ' ' )" \
+         "want: $( printf '%s' "$want" | tr '\n' ' ' )" \
          'first-match, or match-anywhere, returns the model'\''s own explanation of the marker.'
   fi
 fi
@@ -504,7 +491,7 @@ lane_trailing="$LANE_STEP_FIXTURES/trailing-prose-transcript.txt"
 if [ ! -f "$lane_trailing" ]; then
   fail 'the trailing-prose transcript fixture exists' "no such file: $lane_trailing"
 else
-  got=$( "$MARKER_PY" "$TMP/lane-step-parse.py" "$lane_trailing" 2>"$TMP/err" )
+  got=$( "$LANE_STEP" "$lane_trailing" 2>"$TMP/err" )
   rc=$?
   if [ "$rc" -eq 3 ] && [ -z "$got" ]; then
     pass 'a marker followed by more prose is NO VERDICT, so absence still means infra'
@@ -527,7 +514,7 @@ lane_inline="$LANE_STEP_FIXTURES/inline-marker-transcript.txt"
 if [ ! -f "$lane_inline" ]; then
   fail 'the inline-marker transcript fixture exists' "no such file: $lane_inline"
 else
-  got=$( "$MARKER_PY" "$TMP/lane-step-parse.py" "$lane_inline" 2>"$TMP/err" )
+  got=$( "$LANE_STEP" "$lane_inline" 2>"$TMP/err" )
   rc=$?
   if [ "$rc" -eq 3 ] && [ -z "$got" ]; then
     pass 'a marker embedded in prose on the final line is NO VERDICT, not a gate-red'
@@ -542,17 +529,20 @@ fi
 # clause means by "nothing after it", and it is ADR-004's second mitigation:
 # give the token a shape that does not occur in prose ABOUT it. A model that
 # starts the line correctly, on the last line, and then appends an aside after
-# the attributes satisfies last-match, final-line AND column 0 — the other
-# three fixtures are all blind to it. The trailing `\s*$` is what rejects it;
-# drop that clause and the parser hands the reader the whole line, aside and
+# the attributes satisfies last-match, final-line AND column 0, so the decoy,
+# trailing-prose and inline-marker fixtures are all three blind to it. The
+# trailing `\s*$` is what rejects it; drop that clause and the parser hands the reader the whole line, aside and
 # all, as the step's verdict: a "success" whose attribute list ends in
-# unparseable prose. Dropping it turns this assertion red and leaves the other
-# seven green.
+# unparseable prose. Measured: dropping it reddens this assertion and the
+# punctuated-value one below, and nothing else. This is the only fixture that
+# reddens for that mutation ALONE, which is what pins the clause; the
+# punctuated-value fixture is reached by it too because a trailing full stop is
+# also, structurally, an aside after the attributes.
 lane_same_line="$LANE_STEP_FIXTURES/same-line-prose-transcript.txt"
 if [ ! -f "$lane_same_line" ]; then
   fail 'the same-line-prose transcript fixture exists' "no such file: $lane_same_line"
 else
-  got=$( "$MARKER_PY" "$TMP/lane-step-parse.py" "$lane_same_line" 2>"$TMP/err" )
+  got=$( "$LANE_STEP" "$lane_same_line" 2>"$TMP/err" )
   rc=$?
   if [ "$rc" -eq 3 ] && [ -z "$got" ]; then
     pass 'a marker with prose appended after the attributes is NO VERDICT, not a success'
@@ -560,6 +550,34 @@ else
     fail 'a marker with prose appended after the attributes is NO VERDICT, not a success' \
          "rc=$rc got: ${got:-<none>}" \
          'without the end-of-line clause the model'\''s aside is returned as part of the verdict.'
+  fi
+fi
+
+# The value grammar, which is the clause the deleted reference implementation
+# did NOT have. It typed a value as `\S+`, and `\S+` absorbs sentence
+# punctuation: `commits=3.` parses, with the value `3.`. That was harmless
+# while nothing read the attributes, and this slice is what stops it being
+# harmless — a model ending its final line with a full stop is ordinary prose,
+# not a malformed marker, and the SAME absorption one attribute earlier turns
+# the verdict token itself into `success.`, a word in no vocabulary, handed to
+# the caller as the step's outcome. The production grammar requires a value's
+# separators to have alphanumerics on both sides, so this line fails the token
+# match outright and the step reads as `infra`: retried, not believed.
+# Loosening the value back to `\S+` turns this assertion red and leaves the
+# other four fixtures green (each of their markers is either clean or already
+# rejected by a different clause).
+lane_punctuated="$LANE_STEP_FIXTURES/punctuated-value-transcript.txt"
+if [ ! -f "$lane_punctuated" ]; then
+  fail 'the punctuated-value transcript fixture exists' "no such file: $lane_punctuated"
+else
+  got=$( "$LANE_STEP" "$lane_punctuated" 2>"$TMP/err" )
+  rc=$?
+  if [ "$rc" -eq 3 ] && [ -z "$got" ]; then
+    pass 'a value ending in sentence punctuation is NO VERDICT, not a value ending in a full stop'
+  else
+    fail 'a value ending in sentence punctuation is NO VERDICT, not a value ending in a full stop' \
+         "rc=$rc got: $( printf '%s' "${got:-<none>}" | tr '\n' ' ' )" \
+         'a `\S+` value grammar absorbs the full stop, and on `outcome=` it corrupts the verdict token.'
   fi
 fi
 
@@ -711,6 +729,98 @@ else
   fail 'the absorbed filename survives only in the ADR that recorded it as history' \
        "still named in:" $( printf '%s\n' "$stale" | sed "s#^$ROOT/##" ) \
        'two names for one brief is two scrub paths, and the scrub can miss one.'
+fi
+
+# ---------------------------------------------------------------------------
+printf '\nSeam E — unit-lane is a CALLER of the per-step surface\n\n'
+# ---------------------------------------------------------------------------
+#
+# The consuming project's architecture.md 6.1 says `unit-lane` "mostly
+# dissolves: its per-step commands survive, its orchestration role moves to the
+# scheduler." Resolved here as: the agent survives, its *step-protocol
+# judgement* dissolves. There is one implementation of the step protocol and
+# more than one caller of it, and `unit-lane` is now the local sequencer — it
+# runs the five commands over `.work/lane.yaml` and takes each outcome from the
+# `LANE-STEP:` line rather than from the step's prose.
+#
+# A presence oracle, for the reason this file's header already argues: the
+# failure this seam exists to prevent is a DELETION — a step quietly dropped
+# from the sequence, or the marker read replaced by "judge from the report" in a
+# tidy-up — and deletion is what a presence oracle catches. Wrongness is a
+# review.
+
+# One assertion per step, because losing ONE step from the sequence is the
+# silent failure: four steps still run, still report, and still produce a PR —
+# one that skipped its plan or its gate. The needle is the row's command/marker
+# pair rather than the bare command name, which appears throughout the file for
+# other reasons and so would be killed by nothing.
+present "$UNIT_LANE_MD" '`/start` | `step=start`'               'unit-lane sequences /start'
+present "$UNIT_LANE_MD" '`/design` | `step=design`'             'unit-lane sequences /design'
+present "$UNIT_LANE_MD" '`/plan` | `step=plan`'                 'unit-lane sequences /plan'
+present "$UNIT_LANE_MD" '`/build` | `step=build`'               'unit-lane sequences /build'
+present "$UNIT_LANE_MD" '`/verify-build` | `step=verify-build`' 'unit-lane sequences /verify-build'
+
+# And that the outcome comes from the contract, not from reading the step back.
+# This is the half that makes the lane THIN: a sequencer that still adjudicates
+# each step from its prose is the old agent with a table added.
+present "$UNIT_LANE_MD" 'through `lane-step`' \
+  'unit-lane takes each outcome from the LANE-STEP: contract, not from the step'\''s prose'
+
+# The seam the sequence surfaced, and the reason it needs an assertion rather
+# than a sentence: `/start` deletes `.work/lane.yaml` unconditionally
+# (`commands/start.md` Step 3 — asserted in Seam D above, as [SEAM 2]), and
+# `/start` is step 1 of the very sequence above. Slice 3 reasoned about "a
+# `/start` on your own branch", which is not a lane; nobody wrote down that the
+# LANE runs `/start` too. Uncarried, steps 2-5 run with no brief and
+# `/verify-build` finds no `gateDeferred`, so it runs the FULL gate — silently,
+# and once per lane. This is the caller-side mitigation; the durable fix is in
+# `start.md` and is not this slice's to make.
+present "$UNIT_LANE_MD" 'Copy the brief aside before you run `/start` and restore it immediately after' \
+  'unit-lane carries its brief across the step that deletes it'
+
+# ONE parser. Slice 2 wrote the parse rule inside this oracle because nothing
+# consumed the line; this slice makes `unit-lane` the reader, and a reference
+# copy left standing beside the production one is drift nothing can see —
+# nobody runs both, so the fixtures would go on certifying a rule production had
+# stopped using. Pinned on the regex SOURCE shape — the marker token followed
+# immediately by a capture-group open-paren — which a transcript's literal
+# marker (`LANE-STEP:v1 step=...`) never contains, so a fixture is never
+# mistaken for an implementation.
+#
+# The needle is assembled at runtime and never written as one literal, because
+# a guard searching for its own search string finds itself: written whole, this
+# very line would be reported as the second implementation. That is not
+# fastidiousness — it is the shape that would have been "fixed" by excluding
+# this file from the search, which is precisely the file the guard exists to
+# watch, since this is where the second copy lived.
+#
+# Deliberately conservative in one direction: a commented-out second copy trips
+# it. Commenting a parser out is exactly how a second one comes back.
+# `-a` for the same reason the ADR-003 guard above gives: this repo has a file
+# whose binary-ness grep implementations disagree about. `-F` so the paren is a
+# character and not the start of a group.
+LANE_PARSER="$PLUGIN/scripts/lane-step-parse.py"
+lane_token_needle='LANE-STEP:v'
+lane_token_needle="$lane_token_needle("
+# `__pycache__` is excluded, and this is a NARROWING rather than an exemption:
+# a `.pyc` there is not loadable without its source (sourceless import requires
+# the file to sit AT the source path -- byte-compile a module, delete the .py,
+# import it, and you get ModuleNotFoundError). So a hit under `__pycache__/` is
+# definitionally a derivative of the one file already excluded above, and cannot
+# be a second parser anyone runs; excluding it removes zero reachable
+# implementations. Byte-compiling the guarded file otherwise turns this assertion
+# red, and a guard that reddens on ordinary use of the thing it guards is a guard
+# somebody mutes -- the muting is how the mitigation dies, not the false positive.
+second=$( grep -ralF "$lane_token_needle" "$ROOT/scripts" "$PLUGIN" "$ROOT/docs" 2>/dev/null \
+          | grep -vF "$LANE_PARSER" \
+          | grep -v '/__pycache__/' || true )
+if [ -z "$second" ]; then
+  pass 'the production parser is the only implementation of the parse rule'
+else
+  fail 'the production parser is the only implementation of the parse rule' \
+       "a second implementation of the token regex lives in:" \
+       $( printf '%s\n' "$second" | sed "s#^$ROOT/##" ) \
+       'two parsers nothing runs together drift, and the fixtures certify the wrong one.'
 fi
 
 printf '\n'

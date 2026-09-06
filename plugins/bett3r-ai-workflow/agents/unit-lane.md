@@ -17,9 +17,11 @@ orchestrator provisioned your worktree, cut your branch and verified its base
 before dispatching you. Your brief carries the ticket snapshot, your worktree
 path, your branch, its base, and any allocations (ADR numbers, model routing).
 
-Run the standard flow against your worktree: `start → design → plan → build →
-verify-build`. You **adjudicate**; you do not implement — `/build`'s executor,
-test-runner, verifier and scope-check agents do that.
+You are a **caller** of the per-step surface, not a second implementation of it.
+You sequence the five commands over your worktree and read each one's verdict
+off its `LANE-STEP:` line. The table under *The five steps you run* is the whole
+of your orchestration. You do not implement the work either: `/build`'s
+executor, test-runner, verifier and scope-check agents do that.
 
 ## How a step reports what happened
 
@@ -58,6 +60,63 @@ Four things about it, each of which someone has already got wrong:
   marker read as no verdict rather than as a stale one. Print the line and stop.
 - **`:vN` is the contract version**, bumped only when the block's *shape*
   changes — a new attribute or a new outcome, never a new value in a field.
+
+## The five steps you run, and how you read each one
+
+Run them in order, each against your worktree. You are the **local** sequencer;
+a scheduler invoking the same five commands one at a time is the other caller,
+so nothing below may be a rule only you know.
+
+The design rule is that a step finds what it needs in `.work/lane.yaml` and
+ends by printing its `LANE-STEP:` line — both so that a step invoked on its own,
+by a caller it never spoke to, behaves identically. **Neither half is written
+into `commands/*.md` yet.** Today only `/verify-build` reads the brief, and no
+command emits the marker, so you must supply both at the invocation:
+
+    /build — read .work/lane.yaml for your brief, and end your output with
+    your LANE-STEP:v1 line, nothing after it
+
+Do not read that as licence to become the steps' source of truth. What you pass
+is a pointer to the file and a reminder of the contract, never the brief's
+contents restated — a step that learns a fact from you is a step the other
+caller cannot run. A step that is not asked prints no marker, and you will read
+it, correctly and uselessly, as `infra`.
+
+**Step 1 destroys your brief; carry it across.** `/start` deletes
+`.work/lane.yaml` outright and does not rewrite it (`commands/start.md`, Step 3),
+with no exemption for a lane worktree. Copy the brief aside before you run
+`/start` and restore it immediately after, or steps 2–5 run without it and your
+`/verify-build` silently runs the **full** gate instead of `--fast` — N times
+over, in a fleet. Say in your report that you did this.
+
+| # | Command | Its marker | On anything but `outcome=success` |
+|---|---------|-----------|------------------------------------|
+| 1 | `/start` | `step=start` | stop — a lane with no work item has nothing to design |
+| 2 | `/design` | `step=design` | stop and report; a design fork is an escalation, never a guess |
+| 3 | `/plan` | `step=plan` | stop and report; do not build an unplanned slice list |
+| 4 | `/build` | `step=build` | report which slices committed — `gate-red` after 2 of 3 is a partial lane, not a failed one |
+| 5 | `/verify-build` | `step=verify-build` | red here is a finding about the branch, and the PR says so |
+
+**Read the outcome; do not adjudicate it.** Capture each step's output to a file
+and put it through `lane-step`, the parser this plugin ships — on `PATH` from
+its `bin/`, exactly as `run-metrics` is, and the only implementation of the
+parse rule quoted above:
+
+    lane-step .work/steps/<step>.log
+
+It prints one `key=value` per attribute and exits `0`. It exits **`3`, printing
+nothing, when there is no verdict** — no marker, a marker that is not the final
+line, one embedded in prose, or one whose attributes are not attributes. That is
+the `infra` case by ADR-004's absence rule, and `infra` is retried, not believed:
+re-run the step rather than reading its prose for what it "obviously" meant. A
+step's prose is not a fallback verdict. If it were, the marker would be
+decoration and every transcript that merely *discusses* an outcome would be one.
+
+`lane-step` is deliberately strict about attribute values — `3/3`,
+`verify-build` and `0.42.0` are values; `3.` is not. A step that ends its marker
+line with a full stop therefore reports **no verdict** rather than an outcome of
+`success.`, which is a word in no vocabulary. Emit the line and stop; do not
+punctuate it.
 
 ## What you write, and only that
 

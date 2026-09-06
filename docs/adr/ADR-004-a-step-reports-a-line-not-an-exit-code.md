@@ -101,6 +101,26 @@ Unresolved deliberately. Resolving toward tolerance is a change to the **leading
 (`token.match`) alone; the end-of-line and final-line clauses live at separate sites and are
 unaffected.
 
+## Open: what a `v1` reader does with a `vN` line
+
+Surfaced by writing the first real reader (`plugins/bett3r-ai-workflow/scripts/lane-step-parse.py`).
+The token regex captures the version as a group and then nothing consults it, so a
+`LANE-STEP:v2` line is parsed by the v1 rules and its attributes are handed to the caller as if the
+shape had not changed. That is exactly what bumping `:vN` was supposed to make loud.
+
+Recorded rather than decided, for the reason the section above gives: the place it would otherwise
+get answered is a parser, silently. The two sides:
+
+- **Refuse an unknown version** (no verdict, so `infra`, so a retry). Safe, and wrong the one time a
+  `v2` step is dispatched into a fleet whose lanes are still `v1` — every such step reads as infra
+  forever, which is a stall rather than an error.
+- **Parse it anyway.** Right whenever the bump added an attribute a v1 reader does not look at, and
+  silently wrong when it changed the meaning of one it does.
+
+Neither can be chosen without knowing whether callers and steps are versioned together, which is a
+fleet-deployment question this ADR does not reach. There has been no `v2`, so nothing is broken
+today.
+
 ## Status
 
 Accepted. Supersedes nothing. Extends **ADR-003**'s seam discipline: the line and the brief file are
