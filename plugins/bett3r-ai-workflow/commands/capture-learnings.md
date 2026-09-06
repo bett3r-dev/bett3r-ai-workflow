@@ -72,7 +72,9 @@ Propose the target; the user can redirect. **Default to local/memory when ambigu
 Resolve the repo from the plugin's `plugin.json` `repository` (else `origin`). **Dedupe first** — `gh issue list --label ai-learning --search "<keywords>"`; comment on a near-duplicate rather than re-filing. Then auto-compose and create — **one confirm, no form to fill**:
 
 ```
-gh issue create -R <owner>/<repo> --label ai-learning --title "<concise>" --body "<template>"
+# Write the body to a file first. `--body "<markdown>"` is a shell string: backticked paths, flags
+# and symbols are command-substituted away, `gh` exits 0, and the loss is silent and partial.
+gh issue create -R <owner>/<repo> --label ai-learning --title "<concise>" --body-file <path>
 ```
 
 ```
