@@ -13,6 +13,8 @@ Optional slice id(s) to run (e.g. `2` or `2,3`). Default: all `passes: false` sl
 
 ## Step 1 — Load state
 
+**Record the mode first.** Overwrite `.work/mode.yaml` with `mode: build` and the current work item before reading anything else — full rewrite, never an append, so the marker names the command running now instead of the one that ran last on this branch.
+
 Read `.work/slices.yaml`. If it doesn't exist: "No slices found. Run `/plan` first."
 
 The `passes` flags + the git history **are** the progress — there is no separate progress file. Skip any slice already `passes: true` (report "resuming").

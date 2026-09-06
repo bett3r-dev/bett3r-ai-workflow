@@ -101,6 +101,17 @@ jobs:
           sh scripts/test-knowledge-store-hooks.sh
           HOOK_SH=dash sh scripts/test-knowledge-store-hooks.sh
           HOOK_SH=bash sh scripts/test-knowledge-store-hooks.sh
+      # Seam A (the .work/ mode marker) and Seam B (the /design Step 1 context
+      # extension point) are prose contracts in the base plugin's commands, so
+      # nothing compiles them and no existing runner collects them. The marker's
+      # load-bearing half is the CLEARING, whose failure signature is absence —
+      # a stale work item read as the current one, with nothing going red.
+      # One invocation, deliberately: unlike the hook suites above, this oracle
+      # extracts a YAML block rather than a shell block, so there is no
+      # interpreter to vary and a dash/bash matrix here would run the identical
+      # assertions three times while reading as interpreter coverage.
+      - name: Test the flow seams (mode marker + context providers)
+        run: sh scripts/test-flow-seams.sh
       # /design's board-mode preflight is a shell block inside the command's
       # markdown, so it has no compiler and no import to break loudly. This
       # extracts and runs the shipped block against fixture host repos.

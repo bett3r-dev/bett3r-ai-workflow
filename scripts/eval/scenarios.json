@@ -343,6 +343,41 @@
       ],
       "must_not_state": [],
       "_calibration": "must_open is deliberately empty: the routing lives inline in build.md, so there is no pointer to follow. What is asserted is that both gate agents are named AND that a model is attached to each dispatch — an answer that dispatches the verifier without naming opus has read the step and skipped the policy, which is the exact failure."
+    },
+    {
+      "id": "context-providers-reached",
+      "why": "Seam B declares an extension point in /design Step 1 and moves its whole contract behind a pointer. The rules that only exist behind it are the ones that keep it harmless: failure is tolerated (a throwing or timing-out provider must NOT fail /design), zero providers is the normal case and is silent, and a hook was rejected on this repo's own measured evidence (esas-pending.sh). A session that reads past the pointer will improvise the failure policy, and the improvised answer — surface the error, or abort grounding — is the one this seam exists to prevent.",
+      "guards_split": "commands/design.md -> CONTEXT-PROVIDERS.md",
+      "artifact": "plugins/bett3r-ai-workflow/commands/design.md",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/design.md. You are running it on a repo that DOES declare a context provider. You are in Step 1 (Ground). You have read the ticket and CONTEXT.md, and you now invoke the declared provider — it hangs, then raises. State concretely what you do next, what (if anything) the user sees, and what you write in the design doc. Then state what would have happened instead in a repo that declares no provider at all.",
+      "must_open": [
+        "CONTEXT-PROVIDERS.md"
+      ],
+      "must_state": [
+        [
+          "does not fail",
+          "never fails",
+          "not fail",
+          "tolerated",
+          "continue"
+        ],
+        [
+          "degrade",
+          "degraded"
+        ],
+        [
+          "zero providers",
+          "no providers",
+          "none declared",
+          "normal case"
+        ]
+      ],
+      "must_not_state": [
+        "abort",
+        "halt the design",
+        "block"
+      ],
+      "_calibration": "The failure-tolerance rule and the silence-on-zero-providers rule both live ONLY in CONTEXT-PROVIDERS.md; design.md states them in one compressed clause each, so a model that reads only the command can partially satisfy the text assertions. must_open is therefore the load-bearing assertion here, not must_state."
     }
   ]
 }

@@ -24,6 +24,17 @@ Create a branch off the current branch. Name it from the ticket id + a slug (e.g
 
 Create `.work/ and add it to .gitignore` if it is missing. It holds `design.md` and `slices.yaml` — ephemeral, never committed.
 
+**Then clear and rewrite `.work/mode.yaml`.** This is the load-bearing half of the marker, not a formality: everything else in `.work/` — `design.md`, `slices.yaml`, `passes:`, `design-snapshot/`, `fleet-lane.yaml` — is residue that accumulates and is never erased, so a workspace left over from the previous branch reads exactly like the current one's. Delete any existing `.work/mode.yaml` outright and write a fresh one; never merge with, patch, or preserve a field from what was there. A marker that survives a new `/start` is worse than no marker, because it is confidently wrong about which work item you are on.
+
+```yaml
+mode: start          # start | design | plan | build — the command that wrote this, nothing else
+work_item: TV1-1594  # the ticket id, or the branch slug when there is no id
+branch: TV1-1594-delete-items
+updated: 2026-01-30T14:02:11Z   # ISO-8601 UTC
+```
+
+Four fields, overwritten in full by each command that touches it — **never appended to**, since append-only reproduces the exact residue bug the file exists to fix. It is one small file inside an already-gitignored directory, so a repo that ignores it is unaffected.
+
 ## Step 4 — Record the base, do NOT run the suite
 
 Write `.work/known-baseline-failures.md` with the base **sha and branch**, and the line **"not captured — capture on demand"**. That is the whole step. It costs seconds.
@@ -47,6 +58,6 @@ If a ticket id is given and a tracker MCP is available (Jira/GitHub), fetch the 
 
 ## Principles
 
-- Thin. The branch, the recorded base sha and `.work/` are all `start` produces — **no test run**.
+- Thin. The branch, the recorded base sha, `.work/` and a cleared `.work/mode.yaml` are all `start` produces — **no test run**.
 - `.work/` is gitignored and disposable; git is the record.
 

@@ -33,9 +33,13 @@ Classify by the tree in front of you, not the label on the ticket. "Frontend" is
 
 ## Step 1 — Ground
 
+**Record the mode first.** Overwrite `.work/mode.yaml` with `mode: design` and the current work item before anything else in this step — the file is rewritten in full, never appended, so re-running `/design` on a branch that has already been through another command yields a marker naming `design` rather than whatever ran last. `/start` owns clearing it; every other command owns keeping it honest.
+
 Read the ticket, then the relevant bounded context's `CONTEXT.md` (locate via `.esas.config.json` `domainEventsPath`). Where there is none, fall back through `docs/adr/` to **the module headers of the symbols you were told to grep** — and read the headers even when the ADRs hit; in a repo that writes doctrine into headers, the ADRs are the summary and the headers are the source. Say "grounding degraded: no CONTEXT.md" in the doc and recommend `/seed-context`.
 
 Treat the glossary as **evidence to verify, not ground truth**.
+
+**Then collect context contributions, if this repo declares any.** Step 1 is a declared extension point: an optional, repo-local **context provider** may contribute items to the grounding, and items that survive become ordinary Step 3 forks carrying their verbatim source span. The base plugin ships no provider and **zero providers is the normal case** — with none declared, do not go looking, do not mention that an extension point was consulted, and this step behaves exactly as it did before. A provider that errors, times out or returns nothing **never fails `/design`**: note the degrade beside "grounding degraded" and continue. The full contract — the shape of a contribution, why a hook was rejected on this repo's own measured evidence, and why this is `/design` only — is [CONTEXT-PROVIDERS.md](../CONTEXT-PROVIDERS.md).
 
 ### The ticket is evidence, not spec
 
