@@ -21,6 +21,44 @@ Run the standard flow against your worktree: `start → design → plan → buil
 verify-build`. You **adjudicate**; you do not implement — `/build`'s executor,
 test-runner, verifier and scope-check agents do that.
 
+## How a step reports what happened
+
+Every pipeline step ends by printing **one `LANE-STEP:v1` line**, and that line
+is the verdict. The exit code is a coarse cross-check, never the contract
+([ADR-004](../../../docs/adr/ADR-004-a-step-reports-a-line-not-an-exit-code.md)).
+This block is the whole specification of the format — there is no second copy:
+
+```yaml
+marker: LANE-STEP:v1
+attributes: step outcome slices commits
+emits: success | gate-red | blocked-on
+absent: infra
+position: the last line of the step's output, at column 0, nothing after it
+parse: take the last line-anchored match, and require it to be the final line
+```
+
+Read as an example:
+
+    LANE-STEP:v1 step=build outcome=success slices=3/3 commits=3
+
+Four things about it, each of which someone has already got wrong:
+
+- **Every structured fact is an attribute on the marker**, never in the prose
+  around it. A reader matches the token alone.
+- **`infra` is never emitted.** A step that reaches any conclusion prints a
+  line, so **no line is the `infra` signal** — and that costs nothing from a
+  step that is being OOM-killed, disconnected, or destroyed underneath. Do not
+  add an emission path for it; it would have to run inside a dying process.
+- **The parse rule is part of the contract**, because the producer here is a
+  *model*, not a script. Your stdout also carries your own prose about the
+  marker: you can mention the token while explaining it, quote a full example
+  inline, or print one inside a fenced block. So the rule is the **last**
+  match, required to be the **final** line — which is exactly what makes those
+  three shapes harmless, and what makes an afterthought printed after your
+  marker read as no verdict rather than as a stale one. Print the line and stop.
+- **`:vN` is the contract version**, bumped only when the block's *shape*
+  changes — a new attribute or a new outcome, never a new value in a field.
+
 ## What you write, and only that
 
 - Your worktree's tree, your branch, your PR.

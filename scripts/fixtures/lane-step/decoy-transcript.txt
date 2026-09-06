@@ -1,0 +1,17 @@
+Starting the build step against the brief.
+
+I will finish this step by emitting a LANE-STEP: line, which is how a caller
+learns what happened without reading this prose. A build step that committed
+everything ends with `LANE-STEP:v1 step=build outcome=success slices=9/9 commits=9`,
+and the caller reads that line rather than my exit code.
+
+The shape is:
+
+```
+LANE-STEP:v1 step=plan outcome=gate-red slices=0/4 commits=0
+```
+
+Slice 3 went red on the typecheck, so I stopped, fixed it, and re-ran the gate.
+The gate is green and all three slices are committed.
+
+LANE-STEP:v1 step=build outcome=success slices=3/3 commits=3

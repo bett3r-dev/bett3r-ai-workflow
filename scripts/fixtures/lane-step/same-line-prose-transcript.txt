@@ -1,0 +1,5 @@
+Working the build step. Slice 2 needed a second pass on the gate.
+
+The gate is green.
+
+LANE-STEP:v1 step=build outcome=success slices=3/3 commits=3 (and slice 2 was the tricky one)

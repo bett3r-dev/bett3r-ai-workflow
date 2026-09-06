@@ -78,6 +78,29 @@ own park state (`Needs a Human`, deliberately not `Blocked`) is built on the dif
 class costs one enum value. The record behind it — the question, the options, what each implies — is
 separate work.
 
+## Open: whether `position:` tolerates leading indentation
+
+The three mitigations above are now each held by a fixture — last-match, final-line, and token
+shape. Column 0 is enforced by `re.match`, so a marker that is **indented** — inside a list item, a
+quoted block, a nested bullet — yields no verdict and is read as `infra`.
+
+That is contract-conformant today: `position:` says "at column 0". It is recorded here because it is
+a **design question nobody has answered**, not an implementation gap, and because the place it would
+otherwise get answered is a fixture, which would decide it silently.
+
+The two sides are real:
+
+- **Tolerate it.** A model emitting its final line inside a list item or a quoted block is a
+  plausible shape, and the whole premise of this ADR is that the producer is a model rather than a
+  script. Trailing blank lines are already tolerated for exactly this reason.
+- **Do not.** Indentation-tolerance re-opens the decoy the corpus exists to reject: an example
+  marker indented inside a fenced block becomes acceptable, and that is the shape a model produces
+  most often — quoting the contract at itself while explaining it.
+
+Unresolved deliberately. Resolving toward tolerance is a change to the **leading anchor**
+(`token.match`) alone; the end-of-line and final-line clauses live at separate sites and are
+unaffected.
+
 ## Status
 
 Accepted. Supersedes nothing. Extends **ADR-003**'s seam discipline: the line and the brief file are
