@@ -42,6 +42,9 @@ BUILD_MD="$PLUGIN/commands/build.md"
 PROVIDERS_MD="$PLUGIN/CONTEXT-PROVIDERS.md"
 PENDING_MD="$PLUGIN/skills/esas-pending/SKILL.md"
 UNIT_LANE_MD="$PLUGIN/agents/unit-lane.md"
+PROVISIONER_MD="$PLUGIN/agents/provisioner.md"
+RUN_REPORT_MD="$PLUGIN/commands/run-report.md"
+VERIFY_BUILD_MD="$PLUGIN/commands/verify-build.md"
 LANE_STEP_FIXTURES="$ROOT/scripts/fixtures/lane-step"
 MARKER_PY=${MARKER_PY:-python3}
 
@@ -237,7 +240,8 @@ design.md|$DESIGN_MD
 start.md|$START_MD
 plan.md|$PLAN_MD
 build.md|$BUILD_MD
-unit-lane.md|$UNIT_LANE_MD"}
+unit-lane.md|$UNIT_LANE_MD
+provisioner.md|$PROVISIONER_MD"}
 
 # COUPLING_FORBIDDEN_TERMS may likewise be overridden, one term per line.
 # Terms are combined into a single case-insensitive alternation.
@@ -272,7 +276,8 @@ design.md
 start.md
 plan.md
 build.md
-unit-lane.md'
+unit-lane.md
+provisioner.md'
 COUPLING_REQUIRED_TERMS='knowledge store
 knowledge-store'
 
@@ -556,6 +561,156 @@ else
          "rc=$rc got: ${got:-<none>}" \
          'without the end-of-line clause the model'\''s aside is returned as part of the verdict.'
   fi
+fi
+
+# ---------------------------------------------------------------------------
+printf '\nSeam D — the lane brief (.work/lane.yaml)\n\n'
+# ---------------------------------------------------------------------------
+#
+# The brief is a FILE, not a message. The argument was already made in this repo
+# for one field of it and is true of all of them: a lane that is `/clear`ed,
+# handed off, or resumed by a fresh agent loses the message and keeps the file.
+# A step invoked on its own is the limit case — every step is a fresh agent.
+#
+# So the brief has exactly ONE file, `.work/lane.yaml`, and exactly one scrub
+# path. Two files meant two scrub paths, and a scrub that misses one leaves a
+# marker that is confidently wrong about which run this worktree belongs to.
+#
+# Three things are executed here rather than reviewed: the schema block parses,
+# it still carries every field the absorbed marker carried (dropping one is
+# silent, not loud — see `runDir` below), and the old filename no longer names a
+# live artifact anywhere outside the ADR that recorded it as history.
+
+present "$PROVISIONER_MD" '.work/lane.yaml' 'the writer (provisioner) names .work/lane.yaml'
+
+# --- executed: the brief's schema block parses and keeps every field ---
+#
+# Extracted from the writer's own section, which is the only specification of
+# the format — same discipline as `mode.yaml`'s block in start.md. Scoped to the
+# section rather than "the first fenced block in the file", because provisioner.md
+# fences another manifest earlier and the first-block shortcut would silently
+# assert against that one instead.
+awk '/^## 6 /{s=1} s&&/^```yaml$/{f=1;next} f&&/^```$/{exit} f' "$PROVISIONER_MD" > "$TMP/lane-brief.yaml"
+
+if [ ! -s "$TMP/lane-brief.yaml" ]; then
+  fail 'the lane brief schema block is extractable from the writer' \
+       'no fenced ```yaml block found under provisioner.md section 6 — the brief format is specified nowhere executable'
+else
+  pass 'the lane brief schema block is extractable from the writer'
+
+  # TOP-LEVEL keys only. Unlike `mode.yaml`, this brief legitimately nests
+  # (a runner/glob map, a list of handed-down facts), so indented lines are
+  # deliberately out of scope here; what is asserted is the field set the
+  # readers key off, all of which are top level.
+  "$MARKER_PY" - "$TMP/lane-brief.yaml" > "$TMP/lane-brief-keys" 2>"$TMP/err" <<'PY'
+import re, sys
+keys = []
+for raw in open(sys.argv[1], encoding="utf-8"):
+    line = raw.rstrip("\n")
+    if line[:1] in (" ", "\t", "-"):
+        continue
+    line = line.split("#", 1)[0].strip()
+    if not line:
+        continue
+    m = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*):(\s+\S.*)?", line)
+    if not m:
+        sys.exit("unparseable lane brief line: %r" % line)
+    if m.group(1) in keys:
+        sys.exit("duplicate key in lane brief: %r" % m.group(1))
+    keys.append(m.group(1))
+print(" ".join(keys))
+PY
+  if [ $? -ne 0 ]; then
+    fail 'the lane brief schema parses' "$( cat "$TMP/err" )"
+  else
+    pass 'the lane brief schema parses'
+    brief_keys=" $( cat "$TMP/lane-brief-keys" ) "
+
+    # The absorbed marker's fields. `runDir` is the one that fails SILENTLY if
+    # it goes: a fleet unit is not found by branch, by construction, so a lost
+    # `runDir` does not error — run resolution simply finds nothing.
+    missing=
+    for want in runId runDir unitId integrationBranch gateDeferred; do
+      case "$brief_keys" in *" $want "*) ;; *) missing="$missing $want" ;; esac
+    done
+    if [ -z "$missing" ]; then
+      pass 'the brief keeps every field the absorbed lane marker carried'
+    else
+      fail 'the brief keeps every field the absorbed lane marker carried' \
+           "missing:$missing" \
+           'an absorbed field dropped in the rename is exactly what a rename loses quietly.'
+    fi
+
+    # The brief half: what a fresh agent invoked on one step needs and cannot
+    # ask anybody for.
+    missing=
+    for want in ticket worktree branch base drift runners preconditions \
+                adrAllocations modelRouting handedDownFacts; do
+      case "$brief_keys" in *" $want "*) ;; *) missing="$missing $want" ;; esac
+    done
+    if [ -z "$missing" ]; then
+      pass 'the brief carries what a step invoked on its own cannot ask anyone for'
+    else
+      fail 'the brief carries what a step invoked on its own cannot ask anyone for' \
+           "missing:$missing" \
+           'a field left out of the file is a field a /clear-ed or resumed lane has no way to recover.'
+    fi
+  fi
+fi
+
+# Every reader names the file, each at the place that reader USES it. A reader
+# left on the old name reads a file nothing writes any more, which is
+# indistinguishable from "this is not a lane". Each needle below is that
+# reader's own use-site rather than the bare filename: for a reader that also
+# has a use-site needle, a bare-filename assertion is killed by nothing the
+# use-site needle does not already kill — and a clause no mutation can kill on
+# its own reads exactly like a clause that works. (Measured: renaming the file
+# in verify-build.md reddened both its bare-filename row and its gateDeferred
+# row; renaming ONE of run-report's two mentions reddened neither.)
+present "$UNIT_LANE_MD" '.work/lane.yaml' 'unit-lane reads .work/lane.yaml'
+
+# run-report has TWO use sites and needs one assertion each — the auto-discovery
+# path, and the field it discovers through. Losing either alone is silent, and
+# this is the reader most easily missed: a fleet unit is not found by branch, by
+# construction, so a lost runDir returns nothing rather than failing.
+present "$RUN_REPORT_MD" "automatic from a lane worktree's \`.work/lane.yaml\`" \
+  'run-report auto-discovers the run from the brief in the worktree'
+present "$RUN_REPORT_MD" '`.work/lane.yaml` `runDir`' \
+  'run-report still resolves the run through the brief'\''s runDir'
+
+# The absorbed JOB, not just the absorbed field name: the one behavior the
+# separate marker existed for must survive the rename.
+present "$VERIFY_BUILD_MD" '**`.work/lane.yaml` exists and carries `gateDeferred: true`**' \
+  '/verify-build keys the gate mode off the brief'\''s gateDeferred field'
+present "$VERIFY_BUILD_MD" 'run **`--fast`** only' \
+  'and a deferred gate still selects --fast, not the full gate'
+
+# [SEAM 2], applied to the absorbed file. One file, one scrub path — and the
+# scrub is delete-and-rewrite, never a merge. A stale brief makes a PR claim a
+# deferral to a run that no longer exists.
+present "$START_MD" 'Delete any existing `.work/mode.yaml` or `.work/lane.yaml` outright' \
+  '[SEAM 2] /start deletes a stale lane brief, not only the mode marker'
+present "$START_MD" 'One file means one scrub path' \
+  '[SEAM 2] and the reason there is only one brief file is stated, not just the rule'
+
+# The old name must not survive as a LIVE artifact. ADR-003 is excluded by
+# name: an accepted ADR records what was decided then, and rewriting it to
+# match a later change is falsifying the record, not tidying it.
+# `-a` is not needed by /usr/bin/grep, which reads run-metrics.mjs (NUL bytes
+# and all) perfectly well. It is here because this repo now has a file where
+# grep implementations DISAGREE: ugrep treats it as binary and matches nothing,
+# BSD and GNU grep do not. So the guard's reach would otherwise be a property of
+# whose `grep` is on PATH. One character buys independence from that.
+# The exclusion is anchored to the full ADR-003 path prefix: a bare 'ADR-003'
+# substring would silently exempt any future filename containing it.
+stale=$( grep -ral 'fleet-lane\.yaml' "$PLUGIN" "$ROOT/docs" 2>/dev/null \
+         | grep -v 'docs/adr/ADR-003-' || true )
+if [ -z "$stale" ]; then
+  pass 'the absorbed filename survives only in the ADR that recorded it as history'
+else
+  fail 'the absorbed filename survives only in the ADR that recorded it as history' \
+       "still named in:" $( printf '%s\n' "$stale" | sed "s#^$ROOT/##" ) \
+       'two names for one brief is two scrub paths, and the scrub can miss one.'
 fi
 
 printf '\n'

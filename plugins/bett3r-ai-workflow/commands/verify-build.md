@@ -22,8 +22,8 @@ Read `.work/slices.yaml` and `.work/design.md`. All slices should be `passes: tr
 
 Which mode you run depends on whether this unit is landing on its own:
 
-- **`.work/fleet-lane.yaml` exists** (written by the `provisioner`; this unit is one lane of a `/start-multi` fleet) → run **`--fast`** only. The full gate is hoisted to `/merge-multi`, which runs it once on the run's integration branch — the only tree where cross-unit breakage exists at all. Record in the PR body: *"Full gate deferred to the fleet gate, run `<runId>`."* That line is load-bearing: without it the PR reads as fully certified.
-- **No marker** (a single `/start` flow) → run **`--full`**, baseline-diffed. Its report block goes into the PR body under **Verification**, verbatim, counts included.
+- **`.work/lane.yaml` exists and carries `gateDeferred: true`** (the lane brief, written by the `provisioner`; this unit is one lane of a `/start-multi` fleet) → run **`--fast`** only. The full gate is hoisted to `/merge-multi`, which runs it once on the run's integration branch — the only tree where cross-unit breakage exists at all. Record in the PR body: *"Full gate deferred to the fleet gate, run `<runId>`."* That line is load-bearing: without it the PR reads as fully certified.
+- **No brief, or one that does not defer** (a single `/start` flow) → run **`--full`**, baseline-diffed. Its report block goes into the PR body under **Verification**, verbatim, counts included.
 
 A `FAIL` blocks Step 6 — do not open the PR over a red gate. A `SKIP` or `INCONCLUSIVE` step does not block, but is named in the PR body; silence there reads as coverage. This step *produces* the verdict every sweep below assumes.
 

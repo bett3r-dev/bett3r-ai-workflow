@@ -186,9 +186,10 @@ that ran and collected nothing is **inconclusive**, not green — and in a fleet
 both the number of instruments and the number of ways each is green about
 nothing are multiplied by N.
 
-Your worktree carries `.work/fleet-lane.yaml`, which is what tells your
-`/verify-build` to run the **fast** gate and leave the full one to
-`/merge-multi`. If you go red against a baseline, an **inconclusive** baseline
+Your worktree carries `.work/lane.yaml` — your whole brief as a file, which
+is what a step invoked on its own has instead of a dispatch it never saw. Its
+`gateDeferred` field is what tells your `/verify-build` to run the **fast** gate
+and leave the full one to `/merge-multi`. If you go red against a baseline, an **inconclusive** baseline
 capture is a blocker, not a clean one.
 
 Escalate — do not guess — when a fork the design does not answer blocks you.
