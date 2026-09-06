@@ -31,6 +31,12 @@ Classify by the tree in front of you, not the label on the ticket. "Frontend" is
 
 ---
 
+## Step 0 — Read your brief, if there is one
+
+**If `.work/lane.yaml` exists, read it before anything else.** It is this unit's whole brief — written into the worktree from the outside — and it is where your inputs come from, not the caller. Take from it: the ticket and its resolved-design block (`ticket.body`), the `drift` verdict at BASE — what the resolved design still holds for and what it does not — `handedDownFacts` **with their `applies` / `verify whether it applies` labels intact**, and `adrAllocations`, whose reserved numbers you use instead of scanning refs. Its **absence is a valid state** (a single `/start` flow has no brief), so say which of the two you ran under rather than defaulting silently: a missing brief and a unit that legitimately has none are indistinguishable, and that is exactly how a lane runs on the wrong defaults with nothing red.
+
+Never accept these facts at the invocation instead. A step that learns a fact from whoever called it is a step **the other caller cannot run** — the per-step surface exists so that a step invoked on its own, by a caller it never spoke to, behaves identically.
+
 ## Step 1 — Ground
 
 **Record the mode first.** Overwrite `.work/mode.yaml` with `mode: design` and the current work item before anything else in this step — the file is rewritten in full, never appended, so re-running `/design` on a branch that has already been through another command yields a marker naming `design` rather than whatever ran last. `/start` owns clearing it; every other command owns keeping it honest.

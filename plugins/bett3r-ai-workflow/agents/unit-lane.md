@@ -75,22 +75,16 @@ naming its own line, so you invoke them plainly and read what comes back.
 
     /build
 
-The brief half is not there yet — only `/verify-build` reads `.work/lane.yaml`
-on its own — so for the other four, pass the **pointer** at the invocation:
+**The brief half now lives in the commands too**: each of the five opens by
+reading `.work/lane.yaml` for its own inputs, and `/start` leaves a brief that
+names this worktree and this branch alone rather than scrubbing it
+(`commands/start.md`, Step 3). So you invoke each step bare — the command name
+and nothing else — and pass neither the brief nor a pointer to it.
 
-    /plan — read .work/lane.yaml for your brief
-
-Never the brief's contents restated. A step that learns a fact from you is a
-step the other caller cannot run, and that is the whole reason the emitting half
-moved out of this file: a rule only the local sequencer knows is a rule the
-scheduler does not have.
-
-**Step 1 destroys your brief; carry it across.** `/start` deletes
-`.work/lane.yaml` outright and does not rewrite it (`commands/start.md`, Step 3),
-with no exemption for a lane worktree. Copy the brief aside before you run
-`/start` and restore it immediately after, or steps 2–5 run without it and your
-`/verify-build` silently runs the **full** gate instead of `--fast` — N times
-over, in a fleet. Say in your report that you did this.
+Never the brief's contents restated, and no longer a pointer either. A step that
+learns a fact from you is a step the other caller cannot run, and that is the
+whole reason both halves moved out of this file: a rule only the local sequencer
+knows is a rule the scheduler does not have.
 
 | # | Command | Its marker | On anything but `outcome=success` |
 |---|---------|-----------|------------------------------------|
