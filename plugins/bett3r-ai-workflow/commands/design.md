@@ -120,6 +120,8 @@ Markdown + Mermaid, reviewable in one pass, ephemeral and **not committed**. Its
 
 Corollary: **any artifact the design names as a test seam, gate, or tracer-bullet instrument is committed, not left untracked** — or the doc states plainly that the first slice creates it. A design depending on an uncommitted file is neither reviewable nor resumable.
 
+**And the same test applies to this document.** `.work/design.md` is gitignored, so it is a correct *scratch* location and a wrong *citation target*: a path under `.work/` resolves for one worktree on one machine and for no other reader, ever. The moment anything outside this session will point at the design — a ticket body, a sibling ticket, a fleet brief, an ADR — **the cited copy is committed and the citation names the committed path**, not the `.work/` one. Nothing errors either way, which is the whole problem: a lane on a fresh clone finds nothing at the cited path, does not stop, and builds from the ticket body — which this flow treats as a *summary* of the design rather than the design. Six lanes of one run read the doc only because they happened to run in the authoring worktree; mid-run it was committed elsewhere and corrected (531 → 586 lines: a falsified claim, a new rule), and every ticket still pointed at the dead path. **The rule that outlives the specifics: a citation target must be reachable from the base its reader branches from.**
+
 Then summarise the resolved design, the `CONTEXT.md`/ADR updates, and the open risks:
 
 > Review `.work/design.md`. When it's right, run `/plan` to cut it into vertical slices.
