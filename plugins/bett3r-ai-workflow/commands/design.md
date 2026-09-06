@@ -19,6 +19,8 @@ If this repo has no `.esas/`, skip this section entirely and **say nothing about
 
 If it does: board mode is on only when a board is both **possible** (`.esas/` with a `graph.json`, `esas-mcp` registered) and **warranted** (the design's forks name graph artifacts — commands, events, policies, read models, aggregates). Run the preflight in `../skills/esas-design/PREFLIGHT.md` for capability, and read `../skills/esas-design/BOARD-SETUP.md` for the seeding rules and what changes below; `esas-design` owns the standing rules once the tools are live.
 
+**Relevance runs before the preflight, never after it.** The order is the mechanism, not a preference: the preflight prints verdicts and the table under it turns them into things you say out loud — *run the extractor*, *here is the launch line*, *another repo holds the port*. Run it first and the silent path has already spoken by the time the gate answers no. Which is also why relevance is **not** a preflight key and must never become one: a shell block cannot read a decision tree.
+
 Three constraints on the gate itself:
 
 - **On a no, say nothing at all** — no offer, no "we won't need it", no mention a gate was consulted. A mention hands the user a second surface to have an opinion about in a design where the answer is already known.
