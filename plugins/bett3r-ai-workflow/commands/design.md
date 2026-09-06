@@ -126,6 +126,14 @@ Then summarise the resolved design, the `CONTEXT.md`/ADR updates, and the open r
 
 > Review `.work/design.md`. When it's right, run `/plan` to cut it into vertical slices.
 
+## Step 6 — Report the outcome
+
+End your output with this line, at column 0, as the **final** line — nothing after it, not even a closing remark, and no trailing punctuation (`success.` is a value in no vocabulary, and a step that punctuates its marker reports no verdict at all):
+
+    LANE-STEP:v1 step=design outcome=<success|blocked-on>
+
+`success` when the decision tree is resolved and `.work/design.md` is written. `blocked-on` when a fork needs a human and no amount of reading settles it — under a fleet caller that is an escalation, never a guess, and a guessed fork is the expensive kind because it reads as resolved. No gate runs here, so never `gate-red`. Never emit `infra`: its signal is the line's **absence**, which costs nothing from a step being killed underneath. The format contract — attributes, the parse rule, `:vN` — is stated once in [unit-lane](../agents/unit-lane.md); do not restate it here.
+
 ## Principles
 - The grill is the engine; the docs are a side effect. Don't let doc-writing slow the interview.
 - `CONTEXT.md` is durable and committed; `design.md` is ephemeral.

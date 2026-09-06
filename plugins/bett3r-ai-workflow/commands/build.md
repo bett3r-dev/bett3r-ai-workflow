@@ -158,6 +158,14 @@ When all targeted slices are `passes: true` and committed, report: slices comple
 
 > Run `/verify-build` for the whole-PR coherence review and to open the PR.
 
+## Step 6 — Report the outcome
+
+End your output with this line, at column 0, as the **final** line — nothing after it, not even a closing remark, and no trailing punctuation (`success.` is a value in no vocabulary, and a step that punctuates its marker reports no verdict at all):
+
+    LANE-STEP:v1 step=build outcome=<success|gate-red|blocked-on> slices=<done>/<total> commits=<n>
+
+`success` only when every targeted slice is `passes: true` **and** committed. `gate-red` when a slice exhausted its retries or a gate stayed red — `2/3` committed is a **partial lane, not a failed one**, so report the counts and let the caller decide. `blocked-on` for an ESCALATE that needs a human. Take `slices=` and `commits=` from the committed shas, not from memory. Never emit `infra`: its signal is the line's **absence**, which costs nothing from a step being killed underneath. The format contract — attributes, the parse rule, `:vN` — is stated once in [unit-lane](../agents/unit-lane.md); do not restate it here.
+
 ## Principles
 
 - Dispatch to agents; don't implement. Each agent gets a fresh context. **Name a model on every dispatch** — an unnamed one is the session's, the most expensive available.

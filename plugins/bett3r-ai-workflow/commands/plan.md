@@ -89,6 +89,14 @@ Record each created sub-task id back into `.work/slices.yaml` (a `jira` field pe
 
 > Slices ready in `.work/slices.yaml`{ and published as Jira sub-tasks}. Run `/build` to drive them.
 
+## Step 8 — Report the outcome
+
+End your output with this line, at column 0, as the **final** line — nothing after it, not even a closing remark, and no trailing punctuation (`success.` is a value in no vocabulary, and a step that punctuates its marker reports no verdict at all):
+
+    LANE-STEP:v1 step=plan outcome=<success|blocked-on> slices=<n>
+
+`success` when `.work/slices.yaml` is written; `slices=` is the number cut. `blocked-on` when the design cannot be sliced without an answer you do not have — do not emit a slice list you would not build. No gate runs here, so never `gate-red`. Never emit `infra`: its signal is the line's **absence**, which costs nothing from a step being killed underneath. The format contract — attributes, the parse rule, `:vN` — is stated once in [unit-lane](../agents/unit-lane.md); do not restate it here.
+
 ## Principles
 
 - Vertical, never horizontal; tracer bullet first; prefactor before feature.

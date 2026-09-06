@@ -180,6 +180,14 @@ The ephemeral `.work/` (design.md, slices.yaml) has now been fully promoted (ADR
 
 > If this work surfaced an improvement to the *flow or a shared skill/plugin* (not this feature), run `/capture-learnings` to route it to the repo that owns it.
 
+## Step 9 — Report the outcome
+
+End your output with this line, at column 0, as the **final** line — nothing after it, not even a closing remark, and no trailing punctuation (`success.` is a value in no vocabulary, and a step that punctuates its marker reports no verdict at all):
+
+    LANE-STEP:v1 step=verify-build outcome=<success|gate-red|blocked-on>
+
+`success` when the gate is green and the PR is open. `gate-red` when Step 2's gate returned `FAIL` — which already blocks Step 6, so this reports a branch that is red rather than a step that failed. `blocked-on` when the PR cannot be opened for a reason a human must resolve (a conflict, a missing base). A `SKIP` or `INCONCLUSIVE` step is **not** `gate-red`: name it in the PR body and report `success`. Never emit `infra`: its signal is the line's **absence**, which costs nothing from a step being killed underneath. The format contract — attributes, the parse rule, `:vN` — is stated once in [unit-lane](../agents/unit-lane.md); do not restate it here.
+
 ## Principles
 
 - The PR is the system of record — invest in its body, not in committed scratch docs.
