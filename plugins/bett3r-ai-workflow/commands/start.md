@@ -68,7 +68,7 @@ End your output with this line, at column 0, as the **final** line — nothing a
 
     LANE-STEP:v1 step=start outcome=<success|blocked-on>
 
-`success` when the branch exists and `.work/` is scaffolded. `blocked-on` when there is no resolvable work item, or the branch cannot be cut from the base — a lane with no work item has nothing to design. This step runs no suite (Step 4), so it never reports `gate-red`. Never emit `infra`: its signal is the line's **absence**, which costs nothing from a step being killed underneath. The format contract — attributes, the parse rule, `:vN` — is stated once in [unit-lane](../agents/unit-lane.md); do not restate it here.
+`success` when the branch exists and `.work/` is scaffolded. `blocked-on` when there is no resolvable work item, or the branch cannot be cut from the base — a lane with no work item has nothing to design. This step runs no suite (Step 4), so it never reports `gate-red`. **Immediately before printing it**, run `lane-step-record '<the identical line>'`: it commits the verdict to your branch when `.work/lane.yaml` carries `verdictOnBranch: true` and does nothing otherwise; a non-zero exit is reported in your prose, never by changing the line. Never emit `infra` — its signal is the line's absence. The format contract is stated once in [unit-lane](../agents/unit-lane.md); do not restate it here.
 
 ## Principles
 

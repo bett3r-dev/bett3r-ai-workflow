@@ -172,7 +172,7 @@ End your output with this line, at column 0, as the **final** line — nothing a
 
     LANE-STEP:v1 step=build outcome=<success|gate-red|blocked-on> slices=<done>/<total> commits=<n>
 
-`success` only when every targeted slice is `passes: true` **and** committed. `gate-red` when a slice exhausted its retries or a gate stayed red — `2/3` committed is a **partial lane, not a failed one**, so report the counts and let the caller decide. `blocked-on` for an ESCALATE that needs a human. Take `slices=` and `commits=` from the committed shas, not from memory. Never emit `infra`: its signal is the line's **absence**, which costs nothing from a step being killed underneath. The format contract — attributes, the parse rule, `:vN` — is stated once in [unit-lane](../agents/unit-lane.md); do not restate it here.
+`success` only when every targeted slice is `passes: true` **and** committed. `gate-red` when a slice exhausted its retries or a gate stayed red — `2/3` committed is a **partial lane, not a failed one**, so report the counts and let the caller decide. `blocked-on` for an ESCALATE that needs a human. Take `slices=` and `commits=` from the committed shas, not from memory. **Immediately before printing it**, run `lane-step-record '<the identical line>'`: it commits the verdict to your branch when `.work/lane.yaml` carries `verdictOnBranch: true` and does nothing otherwise; a non-zero exit is reported in your prose, never by changing the line. Never emit `infra` — its signal is the line's absence. The format contract is stated once in [unit-lane](../agents/unit-lane.md); do not restate it here.
 
 ## Principles
 

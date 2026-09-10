@@ -138,7 +138,7 @@ End your output with this line, at column 0, as the **final** line — nothing a
 
     LANE-STEP:v1 step=design outcome=<success|blocked-on>
 
-`success` when the decision tree is resolved and `.work/design.md` is written. `blocked-on` when a fork needs a human and no amount of reading settles it — under a fleet caller that is an escalation, never a guess, and a guessed fork is the expensive kind because it reads as resolved. No gate runs here, so never `gate-red`. Never emit `infra`: its signal is the line's **absence**, which costs nothing from a step being killed underneath. The format contract — attributes, the parse rule, `:vN` — is stated once in [unit-lane](../agents/unit-lane.md); do not restate it here.
+`success` when the decision tree is resolved and `.work/design.md` is written. `blocked-on` when a fork needs a human and no amount of reading settles it — under a fleet caller that is an escalation, never a guess, and a guessed fork is the expensive kind because it reads as resolved. No gate runs here, so never `gate-red`. **Immediately before printing it**, run `lane-step-record '<the identical line>'`: it commits the verdict to your branch when `.work/lane.yaml` carries `verdictOnBranch: true` and does nothing otherwise; a non-zero exit is reported in your prose, never by changing the line. Never emit `infra` — its signal is the line's absence. The format contract is stated once in [unit-lane](../agents/unit-lane.md); do not restate it here.
 
 ## Principles
 - The grill is the engine; the docs are a side effect. Don't let doc-writing slow the interview.
