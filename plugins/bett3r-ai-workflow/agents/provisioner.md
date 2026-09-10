@@ -164,6 +164,13 @@ Write `.work/known-baseline-failures.md` exactly as `/start` step 4 specifies: t
 
 **The eager capture is withdrawn** (2026-08-24). The argument for it was "paying once here beats N lanes paying in parallel" — but the base side of a baseline diff is only needed when a lane's `HEAD` is **red**, and a fleet's lanes are usually green. Paying once per *worktree* to serve the minority case is the same unbounded cost one level down. A lane that goes red captures the base side then, for **its red suites by name**.
 
+**But "not captured" must not read as "nothing to know here."** That is the opposite of true when a tier is **deliberately red** — a committed-red acceptance oracle is a practice this flow's ecosystem encourages, so the more it spreads the more this costs, and three lanes once each re-proved the same intentional failure. This is a **hand-down, not a capture**: the orchestrator ran the host repo's full gate on the integration base before cutting any child (`/start-multi` step 5), so **that run's verdict is the integration-tier baseline** and it arrives as an input to you. Record per tier the command, the verdict, and for each known failure its name, reason and whether it is deliberate — one line is the whole fix:
+
+    epic-goal-oracle.integration.test.ts — COMMITTED RED ON PURPOSE
+    (ESAS-82 seams REGISTRATION, GIT EXPORT); inherited, not yours; do not "fix"
+
+Where a tier was genuinely not measured, say *not measured*; where it is known red, say so. Silence about a red tier reads identically to silence about a green one.
+
 Two things that do not change: a **wrong shared baseline is worse than none** (lanes then chase failures that were never theirs, or wave real ones through as pre-existing cover), and a capture from a run that executed nothing is not a baseline — `Tests: 0 total`, an all-skipped tier, or a suite that died at collection all exit 0. If you do capture on demand and get that, record **inconclusive** and say so in your report; never an empty failure set.
 
 **Your build in step 1 is still mandatory.** It is what makes the worktree *ready* — unrelated to the baseline, and the thing that stops "40 of 57 files collected zero tests" being misread as a broken baseline.
