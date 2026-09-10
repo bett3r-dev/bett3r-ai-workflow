@@ -14,11 +14,13 @@ A ticket id and/or a short description of the work.
 
 If `.work/slices.yaml` exists and holds slices not all `passes: true`, note it: "Unfinished work in `.work/` () — starting new work replaces it." **Default: proceed.** That prior work's real record is its branch/commits/PR; `.work/` is disposable. (Only pause if the user explicitly asked to be warned.)
 
-**Records guard:** if `.work/learnings.md` has unprocessed entries (captured via the `record` skill), warn before replacing: "N unprocessed records in `.work/learnings.md` — run `/capture-learnings` first?" Losing these is the exact failure `record` exists to prevent, so default to surfacing it here.
+**Records guard:** if `.work/learnings.md` **or any `.work/multi/*/learnings.md`** has unprocessed entries (captured via the `record` skill), warn before replacing, naming the run where there is one: "N unprocessed records in `.work/multi/<run-id>/learnings.md` (fleet run `<run-id>`) — run `/capture-learnings` first?" Losing these is the exact failure `record` exists to prevent, so default to surfacing it here. **The fleet path is not an afterthought:** `/start-multi` step 6 aggregates every lane's buffer there and step 7 then deletes the worktrees the originals lived in, so that file is the run's **sole surviving copy** — and a guard that checks one literal path is a warning that does not print, which looks exactly like nothing being wrong.
 
 ## Step 2 — Branch
 
-Create a branch off the current branch. Name it from the ticket id + a slug (e.g. `TV1-1594-delete-items`), or from the description if there's no id.
+Create a branch off the current branch. Name it from the ticket id + a slug (e.g. `TV1-1594-delete-items`), or from the description if there's no id. That is the default and the common case: a plain local `/start` off the default branch.
+
+**But check before you create — the branch name may belong to the EXECUTION VENUE, not to you.** If the current branch is already the venue's — it is not the repo's default branch, and it is not one this command created — **keep it and cut nothing.** Record the work item in `.work/mode.yaml` as Step 3 does and say in one line which branch the lane is on and why it was not renamed. The constraint, not the instance: **ticket identity lives in `.work/mode.yaml`'s `work_item:`, never in the branch slug**, and a hosted session that may push only to `claude/*` is one venue, not the rule. Without this the step points the wrong way — the model has to override its own command file to get it right, and the failure lands at push, with the work already done.
 
 ## Step 3 — Scaffold `.work/`
 
