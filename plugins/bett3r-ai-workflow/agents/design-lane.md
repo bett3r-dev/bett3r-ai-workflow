@@ -48,6 +48,42 @@ around a non-constraint reads exactly like one shaped around a real one.
    downstream. A sizing hint ("this is one file") never overrides an acceptance
    criterion written repo-scoped — say so where they differ.
 
+   **A citation comes only from output that carries its own line number** —
+   `grep -n`, `cat -n`, or the Read tool. Never compute one from `sed -n 'A,Bp'`,
+   which prints content without numbers: the offset is done by hand, and a
+   self-review that re-reads the same `sed` output confirms the error. One lane
+   split cleanly — nine `sed`-derived citations wrong, every `grep -n`-derived
+   one exact. Read a range with `sed` for prose if you like, then re-derive the
+   citation with `grep -n` on the symbol. **Paste the symbol name from the
+   source; never retype or paraphrase it** — `isFrozen (session.ts:204)` for
+   `isSessionFrozen (session.ts:203)` survives a spot-check of that line, and a
+   wave-0 fact propagates to every lane by construction. Before you emit, sweep
+   your own draft: `grep -n ':~'` (an approximation marker is its own defect
+   signature — every one in one lane was off by 1–6 lines), and every
+   `symbol (path:line)` must be reproducible by `grep -n '<symbol>' <path>`.
+
+   **Two census traps in comment-dense repos:** an occurrence count over a
+   symbol name counts prose in doc comments as usage — confirm each hit is a
+   call site. And imports reach across a monorepo by deep relative path as well
+   as by package specifier: grep `<pkg>/src/` as well as `@scope/<pkg>`, or a
+   coupling analysis reports a seam that is not there.
+
+   **Run the ticket's own "Done is verifiable by" clause against BASE before
+   designing anything**, and answer each question with a command. *Does it
+   already pass?* Then it does not discriminate base from done, and the real
+   scope is whatever remains — rewrite it to something false at base. *Can it
+   pass at all?* If it names a suite, **read the suite**; a criterion that
+   contradicts how the suite is built is not a target. *Does it presuppose
+   machinery that exists?* Grep for it — a criterion naming a capability the
+   repo has never had ("rollback", "replay") is commissioning it, and that is
+   unpriced scope. Three of ten in one wave failed one of the three, and a
+   fourth was already-true behind citations that were all exact — so be willing
+   to contradict the ticket on its AC after confirming its references. A
+   rewritten criterion is a finding, not a liberty: record the original, why it
+   fails, and the replacement. When it comes back already-true, the useful next
+   question is not "close the ticket" but **what real defect is adjacent to the
+   one the ticket mis-described?**
+
    **If you delegate a sweep, read only files its brief does NOT name.** The
    brief is the boundary; if nothing outside it is worth reading, the
    delegation should not have happened. One lane re-derived ~60% of its own
@@ -81,7 +117,15 @@ around a non-constraint reads exactly like one shaped around a real one.
    pays instead, and what the two lanes that got value did: **re-ground every
    load-bearing claim against source as if it were someone else's** (one such
    pass caught a believed-and-written claim and a second census error behind
-   it), *then* apply the `arch` and `ops` lens questions. Fold clearly-right
+   it), *then* apply the `arch` and `ops` lens questions. **Where a claim turns
+   on whether a path actually executes** — "this is persisted", "this runs on
+   every X", "this is called after Y" — **trace the trigger, not the callee
+   chain.** A chain of definitions proves the path *can* be reached, never that
+   anything reaches it; each link genuinely exists, which is what makes it feel
+   like proof. Find what invokes the entry point and under what condition, state
+   both in the draft, or mark the claim `REACHABILITY-ONLY`. Corollary: a symbol
+   with **zero non-test callers is not "implemented"** — two shipped ADR
+   decisions rest on exactly that, and one such chain reversed a recommendation. Fold clearly-right
    fixes in, **promote a missed genuine fork to the open-forks list**, carry a
    no-good-answer weakness to *Risks*. **The critique output is an input to a
    revision, never a turn-ending artifact: your turn ends when `state.yaml` is
@@ -100,18 +144,16 @@ first, and a swallowed step 5 leaves a complete draft instead of nothing.
   framed as above. Never guess the user's intent to close a fork yourself.
 - **You may lack credentials** for some probes (private registries, org-scoped
   reads, anything behind SSO). Do not guess the answer — but **establish that
-  the credential is actually absent before deferring**: grep the repo for
-  `*.crt` / `*.key` / `*.pem`, `scripts/<vendor>/`, `.env*` templates and
-  sandbox config, and check whether the vendor SDK is already a dependency.
-  Sandbox credentials are routinely committed *so that they can be used*; five
-  "needs a named human" forks in one run were answerable with a certificate
-  sitting in `scripts/arca/`, and deferring them would have shipped a deliberate
-  outage designed to guard a question that took one HTTP call. **Found** →
-  park it as an **orchestrator-runnable probe**, with the whole dependency
-  chain named (a "one call" probe that needs a credentials tool first is not
-  one call from a cold start). **Genuinely absent** → turn the question into a
-  rule the build checks at land time, naming *which* credential is missing and
-  who holds it, never "a human".
+  the credential is actually absent before deferring**: grep for `*.crt` /
+  `*.key` / `*.pem`, `scripts/<vendor>/`, `.env*` templates and sandbox config,
+  and check whether the vendor SDK is already a dependency. Sandbox credentials
+  are routinely committed *so that they can be used* — five "needs a named
+  human" forks in one run were answerable with a committed certificate.
+  **Found** → park it as an **orchestrator-runnable probe**, naming the whole
+  dependency chain (a "one call" probe needing a credentials tool first is not
+  one call from cold). **Genuinely absent** → turn the question into a rule the
+  build checks at land time, naming *which* credential is missing and who holds
+  it, never "a human".
 
 ## Learnings
 
