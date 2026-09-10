@@ -582,6 +582,106 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+printf '\nSeam C2 — the verdict on the branch head (#326)\n\n'
+# ---------------------------------------------------------------------------
+#
+# A scheduler that dispatches a step to a hosted session cannot read that
+# session's stdout through any documented surface. So a brief carrying
+# `verdictOnBranch: true` makes each step also write its marker as an EMPTY
+# commit on its branch, via `bin/lane-step-record`, read back by the same
+# `lane-step` parser. Executed against a real bare remote, because every
+# property that matters is a git property: the line is the message's final
+# line, the commit changes no tree, it reached the remote, and a line the reader
+# cannot read is never recorded.
+
+LANE_RECORD="$PLUGIN/bin/lane-step-record"
+
+# Why a script writes the message rather than the model: a model appends its
+# attribution trailer LAST, and that is no verdict by the final-line rule.
+lane_attrib="$LANE_STEP_FIXTURES/attribution-after-marker-commit.txt"
+if [ ! -f "$lane_attrib" ]; then
+  fail 'the attribution-after-marker commit fixture exists' "no such file: $lane_attrib"
+else
+  got=$( "$LANE_STEP" "$lane_attrib" 2>"$TMP/err" )
+  rc=$?
+  if [ "$rc" -eq 3 ] && [ -z "$got" ]; then
+    pass 'a commit message with a trailer after the marker is NO VERDICT'
+  else
+    fail 'a commit message with a trailer after the marker is NO VERDICT' \
+         "rc=$rc got: $( printf '%s' "${got:-<none>}" | tr '\n' ' ' )" \
+         'the recorder exists because a model composing this message puts Co-Authored-By last.'
+  fi
+fi
+
+# Isolated from the runner's own git config: signing, hooks and templates there
+# are properties of who ran the suite, not of the recorder.
+: > "$TMP/gitconfig"
+rec_git(){
+  GIT_CONFIG_GLOBAL="$TMP/gitconfig" GIT_CONFIG_NOSYSTEM=1 \
+  GIT_AUTHOR_NAME=seams GIT_AUTHOR_EMAIL=seams@example.invalid \
+  GIT_COMMITTER_NAME=seams GIT_COMMITTER_EMAIL=seams@example.invalid \
+  "$@"
+}
+rec_remote="$TMP/rec-remote.git"
+rec_tree="$TMP/rec-tree"
+rec_git git init -q --bare "$rec_remote" 2>/dev/null
+rec_git git clone -q "$rec_remote" "$rec_tree" 2>/dev/null
+( cd "$rec_tree" \
+  && rec_git git checkout -q -b claude/lane-x \
+  && printf '.work/\n' > .gitignore && rec_git git add .gitignore \
+  && rec_git git commit -q -m base \
+  && rec_git git push -q origin claude/lane-x 2>/dev/null \
+  && mkdir -p .work )
+rec_head(){ git -C "$rec_tree" rev-parse HEAD; }
+rec_run(){ ( cd "$rec_tree" && rec_git "$LANE_RECORD" "$1" ) 2>"$TMP/err"; }
+
+printf 'branch: claude/lane-x\n' > "$rec_tree/.work/lane.yaml"
+before=$( rec_head )
+rec_run 'LANE-STEP:v1 step=plan outcome=blocked-on slices=0'
+rc=$?
+if [ "$rc" -eq 0 ] && [ "$( rec_head )" = "$before" ]; then
+  pass 'without verdictOnBranch the recorder writes nothing'
+else
+  fail 'without verdictOnBranch the recorder writes nothing' "rc=$rc $( cat "$TMP/err" )" \
+       'a caller that owns the process would pay an empty commit per step for nothing.'
+fi
+
+printf 'branch: claude/lane-x\nverdictOnBranch: true\n' > "$rec_tree/.work/lane.yaml"
+rec_run 'LANE-STEP:v1 step=plan outcome=blocked-on slices=0.'
+rc=$?
+if [ "$rc" -eq 2 ] && [ "$( rec_head )" = "$before" ]; then
+  pass 'a line lane-step cannot read is refused, not durably recorded'
+else
+  fail 'a line lane-step cannot read is refused, not durably recorded' "rc=$rc $( cat "$TMP/err" )" \
+       'a recorded unreadable verdict reads as infra to the scheduler forever.'
+fi
+
+printf 'branch: claude/lane-y\nverdictOnBranch: true\n' > "$rec_tree/.work/lane.yaml"
+rec_run 'LANE-STEP:v1 step=plan outcome=blocked-on slices=0'
+rc=$?
+if [ "$rc" -eq 1 ] && [ "$( rec_head )" = "$before" ]; then
+  pass 'a brief naming another branch is refused (a recycled worktree)'
+else
+  fail 'a brief naming another branch is refused (a recycled worktree)' "rc=$rc $( cat "$TMP/err" )" \
+       'the verdict would land on a sibling lane'\''s branch.'
+fi
+
+printf 'branch: claude/lane-x\nverdictOnBranch: true\n' > "$rec_tree/.work/lane.yaml"
+rec_run 'LANE-STEP:v1 step=plan outcome=blocked-on slices=0'
+rc=$?
+got=$( git --git-dir="$rec_remote" log -1 --format=%B claude/lane-x 2>/dev/null | "$LANE_STEP" - 2>/dev/null )
+want=$( printf 'step=plan\noutcome=blocked-on\nslices=0' )
+if [ "$rc" -eq 0 ] && [ "$got" = "$want" ] \
+   && git --git-dir="$rec_remote" diff --quiet claude/lane-x~1 claude/lane-x 2>/dev/null \
+   && [ "$( git --git-dir="$rec_remote" rev-parse claude/lane-x~1 2>/dev/null )" = "$before" ]; then
+  pass 'a blocked-on with no work still reaches the remote as an empty commit lane-step reads'
+else
+  fail 'a blocked-on with no work still reaches the remote as an empty commit lane-step reads' \
+       "rc=$rc got: $( printf '%s' "${got:-<no verdict>}" | tr '\n' ' ' ) $( cat "$TMP/err" )" \
+       'to a git-only reader, no commit is infra, and a real question gets retried as a flaky VM.'
+fi
+
+# ---------------------------------------------------------------------------
 printf '\nSeam D — the lane brief (.work/lane.yaml)\n\n'
 # ---------------------------------------------------------------------------
 #
@@ -847,6 +947,14 @@ present "$VERIFY_BUILD_MD" 'LANE-STEP:v1 step=verify-build' '/verify-build emits
 for f in "$START_MD" "$DESIGN_MD" "$PLAN_MD" "$BUILD_MD" "$VERIFY_BUILD_MD"; do
   present "$f" 'as the **final** line' \
     "$( basename "$f" .md ) tells the model the marker must be the LAST line"
+done
+
+# And every step hands the same line to the branch sink (Seam C2). One per
+# command for the reason above: a scheduler reading git sees four verdicts and
+# one permanent `infra`, and the run still produces a PR.
+for f in "$START_MD" "$DESIGN_MD" "$PLAN_MD" "$BUILD_MD" "$VERIFY_BUILD_MD"; do
+  present "$f" "run \`lane-step-record '<the identical line>'\`" \
+    "$( basename "$f" .md ) records its verdict on the branch when the brief asks"
 done
 
 printf '\nSeam G — every step READS the lane brief\n\n'

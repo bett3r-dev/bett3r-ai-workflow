@@ -1,0 +1,5 @@
+#!/bin/sh
+# Launcher for scripts/lane-step-record.py — writes a step's LANE-STEP:v1
+# verdict onto its branch when `.work/lane.yaml` asks. Same shape and the same
+# reason as `lane-step` next door: `bin/` is on PATH, `CLAUDE_PLUGIN_ROOT` is not.
+exec python3 "$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)/scripts/lane-step-record.py" "$@"

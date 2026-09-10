@@ -121,8 +121,36 @@ Neither can be chosen without knowing whether callers and steps are versioned to
 fleet-deployment question this ADR does not reach. There has been no `v2`, so nothing is broken
 today.
 
+## Amended: the verdict also lands on the branch when the caller cannot read stdout
+
+The stdout transport assumed the caller owns the process. A scheduler dispatching a step to a hosted
+session does not: that output is reachable only through an undocumented endpoint, and inferring the
+outcome from whether a PR appeared folds `gate-red` (a verdict about the code) into `infra`
+(retryable) — opposite handling (#326).
+
+So a brief carrying `verdictOnBranch: true` adds a second sink for the **same line**: each step
+passes it to `lane-step-record`, which commits it as an empty commit whose message ends in the line,
+pushes, and reads it back through `lane-step`. Grammar, parser and `:vN` are unchanged; the line is
+already a valid git trailer.
+
+* **A commit, not a file, a note or a tag.** A file at a known path is the recycled-worktree hazard
+  *What we did instead* rejects, and it merges into source; notes are invisible to a host's commits
+  API; a hosted venue may push only to its own branch prefix. A commit on the branch the venue
+  already pushes is readable without a clone.
+* **Empty, always.** A `/plan` ending `blocked-on` before any work otherwise leaves no git artifact,
+  and a git-only reader calls that `infra` — a real question retried as a flaky VM, never reaching
+  its human. With the empty commit, absence on the branch means what absence on stdout means.
+* **Written by a script, not composed by the model.** A model appends its attribution trailers last,
+  and one `Co-Authored-By:` after the marker is no verdict by the final-line rule.
+* **Opt-in.** A caller that owns the process gains nothing and would pay four empty commits per PR.
+  The flag lives in the brief because that is where a step reads its inputs; the provisioner never
+  sets it.
+
+One conflation remains, and it is bounded: a `/start` whose `blocked-on` is *the branch cannot be
+cut* has nowhere to write, so a git-only reader sees `infra`.
+
 ## Status
 
-Accepted. Supersedes nothing. Extends **ADR-003**'s seam discipline: the line and the brief file are
+Accepted; amended for the branch sink (#326). Supersedes nothing. Extends **ADR-003**'s seam discipline: the line and the brief file are
 both seams, and neither may name its first consumer — `scripts/test-flow-seams.sh` grows an
 assertion that generalises past the single hard-coded string it checks today.

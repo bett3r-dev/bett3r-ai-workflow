@@ -37,6 +37,7 @@ marker: LANE-STEP:v1
 attributes: step outcome slices commits
 emits: success | gate-red | blocked-on
 absent: infra
+sink: stdout; also the branch head, via lane-step-record, when .work/lane.yaml has verdictOnBranch: true
 position: the last line of the step's output, at column 0, nothing after it
 parse: take the last line-anchored match, and require it to be the final line
 ```
@@ -45,7 +46,7 @@ Read as an example:
 
     LANE-STEP:v1 step=build outcome=success slices=3/3 commits=3
 
-Four things about it, each of which someone has already got wrong:
+Five things about it, each of which someone has already got wrong:
 
 - **Every structured fact is an attribute on the marker**, never in the prose
   around it. A reader matches the token alone.
@@ -62,6 +63,14 @@ Four things about it, each of which someone has already got wrong:
   marker read as no verdict rather than as a stale one. Print the line and stop.
 - **`:vN` is the contract version**, bumped only when the block's *shape*
   changes — a new attribute or a new outcome, never a new value in a field.
+- **The branch is the second sink, for a caller that cannot read stdout.** A
+  scheduler that dispatched a step to a hosted session has no documented way to
+  read that session back, and "did a PR appear" folds `gate-red` into `infra`.
+  So a brief carrying `verdictOnBranch: true` makes every step pass its line to
+  `lane-step-record` first: an **empty** commit whose message ends in the line,
+  pushed, read back with `git log -1 --format=%B <branch> | lane-step -`. Empty
+  so that a `blocked-on` before any work still leaves a commit — on the branch,
+  too, absence means only `infra`. You own your process; never set the flag.
 
 ## The five steps you run, and how you read each one
 
@@ -85,9 +94,7 @@ substance inline. That substitution is the failure this assertion exists for:
 it produces good work, green gates and a plausible report, while `/build`'s
 dual gate never runs and **no `LANE-STEP:` line is ever emitted by any step**,
 so a scheduler classifying lanes by marker absence reads the whole fleet as
-`infra`. Nine lanes across four fleets each rediscovered this alone; the two
-that mentioned it did so unprompted, and the ones that did not were
-indistinguishable from lanes that dispatched correctly.
+`infra` — nine lanes across four fleets rediscovered this, most of them silently.
 
 | # | Command | Its marker | On anything but `outcome=success` |
 |---|---------|-----------|------------------------------------|
@@ -111,12 +118,6 @@ the `infra` case by ADR-004's absence rule, and `infra` is retried, not believed
 re-run the step rather than reading its prose for what it "obviously" meant. A
 step's prose is not a fallback verdict. If it were, the marker would be
 decoration and every transcript that merely *discusses* an outcome would be one.
-
-`lane-step` is deliberately strict about attribute values — `3/3`,
-`verify-build` and `0.42.0` are values; `3.` is not. A step that ends its marker
-line with a full stop therefore reports **no verdict** rather than an outcome of
-`success.`, which is a word in no vocabulary. Emit the line and stop; do not
-punctuate it.
 
 ## What you write, and only that
 

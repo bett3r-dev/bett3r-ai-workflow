@@ -1,0 +1,4 @@
+lane-step: plan blocked-on
+
+LANE-STEP:v1 step=plan outcome=blocked-on slices=0
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
