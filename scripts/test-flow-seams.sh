@@ -898,7 +898,9 @@ if grep -qF 'Copy the brief aside before you run' "$UNIT_LANE_MD"; then
 else
   pass 'unit-lane no longer carries the caller-side brief workaround'
 fi
-present "$UNIT_LANE_MD" 'The brief half now lives in the commands too' \
+# Needled on the rule, not on the history: b4fffb5 compressed the prose that
+# explained how both halves moved, and the explanation is not what is asserted.
+present "$UNIT_LANE_MD" 'you invoke it bare** — the command name and nothing else, neither the brief nor a pointer to it' \
   'unit-lane invokes each step bare, passing neither brief nor pointer'
 
 # And that the local sequencer no longer supplies the emitting half at the
@@ -906,7 +908,7 @@ present "$UNIT_LANE_MD" 'The brief half now lives in the commands too' \
 # a liability now: a lane that keeps reminding each step to emit is a lane whose
 # steps a SCHEDULER cannot run, which is the exact coupling the per-step surface
 # exists to remove.
-present "$UNIT_LANE_MD" 'The emitting half now lives in the commands' \
+present "$UNIT_LANE_MD" 'Each step finds its own inputs in `.work/lane.yaml` and ends by printing its own `LANE-STEP:` line' \
   'unit-lane no longer patches the emitting half in at the invocation'
 
 printf '\n'
