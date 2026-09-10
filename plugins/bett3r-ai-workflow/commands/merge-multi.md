@@ -72,6 +72,10 @@ A red gate is **fixed on integration**, not deferred. If a failure traces cleanl
 
 So collect the union of issues referenced across every unit PR, and carry them into the **integration** PR body — **one `closes` keyword per issue**, repeated. `Closes #56, closes #62, closes #63`. A bare list (`Closes #56, #62`) closes the first and turns the rest into mentions.
 
+**RECONCILE the manifest before you open the PR.** `run.yaml` declares the run's units and you have just enumerated what merged: compute **`declared − landed`**. If it is non-empty, the integration PR body states it **under its own heading** and the report leads with it; a unit deliberately dropped is recorded **as dropped, with a reason**, because deliberate omission and silent disappearance must not look identical. One line of set arithmetic against state you already hold — and without it a nine-unit run once landed eight, with every per-unit gate green and correct, the integration gate green and correct, and the PR merged honestly. Nothing anywhere asks *"is anything missing?"*, and **the integration branch name is not evidence of scope** — it is derived from the requested unit list at cut time and never revised, so it asserts a scope the run may not have delivered and reads as confirmation rather than contradiction. The only other place the gap was visible was the tracker, to someone who went looking.
+
+**The epic's goal oracle is reported here, red or green.** A fleet that lands every unit with the goal oracle still red is a **reportable outcome, not a silent success**.
+
 **5 — Open the integration PR.**
 
 `gh pr create --base <default> --head int/<run-id>` — ready for review, not a draft. Then verify its base after the fact; `gh pr create` succeeds silently against the wrong ref.
@@ -122,7 +126,7 @@ Then delete `int/<run-id>` if the repo deletes merged branches, and report the d
 
 **7 — Report.**
 
-Units merged (and any skipped, with why) · conflict resolutions, counted · the gate verdict · the integration PR URL · issues closed vs. still open. Update `run.yaml` — `landedAt`, `integrationPr` — so a re-run is a no-op rather than a second attempt.
+Units merged (and any skipped, with why) · **`declared − landed`, always, even when empty** · the epic goal oracle's verdict · conflict resolutions, counted · the gate verdict · the integration PR URL · issues closed vs. still open. Update `run.yaml` — `landedAt`, `integrationPr` — so a re-run is a no-op rather than a second attempt.
 
 ## Principles
 
