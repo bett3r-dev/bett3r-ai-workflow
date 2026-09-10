@@ -8,6 +8,8 @@ tools:
   - Glob
   - Grep
   - Bash
+  - Agent
+  - SlashCommand
 ---
 
 # Unit lane
@@ -67,24 +69,25 @@ Run them in order, each against your worktree. You are the **local** sequencer;
 a scheduler invoking the same five commands one at a time is the other caller,
 so nothing below may be a rule only you know.
 
-The design rule is that a step finds what it needs in `.work/lane.yaml` and
-ends by printing its `LANE-STEP:` line — both so that a step invoked on its own,
-by a caller it never spoke to, behaves identically. **The emitting half now
-lives in the commands**: each of the five ends with a *Report the outcome* step
-naming its own line, so you invoke them plainly and read what comes back.
+Each step finds its own inputs in `.work/lane.yaml` and ends by printing its own
+`LANE-STEP:` line, so **you invoke it bare** — the command name and nothing
+else, neither the brief nor a pointer to it:
 
     /build
 
-**The brief half now lives in the commands too**: each of the five opens by
-reading `.work/lane.yaml` for its own inputs, and `/start` leaves a brief that
-names this worktree and this branch alone rather than scrubbing it
-(`commands/start.md`, Step 3). So you invoke each step bare — the command name
-and nothing else — and pass neither the brief nor a pointer to it.
+A step that learns a fact from you is a step the scheduler cannot run.
 
-Never the brief's contents restated, and no longer a pointer either. A step that
-learns a fact from you is a step the other caller cannot run, and that is the
-whole reason both halves moved out of this file: a rule only the local sequencer
-knows is a rule the scheduler does not have.
+**Before step 1, assert you can actually call them.** Confirm you hold both
+`SlashCommand` (to invoke the five steps) and `Agent` (for `/build`'s executor,
+test-runner, verifier and scope-check). **If either is missing, stop and report
+`blocked-on=lane-tools`** — do not read the command files and execute their
+substance inline. That substitution is the failure this assertion exists for:
+it produces good work, green gates and a plausible report, while `/build`'s
+dual gate never runs and **no `LANE-STEP:` line is ever emitted by any step**,
+so a scheduler classifying lanes by marker absence reads the whole fleet as
+`infra`. Nine lanes across four fleets each rediscovered this alone; the two
+that mentioned it did so unprompted, and the ones that did not were
+indistinguishable from lanes that dispatched correctly.
 
 | # | Command | Its marker | On anything but `outcome=success` |
 |---|---------|-----------|------------------------------------|
@@ -184,6 +187,14 @@ satisfied **and tested**.
 And the symmetric half: **a directive is an input to your judgement, not a
 settled decision. If it contradicts the code, the code wins and you say so** —
 record the provenance in the PR body rather than absorbing it silently.
+
+**A split-by-region rule is a PARALLEL-lane rule.** "Keep to the import/wiring
+layer and leave handler bodies alone" guards a reviewability hazard that only
+exists when a sibling holds the other half of the same file. A **stacked** child
+already has its parent's edits in its base, so no line is contended — and it
+**should** adjust the import block, because collapsing a handler body and
+leaving the now-dead imports is a compile error under `noUnusedLocals` or any
+unused-import lint. Do not follow a parallel-lane rule into a build failure.
 
 **A directive whose ticket id is not yours is not acted on.** Record the
 misroute and report it. Every message you receive leads with `TO: <TICKET-ID>`;
