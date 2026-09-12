@@ -1019,6 +1019,32 @@ present "$UNIT_LANE_MD" 'you invoke it bare** — the command name and nothing e
 present "$UNIT_LANE_MD" 'Each step finds its own inputs in `.work/lane.yaml` and ends by printing its own `LANE-STEP:` line' \
   'unit-lane no longer patches the emitting half in at the invocation'
 
+printf '\nSeam G — the resolved-design marker pair is linted, not remembered\n\n'
+# ---------------------------------------------------------------------------
+#
+# `/design-multi` emits its marker twice because some trackers strip comment
+# nodes, which makes the inline line the fallback. A fallback with fewer
+# attributes passes every check that reads the comment line, so parity is a
+# script, and these two blocks are its positive and negative control. The bad
+# block mentions `run=` in prose on purpose: that stray occurrence is what let a
+# count-based check pass the real defect.
+MARKER_LINT="$PLUGIN/bin/resolved-marker-lint"
+present "$PLUGIN/commands/design-multi.md" 'resolved-marker-lint' '/design-multi runs the marker-parity lint before a write'
+printf '%s\n' '<!-- design-multi:resolved:v2 status=ready base=abc run=r1 -->' '' \
+  '## Resolved Design (design-multi)' '`design-multi:resolved:v2 status=ready base=abc run=r1`' > "$TMP/marker-good.md"
+printf '%s\n' '<!-- design-multi:resolved:v2 status=ready base=abc run=r1 -->' \
+  '## Resolved Design (design-multi)' '`design-multi:resolved:v2 status=ready base=abc`' 'see run=r1 above' > "$TMP/marker-bad.md"
+if "$MARKER_LINT" "$TMP/marker-good.md" >/dev/null 2>&1; then
+  pass 'a block whose marker lines agree passes the lint'
+else
+  fail 'a block whose marker lines agree passes the lint' "$( "$MARKER_LINT" "$TMP/marker-good.md" 2>&1 )"
+fi
+if "$MARKER_LINT" "$TMP/marker-bad.md" >/dev/null 2>&1; then
+  fail 'an inline marker missing run= is refused despite run= in the prose' 'the lint exited 0'
+else
+  pass 'an inline marker missing run= is refused despite run= in the prose'
+fi
+
 printf '\n'
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"
