@@ -1372,6 +1372,398 @@ else
   pass 'work-docs-path reads .claude/bett3r-ai-workflow.json, not .esas.config.json (ADR-003)'
 fi
 
+# ---------------------------------------------------------------------------
+printf '\nSeam I — /build leaves a committed record: decisions.md and build-summary.md (XL-27)\n\n'
+# ---------------------------------------------------------------------------
+#
+# build.md states each record's shape ONCE, as a fenced block. Both blocks are
+# PARSED here, and the D-entry grammar parsed out of build.md is then executed
+# against a real `decisions.md` — this unit's own — so an entry that drifts from
+# the header build.md specifies goes red naming the entry, rather than a
+# presence needle staying green beside an inverted meaning.
+#
+# Overrides, for mutation tests on scratch copies (never on tracked files):
+#   CENSUS_ROOT  — the plugin tree build.md is read from (defined above);
+#   RECORD_ROOT  — the repo whose work-docs folder holds decisions.md. The
+#                  folder is resolved by work-docs-path, never spelled here.
+#                  It must be a git repository: a mutation recipe copies the
+#                  folder and runs `git init` in the copy, rather than leaning
+#                  on work-docs-path accepting a non-repo `--repo` (finding Q4,
+#                  which a fix would close).
+RECORD_BUILD_MD="$CENSUS_ROOT/commands/build.md"
+RECORD_ROOT=${RECORD_ROOT:-$ROOT}
+RECORD_ITEM=${RECORD_ITEM:-XL-27}
+
+# The grammar the extractor holds build.md's blocks to — any edit outside it
+# fails loudly, it never skips:
+#   * a fence is a column-0 line starting ``` ; blocks are taken from the whole
+#     file. The D-entry block is the ONE block whose first line is `## D1 — `;
+#     the build-summary block is the ONE block whose first line is `---` and
+#     which has a top-level `slices:` key.
+#   * D-entry header lines follow the title: `key: value`, an optional trailing
+#     comment introduced by whitespace + `#` + space. The header ends at the
+#     first line that is not key-shaped (the prose). A line joined with ` · `
+#     is ONE header line holding several keys: each segment is `key: value`,
+#     and the line's trailing comment belongs to its LAST segment. So
+#     `step: build · slice: 2 · decidedBy: executor  # a | b` yields the keys
+#     step, slice, decidedBy, and the decidedBy enum `a b`.
+#   * an enum is read from a key's comment: `|`-separated tokens.
+#   * the build-summary block is `---` … `---` frontmatter: top-level `key:`
+#     lines, `slices:` items as `  - key:` then `    key:` lines — deeper
+#     nesting (a `usage:` map) is reported as a key, never skipped — followed by
+#     markdown prose.
+"$MARKER_PY" - "$RECORD_BUILD_MD" "$TMP/d-grammar.json" > "$TMP/record-shape" 2>"$TMP/err" <<'PYREC'
+import json, re, sys
+src, out = sys.argv[1], sys.argv[2]
+lines = open(src, encoding="utf-8").read().splitlines()
+blocks, cur = [], None
+for l in lines:
+    if l.startswith("```"):
+        if cur is None:
+            cur = []
+        else:
+            blocks.append(cur)
+            cur = None
+    elif cur is not None:
+        cur.append(l)
+if cur is not None:
+    sys.exit("unterminated fence in build.md")
+
+KEY = re.compile(r"([a-z][A-Za-z_]*):(?:\s+(.*))?$")
+def split_comment(v):
+    m = re.search(r"\s+#\s", v)
+    return (v[:m.start()], v[m.end():]) if m else (v, "")
+
+d = [b for b in blocks if b and re.match(r"## D1 — ", b[0])]
+if len(d) != 1:
+    sys.exit("expected exactly one fenced block starting `## D1 — ` in build.md, found %d" % len(d))
+keys, enums = [], {}
+for l in d[0][1:]:
+    value, comment = split_comment(l)
+    segs = value.split(" · ")
+    ms = [KEY.fullmatch(s.strip()) for s in segs]
+    if not all(ms):
+        break
+    for m in ms:
+        keys.append(m.group(1))
+    if comment:
+        enums[ms[-1].group(1)] = [t.strip() for t in comment.split("|") if t.strip()]
+n_header = 0
+for l in d[0][1:]:
+    if all(KEY.fullmatch(s.strip()) for s in split_comment(l)[0].split(" · ")):
+        n_header += 1
+    else:
+        break
+if n_header == len(d[0]) - 1:
+    sys.exit("the D-entry block has no prose line after its header")
+step_line = [l for l in d[0][1:] if l.startswith("step:")]
+print("d.keys\t" + " ".join(keys))
+print("d.stepline\t" + (" ".join(KEY.fullmatch(s.strip()).group(1) for s in split_comment(step_line[0])[0].split(" · ")) if step_line else ""))
+for k in ("kind", "decidedBy"):
+    print("d.enum.%s\t%s" % (k, " ".join(enums.get(k, []))))
+print("d.alltext\t" + " ".join(d[0]).replace("\t", " "))
+json.dump({"keys": keys, "kind": enums.get("kind", []), "decidedBy": enums.get("decidedBy", [])}, open(out, "w"))
+
+s = [b for b in blocks if b and b[0] == "---" and any(l.startswith("slices:") for l in b)]
+if len(s) != 1:
+    sys.exit("expected exactly one fenced `---` frontmatter block with `slices:` in build.md, found %d" % len(s))
+b = s[0]
+try:
+    close = b.index("---", 1)
+except ValueError:
+    sys.exit("the build-summary block has no closing `---`")
+top, item_keys, all_keys, comments, values = [], [], [], {}, {}
+items = 0
+for l in b[1:close]:
+    if not l.strip():
+        continue
+    value, comment = split_comment(l)
+    m = re.fullmatch(r"([A-Za-z_]+):(?:\s+(.*))?", value)
+    mi = re.fullmatch(r"  - ([A-Za-z_]+):(?:\s+(.*))?", value)
+    mc = re.fullmatch(r"    ([A-Za-z_]+):(?:\s+(.*))?", value)
+    md = re.fullmatch(r"\s+([A-Za-z_]+):(?:\s+(.*))?", value)
+    if m:
+        top.append(m.group(1)); all_keys.append(m.group(1))
+    elif mi or mc:
+        mm = mi or mc
+        if mi:
+            items += 1
+        if items == 1:
+            item_keys.append(mm.group(1))
+        all_keys.append(mm.group(1))
+        comments[mm.group(1)] = comment
+        values[mm.group(1)] = (mm.group(2) or "").strip()
+    elif md:
+        all_keys.append(md.group(1))
+    else:
+        sys.exit("build-summary frontmatter line outside the grammar: %r" % l)
+print("s.top\t" + " ".join(top))
+print("s.item\t" + " ".join(item_keys))
+print("s.all\t" + " ".join(all_keys))
+for k in ("origin", "mode", "redBeforeGreen"):
+    toks = [t.strip().split()[0] for t in comments.get(k, "").split("|") if t.strip()]
+    print("s.enum.%s\t%s" % (k, " ".join(toks)))
+for k in ("commit", "attempts", "verifier"):
+    print("s.comment.%s\t%s" % (k, comments.get(k, "")))
+print("s.pdd.value\t" + values.get("postDesignDecisions", ""))
+print("s.pdd.comment\t" + comments.get("postDesignDecisions", ""))
+print("s.prose\t" + " | ".join(l for l in b[close + 1:] if l.strip()))
+PYREC
+if [ $? -ne 0 ]; then
+  fail 'build.md states the D-entry header and the build-summary frontmatter as parseable fenced blocks' "$( cat "$TMP/err" )"
+else
+  pass 'build.md states the D-entry header and the build-summary frontmatter as parseable fenced blocks'
+  shape(){ awk -F '\t' -v k="$1" '$1 == k { sub(/^[^\t]*\t/, ""); print }' "$TMP/record-shape"; }
+  # expect <label> <shape key> <wanted>
+  expect(){
+    got=$( shape "$2" )
+    if [ "$got" = "$3" ]; then pass "$1"; else fail "$1" "want: $3" "got:  $got"; fi
+  }
+  expect 'the D-entry header keys are exactly kind, step · slice · decidedBy, sources, rejected, supersedes' \
+    d.keys 'kind step slice decidedBy sources rejected supersedes'
+  expect 'slice and decidedBy ride on the step line' d.stepline 'step slice decidedBy'
+  expect 'the D-entry kind enum is false-premise | silent-seam | deviation | shipped-finding | overruled | waiver' \
+    d.enum.kind 'false-premise silent-seam deviation shipped-finding overruled waiver'
+  expect 'the D-entry decidedBy enum is executor | verifier | orchestrator | lane | human' \
+    d.enum.decidedBy 'executor verifier orchestrator lane human'
+  if shape d.alltext | grep -qiE 'confiden|certaint|probab|score'; then
+    fail 'the D-entry header carries no self-rated confidence field' "$( shape d.alltext )"
+  else
+    pass 'the D-entry header carries no self-rated confidence field'
+  fi
+  expect 'the build-summary frontmatter /build writes is exactly work_item, plugin, base, slices' \
+    s.top 'work_item plugin base slices'
+  expect 'each build-summary slice entry carries exactly the F3 keys' \
+    s.item 'id name origin mode commit passed attempts retries verifier redBeforeGreen postDesignDecisions'
+  for absent in usage verifyBuild workItem; do
+    if shape s.all | tr ' ' '\n' | grep -qx "$absent"; then
+      fail "/build's build-summary block does not write \`$absent\`" "keys seen: $( shape s.all )"
+    else
+      pass "/build's build-summary block does not write \`$absent\`"
+    fi
+  done
+  expect 'a slice origin is plan | verify-build' s.enum.origin 'plan verify-build'
+  expect 'a slice mode is sequential | worktree | null' s.enum.mode 'sequential worktree null'
+  expect 'redBeforeGreen is true | mutation | null' s.enum.redBeforeGreen 'true mutation null'
+  case $( shape s.pdd.value ) in
+    '['*']') pass 'postDesignDecisions is a list' ;;
+    *) fail 'postDesignDecisions is a list' "got: $( shape s.pdd.value )" ;;
+  esac
+  case $( shape s.pdd.comment ) in
+    *'[]'*) pass 'the block says an empty postDesignDecisions is written as []' ;;
+    *) fail 'the block says an empty postDesignDecisions is written as []' "comment: $( shape s.pdd.comment )" ;;
+  esac
+  case $( shape s.prose ) in
+    '## What shipped'*) pass 'the build-summary block ends with a ## What shipped prose section' ;;
+    *) fail 'the build-summary block ends with a ## What shipped prose section' "got: $( shape s.prose )" ;;
+  esac
+fi
+
+# The old principle is gone; the rules that replace it are present.
+for old in 'No `build-progress.md`, no `build-summary.md`' 'The commits and `passes` flags are the truth'; do
+  if grep -qF -e "$old" "$( norm "$RECORD_BUILD_MD" )"; then
+    fail "/build no longer carries: $old" "still present in commands/build.md"
+  else
+    pass "/build no longer carries: $old"
+  fi
+done
+present "$RECORD_BUILD_MD" 'The orchestrator is the single writer of `decisions.md` and `build-summary.md`' \
+  '/build names the orchestrator the single writer of both record files'
+present "$RECORD_BUILD_MD" 'never write `decisions.md` or `build-summary.md`' \
+  '/build forbids workers and executors from writing either record file'
+present "$RECORD_BUILD_MD" 'Every dispatch description names `slice <id>`' \
+  '/build names the slice in every dispatch description'
+present "$RECORD_BUILD_MD" 'generated later by `/verify-build`' \
+  '/build says the usage and verifyBuild blocks are generated by /verify-build'
+present "$RECORD_BUILD_MD" '`postDesignDecisions: []`' '/build writes zero decisions as postDesignDecisions: []'
+present "$RECORD_BUILD_MD" 'green **or partial**' '/build writes build-summary.md on a partial end too'
+present "$RECORD_BUILD_MD" 'work-docs-path --item <work_item>' '/build resolves the record folder with work-docs-path'
+present "$RECORD_BUILD_MD" '`.work/slices.yaml` stays working state' '/build keeps slices.yaml as uncommitted working state'
+present "$RECORD_BUILD_MD" 'spelled `work_item:`, not `workItem:`' '/build names the work_item spelling for the frontmatter'
+# A resumed or repeated /build has no source for an earlier session's per-slice
+# facts: it must carry them verbatim or write null, never guess them (F3), and it
+# must list every planned slice, because a missing slice reads as an unplanned one.
+# Verbatim only while the entry still agrees with the passes flag: a slice that
+# escalated in one session and landed in a later one that died before Step 6
+# would otherwise keep `passed: false, commit: null` forever.
+present "$RECORD_BUILD_MD" 'keeps its existing entry from `build-summary.md` verbatim only when that entry'\''s `passed` matches the slice'\''s `passes:` flag in `.work/slices.yaml`' \
+  '/build carries an earlier slice entry verbatim only while it agrees with the passes flag'
+present "$RECORD_BUILD_MD" 'and is rewritten from the flag' '/build rewrites a stale entry from the passes flag'
+present "$RECORD_BUILD_MD" 'a `passes: false` one keeps its entry with `passed: false` and `commit: null`' \
+  '/build keeps a reverted slice'\''s entry as unlanded, never as never-started'
+# The lookup is anchored (`^… `, so `XL-2` never matches `XL-27`) and ranged
+# (`<base>..HEAD`, so master's history of other work items is out of reach).
+present "$RECORD_BUILD_MD" "git log --format=%H -E --grep '^Slice <id> of <work_item> ' <base>..HEAD" \
+  '/build finds an earlier-session slice'\''s commit by an anchored, ranged lookup'
+present "$RECORD_BUILD_MD" 'Slice <id> of <work_item> — <slice name>' \
+  '/build Step 4'\''s commit line carries the work_item the lookup searches for'
+present "$RECORD_BUILD_MD" 'never pick one' '/build refuses to choose between several candidate commits'
+present "$RECORD_BUILD_MD" '`passed: true` with `commit: null` is legal' \
+  '/build states a passed slice whose commit cannot be found is recorded, not guessed'
+present "$RECORD_BUILD_MD" 'never a guessed value' '/build writes null for an unproven fact, never a guessed value'
+present "$RECORD_BUILD_MD" '`id` and `name` come from `.work/slices.yaml` and are never `null`' \
+  '/build sources a slice entry'\''s id and name from slices.yaml, never null'
+present "$RECORD_BUILD_MD" '`origin` is the slice'\''s own `origin:` field in `.work/slices.yaml`, else `plan`' \
+  '/build sources origin from slices.yaml, defaulting to plan, never null'
+present "$RECORD_BUILD_MD" 'Every slice in `.work/slices.yaml` gets an entry' '/build lists every planned slice in build-summary.md'
+present "$RECORD_BUILD_MD" 'never an absent key' '/build writes zero decisions as [], never an absent key'
+present "$RECORD_BUILD_MD" 'Executors, verifiers and pool workers never write' \
+  '/build names all three non-writers of the record (C1)'
+present "$RECORD_BUILD_MD" 'unless the run stopped before any slice ran' \
+  '/build Step 6 skips build-summary.md only when no slice ran'
+if [ -f "$TMP/record-shape" ]; then
+  case $( shape s.comment.commit ) in *null*) pass 'the block allows commit: null for a slice that did not land' ;;
+    *) fail 'the block allows commit: null for a slice that did not land' "comment: $( shape s.comment.commit )" ;; esac
+  case $( shape s.comment.attempts ) in *'0 = never started'*) pass 'the block allows attempts: 0 for a never-started slice' ;;
+    *) fail 'the block allows attempts: 0 for a never-started slice' "comment: $( shape s.comment.attempts )" ;; esac
+  case $( shape s.comment.verifier ) in *null*) pass 'the block allows verifier: null for a slice no verifier saw' ;;
+    *) fail 'the block allows verifier: null for a slice no verifier saw' "comment: $( shape s.comment.verifier )" ;; esac
+fi
+# The softenings, refuted over the whole record section (`## The committed
+# record` … `## Step 5`): a word that makes a fact estimable, a slice or the
+# postDesignDecisions key omissible, or a non-orchestrator a writer. The two
+# literals that NAME the forbidden thing are removed before matching; any other
+# use of these words in the section must be reworded, never allowlisted.
+record_section="$TMP/build-record-section.md"
+awk '/^## The committed record/{f=1} /^## Step 5/{f=0} f' "$RECORD_BUILD_MD" > "$record_section"
+if [ ! -s "$record_section" ]; then
+  fail '/build'\''s record section is extractable' 'no `## The committed record` … `## Step 5` span in commands/build.md'
+else
+  soft=$( tr '\n' ' ' < "$record_section" | sed -e 's/never a guessed value//g' -e 's/never an absent key//g' \
+    | grep -oiE '\b(estimat[a-z]*|guess[a-z]*|omit[a-z]*|optional|absent|left out|may append|may write|infer[a-z]*)\b' | sort -u | tr '\n' ' ' )
+  if [ -n "$soft" ]; then
+    fail '/build'\''s record section makes no fact guessable, no key or slice omissible, no worker a writer' "softening word(s): $soft"
+  else
+    pass '/build'\''s record section makes no fact guessable, no key or slice omissible, no worker a writer'
+  fi
+fi
+if grep -qF -e 'unless Step 1'\''s `work-docs-path` stopped the run' "$( norm "$RECORD_BUILD_MD" )"; then
+  fail '/build Step 6 no longer ties the skip to work-docs-path alone' 'still present'
+else
+  pass '/build Step 6 no longer ties the skip to work-docs-path alone'
+fi
+# No hardcoded root: the folder is work-docs-path's to name.
+if grep -qF 'docs/prs' "$RECORD_BUILD_MD"; then
+  fail '/build hardcodes no work-docs root' "$( grep -nF 'docs/prs' "$RECORD_BUILD_MD" )"
+else
+  pass '/build hardcodes no work-docs root'
+fi
+# The reason for the `slice <id>` rule stays true: run-metrics attributes by
+# that regex. `-a`: the file is classified binary by grep.
+RUN_METRICS="$PLUGIN/scripts/run-metrics.mjs"
+if grep -qaF 'd.match(/slice\s*(\d+)/i)' "$RUN_METRICS"; then
+  pass 'run-metrics retryLedger still attributes a dispatch by `slice <n>` in its description'
+else
+  fail 'run-metrics retryLedger still attributes a dispatch by `slice <n>` in its description' \
+       'the regex /build'\''s dispatch-description rule relies on is gone from scripts/run-metrics.mjs'
+fi
+
+# --- executed: this unit's decisions.md holds to the grammar build.md states --
+#
+# Grammar (from the parsed build.md block, not restated): `## D<n> — <title>`
+# headings with ids contiguous from 1; the header keys, in the extracted order,
+# on the lines right after the title (the same ` · ` joining and trailing-
+# comment rule as above); `kind` and `decidedBy` in the extracted enums; `slice`
+# a number or `—`; `sources` a non-empty `[…]`; `rejected` non-empty;
+# `supersedes` either `—` or earlier ids `D<m>[, D<m>…]`; at least one prose
+# line. A `## ` heading that is not a D title is malformed. Every error names
+# its entry.
+wdp_line=$( python3 "$PLUGIN/scripts/work-docs-path.py" --item "$RECORD_ITEM" --repo "$RECORD_ROOT" 2>&1 | tail -n 1 )
+record_dir=$( printf '%s' "$wdp_line" | sed -n 's/.* outcome=ok .*path=\([^ ]*\).*/\1/p' )
+if [ -z "$record_dir" ]; then
+  fail "work-docs-path resolves $RECORD_ITEM's record folder" "verdict: $wdp_line"
+elif [ ! -f "$TMP/d-grammar.json" ]; then
+  fail "$RECORD_ITEM decisions.md holds to build.md's D-entry grammar" 'no grammar was extracted from build.md (see above)'
+else
+  case $record_dir in /*) ;; *) record_dir="$RECORD_ROOT/$record_dir" ;; esac
+  DECISIONS="$record_dir/decisions.md"
+  "$MARKER_PY" - "$TMP/d-grammar.json" "$DECISIONS" > "$TMP/decisions-out" 2>&1 <<'PYDEC'
+import json, os, re, sys
+g = json.load(open(sys.argv[1]))
+path = sys.argv[2]
+if not os.path.isfile(path):
+    sys.exit("no decisions.md at %s" % path)
+KEY = re.compile(r"([a-z][A-Za-z_]*):(?:\s+(.*))?$")
+def split_comment(v):
+    m = re.search(r"\s+#\s", v)
+    return v[:m.start()] if m else v
+lines = open(path, encoding="utf-8").read().splitlines()
+entries, fence = [], False
+for i, l in enumerate(lines):
+    if l.startswith("```"):
+        fence = not fence
+    if fence or not l.startswith("## "):
+        if entries:
+            entries[-1][2].append(l)
+        continue
+    m = re.fullmatch(r"## D([1-9][0-9]*) — (\S.*)", l)
+    if not m:
+        entries.append(("line %d" % (i + 1), None, []))
+        print("line %d: heading is not a `## D<n> — <title>` entry: %r" % (i + 1, l))
+        continue
+    entries.append(("D" + m.group(1), int(m.group(1)), []))
+errors = 0
+if not entries:
+    print("decisions.md has no `## D<n> — ` entries"); errors += 1
+for pos, (name, n, body) in enumerate(entries, 1):
+    if n is None:
+        errors += 1; continue
+    def err(msg):
+        global errors
+        errors += 1
+        print("%s: %s" % (name, msg))
+    if n != pos:
+        err("id out of sequence — expected D%d" % pos)
+    keys, vals, j = [], {}, 0
+    while j < len(body):
+        segs = split_comment(body[j]).split(" · ")
+        ms = [KEY.fullmatch(s.strip()) for s in segs]
+        if not all(ms):
+            break
+        for mm in ms:
+            keys.append(mm.group(1)); vals[mm.group(1)] = (mm.group(2) or "").strip()
+        j += 1
+    if keys != g["keys"]:
+        missing = [k for k in g["keys"] if k not in keys]
+        extra = [k for k in keys if k not in g["keys"]]
+        err("header keys %s, want %s%s%s" % (" ".join(keys) or "(none)", " ".join(g["keys"]),
+            ("; missing: " + " ".join(missing)) if missing else "", ("; unexpected: " + " ".join(extra)) if extra else ""))
+    if "kind" in vals and vals["kind"] not in g["kind"]:
+        err("kind %r is not one of %s" % (vals["kind"], " | ".join(g["kind"])))
+    if "decidedBy" in vals and vals["decidedBy"] not in g["decidedBy"]:
+        err("decidedBy %r is not one of %s" % (vals["decidedBy"], " | ".join(g["decidedBy"])))
+    if "slice" in vals and not re.fullmatch(r"[0-9]+|—", vals["slice"]):
+        err("slice %r is neither a number nor —" % vals["slice"])
+    if "step" in vals and not re.fullmatch(r"[a-z][a-z-]*", vals["step"]):
+        err("step %r is not a step name" % vals["step"])
+    if "sources" in vals and not re.fullmatch(r"\[\s*\S.*\]", vals["sources"]):
+        err("sources %r is not a non-empty [ … ] list" % vals["sources"])
+    if "rejected" in vals and not vals["rejected"]:
+        err("rejected is empty")
+    if "supersedes" in vals:
+        s = vals["supersedes"]
+        if s != "—":
+            if not re.fullmatch(r"D[0-9]+(, D[0-9]+)*", s):
+                err("supersedes %r is neither — nor a D-id list" % s)
+            else:
+                for ref in re.findall(r"D([0-9]+)", s):
+                    if not 1 <= int(ref) < n:
+                        err("supersedes D%s, which is not an earlier entry" % ref)
+    if not any(l.strip() for l in body[j:]):
+        err("no prose after the header")
+if errors:
+    sys.exit(1)
+print("entries=%d" % len(entries))
+PYDEC
+  if [ $? -ne 0 ]; then
+    set --
+    while IFS= read -r e; do set -- "$@" "$e"; done < "$TMP/decisions-out"
+    fail "$RECORD_ITEM decisions.md holds to build.md's D-entry grammar (${DECISIONS#"$RECORD_ROOT"/})" "$@"
+  else
+    pass "$RECORD_ITEM decisions.md holds to build.md's D-entry grammar — $( cat "$TMP/decisions-out" )"
+  fi
+fi
+
 printf '\n'
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"
