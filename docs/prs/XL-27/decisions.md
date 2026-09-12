@@ -601,3 +601,48 @@ supersedes: —
 In a session where every slice is already passes: true, no slice runs, and the session
 only writes the summary. Read literally, that run "stopped before any slice ran" and
 skips build-summary.md, which is the one thing it came to do.
+
+## D57 — The commit lookup can still pick a docs(record) commit that quotes the Step 4 line
+kind: shipped-finding
+step: build · slice: 3 · decidedBy: verifier
+sources: [code:commands/build.md Step 5 record section, design:F3]
+rejected: filter record commits in slice 3 — out of the second scoped fix's items
+supersedes: —
+build.md says a docs(record) commit never carries the `Slice <id> of <work_item>` line,
+but nothing enforces it. A hand-committed slice that drops the line, followed by a record
+commit whose body quotes it at column 0, makes the lookup return the record commit's sha.
+A subject line that starts with the same text matches the same way. Both can only return
+a commit of this same work item and slice id, never another ticket's (D54 holds). Fix
+candidate: drop subjects starting `docs(record)` from the matches.
+
+## D58 — A reverted slice's kept null attempts and retries read oddly beside passed: false
+kind: shipped-finding
+step: build · slice: 3 · decidedBy: verifier
+sources: [code:commands/build.md build-summary block comments]
+rejected: —
+supersedes: —
+When the stale entry was itself an earlier-session passed entry, the reverse-mismatch rule
+keeps its `attempts: null` and `retries: null` next to `passed: false`. The comment's
+"null = passed in an earlier session with no record of it" stays historically true but
+reads as a contradiction. A `## What shipped` note naming reverted slices would clear it.
+
+## D59 — A kept-verbatim entry can carry a stale name after re-planning
+kind: shipped-finding
+step: build · slice: 3 · decidedBy: verifier
+sources: [code:commands/build.md build-summary rules, code:.work/slices.yaml]
+rejected: —
+supersedes: —
+If /plan renamed a slice, "kept verbatim" carries the old `name:`, which contradicts D50's
+rule that id and name come from slices.yaml. Fix candidate: verbatim except id, name and
+origin, which are always re-read from slices.yaml.
+
+## D60 — D54's reason for the range overstates what the range does
+kind: shipped-finding
+step: build · slice: 3 · decidedBy: verifier
+sources: [code:commands/build.md Step 5 record section]
+rejected: —
+supersedes: —
+D54 and build.md say the range keeps other work items' history out; the line-start anchor
+with its trailing space already does that. What the range adds is excluding this work
+item's own earlier runs from before `base:`. It also does not exclude master commits merged
+into the branch, which can only match the same work item.
