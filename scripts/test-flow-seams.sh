@@ -2327,6 +2327,19 @@ for refuted in 'one commit per slice' 'follow-up slice' '`verifyBuild.concerns` 
   fi
 done
 
+# ADR-005 reversed the founding "Nothing else is kept" principle: a work item's
+# record (design, decisions, concerns, build summary) is committed beside the
+# code. Neither sentence of the old rule may survive anywhere in the plugin —
+# not in the README's Core principles, not in /verify-build's Principles.
+for refuted in 'Nothing else is kept' 'committed scratch docs'; do
+  hits=$( grep -rlF -e "$refuted" "$PLUGIN" )
+  if [ -n "$hits" ]; then
+    fail "the plugin no longer states the reversed rule: $refuted (ADR-005)" $hits
+  else
+    pass "the plugin no longer states the reversed rule: $refuted (ADR-005)"
+  fi
+done
+
 printf '\n'
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"

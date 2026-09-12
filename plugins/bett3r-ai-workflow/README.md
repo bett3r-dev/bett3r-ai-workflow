@@ -47,8 +47,8 @@ The flow improves itself. `capture-learnings` routes each learning to **where it
 - **A slice is the smallest independently-*verifiable* behavior**, cut top-to-bottom through all layers — never a horizontal layer. Only a vertical slice has its own green signal, which is what lets the loop verify and commit it on its own.
 - **Tracer bullet first.** The first slice is the thinnest end-to-end path through the riskiest, gate-less seam — proving the architecture before fleshing it out.
 - **Dual gate.** A slice is done only when its automated test passes **and** a verifier confirms the host repo's architectural invariants (the judgment tests can't catch). Tests alone ship defects that pass tests.
-- **Git is the system of record.** One commit per slice. The PR description carries the design narrative + per-slice summary. ADRs capture decisions. Nothing else is kept.
-- **Minimal, ephemeral residue.** Working state (`design.md`, `slices.yaml`) lives in a gitignored `.work/` and evaporates — promoted into the PR + ADRs on landing. No committed `sdd.md` / `build-progress.md` / test-plan scaffolding.
+- **Git is the system of record — the commits and a committed record beside the code.** One slice commit per slice. Each work item also leaves one folder under the work-docs root (resolved by `work-docs-path`, `docs/prs/<id>/` by default) holding four files, one copy each: `design.md` (the design as resolved), `decisions.md` (every decision made after it), `concerns.md` (the owners' bars, ruled at landing) and `build-summary.md` (the run's telemetry). The PR body is a short summary that links that record. ADRs still own the durable decisions that outlive a work item. (`docs/adr/ADR-005` records why this reversed the plugin's original "keep only the PR" rule.)
+- **Only working state is ephemeral.** The gitignored `.work/` holds working state alone — `slices.yaml`, `mode.yaml`, a lane brief, learnings, handoffs — and is discarded after landing. Nothing in the committed record has a second copy there. No committed `sdd.md` / `build-progress.md` / test-plan scaffolding.
 
 ## The plugin/project seam
 

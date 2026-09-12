@@ -286,7 +286,7 @@ End your output with this line, at column 0, as the **final** line — nothing a
 
 ## Principles
 
-- The PR is the system of record — invest in its body, not in committed scratch docs.
+- The PR is the system of record through what it lands: its commits and the committed record beside the code (`design.md`, `decisions.md`, `concerns.md`, `build-summary.md`). Keep its body a short summary that links that record rather than restating it, and put decisions that outlive this work item in ADRs.
 - This pass is cross-slice; trust the per-slice gates for within-slice correctness — but not for anything that ripples *outside* a slice's oracle. That is this pass's job.
 - **"Tests pass" is not evidence for a path that has no test.** A green gate covers the path it ran, nothing more. Every sweep above is a way that path is narrower than it looks; name the untested path rather than inferring coverage from green. The four facts this pass rests on are in [EVIDENCE.md](../EVIDENCE.md) — read it if a sweep's *why* is unclear.
 - **Disprove in both directions** — disprove a *finding* before you report it (a false Critical is costlier than a missed nit), and disprove the *claims the code makes about itself* before they propagate into the PR body. A **clean** verdict is the third kind of claim, and the easiest to accept.
