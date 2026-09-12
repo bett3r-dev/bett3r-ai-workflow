@@ -1,0 +1,8 @@
+#!/bin/sh
+# Launcher for scripts/resolved-marker-lint.py — refuses a resolved-design block
+# whose two `design-multi:resolved:vN` marker lines differ in any attribute.
+#
+# Here for the same reason as `lane-step`: `CLAUDE_PLUGIN_ROOT` is substituted for
+# hook invocations only, while every enabled plugin's `bin/` is on `PATH`, keyed
+# by the version the session loaded.
+exec python3 "$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)/scripts/resolved-marker-lint.py" "$@"
