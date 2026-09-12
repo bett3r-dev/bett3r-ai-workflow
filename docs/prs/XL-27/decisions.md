@@ -961,3 +961,121 @@ proposed three concerns quoted verbatim from it: C1 hard, the PR body stays shor
 the committed files; C2 hard, durable decisions still go to ADRs; C3 soft, concerns keep
 attribution and are checked at landing. The owner approved them on 2026-09-12 at 17:18 -03,
 and they are recorded in concerns.md with no verdict yet. /verify-build rules them.
+
+## D88 — /merge-multi rules each unit's concerns from its head before merging it
+kind: silent-seam
+step: build · slice: 7 · decidedBy: executor
+sources: [design:F4, design:C2, code:plugins/bett3r-ai-workflow/commands/merge-multi.md, code:plugins/bett3r-ai-workflow/scripts/concerns-check.py]
+rejected: trusting the flow/concerns commit status — a post can fail or be stale, and design C2 made /merge-multi the hard block
+supersedes: —
+A new Step 1b reads each unit's concerns.md and decisions.md from the unit's head sha with
+git show into a fresh temp directory, and runs concerns-check --decisions. Only
+outcome=pass merges. fail, error, a missing verdict line and a missing concerns.md refuse:
+/verify-build always commits the file, so its absence means the unit never finished. A
+missing decisions.md errors only when a concern is waived.
+
+## D89 — A refused unit blocks its dependents, and only a ruled head is merged
+kind: silent-seam
+step: build · slice: 7 · decidedBy: executor
+sources: [code:plugins/bett3r-ai-workflow/commands/merge-multi.md]
+rejected: merging a stacked child of a refused parent — it would carry the parent's unruled work into integration; ruling only once per run — a head moved by a later push would merge unchecked
+supersedes: —
+A refused unit removes itself and every unit stacked on it from the landing; units in other
+waves still merge. Step 2 merges exactly the head sha Step 1b ruled; a moved head, or a fix
+pushed to a unit branch in Step 3, is ruled again before merging. --dry-run runs Step 1b
+and reports the would-refuse set. Refused units are listed with their verdict line under
+the integration PR's declared − landed section.
+
+## D90 — The run-level decisions.md lives under the run id, and work-docs-path accepts run ids
+kind: deviation
+step: build · slice: 7 · decidedBy: human
+sources: [human, design:F5, code:plugins/bett3r-ai-workflow/scripts/work-docs-path.py, code:plugins/bett3r-ai-workflow/commands/start-multi.md]
+rejected: an <epic-id> folder — run.yaml has no epic field; lower-case run ids only — this repo's real runs multi-ESAS-29 and multi-ESAS-93-94 would get no folder; conflict resolutions in the PR body only
+supersedes: —
+Decided on 2026-09-12 at 17:46 and 18:05 -03. /merge-multi writes its conflict resolutions
+to <root>/<run-id>/decisions.md, as the single writer allocating D ids. work-docs-path
+accepts a run id as the lower-case prefix `multi-` followed by mixed-case, dash-joined
+words, and names the folder by the id as written. The Jira and GitHub shapes are checked
+first, so MULTI-7 stays a Jira key; a comparison over more than 135,000 ids found no
+previously valid id reclassified.
+
+## D91 — /merge-multi reads each unit's work item from the lane's state file
+kind: deviation
+step: build · slice: 7 · decidedBy: human
+sources: [human, code:plugins/bett3r-ai-workflow/agents/unit-lane.md, code:plugins/bett3r-ai-workflow/commands/merge-multi.md]
+rejected: inferring it from run.yaml's units[].id — a no-id unit dated at /start has a different folder
+supersedes: —
+Decided on 2026-09-12 at 17:46 -03. A unit lane records `work_item:` in
+<run>/units/<id>.state.yaml, the same value its /start wrote to .work/mode.yaml. Step 1b
+reads it and resolves the folder with work-docs-path. A missing file, key or resolution
+refuses the unit and never falls back to the unit id.
+
+## D92 — /merge-multi does not restate /design-multi's cross-cutting policies
+kind: deviation
+step: build · slice: 7 · decidedBy: human
+sources: [human, design:F5]
+rejected: restating them from .work/design-multi/<run>/decisions.md — gitignored and present only in the main checkout
+supersedes: —
+Decided on 2026-09-12 at 17:46 -03. Design F5 had the run-level decisions.md also carry
+/design-multi Phase B policies. Each unit's committed design.md already carries its resolved
+design, policies included, so the run-level file holds /merge-multi's own conflict
+resolutions only.
+
+## D93 — A run id work-docs-path refuses writes no run-level entry, and merging continues
+kind: silent-seam
+step: build · slice: 7 · decidedBy: human
+sources: [human, code:plugins/bett3r-ai-workflow/commands/merge-multi.md, code:plugins/bett3r-ai-workflow/commands/start-multi.md]
+rejected: stopping the landing — the run-level record is not a merge gate
+supersedes: —
+A hand-made run id, or one built from a unit id work-docs-path cannot carry (a Jira key with
+an underscore gives multi-MY_PROJ-1), resolves no folder. /merge-multi then writes no
+run-level entry, records the refusal's verdict line under Conflict resolutions in the
+integration PR body, and keeps merging. /start-multi warns about underscore unit ids.
+
+## D94 — merge-multi.md is pinned whole, keyed by section
+kind: deviation
+step: build · slice: 7 · decidedBy: human
+sources: [human, code:scripts/test-merge-multi-concerns.sh]
+rejected: keyword guards and partial sentence pins — across four verifier rounds each let a rewording through that made /merge-multi merge an unchecked unit or trust the status
+supersedes: —
+Decided on 2026-09-12 between 18:17 and 18:45 -03. The suite pins every sentence, table
+row, fence and the front matter of merge-multi.md as a multiset of (section, unit) pairs,
+164 in all. The executed Step 1b block is pinned as text and also run against throwaway
+unit branches. Any addition, removal, edit or move between sections fails and names the
+unit. A legitimate wording change must update the pinned list.
+
+## D95 — The dry-run sentence now matches Step 1's per-unit actions
+kind: deviation
+step: build · slice: 7 · decidedBy: human
+sources: [human, code:plugins/bett3r-ai-workflow/commands/merge-multi.md]
+rejected: "a finding above halts the whole command before anything merges" — Step 1's bullets skip, retarget or exclude one unit
+supersedes: —
+Decided on 2026-09-12 at 18:40 -03. The sentence now says a Step 1 finding acts on the unit
+it names, as its bullet says — skip it, retarget or exclude it, or stop on the human's
+outstanding objection — while a Step 1b refusal removes that unit and its stacked
+dependents, and the rest proceed.
+
+## D96 — What the merge-multi.md pin still does not catch
+kind: shipped-finding
+step: build · slice: 7 · decidedBy: verifier
+sources: [code:scripts/test-merge-multi-concerns.sh]
+rejected: —
+supersedes: —
+Order inside a section is not pinned, and neither is the order of whole sections apart from
+Step 1b before Step 2; no reorder tried made a failing unit merge. Whitespace-only edits
+inside the executed block are hidden from the text pin, though every one tried failed the
+run fixture. A plain bold lead line does not start a section, so text under it counts as
+the previous section (it fails as extra). The test header still says the block has two
+placeholders; it has three. The helper closed_set() is defined and unused.
+
+## D97 — Step 1 wording gaps and fleet limits left open
+kind: shipped-finding
+step: build · slice: 7 · decidedBy: verifier
+sources: [code:plugins/bett3r-ai-workflow/commands/merge-multi.md, code:plugins/bett3r-ai-workflow/agents/unit-lane.md]
+rejected: —
+supersedes: —
+The Step 1 bullet "never reached passed … or has no PR" names no action, and "Stop" does not
+say whether it stops the unit or the command; both predate this unit, though the reworded
+dry-run sentence reads per-unit against the lead-in "stop on any of these". Nothing checks
+that a lane wrote work_item before merge time, so a missing one is caught only at Step 1b.
+The unit boundaries inside a run id cannot be recovered from it.
