@@ -378,6 +378,77 @@
         "block"
       ],
       "_calibration": "The failure-tolerance rule and the silence-on-zero-providers rule both live ONLY in CONTEXT-PROVIDERS.md; design.md states them in one compressed clause each, so a model that reads only the command can partially satisfy the text assertions. must_open is therefore the load-bearing assertion here, not must_state."
+    },
+    {
+      "id": "tracker-writer-reached",
+      "why": "design-multi's Phase C delegates every tracker write to the tracker-writer agent. If that dispatch is read past, the orchestrator writes inline from memory of a contract that no longer lives in its own file, and the lossy markdown-to-ADF round-trip goes unverified behind a 200.",
+      "guards_split": "commands/design-multi.md -> agents/tracker-writer.md",
+      "artifact": "plugins/bett3r-ai-workflow/commands/design-multi.md",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/design-multi.md. You are running it as the orchestrator. You are in Phase C: the user has just confirmed, and four resolved-design blocks are on disk at .work/design-multi/run-1/units/TV1-1..4.ticket-block.md, ready to append to their Jira descriptions. List concretely every action you take next, naming actual agents, commands and files.",
+      "must_open": [
+        "agents/tracker-writer.md"
+      ],
+      "must_state": [
+        [
+          "tracker-writer"
+        ],
+        [
+          "TRACKER-WRITE",
+          "TRACKER-WAVE",
+          "report"
+        ]
+      ],
+      "must_not_state": []
+    },
+    {
+      "id": "tracker-writer-states-its-own-rules",
+      "why": "The content that moved out of design-multi works in its new home: a block citing a __tests__ path, written into a description whose size a markdown count cannot predict.",
+      "guards_split": "agents/tracker-writer.md (the content that moved out of design-multi)",
+      "artifact": "plugins/bett3r-ai-workflow/agents/tracker-writer.md",
+      "prompt": "Read the agent file plugins/bett3r-ai-workflow/agents/tracker-writer.md. You are that agent. Your one item: append units/TV1-7.ticket-block.md to Jira ticket TV1-7, whose current description is 24,000 markdown characters. The block is code-dense and cites the path src/__tests__/sync.test.ts in plain prose. Say concretely what you do about the size and about that path, before and after the write.",
+      "must_open": [],
+      "must_state": [
+        [
+          "ADF",
+          "CONTENT_LIMIT_EXCEEDED"
+        ],
+        [
+          "inline code",
+          "backtick"
+        ],
+        [
+          "fresh fetch",
+          "re-fetch",
+          "read-back",
+          "readback"
+        ]
+      ],
+      "must_not_state": [
+        "32767 - len",
+        "headroom is 8"
+      ]
+    },
+    {
+      "id": "tracker-confirm-not-delegated",
+      "why": "NEGATIVE CONTROL for the tracker-writer split. Confirming with the user before an outward-facing write, and taking a different run's marker to the user, must stay with the orchestrator. A split that quietly hands either to the writer would still pass tracker-writer-reached.",
+      "guards_split": "commands/design-multi.md (what deliberately did NOT move)",
+      "artifact": "plugins/bett3r-ai-workflow/commands/design-multi.md",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/design-multi.md. You are the orchestrator in Phase C. The tracker-writer's report says TV1-3 was stopped: its description already carries a design-multi:resolved:v2 marker with a different run=. Who confirmed the writes before dispatch, and what do you do now about TV1-3?",
+      "must_open": [],
+      "must_state": [
+        [
+          "user"
+        ],
+        [
+          "confirm",
+          "ask",
+          "surface"
+        ]
+      ],
+      "must_not_state": [
+        "re-dispatch the tracker-writer to overwrite",
+        "overwrite the existing block"
+      ]
     }
   ]
 }
