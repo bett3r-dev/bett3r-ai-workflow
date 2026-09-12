@@ -1079,3 +1079,33 @@ say whether it stops the unit or the command; both predate this unit, though the
 dry-run sentence reads per-unit against the lead-in "stop on any of these". Nothing checks
 that a lane wrote work_item before merge time, so a missing one is caught only at Step 1b.
 The unit boundaries inside a run id cannot be recovered from it.
+
+## D98 — How ADR-005 cites and measures
+kind: silent-seam
+step: build · slice: 8 · decidedBy: executor
+sources: [code:docs/adr/ADR-005-a-work-items-record-is-committed-beside-the-code-not-only-in-the-pr-body.md, code:scripts/test-flow-seams.sh, code:scripts/needles.json]
+rejected: markdown links in the ADR — check-artifact-links.py does not scan docs/adr, and a relative link from the plugin README breaks in the installed plugin cache; refuting the old sentences in README and verify-build only — they could move into another file
+supersedes: —
+ADR-005 cites paths in code format, each checked with test -e, and the README names it as
+plain text. It prints teselly's monthly folder counts by author date, as the design did,
+and notes the commit-date counts. Every figure was re-measured offline against teselly's
+local master, except the PR body sizes and the GitHub 403, which came from gh during
+design and are marked as not re-measured. The refute loop scans every file in the plugin.
+The fail-closed needles pin verify-build.md's wording, since needles read only markdown.
+The ADR carries a Principle section: measure a premise before a rule discards knowledge,
+and name the reader a kept record is for.
+
+## D99 — Old-rule wording that survives outside the rewritten principles
+kind: shipped-finding
+step: build · slice: 8 · decidedBy: verifier
+sources: [code:plugins/bett3r-ai-workflow/commands/verify-build.md, code:plugins/bett3r-ai-workflow/commands/plan.md, code:plugins/bett3r-ai-workflow/skills/handoff/SKILL.md, code:plugins/bett3r-ai-workflow/.claude-plugin/plugin.json, code:plugins/bett3r-ai-workflow/skills/vertical-slicing/SKILL.md]
+rejected: —
+supersedes: —
+Several lines still describe the durable record as ADRs, the PR and commits only:
+verify-build.md Step 8 (".work fully promoted (ADRs + PR body + per-slice commits)") and its
+front matter and opening ("durable record (ADRs + a PR)"), plan.md's principles ("the durable
+record is the per-slice commits + the PR"), handoff's "Git and the PR are the system of
+record", and plugin.json's description. vertical-slicing still says "one commit per slice".
+No step acts on any of them — the steps themselves commit the record — so they are
+incomplete wording, not wrong instructions. ADR-005 also mixes path roots: some paths are
+relative to the repo, others to the plugin directory.
