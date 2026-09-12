@@ -12,7 +12,7 @@
 #
 # ## Three consumers, one event
 #
-# ESAS-85 (capture the PR body), ESAS-87 (kick extraction) and ESAS-92 (export
+# XL-30 (capture the PR body), XL-21 (kick extraction) and XL-14 (export
 # freshness) all attach here. None of them is named in this file: the hook
 # reports *what happened* to `.knowledge-store/capture` and the store decides
 # who cares. That is the coupling invariant — the store adapts to the flow,
