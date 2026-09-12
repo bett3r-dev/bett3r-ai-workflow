@@ -405,7 +405,7 @@
       "why": "The content that moved out of design-multi works in its new home: a block citing a __tests__ path, written into a description whose size a markdown count cannot predict.",
       "guards_split": "agents/tracker-writer.md (the content that moved out of design-multi)",
       "artifact": "plugins/bett3r-ai-workflow/agents/tracker-writer.md",
-      "prompt": "Read the agent file plugins/bett3r-ai-workflow/agents/tracker-writer.md. You are that agent. Your one item: append units/TV1-7.ticket-block.md to Jira ticket TV1-7, whose current description is 24,000 markdown characters. The block is code-dense and cites the path src/__tests__/sync.test.ts in plain prose. Say concretely what you do about the size and about that path, before and after the write.",
+      "prompt": "Read the agent file plugins/bett3r-ai-workflow/agents/tracker-writer.md. You are that agent. This is a thought experiment: do not look for the block file or any other file besides the agent file. Your brief is complete: item TV1-7, kind block, run-id design-multi-TV1-7, BASE abc1234, source units/TV1-7.ticket-block.md. Preflight has already passed (the marker lint exits 0, and git cat-file proves src/__tests__/sync.test.ts at BASE), and TV1-7's current description carries no design-multi marker. That description is 24,000 markdown characters. The block is code-dense and cites the path src/__tests__/sync.test.ts in plain prose. Say concretely what you do about the size and about that path, before the write and after it.",
       "must_open": [],
       "must_state": [
         [
@@ -426,7 +426,8 @@
       "must_not_state": [
         "32767 - len",
         "headroom is 8"
-      ]
+      ],
+      "_calibration": "The first version named a block file that does not exist and gave no run-id or BASE. It opened tracker-writer.md 3/3 but passed 1/3: the agent correctly REFUSED at preflight, and a session that stopped at 'refused, nothing written' never described the read-back. Two replays of that prompt both stated the rules (read-back and readback), so the agent was right and the scenario was asking it to act on an incomplete brief. The prompt now supplies a complete brief with preflight passed and forbids the file search."
     },
     {
       "id": "tracker-confirm-not-delegated",
