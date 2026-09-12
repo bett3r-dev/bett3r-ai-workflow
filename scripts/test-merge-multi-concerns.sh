@@ -612,7 +612,7 @@ PINNED_FILE = [
     ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "- `outcome=pass` → merge the unit."],
     ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "- `outcome=fail` → refuse the unit."],
     ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "- `outcome=error` → refuse the unit."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "This is not-success exactly like `fail` — a malformed file, a fabricated or foreign waiver citation, or a corrupt `decisions.md` never reads as a pass or as \"no concerns\" (carried from slice 5/6)."],
+    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "This is not-success exactly like `fail` — a malformed file, a fabricated or foreign waiver citation, or a corrupt `decisions.md` never reads as a pass or as \"no concerns\"."],
     ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "- No verdict line at all (the command produced nothing, died before printing one, or never ran because the unit's work item did not resolve) → refuse the unit."],
     ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "A missing `concerns.md` at the unit head is a refusal, not \"no concerns\"."],
     ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "`/verify-build` always commits the file, empty when the unit raised none, so `git show` failing to find it at that sha means that unit's `/verify-build` did not complete — and the `git show` above already reproduces that: with no file written to `$TMP/concerns.md`, `concerns-check` itself returns `outcome=error reason=file-not-found`, which the mapping above already refuses."],
@@ -639,6 +639,10 @@ PINNED_FILE = [
     ["2 — Merge into integration, in dependency order.", "For any monotonic pin several units moved — tier counts, node-registry census, deployment-unit counts, topology ratchets — every branch's value is correct on its own base and wrong on the merged tree, so there is no side to take: `ours`/`theirs` ships a wrong pin the suite then *enforces*, surfacing as an authorization defect rather than a merge defect."],
     ["2 — Merge into integration, in dependency order.", "Write `base + Σ (each unit's delta measured against its own base)` — `run.yaml`'s step-8 report carries the addends — and verify by running the suite, which prints the received length, not by the merge being clean."],
     ["2 — Merge into integration, in dependency order.", "One fleet's correct value (704) appeared on no branch."],
+    ["2 — Merge into integration, in dependency order.", "A clean merge does not discharge a cross-unit obligation."],
+    ["2 — Merge into integration, in dependency order.", "Before merging, list every obligation the units recorded for the merge — `owesSiblings` in each `units/<id>.state.yaml`, and any PR-body \"for the <sibling> merge\" section."],
+    ["2 — Merge into integration, in dependency order.", "Check each against the merged file whether or not git conflicted there, apply it on integration with a test that is red without it, and record it as a resolution like any conflict; an obligation with no matching resolution blocks step 5."],
+    ["2 — Merge into integration, in dependency order.", "One was written three times — design, state file, PR body — and merged away cleanly with every gate green, because no unit's tests could reach the intersection."],
     ["2 — Merge into integration, in dependency order.", "Record every resolution as you make it — which units, which file, what was kept and what was dropped, and why."],
     ["2 — Merge into integration, in dependency order.", "This is the one part of what lands that nobody reviewed: the reviewer approved unit diffs, and what ships is those diffs *plus* your resolutions."],
     ["2 — Merge into integration, in dependency order.", "It goes in the integration PR body (step 5), which is the only section there allowed to be verbose, and as a `decisions.md` entry in the run-level folder below — the body keeps being written exactly as before; the entry is additive, not a replacement."],
@@ -652,7 +656,6 @@ PINNED_FILE = [
     ["3 — Run the full gate, once, on integration.", "Read that skill for the discovery order and the four ways a green read is wrong; do not re-derive them here."],
     ["3 — Run the full gate, once, on integration.", "They are all [EVIDENCE.md](../EVIDENCE.md) §1 — *a verdict is evidence only about what it actually executed* — and this is the one run in the whole fleet that certifies the assembled tree, so a misread here is unbacked by anything downstream."],
     ["3 — Run the full gate, once, on integration.", "The verdict names the ref it ran at and therefore which units it covers — the assembled tree covers every merged unit; a unit excluded with `--only` is not covered and is named as such."],
-    ["3 — Run the full gate, once, on integration.", "(Before the hoist, a deep gate run once on a mid-stack branch was reasoned to cover its ancestors and silently excluded the one parallel unit — which was the one that failed lift-readiness at merge.)"],
     ["3 — Run the full gate, once, on integration.", "A red gate is fixed on integration, not deferred."],
     ["3 — Run the full gate, once, on integration.", "If a failure traces cleanly to one unit and the fix is more than a line, push the fix to that unit's branch and re-merge — that keeps the unit PR an honest record of its own work."],
     ["3 — Run the full gate, once, on integration.", "A fix pushed to a unit branch changes its head: re-run Step 1b at the new head sha before re-merging, and refuse on anything but `outcome=pass`."],
@@ -832,6 +835,12 @@ PYMUT
     fail "mutation control: $label" "expected a bad| line containing: $expect" "got: $out"
   fi
 }
+
+mutate_and_expect_bad \
+  '(obligations) inverting "a clean merge does not discharge an obligation" is caught' \
+  'A clean merge does not discharge a cross-unit obligation.' \
+  'A clean merge discharges a cross-unit obligation.' \
+  'closed set: the whole of merge-multi.md'
 
 mutate_and_expect_bad \
   '(a) removing --decisions from the concerns-check call is caught' \
