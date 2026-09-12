@@ -646,3 +646,114 @@ D54 and build.md say the range keeps other work items' history out; the line-sta
 with its trailing space already does that. What the range adds is excluding this work
 item's own earlier runs from before `base:`. It also does not exclude master commits merged
 into the branch, which can only match the same work item.
+
+## D61 — concerns-check takes a file path, and an absent file is an error
+kind: deviation
+step: build · slice: 5 · decidedBy: executor
+sources: [design:F4, code:plugins/bett3r-ai-workflow/scripts/concerns-check.py]
+rejected: resolve the file with --item through work-docs-path — /merge-multi must check other units' heads with git show, which work-docs-path cannot resolve from an unrelated branch; an absent file passing — a bad path must never look like a unit that raised no concerns
+supersedes: —
+concerns-check reads a concerns.md given as a path and prints a CONCERNS-CHECK:v1 verdict
+line. A missing or unreadable file is outcome=error, exit 2.
+
+## D62 — A concerns.md with no entries passes only when it is empty
+kind: silent-seam
+step: build · slice: 5 · decidedBy: executor
+sources: [design:C5, code:plugins/bett3r-ai-workflow/scripts/concerns-check.py, code:scripts/fixtures/concerns/]
+rejected: pass any file with zero well-formed entries — the first pass did, and a file whose real hard bars sat under ### C1, ## C1 -, ## Concern 1 or a bullet list passed as "no concerns"; allow a leading # title line — the skill never writes one
+supersedes: —
+Zero entries pass only for an empty or whitespace-only file after one BOM. Any other line
+that is not a well-formed `## C<n> — <label>` header, a field, or blank is an error: a
+near-miss header is malformed-header, stray content is malformed-unrecognised-content, a
+non-field line inside an entry is malformed-entry, and a key outside the seven is
+malformed-unknown-field. Found by the verifier on retry 1; the fixture that pinned the
+fail-open (empty.md holding prose) is now zero bytes.
+
+## D63 — A C-entry's quote is the raising quote; a waiver is cited from evidence
+kind: deviation
+step: build · slice: 5 · decidedBy: verifier
+sources: [design:F4, code:plugins/bett3r-ai-workflow/skills/concern/SKILL.md, code:plugins/bett3r-ai-workflow/scripts/concerns-check.py]
+rejected: require only a non-empty quote for verdict: waived — every entry already has one, so any entry could be flipped to waived with no owner consent; overwrite quote with the waiver's words — contradicts the append-only raising record
+supersedes: —
+F4's "verdict: waived requires the verbatim quote and appends a decisions.md entry" is read
+as the waiver's own quote. quote: stays the owner's raising quote. A waived entry's
+evidence: must cite the waiver as decisions.md#D<n>; concerns-check checks only that the
+citation is present. /verify-build (slice 6) must verify the cited entry exists in this
+unit's own decisions.md with kind: waiver, decidedBy: human, and the owner's verbatim quote.
+
+## D64 — Required C-entry fields are non-empty, and placeholders count as empty
+kind: silent-seam
+step: build · slice: 5 · decidedBy: executor
+sources: [design:F4, code:plugins/bett3r-ai-workflow/scripts/concerns-check.py]
+rejected: leave why and verify unchecked; allow a ruled verdict with no evidence
+supersedes: —
+raisedBy, quote, why and verify must be non-empty on every entry, and evidence whenever
+verdict is not —. A blank value, —, -, or a whole <…> template counts as empty. So
+verdict: met with evidence: — is an error, while a freshly captured entry (verdict: — and
+evidence: —) still fails as missing-verdict.
+
+## D65 — A trailing comment on bar or verdict is ignored
+kind: silent-seam
+step: build · slice: 5 · decidedBy: executor
+sources: [code:plugins/bett3r-ai-workflow/skills/concern/SKILL.md, code:plugins/bett3r-ai-workflow/scripts/concerns-check.py, code:scripts/test-flow-seams.sh]
+rejected: strip comments on every field — evidence legitimately holds #D3; tell the model not to copy the template's comments — the example would still fail its own checker
+supersedes: —
+The skill's C-entry template carries inline # comments that list the allowed values, and a
+model copying it literally failed concerns-check (verifier, retry 2). A value matching
+^(\S+)\s+#.*$ on bar or verdict is ruled by the token before the comment. A comment-only
+value, a # with no space, or two words before the comment stay malformed. A seam runs the
+filled template itself through the checker.
+
+## D66 — C-entry ids may have gaps; the skill allocates them
+kind: silent-seam
+step: build · slice: 5 · decidedBy: executor
+sources: [code:plugins/bett3r-ai-workflow/skills/concern/SKILL.md, code:plugins/bett3r-ai-workflow/scripts/concerns-check.py]
+rejected: treat non-contiguous ids as malformed — that would forbid ever retiring a concern
+supersedes: —
+The skill allocates the next id as the file's highest C<n> + 1. concerns-check never
+allocates, and a duplicate id is an error. The header grammar rejects C0 and C01.
+
+## D67 — /design seeds concerns only from explicit bars, and capture uses the reader path
+kind: silent-seam
+step: build · slice: 5 · decidedBy: executor
+sources: [design:F4, code:plugins/bett3r-ai-workflow/commands/design.md, code:plugins/bett3r-ai-workflow/skills/concern/SKILL.md]
+rejected: an enum for raisedBy — the design gives none; the writer form of work-docs-path — appending a concern never overwrites, so the design.md ownership check does not apply
+supersedes: —
+/design Step 1 treats a ticket sentence as a bar when it is phrased as a shipping condition
+(must, can't ship unless, a red line), not as a feature description; when unsure it
+captures a soft concern rather than dropping it. raisedBy is free text,
+`<who> · step: <step>`. The concern skill resolves its folder with the reader form of
+work-docs-path, with no --owner-branch.
+
+## D68 — Every concerns-check verdict-line value is percent-encoded
+kind: deviation
+step: build · slice: 5 · decidedBy: executor
+sources: [adr:ADR-004, code:plugins/bett3r-ai-workflow/scripts/concerns-check.py]
+rejected: replacing spaces with _ — not reversible
+supersedes: —
+Values with spaces (value=unmet (see PR), a path with spaces) broke a key=value reader.
+Space, tab, %, = and control bytes are percent-encoded on every field, including detail=.
+
+## D69 — Some concern shapes still pass that a stricter checker would reject
+kind: shipped-finding
+step: build · slice: 5 · decidedBy: verifier
+sources: [code:plugins/bett3r-ai-workflow/scripts/concerns-check.py]
+rejected: —
+supersedes: —
+Free-text fields are not comment-stripped, so a placeholder followed by a comment counts as
+non-empty: verdict: waived with quote: — # x and a citation passes, and verdict: met with
+evidence: — # x passes. A comment that contradicts its token (bar: soft # hard) passes
+silently. The waiver regex only needs the citation substring, so "not decisions.md#D3" and
+a path-prefixed citation pass here; slice 6's cross-file check is the gate.
+
+## D70 — Minor concerns-check behaviours are unpinned
+kind: shipped-finding
+step: build · slice: 5 · decidedBy: verifier
+sources: [code:plugins/bett3r-ai-workflow/scripts/concerns-check.py, code:scripts/fixtures/concerns/, code:scripts/test-flow-seams.sh]
+rejected: —
+supersedes: —
+A file holding only non-breaking spaces passes as empty. Quotes are stripped from bar and
+verdict, so verdict: "met" passes, and a vertical tab splits a line. With the near-miss
+header check removed, malformed files still fail closed, but the suite goes red only
+because the reason= text changes. malformed-bar-two-words-comment.md does not distinguish
+the regex ^(\S+)\s+# from the equivalent ^(.+?)\s+# while bar values are single words.
