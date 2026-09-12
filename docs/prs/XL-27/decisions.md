@@ -853,3 +853,111 @@ python3-yaml without `apt-get update`, so a stale package index could fail it (l
 the suite runs under sh and dash but not bash in CI. Step 3 says "follow-up slice" where
 Step 5b says fix slices, and Step 3's "not committed to a file" now has counts that Step 5b
 does commit.
+
+## D79 — /verify-build rules the concerns in a new Step 5a, before the build summary
+kind: silent-seam
+step: build · slice: 6 · decidedBy: executor
+sources: [design:F4, code:plugins/bett3r-ai-workflow/commands/verify-build.md]
+rejected: after Step 4 — the ADRs could not be cited as evidence; inside Step 5b — it mixes ruling with telemetry
+supersedes: —
+Step 5a sits after Step 5 (the ADRs) and before Step 5b, so the gate, the coherence review
+and the ADRs exist as evidence, and Step 5b's commit carries the result. It commits the
+ruled concerns.md on its own as a docs(record) commit.
+
+## D80 — An absent concerns.md is committed empty and reported as "no concerns recorded"
+kind: silent-seam
+step: build · slice: 6 · decidedBy: executor
+sources: [design:F4, code:plugins/bett3r-ai-workflow/commands/verify-build.md]
+rejected: skipping the check and posting nothing — indistinguishable from the flow never running, and /merge-multi's check would error on a missing file; a success status with no file — the status link would point at nothing
+supersedes: —
+Where work-docs-path resolves and no concerns.md exists, /verify-build writes and commits an
+empty file, which concerns-check passes as hard=0 soft=0, and posts success with "no
+concerns recorded". The verifier judged "raised" an overclaim: the file records what was
+captured, not what the owner said.
+
+## D81 — concerns-check --decisions verifies every waiver citation against this unit's decisions.md
+kind: deviation
+step: build · slice: 6 · decidedBy: executor
+sources: [design:F4, code:plugins/bett3r-ai-workflow/scripts/concerns-check.py, code:scripts/fixtures/concerns/waiver/]
+rejected: a prose-only cross-file check in /verify-build — untestable; a second D-entry grammar
+supersedes: —
+With `--decisions <path>`, each `waived` C-entry's citation must resolve, in that file, to
+exactly one entry with kind: waiver, decidedBy: human and a non-empty body. A citation
+preceded by anything other than the value start, a space, a tab or `(` names another file
+and errors; a duplicate D-id is ambiguous. The decisions file is read only when an entry is
+waived. Without the flag, slice 5's behaviour is unchanged. This closes the gap D63 carried
+to slice 6.
+
+## D82 — A waiver covers only the concerns its title names, and must quote the owner
+kind: silent-seam
+step: build · slice: 6 · decidedBy: verifier
+sources: [design:F4, code:plugins/bett3r-ai-workflow/scripts/concerns-check.py, code:scripts/test-flow-seams.sh]
+rejected: a `waives:` header line — the D-entry grammar check rejects extra header keys; matching the id in the body — a body can mention other concerns
+supersedes: —
+The first version let one owner waiver for C1 pass a hard C2 that cited it. The waiver
+D-entry's title must now name each C-id it waives as a whole id (`## D<n> — The owner waives
+C<n>: <label>`), and its body must hold a non-blank straight or curly double-quoted span.
+Code fences are read exactly as the D-entry grammar check reads them, so a fenced example
+waiver is never a record. The citation is written bare, without backticks or a path.
+
+## D83 — How the flow/concerns status is posted
+kind: silent-seam
+step: build · slice: 6 · decidedBy: executor
+sources: [design:F4, design:R5, code:plugins/bett3r-ai-workflow/commands/verify-build.md]
+rejected: a table for the outcome mapping — harder to parse without false matches; re-running concerns-check on the empty verdict commit — the tree is unchanged
+supersedes: —
+The mapping is one column-0 bullet per outcome: pass → success, fail → failure, error →
+failure, and a missing verdict line maps to the error row. The description is capped at 140
+characters, dropping trailing C-ids as `, +<n> more`; that limit is an assumption not checked
+against GitHub. The status is re-posted on the flow's own later pushes, including the empty
+commit Step 9's lane-step-record pushes. A concerns fail or error still reports LANE-STEP
+success, because the PR is open with them named.
+
+## D84 — The PR body is a short summary plus links to the committed record
+kind: silent-seam
+step: build · slice: 6 · decidedBy: executor
+sources: [design:Resolved without a fork, code:plugins/bett3r-ai-workflow/commands/verify-build.md]
+rejected: dropping the Decisions or Coherence review sections — Steps 3 and 5 still report there
+supersedes: —
+The body keeps a short summary, a Record section with blob links to design.md, decisions.md,
+concerns.md and build-summary.md, Slices, Unmet hard concerns (fail or error only),
+Verification, the dev checklist, Decisions, Coherence review and Run cost. verifyBuild.concerns
+is copied from Step 5a's verdict line, or null with "Concerns not checked: <reason>" on error.
+
+## D85 — Some waiver records concerns-check still accepts
+kind: shipped-finding
+step: build · slice: 6 · decidedBy: verifier
+sources: [code:plugins/bett3r-ai-workflow/scripts/concerns-check.py, code:plugins/bett3r-ai-workflow/commands/verify-build.md]
+rejected: —
+supersedes: —
+The quote rule's regex accepts a span made only of quotes (`"" ""`), although its docstring
+says non-blank. The title id check treats `C1a`, `_C1` and `C1.5` as naming C1. kind and
+decidedBy are read from anywhere in the entry, and the first `decidedBy:` substring wins, so
+an entry the D-entry grammar check would reject can still pass. `~~~` and indented fences are
+not fences to either reader, though they render as fences. A negated title or citation, a
+quote-shaped span that is not the owner's words, and one title naming several C-ids all pass;
+the checker proves structure, not authorship. Step 5a's list of rejected records omits the
+title and quote rules that its own item 1 states.
+
+## D86 — Slice 6 leaves small forward and platform assumptions
+kind: shipped-finding
+step: build · slice: 6 · decidedBy: verifier
+sources: [code:plugins/bett3r-ai-workflow/commands/verify-build.md, code:scripts/test-flow-seams.sh]
+rejected: —
+supersedes: —
+Step 6b says /merge-multi runs the concerns check on each unit head, which is true only once
+slice 7 lands in this PR. The blob links point at the branch, so they break after the branch
+is deleted. The shared seam-suite `present` helper still calls `grep -qF` without `-e`.
+
+## D87 — The owner approved three concerns quoted from the XL-27 ticket
+kind: deviation
+step: build · slice: 6 · decidedBy: human
+sources: [human, code:docs/prs/XL-27/concerns.md, code:plugins/bett3r-ai-workflow/skills/concern/SKILL.md]
+rejected: invented owner quotes — a concern must carry the owner's own words; no concerns for this unit — the PR would ship concerns-check with no live proof
+supersedes: —
+The plan had this PR carry its own concerns.md so its /verify-build is concerns-check's first
+live proof. The executor could not read the ticket, so the orchestrator read XL-27 and
+proposed three concerns quoted verbatim from it: C1 hard, the PR body stays short and links to
+the committed files; C2 hard, durable decisions still go to ADRs; C3 soft, concerns keep
+attribution and are checked at landing. The owner approved them on 2026-09-12 at 17:18 -03,
+and they are recorded in concerns.md with no verdict yet. /verify-build rules them.
