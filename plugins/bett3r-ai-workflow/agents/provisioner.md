@@ -132,7 +132,7 @@ branch: <the lane's branch>
 base: <the branch it was cut from, and the sha you verified it at>
 drift: <the drift verdict at BASE — what the resolved design still holds for, and what it does not>
 runners: <the host repo's runner/glob map: which command runs which test paths>
-preconditions: <the host repo's build/test preconditions, from CLAUDE.md and every .claude/rules/ file>
+preconditions: <the host repo's build/test preconditions, from CLAUDE.md and every .claude/rules/ file — each LABELLED like handedDownFacts: `applies` only with the command that confirmed it at BASE, else `verify whether it applies`>
 adrAllocations: <the monotonically-numbered artifacts reserved for this lane, ADR numbers above all>
 modelRouting: <the model each step runs under>
 handedDownFacts: <each fact LABELLED `applies` or `verify whether it applies`, with the command that settles it>
@@ -147,7 +147,7 @@ gateDeferred: true
 
 `gateDeferred` is the one signal that tells the lane's `/verify-build` it is **not** landing on its own: it runs the host repo's gate in `--fast` mode and leaves the full gate to `/merge-multi`, which runs it once on the integration branch — the only tree where cross-unit breakage exists at all.
 
-`handedDownFacts` carries its labels into the file for the same reason the rest of it is here: a fact remembered as settled, when it was only ever *"verify whether it applies"*, is how a lane skips the check that would have disproved it.
+`handedDownFacts` carries its labels into the file for the same reason the rest of it is here: a fact remembered as settled, when it was only ever *"verify whether it applies"*, is how a lane skips the check that would have disproved it. `preconditions` carries them too, because a rules file rots like any other claim — one extracted repo's rules said packages export `build/esm/index.js` while every `package.json` at BASE exported `./src/index.ts`, and that went into three briefs as settled (`git show <BASE>:<pkg>/package.json` is the confirming command).
 
 It has to be a **file in the worktree**, not a message. A lane that is `/clear`ed, handed off, or resumed by a fresh agent loses the message and keeps the file — and a step invoked on its own is the limit case, because every step is then a fresh agent with no memory of a dispatch it never saw. The failure mode of losing `gateDeferred` is N full gate runs where one was wanted, which is slow but survivable; the failure mode of a *stale* brief inherited from a previous run is a PR that silently claims a deferral to a fleet that no longer exists. Step 2's archive-and-scrub covers the second — this file is one of the `.work/` artifacts that must not survive into a different run, and `/start` deletes it outright for the same reason.
 
@@ -161,10 +161,6 @@ because both halves fail *quietly* — a lane still holding the old file silentl
 `--fast` was wanted (slow, survivable), and `run-metrics` silently resolves **nothing** rather than
 erroring, which is the failure `/run-report` already warns about: a fleet unit is not findable by
 branch, by construction. Re-provision the worktree, or rename the file by hand.
-
-The old name is not written in this paragraph on purpose: `scripts/test-flow-seams.sh` asserts that it
-survives **only** in the ADR that recorded it as history, and that guard is not worth an exemption for
-one sentence of prose. It caught this very paragraph on the first draft.
 
 ## 7 — Record the base — do NOT run the suite
 
@@ -197,7 +193,7 @@ Two things that do not change: a **wrong shared baseline is worse than none** (l
 
 **Local config staged:** [which decrypted files you copied, or "none needed"]
 
-**Fleet-lane marker:** [written, with the runId it names — or "not a fleet unit"]
+**Lane brief:** [`.work/lane.yaml` written, with the runId it names — or "not a fleet unit"]
 
 **Design snapshot:** [written, with the sourceSha it records — or **not written**, with which reason: the main checkout has no design layer, or its sha/cleanliness did not match the run's base. If not written, say plainly that this lane's designed artifacts will be hand-written, so the difference is visible in the run's report rather than discovered in the diff.]
 
