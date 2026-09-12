@@ -757,3 +757,99 @@ verdict, so verdict: "met" passes, and a vertical tab splits a line. With the ne
 header check removed, malformed files still fail closed, but the suite goes red only
 because the reason= text changes. malformed-bar-two-words-comment.md does not distinguish
 the regex ^(\S+)\s+# from the equivalent ^(.+?)\s+# while bar values are single words.
+
+## D71 — R7 is partial: workers stamped gitBranch HEAD are counted, not attributed
+kind: shipped-finding
+step: build · slice: 4 · decidedBy: executor
+sources: [design:R7, code:plugins/bett3r-ai-workflow/scripts/run-metrics.mjs, code:scripts/test-run-metrics.sh]
+rejected: verify against a real pool run — no agent was ever dispatched into a pool worktree in this unit, so no such transcript exists; assert R7 from reading the code — the design requires a real check
+supersedes: —
+run-metrics finds a subagent under its parent session and drops it when its dominant
+gitBranch differs from the task branch. A worker stamped `HEAD`, as a detached checkout
+would be, is therefore not attributed to any slice. The script's own note says subagent
+records carry the orchestrator's branch and cwd, so the drop is probably rare, but it has
+never been observed either way. The fragment now counts these as `droppedDetached=<n>` and
+/verify-build names the undercount in What shipped. A /start-multi unit is never
+branch-filtered, so its 0 means not measured, not none dropped. Verify against a real
+pool run when one exists.
+
+## D72 — The usage fragment is YAML with a trailing verdict line and writes nothing
+kind: silent-seam
+step: build · slice: 4 · decidedBy: executor
+sources: [design:F3b, adr:ADR-004, code:plugins/bett3r-ai-workflow/scripts/run-metrics.mjs]
+rejected: an --emit-usage flag — reads as if it writes; JSON — build-summary's frontmatter is YAML; a top-level droppedDetached key — outside F3's shape
+supersedes: —
+`--usage-fragment` prints a `slices:` list of `{id, usage: {executor, verifier, testRunner}}`,
+`unattributed:`, and `verifyBuild: usage:`, each cell `{ model, effort, tokens, activeMs }`
+or null, ending with the comment line `# RUN-METRICS-USAGE:v1 outcome=… droppedDetached=<n>`.
+It never writes runs/ or the index. No transcript-directory flag was added; the suite owns HOME.
+
+## D73 — The fragment reuses retryLedger for attribution
+kind: silent-seam
+step: build · slice: 4 · decidedBy: executor
+sources: [code:plugins/bett3r-ai-workflow/scripts/run-metrics.mjs retryLedger]
+rejected: copying the regex — the report and the fragment could then disagree; extracting a shared helper — it would move the line build.md cites
+supersedes: —
+The fragment calls `retryLedger([r])` per run, so `slice 12` attributes to 12, `slices 1-3`
+is unattributed, and the first match wins. It also inherits the `\bS(\d+)\b` fallback, so a
+description like "S3 bucket fix" attributes to slice 3; that predates this unit.
+
+## D74 — /verify-build measures in a new Step 5b, before the PR
+kind: silent-seam
+step: build · slice: 4 · decidedBy: executor
+sources: [design:F3b, code:plugins/bett3r-ai-workflow/commands/verify-build.md]
+rejected: renumbering the steps — breaks step references; measuring again after the PR
+supersedes: —
+Step 5b sits between Step 5 and Step 6. It runs `run-metrics --emit --quiet` and the
+fragment, fills build-summary.md through work-docs-path, commits it, and Step 6 then pushes
+and opens the PR. Step 7 only pastes the headline. The PR tail is therefore not in
+verifyBuild.usage.
+
+## D75 — A missing measurement is null with a reason, never numbers
+kind: silent-seam
+step: build · slice: 4 · decidedBy: executor
+sources: [design:F3, code:plugins/bett3r-ai-workflow/commands/verify-build.md]
+rejected: writing zeros; copying earlier numbers
+supersedes: —
+An `outcome=error`, a missing verdict line, or a command that did not run writes
+`usage: null` on every slice and `verifyBuild.usage: null`, plus "Usage not measured:
+<reason>." in What shipped. A slice with no fragment entry gets null and a named reason; a
+role with no dispatch is null. Unattributed usage is one sentence in What shipped, not
+frontmatter.
+
+## D76 — How a usage cell is computed
+kind: silent-seam
+step: build · slice: 4 · decidedBy: executor
+sources: [code:plugins/bett3r-ai-workflow/scripts/run-metrics.mjs, code:plugins/bett3r-ai-workflow/commands/verify-build.md]
+rejected: a list of models per role — makes the field's type vary
+supersedes: —
+`model` and `effort` are the value carrying the most tokens across that role's runs (first
+seen wins a tie; undeterminable is null), so a sonnet run retried on opus records only
+`opus` while the retry stays in `retries`. Effort is read exactly as transcripts record it.
+`tokens` is the four-way sum. `activeMs` sums parallel dispatches, so it can exceed wall
+time. verifyBuild.usage covers the non-executor/verifier/test-runner runs clipped to the
+/verify-build windows. The /build orchestrator's own usage appears in no block.
+
+## D77 — verifyBuild's other keys are copied from /verify-build's own reports
+kind: silent-seam
+step: build · slice: 4 · decidedBy: verifier
+sources: [design:F3, code:plugins/bett3r-ai-workflow/commands/verify-build.md]
+rejected: leaving gate, coherence, fixSlicesAdded and adrs unfilled — no slice owned them
+supersedes: —
+Step 5b fills `gate: { mode, verdict, skipped, inconclusive }` from Step 2's report,
+`coherence: { critical, medium, low, shippedUnresolved }` and `fixSlicesAdded` from Step 3,
+and `adrs` from Step 5, copied and never estimated; a step with no report writes null.
+`concerns` is null until slice 6's ruling writes it (carried to slice 6).
+
+## D78 — Minor slice 4 wording and CI items left open
+kind: shipped-finding
+step: build · slice: 4 · decidedBy: verifier
+sources: [code:plugins/bett3r-ai-workflow/commands/verify-build.md, code:.github/workflows/validate-plugins.yml]
+rejected: —
+supersedes: —
+The droppedDetached bullet says "detached pool worktree", but the code counts any
+subagent stamped `HEAD`; the fleet 0 is not stated in verify-build.md. The CI step installs
+python3-yaml without `apt-get update`, so a stale package index could fail it (loudly), and
+the suite runs under sh and dash but not bash in CI. Step 3 says "follow-up slice" where
+Step 5b says fix slices, and Step 3's "not committed to a file" now has counts that Step 5b
+does commit.
