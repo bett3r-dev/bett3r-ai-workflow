@@ -7,13 +7,13 @@
   },
   "metadata": {
     "description": "Bett3r internal AI development tooling: the project-agnostic vertical-slice workflow plus the PV3 DDD framework skills.",
-    "version": "0.30.0"
+    "version": "0.31.0"
   },
   "plugins": [
     {
       "name": "bett3r-ai-workflow",
       "source": "./plugins/bett3r-ai-workflow",
-      "description": "Vertical-slice, dual-gated development flow: grill the design, slice it (tracer bullet first), drive each slice to green with executor + verifier + test loop, commit per slice, land the PR as system of record. Project-agnostic \u2014 reads the host repo's conventions at runtime."
+      "description": "Vertical-slice, dual-gated development flow: grill the design, slice it (tracer bullet first), drive each slice to green with executor + verifier + test loop, commit per slice, commit each work item's record beside the code, and land a PR that links it. Project-agnostic \u2014 reads the host repo's conventions at runtime."
     },
     {
       "name": "bett3r-pv3-ai-skills",

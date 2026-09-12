@@ -24,7 +24,7 @@ Create a branch off the current branch. Name it from the ticket id + a slug (e.g
 
 ## Step 3 — Scaffold `.work/`
 
-Create `.work/ and add it to .gitignore` if it is missing. It holds `design.md` and `slices.yaml` — ephemeral, never committed.
+Create `.work/ and add it to .gitignore` if it is missing. It holds `slices.yaml` and the rest of the working state — ephemeral, never committed. The design is not kept here: `/design` commits it beside the code, in the folder `work-docs-path` names.
 
 **Then clear and rewrite `.work/mode.yaml`, and clear `.work/lane.yaml`.** This is the load-bearing half of the marker, not a formality: everything else in `.work/` — `design.md`, `slices.yaml`, `passes:`, `design-snapshot/` — is residue that accumulates and is never erased, so a workspace left over from the previous branch reads exactly like the current one's. Delete any existing `.work/mode.yaml` or `.work/lane.yaml` outright and write a fresh `mode.yaml`; never merge with, patch, or preserve a field from what was there. A marker that survives a new `/start` is worse than no marker, because it is confidently wrong about which work item you are on.
 
@@ -34,12 +34,16 @@ Create `.work/ and add it to .gitignore` if it is missing. It holds `design.md` 
 
 ```yaml
 mode: start          # start | design | plan | build — the command that wrote this, nothing else
-work_item: TV1-1594  # the ticket id, or the branch slug when there is no id
+work_item: TV1-1594  # the ticket id; with no id, <yyyy-mm-dd>-<slug> dated the day /start ran, fixed once
 branch: TV1-1594-delete-items
 updated: 2026-01-30T14:02:11Z   # ISO-8601 UTC
 ```
 
 Four fields, overwritten in full by each command that touches it — **never appended to**, since append-only reproduces the exact residue bug the file exists to fix. It is one small file inside an already-gitignored directory, so a repo that ignores it is unaffected.
+
+**With no ticket id, `work_item:` is `<yyyy-mm-dd>-<slug>`, never the branch name itself.** Every command that reads the design passes `work_item:` untouched to `work-docs-path --item`, which accepts a no-id work item only in that shape — a raw `claude/Fix_Flaky test` would block `/design`, `/plan` and `/verify-build` alike. Derive the slug from the last path segment of the branch: lower-case it, turn every run of other characters into one `-`, and trim dashes from both ends (`claude/Fix_Flaky test` → `fix-flaky-test`). If that leaves nothing — a branch ending in `/`, a segment with no ASCII letter or digit — **ask the user for a slug** rather than inventing one; with no one to ask, end `blocked-on` (no resolvable work item).
+
+**The date is the day `/start` ran, in the local time zone, recorded once and never re-derived** (`2026-01-30-fix-flaky-test`). Every later command that rewrites `.work/mode.yaml` carries `work_item:` forward unchanged — it never re-dates it, and never re-derives the slug from the branch. The date is what tells two work items on one branch name apart: a branch deleted after merge and recreated months later for unrelated work derives the same slug, and only the new `/start` day keeps its design out of the old one's folder.
 
 ## Step 4 — Record the base, do NOT run the suite
 

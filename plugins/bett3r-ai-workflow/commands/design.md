@@ -39,11 +39,13 @@ Never accept these facts at the invocation instead. A step that learns a fact fr
 
 ## Step 1 — Ground
 
-**Record the mode first.** Overwrite `.work/mode.yaml` with `mode: design` and the current work item before anything else in this step — the file is rewritten in full, never appended, so re-running `/design` on a branch that has already been through another command yields a marker naming `design` rather than whatever ran last. `/start` owns clearing it; every other command owns keeping it honest.
+**Record the mode first.** Overwrite `.work/mode.yaml` with `mode: design` and the current work item (`work_item:` carried forward exactly as `/start` recorded it, never re-dated or re-derived from the branch) before anything else in this step — the file is rewritten in full, never appended, so re-running `/design` on a branch that has already been through another command yields a marker naming `design` rather than whatever ran last. `/start` owns clearing it; every other command owns keeping it honest.
 
 Read the ticket, then the relevant bounded context's `CONTEXT.md` (locate via `.esas.config.json` `domainEventsPath`). Where there is none, fall back through `docs/adr/` to **the module headers of the symbols you were told to grep** — and read the headers even when the ADRs hit; in a repo that writes doctrine into headers, the ADRs are the summary and the headers are the source. Say "grounding degraded: no CONTEXT.md" in the doc and recommend `/seed-context`.
 
 Treat the glossary as **evidence to verify, not ground truth**.
+
+**Seed concerns from explicit bars in the ticket.** While reading the ticket, watch for a sentence stating an owner's bar — a "must", "can't ship unless", a red line, an explicit acceptable-risk waiver — attributed or attributable to the ticket owner. For each one, capture it now with the `concern` skill (`raisedBy: ticket owner · step: design`, `quote:` the ticket's own sentence, verbatim). An **explicit bar** is a sentence stating a requirement as a condition of shipping, not an ordinary acceptance criterion phrased as a feature description — "must not exceed 200ms" is a bar; "shows the total on the summary screen" is an AC. When genuinely unsure whether a sentence is a bar, treat it as a `soft` one rather than dropping it: a soft concern still surfaces at `/verify-build`, and dropping a real bar is the worse failure of the two. A ticket stating nothing bar-shaped leaves no concerns seeded here — that is the normal case, not a gap to invent one for.
 
 **Then collect context contributions, if this repo declares any.** Step 1 is a declared extension point: an optional, repo-local **context provider** may contribute items to the grounding, and items that survive become ordinary Step 3 forks carrying their verbatim source span. The base plugin ships no provider and **zero providers is the normal case** — with none declared, do not go looking, do not mention that an extension point was consulted, and this step behaves exactly as it did before. A provider that errors, times out or returns nothing **never fails `/design`**: note the degrade beside "grounding degraded" and continue. The full contract — the shape of a contribution, why a hook was rejected on this repo's own measured evidence, and why this is `/design` only — is [CONTEXT-PROVIDERS.md](../CONTEXT-PROVIDERS.md).
 
@@ -107,9 +109,31 @@ While you interview: challenge terms against the glossary, update `CONTEXT.md` i
 
 Then run `critique` (`arch,ops`) against the resolved tree — one focused adversarial pass, not a second grill. Fold in what is clearly right; drop back to the grill for a genuine fork it surfaces; carry a weakness with no good answer into *Risks*.
 
-## Step 4 — Write `.work/design.md`
+## Step 4 — Write and commit the design
 
-Markdown + Mermaid, reviewable in one pass, ephemeral and **not committed**. Its durable conclusions live in the committed glossary/ADR updates and, later, the PR body. Sections:
+**Resolve where it goes first, with `work-docs-path`** — never from memory of the convention. Pass the work item recorded in `.work/mode.yaml`, untouched: `work-docs-path --item <work_item>` — a Jira key, `#<n>` for a GitHub issue, or with no id the `<yyyy-mm-dd>-<slug>` that `/start` dated once. Never re-date it or re-derive it from the branch. The script owns the whole rule — the root (`docs/prs`, unless the repo's `.claude/bett3r-ai-workflow.json` sets `workDocsRoot`) and the id normalisation — so do not restate it; every other command that reads the design calls it with the same arguments. Read its last line, not its exit code (ADR-004): `outcome=ok` names the folder as `path=`. `outcome=error` stops this step — say its `reason=` (an unusable config, a malformed or undated work item) and end `blocked-on`. **Never fall back** to the default root or to a copy under `.work/`: a design written anywhere the script did not name is a design no reader will find.
+
+**An existing folder is overwritten only when it is this work item's, and the design itself says whose it is.** Every design this step writes opens with an ownership header, rewritten on every pass — `work_item:` spelled and valued as in `.work/mode.yaml` — a no-id work item as its full dated `<yyyy-mm-dd>-<slug>`, compared exactly; a GitHub issue as `gh-<n>` or quoted, because a bare `#268` is a YAML comment — and `branch:` the branch writing it:
+
+```yaml
+---
+work_item: TV1-2400
+branch: TV1-2400-delete-items
+---
+```
+
+So call the script once more as the writer, with the branch: `work-docs-path --item <work_item> --owner-branch "$(git branch --show-current)"`. It reads that header — **never git history**, which cannot say who wrote a folder: a stacked child branch, a feature that merged an unmerged parent, and a branch cut past a stale `origin` all hold another work item's design in their own commits — and its verdict line carries `owner=`. Readers never pass the flag, and it does not change `path=`. Act on it and nothing else:
+
+- `owner=none` — the folder does not exist. Write it fresh, header first.
+- `owner=self` — the header names this work item **and** this branch. Overwrite `design.md` in place.
+- `owner=other` or `owner=unowned` — another work item's or another branch's design, or a folder whose design proves no owner (no `design.md`, no header, a malformed or partial one; a design from before headers existed lands here). **Write nothing** and end `blocked-on`. Say which, and what the human does: run `/start` for a new work item, or, having confirmed the folder is this work's, edit the header's `branch:`/`work_item:` by hand, commit that, and re-run.
+- `outcome=error reason=malformed-owner-branch` — a detached HEAD has no branch to own anything. **Write nothing** and end `blocked-on`, and say so.
+- `outcome=error reason=<any other>` — the config, the work item or the flags are unusable, and the reason names which. **Write nothing** and end `blocked-on`.
+- `no verdict line` — the script died before concluding, or its last line carries no `owner=`. **Write nothing** and end `blocked-on`.
+
+**The same rule holds for a `--item` folder**: a ticket id is unique, but one ticket can have two live branches — a stacked follow-up, a fleet lane beside an interactive retry — and each one's committed design is that branch's record, so a ticket folder written from another branch stops too. Re-designing a ticket on a new branch is legitimate, and costs one hand edit of `branch:` that doubles as the record of the takeover. A renamed branch is likewise a false stop; that is the accepted, safe direction. **The one accepted false overwrite** is its mirror: a no-id branch name deleted and recreated for unrelated work **on the same day** gets the same dated `work_item` from `/start`, so the header matches and the verdict is `owner=self`. The date `/start` fixed is the only thing that tells the two apart, and a day is its resolution; on any later day the new work item gets its own folder.
+
+Write `<path>/design.md` — the header, then Markdown + Mermaid, reviewable in one pass — and **commit it on every pass**, a re-run included: `git add <path>/design.md && git commit -m "docs(<id>): design" -- <path>/design.md`, the pathspec keeping anything else staged out of the commit (an unchanged re-run has nothing to commit, and that is fine). Overwriting your own folder is how a re-run amends the design; the diff between passes is the amendment record, and the extra commit is accepted noise. This is the **one** copy: nothing mirrors it into `.work/`. Its durable cross-work-item conclusions still also belong in the glossary/ADR updates. Sections:
 
 - **Problem & intent**, in the ubiquitous language.
 - **The resolved decision tree** — each pivotal fork, the chosen answer, the why, the rejected options.
@@ -122,15 +146,15 @@ Markdown + Mermaid, reviewable in one pass, ephemeral and **not committed**. Its
 
 ## Step 5 — Hand off
 
-**Answer this before handing off: could a fresh session holding only this repo and `.work/design.md` run `/plan` without loss?** Enumerate what this session produced — files, commands and their outputs, counts, external state — and confirm each is in the doc, committed, or declared re-derivable with the command to re-derive it ([EVIDENCE.md](../EVIDENCE.md) §4: this fails worse the better the session was).
+**Answer this before handing off: could a fresh session holding only this repo and the committed `<path>/design.md` run `/plan` without loss?** Enumerate what this session produced — files, commands and their outputs, counts, external state — and confirm each is in the doc, committed, or declared re-derivable with the command to re-derive it ([EVIDENCE.md](../EVIDENCE.md) §4: this fails worse the better the session was).
 
 Corollary: **any artifact the design names as a test seam, gate, or tracer-bullet instrument is committed, not left untracked** — or the doc states plainly that the first slice creates it. A design depending on an uncommitted file is neither reviewable nor resumable.
 
-**And the same test applies to this document.** `.work/design.md` is gitignored, so it is a correct *scratch* location and a wrong *citation target*: a path under `.work/` resolves for one worktree on one machine and for no other reader, ever. The moment anything outside this session will point at the design — a ticket body, a sibling ticket, a fleet brief, an ADR — **the cited copy is committed and the citation names the committed path**, not the `.work/` one. Nothing errors either way, which is the whole problem: a lane on a fresh clone finds nothing at the cited path, does not stop, and builds from the ticket body — which this flow treats as a *summary* of the design rather than the design. Six lanes of one run read the doc only because they happened to run in the authoring worktree; mid-run it was committed elsewhere and corrected (531 → 586 lines: a falsified claim, a new rule), and every ticket still pointed at the dead path. **The rule that outlives the specifics: a citation target must be reachable from the base its reader branches from.**
+**And the same test applies to this document** — which is why Step 4 commits it instead of leaving it in the gitignored `.work/`. A path under `.work/` is a correct *scratch* location and a wrong *citation target*: it resolves for one worktree on one machine and for no other reader, ever. The moment anything outside this session will point at the design — a ticket body, a sibling ticket, a fleet brief, an ADR — **the citation names the committed `<path>/design.md`**, and it resolves only from a base that carries the commit. Nothing errors either way, which is the whole problem: a lane on a fresh clone finds nothing at the cited path, does not stop, and builds from the ticket body — which this flow treats as a *summary* of the design rather than the design. Six lanes of one run read the doc only because they happened to run in the authoring worktree; mid-run it was committed elsewhere and corrected (531 → 586 lines: a falsified claim, a new rule), and every ticket still pointed at the dead path. **The rule that outlives the specifics: a citation target must be reachable from the base its reader branches from.**
 
 Then summarise the resolved design, the `CONTEXT.md`/ADR updates, and the open risks:
 
-> Review `.work/design.md`. When it's right, run `/plan` to cut it into vertical slices.
+> Review `<path>/design.md` (committed). When it's right, run `/plan` to cut it into vertical slices.
 
 ## Step 6 — Report the outcome
 
@@ -138,9 +162,9 @@ End your output with this line, at column 0, as the **final** line — nothing a
 
     LANE-STEP:v1 step=design outcome=<success|blocked-on>
 
-`success` when the decision tree is resolved and `.work/design.md` is written. `blocked-on` when a fork needs a human and no amount of reading settles it — under a fleet caller that is an escalation, never a guess, and a guessed fork is the expensive kind because it reads as resolved. No gate runs here, so never `gate-red`. **Immediately before printing it**, run `lane-step-record '<the identical line>'`: it commits the verdict to your branch when `.work/lane.yaml` carries `verdictOnBranch: true` and does nothing otherwise; a non-zero exit is reported in your prose, never by changing the line. Never emit `infra` — its signal is the line's absence. The format contract is stated once in [unit-lane](../agents/unit-lane.md); do not restate it here.
+`success` when the decision tree is resolved and `<path>/design.md` is written and committed. `blocked-on` when a fork needs a human and no amount of reading settles it — under a fleet caller that is an escalation, never a guess, and a guessed fork is the expensive kind because it reads as resolved — or when `work-docs-path` answered `outcome=error`, which a human settles by fixing the config or naming the work item. No gate runs here, so never `gate-red`. **Immediately before printing it**, run `lane-step-record '<the identical line>'`: it commits the verdict to your branch when `.work/lane.yaml` carries `verdictOnBranch: true` and does nothing otherwise; a non-zero exit is reported in your prose, never by changing the line. Never emit `infra` — its signal is the line's absence. The format contract is stated once in [unit-lane](../agents/unit-lane.md); do not restate it here.
 
 ## Principles
 - The grill is the engine; the docs are a side effect. Don't let doc-writing slow the interview.
-- `CONTEXT.md` is durable and committed; `design.md` is ephemeral.
+- `CONTEXT.md` is durable across work items; the design belongs to one work item and is committed with it, in the folder `work-docs-path` names.
 - Speak the ubiquitous language — a term the glossary lacks is a term to resolve and record.

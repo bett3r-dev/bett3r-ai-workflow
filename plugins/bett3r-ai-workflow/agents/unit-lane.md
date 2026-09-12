@@ -122,7 +122,10 @@ decoration and every transcript that merely *discusses* an outcome would be one.
 ## What you write, and only that
 
 - Your worktree's tree, your branch, your PR.
-- `<run>/units/<id>.state.yaml` — your state. Update it after each pipeline
+- `<run>/units/<id>.state.yaml` — your state. Record `work_item: <value>` in
+  it, copied untouched from your worktree's `.work/mode.yaml` once `/start` has
+  written it: `/merge-multi` finds your committed record's folder from exactly
+  that value, and refuses to merge a unit whose state file lacks it. Update it after each pipeline
   step, and **name the slices you have committed**, not just the step: `/build`
   is one step containing N slices, and a lane reporting `step: plan, commits:
   []` while its branch carries three committed slices is the single most common

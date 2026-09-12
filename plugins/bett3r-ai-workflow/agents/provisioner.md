@@ -1,6 +1,6 @@
 ---
 name: provisioner
-description: Makes one already-cut worktree actually ready to build — install *and* build, scrub inherited `.work/`, lay multi-repo checkouts out, capture the baseline. Use from `/start-multi` step 2, once per unit, before any unit agent is dispatched.
+description: Makes one already-cut worktree actually ready to build — install *and* build, scrub inherited `.work/`, lay multi-repo checkouts out, capture the baseline. Use from `/start-multi` step 2, once per unit, before any unit agent is dispatched; or from `/build` step 2, once per `worktree-pool` worktree, serially, before any slice runs in it.
 tools:
   - Read
   - Write
@@ -22,6 +22,14 @@ The orchestrator hands you: the unit id, the worktree path, the repo kind (`stan
 
 A **cross-repo / no-build** unit has no worktree at all. If that is the kind you were given, there is nothing to provision: report READY immediately and say so.
 
+### When `/build` dispatches you for a pool worktree
+
+A `/build` pool worktree is **not a lane**: the task branch's slices run in it one after another, and it is reset between them. So your input is the worktree path, the task branch, the host repo's install and build commands, and a scratchpad subdirectory — there is no run id, integration branch or run directory, and you do not ask for them.
+
+- **1 applies, with the install and build made by the script.** Stage the local config and probe the test tiers as written, then run install and build as `worktree-pool reset <worktree> <task-branch> --install '<cmd>' --build '<cmd>'` and report its `WORKTREE-POOL:v1` line. Not a hand-run install: `/build` resets through the same call before every slice, so the pool has one definition of what readiness runs.
+- **4 applies** as written.
+- **Skip 2, 3, 5, 6 and 7.** The worktree was cut moments ago, so there is no inherited `.work/`; the pool is laid out by `worktree-pool`, not by repo; and the brief, the design layer and the baseline stay the orchestrator's, in its own checkout. **Never write `.work/lane.yaml` into a pool worktree** — a brief there claims a lane that does not exist.
+
 ## 1 — Install *and* build
 
 Run the install, then run a **build**, preferring the repo's recursive script (`build:all`, `turbo build`) over a bare `build`.
@@ -42,7 +50,7 @@ Fixed once here, or paid N times in parallel by lanes that each get it wrong ind
 
 **Archive (never delete) a reused worktree's `.work/`.**
 
-- The dangerous files are exactly the ones the flow reads back: `design.md`, `slices.yaml`, `pr-body.md`, `decisions.md`. A populated `slices.yaml` gives a lane every reason to build a **different ticket**, confidently.
+- The dangerous files are exactly the ones the flow reads back: `slices.yaml`, `pr-body.md`, `decisions.md` — plus a `design.md`, which is legacy residue from checkouts before 0.68.0 (the design is now committed, not kept in `.work/`) and is archived like the rest. A populated `slices.yaml` gives a lane every reason to build a **different ticket**, confidently.
 - Stale and current are distinguishable **only by mtime**. `.work/` is gitignored, so `git status` is clean either way — there is no ordinary tell.
 - Archive into the run directory rather than removing: those buffers include the `learnings.md` that the fleet's rescue step exists to recover. Deleting them destroys the run's highest-signal output.
 

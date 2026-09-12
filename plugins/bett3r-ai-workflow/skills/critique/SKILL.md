@@ -23,7 +23,7 @@ Examples:
 - `/critique --lens arch --tone brutal The API gateway fans out to 5 services per request`
 - `/critique --lens all The checkout flow requires 4 steps before payment`
 
-If no target is given, critique the active design — read `.work/design.md` if it exists.
+If no target is given, critique the active design — read `design.md` in the folder `work-docs-path` names for the current work item (called exactly as `/design` Step 4 calls it), if it exists.
 
 ## Tone (always on)
 

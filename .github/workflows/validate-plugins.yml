@@ -120,6 +120,57 @@ jobs:
           sh scripts/test-esas-design.sh
           PREFLIGHT_SH=dash sh scripts/test-esas-design.sh
           PREFLIGHT_SH=bash sh scripts/test-esas-design.sh
+      # /build runs ready slices concurrently in a reusable worktree pool, and
+      # the git half of that (size, provision, unconditional reset, cherry-pick
+      # land, guarded teardown) is `bin/worktree-pool`. A new script under
+      # plugins/ is collected by no step above — the hook suites hardcode their
+      # scripts — so without this step it would ship with the workflow green.
+      # The suite drives it over throwaway git repos with stub install/build
+      # commands. POOL_SH varies the launcher's interpreter with the suite's.
+      - name: Test the worktree pool (throwaway git repos)
+        run: |
+          sh scripts/test-worktree-pool.sh
+          POOL_SH=dash dash scripts/test-worktree-pool.sh
+          POOL_SH=bash bash scripts/test-worktree-pool.sh
+      # Every command that reads or writes a work item's committed design reaches
+      # its folder through `bin/work-docs-path` (root from the repo's
+      # `.claude/bett3r-ai-workflow.json` `workDocsRoot`, else `docs/prs`; the id
+      # normalised). A new script under plugins/ is collected by no step above,
+      # and its load-bearing half is a refusal — an unusable config must be a
+      # loud error, never a silent default — whose failure is invisible in any
+      # session that happens to have a clean config. WDP_SH varies the launcher's
+      # interpreter with the suite's.
+      - name: Test the work-docs path rule (throwaway git repos)
+        run: |
+          sh scripts/test-work-docs-path.sh
+          WDP_SH=dash dash scripts/test-work-docs-path.sh
+          WDP_SH=bash bash scripts/test-work-docs-path.sh
+      # /merge-multi rules each unit's own concerns from its head commit before
+      # merging it — the hard block design F4/C2 puts here, never trusting the
+      # advisory `flow/concerns` GitHub status. A presence-only check on that
+      # prose would pass an inverted meaning (reading the working tree, or a
+      # missing --decisions) silently, so this drives merge-multi.md's own
+      # fenced command block for real, against throwaway unit branches.
+      - name: Test /merge-multi rules each unit's concerns before merging (throwaway git repo)
+        run: |
+          sh scripts/test-merge-multi-concerns.sh
+          dash scripts/test-merge-multi-concerns.sh
+          bash scripts/test-merge-multi-concerns.sh
+      # /verify-build copies build-summary.md's usage numbers from
+      # `run-metrics --usage-fragment` before it opens the PR. No step above
+      # executes run-metrics, and its slice attribution is a regex over a
+      # dispatch's description whose failure is a quietly wrong number, not an
+      # error. The suite drives the real script over a transcript fixture under
+      # a temp HOME and recomputes token sums, attribution and proration from the
+      # fixture rows (mirroring only the branch filter and the gap rule).
+      # The script is run by node directly, so only the suite's shell varies.
+      # Its judge needs PyYAML: installed here when missing, and the suite fails
+      # loudly (never skips) if it still cannot import it.
+      - name: Test the run-metrics usage fragment (transcript fixture)
+        run: |
+          python3 -c 'import yaml' 2>/dev/null || sudo apt-get install -y python3-yaml
+          sh scripts/test-run-metrics.sh
+          dash scripts/test-run-metrics.sh
 
       # `bin/check-skill-shadows` runs in HOST repos, not here — it compares a
       # repo's `.claude/` against the plugins actually installed on that machine,

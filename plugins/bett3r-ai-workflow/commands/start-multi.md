@@ -27,7 +27,7 @@ Work-unit ids (+ optional descriptions), then flags.
 
 ## Steps
 
-**0 — Acquire & snapshot (the only tracker touch).** Resolve `run-id`. Resume if `run.yaml` exists and not `--fresh`. Else fetch each unit from the tracker **once** into the run dir (lanes read the snapshot, never the tracker). Pin `BASE=$(git rev-parse origin/<default>)` after `git fetch origin`, cut and push `int/<run-id>` from it, record it in `run.yaml`. It exists before any worktree so every unit is based on it from the start — retargeting afterwards is the wrong-target-merge hazard `/merge-multi` then has to police.
+**0 — Acquire & snapshot (the only tracker touch).** Resolve `run-id` as `multi-<unit ids joined by ->`: the prefix lower-case, the unit ids as they are written (`multi-ESAS-93-94`) — the shape `work-docs-path --item` accepts for the run-level folder `/merge-multi` writes. A unit id containing an underscore (`MY_PROJ-1`) gives a run id `work-docs-path` refuses (`multi-MY_PROJ-1`), so that run gets no run-level `decisions.md` and its conflict resolutions stay in the integration PR body only. Resume if `run.yaml` exists and not `--fresh`. Else fetch each unit from the tracker **once** into the run dir (lanes read the snapshot, never the tracker). Pin `BASE=$(git rev-parse origin/<default>)` after `git fetch origin`, cut and push `int/<run-id>` from it, record it in `run.yaml`. It exists before any worktree so every unit is based on it from the start — retargeting afterwards is the wrong-target-merge hazard `/merge-multi` then has to police.
 
   **Grep each snapshot for `design-multi:resolved:vN`** (emitted as an HTML comment *and* a visible inline-code line; match the marker's token regex, never marker-then-heading adjacency — the tracker's round-trip inserts a blank line there). Such a unit is `designResolved` with its `resolvedBase`, and is **not** design-heavy — its human interview already happened. This reader knows `:v1` and `:v2`; escalate an unknown `:vN` rather than guessing. From `:v2` the marker carries `status`: **skip anything not `ready` and log why** — deferrals, units blocked on human-supplied secrets, and umbrella parents with no net-new code burn a lane and can open a bad PR. `status=ready deps=<ID>` is ready **with a required dep**: add it to the dep graph as if passed in `--deps`. A status word outside those four is a contract drift — escalate, do not guess.
 
@@ -114,7 +114,7 @@ Work-unit ids (+ optional descriptions), then flags.
 
 ## run.yaml (ephemeral, gitignored)
 ```yaml
-runId: multi-...
+runId: multi-<unit ids joined by ->   # e.g. multi-ESAS-93-94 — see step 0
 createdBaseSha: <pinned origin/default>
 integrationBranch: int/<run-id>
 landedAt: null          # /merge-multi writes this
@@ -134,6 +134,7 @@ units:
 - **The orchestrator owns what no lane can see** — numbering, cross-lane dedup, base drift, sibling overlap, provisioning, addressing, the diamond merge. Each is invisible from inside a unit *by construction*, so none can be delegated by writing a better brief. **This is also the file's own scope rule: a line that a lane could learn belongs in `unit-lane`, not here.**
 - **Recon is a hint, not a fact.** Compute anything base-sensitive against the pinned BASE (`git show <BASE>:<path>`), never a working-dir grep whose HEAD drifts from it. Every handed-down fact is a claim with a provenance and an expiry — [EVIDENCE.md](../EVIDENCE.md) §3.
 - **Tracker once, then never.** Deps live in `run.yaml`, not in tracker links.
+- **A sibling lane cannot cite another lane's committed design (or decisions/concerns) until merge.** Each lane's `/design`, `/build` and `/verify-build` write `<root>/<id>/` on its own unit branch, exactly as a single flow — that folder does not exist on any other lane's branch, or on `int/<run-id>`, until [`/merge-multi`](./merge-multi.md) lands it. Documented, not engineered around: a lane needing a sibling's design decision gets it the way step 0 already hands down any other cross-lane fact, quoted in its brief, never by reading a file it cannot see.
 - **Unattended is the contract; parallel is the optimisation.** Never buy throughput with an unbatched stop.
 - **Never clobber a dirty worktree; tear down only what this run created.**
 - **Resumable** via `run.yaml` + idempotent steps + per-slice commits.

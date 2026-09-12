@@ -1045,6 +1045,1301 @@ else
   pass 'an inline marker missing run= is refused despite run= in the prose'
 fi
 
+printf '\nSeam H — /build runs ready slices in a worktree pool, through the script\n\n'
+# ---------------------------------------------------------------------------
+#
+# The git mechanics are executed by scripts/test-worktree-pool.sh. What no
+# suite can execute is /build CHOOSING to call them, so these needles pin the
+# calls and the one rule most likely to be "optimised" away: the reset that runs
+# install and build even when nothing changed.
+for sub in size provision reset land teardown; do
+  present "$BUILD_MD" "worktree-pool $sub" "/build calls worktree-pool $sub"
+done
+present "$BUILD_MD" 'unconditionally' '/build resets a pool worktree unconditionally'
+present "$BUILD_MD" 'Never skip it because the lockfile did not move' \
+  '/build refuses the lockfile-conditional reset by name'
+present "$BUILD_MD" 'worktreePoolMax' '/build reads the brief'\''s worktreePoolMax'
+present "$BUILD_MD" 'the **landed** sha, never the worker'\''s' '/build records the landed sha'
+present "$BUILD_MD" 'Workers never write the record' '/build keeps the orchestrator the single writer'
+present "$BUILD_MD" 'takes no further slice until teardown' \
+  '/build retires a worktree whose slice did not land (its uncommitted work survives to teardown)'
+present "$BUILD_MD" '[--only <ids>]' '/build sizes a targeted run by the slices it will run'
+present "$BUILD_MD" 'already=true' '/build reads an idempotent re-land as landed'
+present "$BUILD_MD" 'reason=main-checkout-dirty' '/build has a reading for a refused land, not only landed/conflict'
+present "$BUILD_MD" 'no verdict line' '/build reads a missing verdict line as the script dying, never as a pass'
+present "$BUILD_MD" 'In a pool worktree' '/build says where step 0 reads the design layer for a pool slice'
+present "$BUILD_MD" 'at the land, with the landed sha' '/build Step 4 sets passes: true at the land for a pool slice'
+
+# And the same-tree parallelism it replaced is gone. Asserting only the new
+# text would stay green with both procedures present, and the old one is the
+# shorter and more tempting to follow.
+for old in 'be run in parallel (dispatch their executors concurrently)' 'When unsure, go sequential'; do
+  if grep -qF "$old" "$( norm "$BUILD_MD" )"; then
+    fail '/build no longer carries the same-tree "may be run in parallel" procedure' "still present: $old"
+  else
+    pass "/build no longer carries: $old"
+  fi
+done
+
+present "$PROVISIONER_MD" 'Use from `/start-multi` step 2, once per unit' 'the provisioner still serves /start-multi'
+present "$PROVISIONER_MD" 'or from `/build` step 2, once per `worktree-pool` worktree' 'the provisioner is dispatchable for a /build pool worktree'
+
+# ---------------------------------------------------------------------------
+# The design is committed beside the code, at the work-docs root (XL-27)
+# ---------------------------------------------------------------------------
+#
+# `/design` writes and commits `<root>/<id>/design.md`, and there is ONE copy:
+# no reader may fall back to the old gitignored scratch path (operator decision
+# C3). The folder is named by `bin/work-docs-path`, executed by
+# `scripts/test-work-docs-path.sh`; what is asserted here is that the prose
+# around it moved with it.
+#
+# CENSUS_ROOT may be overridden by the environment so a mutation test can point
+# the census at a scratch copy of the plugin tree without touching tracked
+# files. The override is checked for being a plugin tree at all: a census run
+# over a directory holding nothing reports zero occurrences of anything, green.
+CENSUS_ROOT=${CENSUS_ROOT:-$PLUGIN}
+OLD_DESIGN_PATH='.work/design.md'
+
+if [ ! -f "$CENSUS_ROOT/commands/design.md" ]; then
+  fail 'the census root is a plugin tree' "no commands/design.md under $CENSUS_ROOT"
+else
+  pass 'the census root is a plugin tree'
+fi
+
+# ZERO occurrences, structurally: every file under the plugin, whatever its
+# extension, read as text (`-a` — `scripts/run-metrics.mjs` is classified binary
+# by grep, and a binary file only prints "matches", never the line). The needle
+# is the literal path and nothing else, so prose cannot trip it except by
+# spelling the path — and there are no exclusions, so a sentence recalling the
+# old location historically must be reworded rather than allowlisted. The
+# trailing /dev/null forces the file-name prefix even when `find` hands grep a
+# single file. Byte-compile caches are not source and are gitignored.
+census="$TMP/old-design-path.census"
+find "$CENSUS_ROOT" -type f ! -path '*/__pycache__/*' \
+  -exec grep -naF -e "$OLD_DESIGN_PATH" /dev/null {} + > "$census"
+if [ -s "$census" ]; then
+  # One context line per offending site: file:line, then the text, so the
+  # message names every file and line without anyone re-running the grep.
+  set --
+  while IFS= read -r site; do
+    set -- "$@" "${site#"$CENSUS_ROOT"/}"
+  done < "$census"
+  fail "no \`$OLD_DESIGN_PATH\` remains in the plugin — $( wc -l < "$census" | tr -d ' ' ) site(s)" "$@"
+else
+  pass "no \`$OLD_DESIGN_PATH\` remains anywhere in the plugin (no fallback reader)"
+fi
+
+# The positive half: every artifact that reads or writes the design reaches it
+# through `work-docs-path` by name, instead of restating the root/id table. A
+# ZERO census alone stays green when a reader's reference is simply deleted.
+for f in commands/design.md commands/plan.md commands/verify-build.md agents/verifier.md \
+         skills/handoff/SKILL.md skills/handon/SKILL.md skills/critique/SKILL.md \
+         skills/esas-design/SKILL.md skills/esas-design/BOARD-SETUP.md README.md; do
+  if [ ! -f "$CENSUS_ROOT/$f" ]; then
+    fail "$f reaches the design through work-docs-path" "file not found: $f"
+  elif grep -qF 'work-docs-path' "$CENSUS_ROOT/$f"; then
+    pass "$f reaches the design through work-docs-path"
+  else
+    fail "$f reaches the design through work-docs-path" "no \`work-docs-path\` in $f"
+  fi
+done
+
+CENSUS_DESIGN_MD="$CENSUS_ROOT/commands/design.md"
+present "$CENSUS_DESIGN_MD" '## Step 4 — Write and commit the design' '/design Step 4 writes AND commits the design'
+present "$CENSUS_DESIGN_MD" 'commit it on every pass' '/design commits the design file on every pass, re-runs included (C4 noise accepted)'
+present "$CENSUS_DESIGN_MD" 'git commit -m' '/design names the commit command for the design file'
+present "$CENSUS_DESIGN_MD" 'outcome=error' '/design has a reading for a work-docs-path error'
+present "$CENSUS_DESIGN_MD" 'Never fall back' '/design forbids a fallback location when the root cannot be resolved'
+# Ownership of an existing folder is RECORDED in the design (a frontmatter
+# header) and DECIDED by work-docs-path from that header — never inferred from
+# git history, which falsely claimed another work item's folder in stacked,
+# merged-feature and stale-origin topologies. The script's behaviour is executed
+# in test-work-docs-path.sh; here the command is held to reading its verdict.
+present "$CENSUS_DESIGN_MD" 'work-docs-path --item <work_item> --owner-branch "$(git branch --show-current)"' '/design asks work-docs-path for ownership, with the current branch'
+present "$CENSUS_DESIGN_MD" '`work-docs-path --item <work_item>` — a Jira key, `#<n>` for a GitHub issue, or with no id the `<yyyy-mm-dd>-<slug>`' \
+  '/design passes the recorded work_item through --item untouched, a dated no-id id included'
+present "$CENSUS_DESIGN_MD" '**The same rule holds for a `--item` folder**' '/design applies the owner=self rule to ticket folders too'
+present "$CENSUS_DESIGN_MD" 'A renamed branch is likewise a false stop' '/design names the renamed-branch false stop as the accepted direction'
+present "$CENSUS_DESIGN_MD" '**on the same day** gets the same dated `work_item`' \
+  '/design states the same-day reused-branch overwrite as the accepted residual'
+# The retired flags: a command still passing them is a command re-deriving the
+# date `/start` fixed. No exclusions — the script's own docs avoid the literal.
+wdp_retired="$TMP/wdp-retired.census"
+find "$CENSUS_ROOT" -type f ! -path '*/__pycache__/*' \
+  -exec grep -naE -e 'work-docs-path[^|;]*--(slug|date)([^a-z-]|$)' -e '`--(slug|date)`' /dev/null {} + > "$wdp_retired"
+if [ -s "$wdp_retired" ]; then
+  set --
+  while IFS= read -r site; do set -- "$@" "${site#"$CENSUS_ROOT"/}"; done < "$wdp_retired"
+  fail 'no command passes the retired work-docs-path --slug / --date flags' "$@"
+else
+  pass 'no command passes the retired work-docs-path --slug / --date flags'
+fi
+step4="$TMP/design-step4.md"
+awk '/^## Step 4/{f=1} /^## Step 5/{f=0} f' "$CENSUS_DESIGN_MD" > "$step4"
+if [ ! -s "$step4" ]; then
+  fail '/design Step 4 is extractable' 'no `## Step 4` … `## Step 5` span in commands/design.md'
+else
+  pass '/design Step 4 is extractable'
+  # The retired git-history rule is gone, not merely joined by the new one.
+  for old in 'git merge-base' 'git cat-file -e' '"$mb"..HEAD' 'git log' 'known-baseline-failures'; do
+    if grep -qF -e "$old" "$step4"; then
+      fail "/design Step 4 no longer decides ownership from git history: $old" "still present in Step 4: $old"
+    else
+      pass "/design Step 4 no longer decides ownership from git history: $old"
+    fi
+  done
+  # The header's shape is the fenced ```yaml block in Step 4 — the only
+  # specification of it, parsed like the mode.yaml block: frontmatter fences,
+  # `key: value` lines, and exactly the two ownership keys, spelled as
+  # `.work/mode.yaml` spells them.
+  awk '/^```yaml$/{f=1;next} /^```$/{if(f)exit} f' "$step4" > "$TMP/owner-header.yaml"
+  if [ ! -s "$TMP/owner-header.yaml" ]; then
+    fail '/design Step 4 shows the ownership header as a fenced yaml block' 'no ```yaml block in Step 4'
+  else
+    pass '/design Step 4 shows the ownership header as a fenced yaml block'
+    "$MARKER_PY" - "$TMP/owner-header.yaml" > "$TMP/owner-keys" 2>"$TMP/err" <<'PY2'
+import re, sys
+lines = [l.rstrip("\n") for l in open(sys.argv[1], encoding="utf-8") if l.strip()]
+if len(lines) < 2 or lines[0] != "---" or lines[-1] != "---":
+    sys.exit("the header block is not a frontmatter block (--- … ---): %r" % lines)
+keys = []
+for line in lines[1:-1]:
+    m = re.fullmatch(r"([a-z_][a-z0-9_]*):\s+(\S+)", line.strip())
+    if not m:
+        sys.exit("unparseable header line: %r" % line)
+    keys.append(m.group(1))
+print(" ".join(keys))
+PY2
+    if [ $? -ne 0 ]; then
+      fail 'the documented ownership header parses' "$( cat "$TMP/err" )"
+    else
+      pass 'the documented ownership header parses'
+      check_keys=$( cat "$TMP/owner-keys" )
+      if [ "$check_keys" = 'work_item branch' ]; then
+        pass 'the ownership header is exactly work_item / branch (mode.yaml spelling)'
+      else
+        fail 'the ownership header is exactly work_item / branch (mode.yaml spelling)' "got: $check_keys"
+      fi
+    fi
+  fi
+
+  # --- executed: Step 4's outcome → action map ---------------------------------
+  # Presence of the right sentences stays green with a wrong one beside them
+  # (an `owner=unowned — overwrite` bullet added above the stop bullet), or with
+  # the right bullet's action rewritten (the detached-HEAD bullet told to "write
+  # fresh"). So the owner-decision list is PARSED into outcome → action and the
+  # map itself is asserted.
+  #
+  # The grammar the parser relies on — any Step 4 edit outside it fails loudly,
+  # it never skips:
+  #   * the list is the run of `- ` lines right after the one line ending
+  #     `Act on it and nothing else:` (blank lines before the first bullet are
+  #     allowed; the list ends at the first blank line after one);
+  #   * every bullet is ONE source line: `- ` + one or more code-span outcome
+  #     labels joined by `, ` / ` or ` / `, or `, then ` — `, then the action;
+  #   * an action is `stop` iff it says end `blocked-on`, `write` iff it carries
+  #     a write/overwrite/rewrite verb once `Write nothing` is removed — exactly
+  #     one of the two, so a bullet pairing a stop with a write verb, or saying
+  #     neither, is a grammar error;
+  #   * the labels are exactly the verdict readings below, each exactly once.
+  "$MARKER_PY" - "$step4" > "$TMP/owner-map" 2>"$TMP/err" <<'PY3'
+import re, sys
+lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+anchors = [i for i, l in enumerate(lines) if l.rstrip().endswith("Act on it and nothing else:")]
+if len(anchors) != 1:
+    sys.exit("expected exactly one line ending 'Act on it and nothing else:' in Step 4, found %d" % len(anchors))
+i = anchors[0] + 1
+while i < len(lines) and not lines[i].strip():
+    i += 1
+bullets = []
+while i < len(lines) and lines[i].strip():
+    if not lines[i].startswith("- "):
+        sys.exit("line %r inside the owner-decision list is not a one-line `- ` bullet" % lines[i])
+    bullets.append(lines[i])
+    i += 1
+if not bullets:
+    sys.exit("no bullets after 'Act on it and nothing else:'")
+label_run = r"`[^`]+`(?:(?:, or |, | or )`[^`]+`)*"
+for b in bullets:
+    m = re.fullmatch(r"- (%s) — (.+)" % label_run, b)
+    if not m:
+        sys.exit("bullet outside the grammar (`label` [or `label`] — action): %r" % b)
+    action = m.group(2).replace("**", "")
+    stop = re.search(r"\bend `blocked-on`", action, re.I) is not None
+    write = re.search(r"\b(?:over|re)?writes?\b", re.sub(r"(?i)\bwrite nothing\b", "", action), re.I) is not None
+    if stop == write:
+        sys.exit("bullet is %s: %r" % ("both a stop and a write" if stop else "neither a stop nor a write", b))
+    for label in re.findall(r"`([^`]+)`", m.group(1)):
+        print("%s\t%s" % (label, "stop" if stop else "write"))
+PY3
+  if [ $? -ne 0 ]; then
+    fail '/design Step 4 owner-decision list parses into outcome → action' "$( cat "$TMP/err" )"
+  else
+    pass '/design Step 4 owner-decision list parses into outcome → action'
+    for want in 'owner=none	write' 'owner=self	write' 'owner=other	stop' 'owner=unowned	stop' \
+                'outcome=error reason=malformed-owner-branch	stop' 'outcome=error reason=<any other>	stop' \
+                'no verdict line	stop'; do
+      label=${want%%	*} action=${want#*	}
+      seen=$( awk -F '\t' -v l="$label" '$1 == l' "$TMP/owner-map" )
+      n=$( printf '%s' "$seen" | grep -c . )
+      if [ "$n" -ne 1 ]; then
+        fail "Step 4 maps \`$label\` exactly once" "found $n bullet label(s):" "$( cat "$TMP/owner-map" )"
+      elif [ "$seen" != "$want" ]; then
+        fail "Step 4 maps \`$label\` → $action" "got: ${seen#*	}"
+      else
+        pass "Step 4 maps \`$label\` → $action"
+      fi
+    done
+    extra=$( awk -F '\t' '$1 !~ /^(owner=(none|self|other|unowned)|outcome=error reason=(malformed-owner-branch|<any other>)|no verdict line)$/' "$TMP/owner-map" )
+    if [ -n "$extra" ]; then
+      fail 'Step 4 maps no outcome outside the verdict vocabulary' "$extra"
+    else
+      pass 'Step 4 maps no outcome outside the verdict vocabulary'
+    fi
+  fi
+fi
+
+# The marker's work_item must be something work-docs-path accepts: a no-id
+# work item is `<yyyy-mm-dd>-<slug>`, dated ONCE by /start and carried forward,
+# never a branch name with `/` in it and never re-dated by a later command. The
+# spec comment is read from the parsed marker block itself, not the prose.
+marker_item_comment=$( sed -n 's/^work_item:[^#]*#//p' "$TMP/marker.yaml" )
+case $marker_item_comment in
+  *'<yyyy-mm-dd>-<slug>'*'/start'*'fixed once'*)
+    pass 'the marker block specifies a no-id work_item as <yyyy-mm-dd>-<slug>, dated at /start, fixed once' ;;
+  *)
+    fail 'the marker block specifies a no-id work_item as <yyyy-mm-dd>-<slug>, dated at /start, fixed once' \
+         "work_item comment in start.md's block: ${marker_item_comment:-(none)}" ;;
+esac
+present "$START_MD" 'last path segment of the branch' '/start says how the no-id slug is derived from the branch'
+present "$START_MD" 'The date is the day `/start` ran, in the local time zone, recorded once and never re-derived' \
+  '/start fixes the no-id date once, local time, never re-derived'
+present "$START_MD" 'carries `work_item:` forward unchanged' '/start says later commands carry work_item forward unchanged'
+present "$START_MD" '**ask the user for a slug**' '/start says what to do when the derived slug is empty (Q8)'
+# Every command after /start that fully rewrites `.work/mode.yaml` must carry
+# `work_item:` forward, not re-derive it: the date /start fixed is not
+# recoverable from the branch, so a re-derived id is malformed and a re-dated
+# one splits the record into a second folder.
+carry='carried forward exactly as `/start` recorded it'
+for f in commands/design.md commands/plan.md commands/build.md; do
+  if [ ! -f "$CENSUS_ROOT/$f" ]; then
+    fail "$f carries work_item forward when it rewrites mode.yaml" "file not found: $f"
+  elif grep -qF -e "$carry" "$( norm "$CENSUS_ROOT/$f" )"; then
+    pass "$f carries work_item forward when it rewrites mode.yaml"
+  else
+    fail "$f carries work_item forward when it rewrites mode.yaml" "no \"$carry\" in $f"
+  fi
+done
+if grep -qF 'lower-case dash-separated slug when there is no id' "$( norm "$START_MD" )"; then
+  fail 'the marker spec no longer calls an undated slug a work_item' 'still present: lower-case dash-separated slug when there is no id'
+else
+  pass 'the marker spec no longer calls an undated slug a work_item'
+fi
+if grep -qF 'or the branch slug when there is no id' "$( norm "$START_MD" )"; then
+  fail 'the marker spec no longer calls a raw branch slug a work_item' 'still present: or the branch slug when there is no id'
+else
+  pass 'the marker spec no longer calls a raw branch slug a work_item'
+fi
+present "$CENSUS_DESIGN_MD" '.claude/bett3r-ai-workflow.json' '/design names the config file the root is read from'
+present "$CENSUS_ROOT/commands/plan.md" 'No design found' '/plan still stops when the design is absent'
+
+# The reversed sentences are gone. Presence of the new rule alone stays green
+# with the old one beside it, and "not committed" is the shorter to follow.
+for old in 'ephemeral and **not committed**' '`design.md` is ephemeral' 'It holds `design.md` and `slices.yaml`'; do
+  hit=
+  for f in commands/design.md commands/start.md; do
+    grep -qF "$old" "$( norm "$CENSUS_ROOT/$f" )" && hit="$hit $f"
+  done
+  if [ -n "$hit" ]; then
+    fail "the design is no longer described as ephemeral scratch: $old" "still present in:$hit"
+  else
+    pass "the design is no longer described as ephemeral scratch: $old"
+  fi
+done
+
+# ADR-003: the root is the plugin's own key, never another tool's config. The
+# script is checked for existence first: grepping a missing file finds nothing,
+# and "nothing" is exactly the passing answer.
+WDP_PY="$PLUGIN/scripts/work-docs-path.py"
+if [ ! -f "$WDP_PY" ]; then
+  fail 'work-docs-path does not read .esas.config.json (ADR-003)' 'scripts/work-docs-path.py does not exist'
+elif grep -qF '.esas.config.json' "$WDP_PY"; then
+  fail 'work-docs-path does not read .esas.config.json (ADR-003)' "scripts/work-docs-path.py names .esas.config.json"
+elif ! grep -qF '.claude", "bett3r-ai-workflow.json' "$WDP_PY"; then
+  fail 'work-docs-path reads its own .claude/bett3r-ai-workflow.json' 'the config path literal is not in scripts/work-docs-path.py'
+else
+  pass 'work-docs-path reads .claude/bett3r-ai-workflow.json, not .esas.config.json (ADR-003)'
+fi
+
+# ---------------------------------------------------------------------------
+printf '\nSeam I — /build leaves a committed record: decisions.md and build-summary.md (XL-27)\n\n'
+# ---------------------------------------------------------------------------
+#
+# build.md states each record's shape ONCE, as a fenced block. Both blocks are
+# PARSED here, and the D-entry grammar parsed out of build.md is then executed
+# against a real `decisions.md` — this unit's own — so an entry that drifts from
+# the header build.md specifies goes red naming the entry, rather than a
+# presence needle staying green beside an inverted meaning.
+#
+# Overrides, for mutation tests on scratch copies (never on tracked files):
+#   CENSUS_ROOT  — the plugin tree build.md is read from (defined above);
+#   RECORD_ROOT  — the repo whose work-docs folder holds decisions.md. The
+#                  folder is resolved by work-docs-path, never spelled here.
+#                  It must be a git repository: a mutation recipe copies the
+#                  folder and runs `git init` in the copy, rather than leaning
+#                  on work-docs-path accepting a non-repo `--repo` (finding Q4,
+#                  which a fix would close).
+RECORD_BUILD_MD="$CENSUS_ROOT/commands/build.md"
+RECORD_ROOT=${RECORD_ROOT:-$ROOT}
+RECORD_ITEM=${RECORD_ITEM:-XL-27}
+
+# The grammar the extractor holds build.md's blocks to — any edit outside it
+# fails loudly, it never skips:
+#   * a fence is a column-0 line starting ``` ; blocks are taken from the whole
+#     file. The D-entry block is the ONE block whose first line is `## D1 — `;
+#     the build-summary block is the ONE block whose first line is `---` and
+#     which has a top-level `slices:` key.
+#   * D-entry header lines follow the title: `key: value`, an optional trailing
+#     comment introduced by whitespace + `#` + space. The header ends at the
+#     first line that is not key-shaped (the prose). A line joined with ` · `
+#     is ONE header line holding several keys: each segment is `key: value`,
+#     and the line's trailing comment belongs to its LAST segment. So
+#     `step: build · slice: 2 · decidedBy: executor  # a | b` yields the keys
+#     step, slice, decidedBy, and the decidedBy enum `a b`.
+#   * an enum is read from a key's comment: `|`-separated tokens.
+#   * the build-summary block is `---` … `---` frontmatter: top-level `key:`
+#     lines, `slices:` items as `  - key:` then `    key:` lines — deeper
+#     nesting (a `usage:` map) is reported as a key, never skipped — followed by
+#     markdown prose.
+"$MARKER_PY" - "$RECORD_BUILD_MD" "$TMP/d-grammar.json" > "$TMP/record-shape" 2>"$TMP/err" <<'PYREC'
+import json, re, sys
+src, out = sys.argv[1], sys.argv[2]
+lines = open(src, encoding="utf-8").read().splitlines()
+blocks, cur = [], None
+for l in lines:
+    if l.startswith("```"):
+        if cur is None:
+            cur = []
+        else:
+            blocks.append(cur)
+            cur = None
+    elif cur is not None:
+        cur.append(l)
+if cur is not None:
+    sys.exit("unterminated fence in build.md")
+
+KEY = re.compile(r"([a-z][A-Za-z_]*):(?:\s+(.*))?$")
+def split_comment(v):
+    m = re.search(r"\s+#\s", v)
+    return (v[:m.start()], v[m.end():]) if m else (v, "")
+
+d = [b for b in blocks if b and re.match(r"## D1 — ", b[0])]
+if len(d) != 1:
+    sys.exit("expected exactly one fenced block starting `## D1 — ` in build.md, found %d" % len(d))
+keys, enums = [], {}
+for l in d[0][1:]:
+    value, comment = split_comment(l)
+    segs = value.split(" · ")
+    ms = [KEY.fullmatch(s.strip()) for s in segs]
+    if not all(ms):
+        break
+    for m in ms:
+        keys.append(m.group(1))
+    if comment:
+        enums[ms[-1].group(1)] = [t.strip() for t in comment.split("|") if t.strip()]
+n_header = 0
+for l in d[0][1:]:
+    if all(KEY.fullmatch(s.strip()) for s in split_comment(l)[0].split(" · ")):
+        n_header += 1
+    else:
+        break
+if n_header == len(d[0]) - 1:
+    sys.exit("the D-entry block has no prose line after its header")
+step_line = [l for l in d[0][1:] if l.startswith("step:")]
+print("d.keys\t" + " ".join(keys))
+print("d.stepline\t" + (" ".join(KEY.fullmatch(s.strip()).group(1) for s in split_comment(step_line[0])[0].split(" · ")) if step_line else ""))
+for k in ("kind", "decidedBy"):
+    print("d.enum.%s\t%s" % (k, " ".join(enums.get(k, []))))
+print("d.alltext\t" + " ".join(d[0]).replace("\t", " "))
+json.dump({"keys": keys, "kind": enums.get("kind", []), "decidedBy": enums.get("decidedBy", [])}, open(out, "w"))
+
+s = [b for b in blocks if b and b[0] == "---" and any(l.startswith("slices:") for l in b)]
+if len(s) != 1:
+    sys.exit("expected exactly one fenced `---` frontmatter block with `slices:` in build.md, found %d" % len(s))
+b = s[0]
+try:
+    close = b.index("---", 1)
+except ValueError:
+    sys.exit("the build-summary block has no closing `---`")
+top, item_keys, all_keys, comments, values = [], [], [], {}, {}
+items = 0
+for l in b[1:close]:
+    if not l.strip():
+        continue
+    value, comment = split_comment(l)
+    m = re.fullmatch(r"([A-Za-z_]+):(?:\s+(.*))?", value)
+    mi = re.fullmatch(r"  - ([A-Za-z_]+):(?:\s+(.*))?", value)
+    mc = re.fullmatch(r"    ([A-Za-z_]+):(?:\s+(.*))?", value)
+    md = re.fullmatch(r"\s+([A-Za-z_]+):(?:\s+(.*))?", value)
+    if m:
+        top.append(m.group(1)); all_keys.append(m.group(1))
+    elif mi or mc:
+        mm = mi or mc
+        if mi:
+            items += 1
+        if items == 1:
+            item_keys.append(mm.group(1))
+        all_keys.append(mm.group(1))
+        comments[mm.group(1)] = comment
+        values[mm.group(1)] = (mm.group(2) or "").strip()
+    elif md:
+        all_keys.append(md.group(1))
+    else:
+        sys.exit("build-summary frontmatter line outside the grammar: %r" % l)
+print("s.top\t" + " ".join(top))
+print("s.item\t" + " ".join(item_keys))
+print("s.all\t" + " ".join(all_keys))
+for k in ("origin", "mode", "redBeforeGreen"):
+    toks = [t.strip().split()[0] for t in comments.get(k, "").split("|") if t.strip()]
+    print("s.enum.%s\t%s" % (k, " ".join(toks)))
+for k in ("commit", "attempts", "verifier"):
+    print("s.comment.%s\t%s" % (k, comments.get(k, "")))
+print("s.pdd.value\t" + values.get("postDesignDecisions", ""))
+print("s.pdd.comment\t" + comments.get("postDesignDecisions", ""))
+print("s.prose\t" + " | ".join(l for l in b[close + 1:] if l.strip()))
+PYREC
+if [ $? -ne 0 ]; then
+  fail 'build.md states the D-entry header and the build-summary frontmatter as parseable fenced blocks' "$( cat "$TMP/err" )"
+else
+  pass 'build.md states the D-entry header and the build-summary frontmatter as parseable fenced blocks'
+  shape(){ awk -F '\t' -v k="$1" '$1 == k { sub(/^[^\t]*\t/, ""); print }' "$TMP/record-shape"; }
+  # expect <label> <shape key> <wanted>
+  expect(){
+    got=$( shape "$2" )
+    if [ "$got" = "$3" ]; then pass "$1"; else fail "$1" "want: $3" "got:  $got"; fi
+  }
+  expect 'the D-entry header keys are exactly kind, step · slice · decidedBy, sources, rejected, supersedes' \
+    d.keys 'kind step slice decidedBy sources rejected supersedes'
+  expect 'slice and decidedBy ride on the step line' d.stepline 'step slice decidedBy'
+  expect 'the D-entry kind enum is false-premise | silent-seam | deviation | shipped-finding | overruled | waiver' \
+    d.enum.kind 'false-premise silent-seam deviation shipped-finding overruled waiver'
+  expect 'the D-entry decidedBy enum is executor | verifier | orchestrator | lane | human' \
+    d.enum.decidedBy 'executor verifier orchestrator lane human'
+  if shape d.alltext | grep -qiE 'confiden|certaint|probab|score'; then
+    fail 'the D-entry header carries no self-rated confidence field' "$( shape d.alltext )"
+  else
+    pass 'the D-entry header carries no self-rated confidence field'
+  fi
+  expect 'the build-summary frontmatter /build writes is exactly work_item, plugin, base, slices' \
+    s.top 'work_item plugin base slices'
+  expect 'each build-summary slice entry carries exactly the F3 keys' \
+    s.item 'id name origin mode commit passed attempts retries verifier redBeforeGreen postDesignDecisions'
+  for absent in usage verifyBuild workItem; do
+    if shape s.all | tr ' ' '\n' | grep -qx "$absent"; then
+      fail "/build's build-summary block does not write \`$absent\`" "keys seen: $( shape s.all )"
+    else
+      pass "/build's build-summary block does not write \`$absent\`"
+    fi
+  done
+  expect 'a slice origin is plan | verify-build' s.enum.origin 'plan verify-build'
+  expect 'a slice mode is sequential | worktree | null' s.enum.mode 'sequential worktree null'
+  expect 'redBeforeGreen is true | mutation | null' s.enum.redBeforeGreen 'true mutation null'
+  case $( shape s.pdd.value ) in
+    '['*']') pass 'postDesignDecisions is a list' ;;
+    *) fail 'postDesignDecisions is a list' "got: $( shape s.pdd.value )" ;;
+  esac
+  case $( shape s.pdd.comment ) in
+    *'[]'*) pass 'the block says an empty postDesignDecisions is written as []' ;;
+    *) fail 'the block says an empty postDesignDecisions is written as []' "comment: $( shape s.pdd.comment )" ;;
+  esac
+  case $( shape s.prose ) in
+    '## What shipped'*) pass 'the build-summary block ends with a ## What shipped prose section' ;;
+    *) fail 'the build-summary block ends with a ## What shipped prose section' "got: $( shape s.prose )" ;;
+  esac
+fi
+
+# The old principle is gone; the rules that replace it are present.
+for old in 'No `build-progress.md`, no `build-summary.md`' 'The commits and `passes` flags are the truth'; do
+  if grep -qF -e "$old" "$( norm "$RECORD_BUILD_MD" )"; then
+    fail "/build no longer carries: $old" "still present in commands/build.md"
+  else
+    pass "/build no longer carries: $old"
+  fi
+done
+present "$RECORD_BUILD_MD" 'The orchestrator is the single writer of `decisions.md` and `build-summary.md`' \
+  '/build names the orchestrator the single writer of both record files'
+present "$RECORD_BUILD_MD" 'never write `decisions.md` or `build-summary.md`' \
+  '/build forbids workers and executors from writing either record file'
+present "$RECORD_BUILD_MD" 'Every dispatch description names `slice <id>`' \
+  '/build names the slice in every dispatch description'
+present "$RECORD_BUILD_MD" 'generated later by `/verify-build`' \
+  '/build says the usage and verifyBuild blocks are generated by /verify-build'
+present "$RECORD_BUILD_MD" '`postDesignDecisions: []`' '/build writes zero decisions as postDesignDecisions: []'
+present "$RECORD_BUILD_MD" 'green **or partial**' '/build writes build-summary.md on a partial end too'
+present "$RECORD_BUILD_MD" 'work-docs-path --item <work_item>' '/build resolves the record folder with work-docs-path'
+present "$RECORD_BUILD_MD" '`.work/slices.yaml` stays working state' '/build keeps slices.yaml as uncommitted working state'
+present "$RECORD_BUILD_MD" 'spelled `work_item:`, not `workItem:`' '/build names the work_item spelling for the frontmatter'
+# A resumed or repeated /build has no source for an earlier session's per-slice
+# facts: it must carry them verbatim or write null, never guess them (F3), and it
+# must list every planned slice, because a missing slice reads as an unplanned one.
+# Verbatim only while the entry still agrees with the passes flag: a slice that
+# escalated in one session and landed in a later one that died before Step 6
+# would otherwise keep `passed: false, commit: null` forever.
+present "$RECORD_BUILD_MD" 'keeps its existing entry from `build-summary.md` verbatim only when that entry'\''s `passed` matches the slice'\''s `passes:` flag in `.work/slices.yaml`' \
+  '/build carries an earlier slice entry verbatim only while it agrees with the passes flag'
+present "$RECORD_BUILD_MD" 'and is rewritten from the flag' '/build rewrites a stale entry from the passes flag'
+present "$RECORD_BUILD_MD" 'a `passes: false` one keeps its entry with `passed: false` and `commit: null`' \
+  '/build keeps a reverted slice'\''s entry as unlanded, never as never-started'
+# The lookup is anchored (`^… `, so `XL-2` never matches `XL-27`) and ranged
+# (`<base>..HEAD`, so master's history of other work items is out of reach).
+present "$RECORD_BUILD_MD" "git log --format=%H -E --grep '^Slice <id> of <work_item> ' <base>..HEAD" \
+  '/build finds an earlier-session slice'\''s commit by an anchored, ranged lookup'
+present "$RECORD_BUILD_MD" 'Slice <id> of <work_item> — <slice name>' \
+  '/build Step 4'\''s commit line carries the work_item the lookup searches for'
+present "$RECORD_BUILD_MD" 'never pick one' '/build refuses to choose between several candidate commits'
+present "$RECORD_BUILD_MD" '`passed: true` with `commit: null` is legal' \
+  '/build states a passed slice whose commit cannot be found is recorded, not guessed'
+present "$RECORD_BUILD_MD" 'never a guessed value' '/build writes null for an unproven fact, never a guessed value'
+present "$RECORD_BUILD_MD" '`id` and `name` come from `.work/slices.yaml` and are never `null`' \
+  '/build sources a slice entry'\''s id and name from slices.yaml, never null'
+present "$RECORD_BUILD_MD" '`origin` is the slice'\''s own `origin:` field in `.work/slices.yaml`, else `plan`' \
+  '/build sources origin from slices.yaml, defaulting to plan, never null'
+present "$RECORD_BUILD_MD" 'Every slice in `.work/slices.yaml` gets an entry' '/build lists every planned slice in build-summary.md'
+present "$RECORD_BUILD_MD" 'never an absent key' '/build writes zero decisions as [], never an absent key'
+present "$RECORD_BUILD_MD" 'Executors, verifiers and pool workers never write' \
+  '/build names all three non-writers of the record (C1)'
+present "$RECORD_BUILD_MD" 'unless the run stopped before any slice ran' \
+  '/build Step 6 skips build-summary.md only when no slice ran'
+if [ -f "$TMP/record-shape" ]; then
+  case $( shape s.comment.commit ) in *null*) pass 'the block allows commit: null for a slice that did not land' ;;
+    *) fail 'the block allows commit: null for a slice that did not land' "comment: $( shape s.comment.commit )" ;; esac
+  case $( shape s.comment.attempts ) in *'0 = never started'*) pass 'the block allows attempts: 0 for a never-started slice' ;;
+    *) fail 'the block allows attempts: 0 for a never-started slice' "comment: $( shape s.comment.attempts )" ;; esac
+  case $( shape s.comment.verifier ) in *null*) pass 'the block allows verifier: null for a slice no verifier saw' ;;
+    *) fail 'the block allows verifier: null for a slice no verifier saw' "comment: $( shape s.comment.verifier )" ;; esac
+fi
+# The softenings, refuted over the whole record section (`## The committed
+# record` … `## Step 5`): a word that makes a fact estimable, a slice or the
+# postDesignDecisions key omissible, or a non-orchestrator a writer. The two
+# literals that NAME the forbidden thing are removed before matching; any other
+# use of these words in the section must be reworded, never allowlisted.
+record_section="$TMP/build-record-section.md"
+awk '/^## The committed record/{f=1} /^## Step 5/{f=0} f' "$RECORD_BUILD_MD" > "$record_section"
+if [ ! -s "$record_section" ]; then
+  fail '/build'\''s record section is extractable' 'no `## The committed record` … `## Step 5` span in commands/build.md'
+else
+  soft=$( tr '\n' ' ' < "$record_section" | sed -e 's/never a guessed value//g' -e 's/never an absent key//g' \
+    | grep -oiE '\b(estimat[a-z]*|guess[a-z]*|omit[a-z]*|optional|absent|left out|may append|may write|infer[a-z]*)\b' | sort -u | tr '\n' ' ' )
+  if [ -n "$soft" ]; then
+    fail '/build'\''s record section makes no fact guessable, no key or slice omissible, no worker a writer' "softening word(s): $soft"
+  else
+    pass '/build'\''s record section makes no fact guessable, no key or slice omissible, no worker a writer'
+  fi
+fi
+if grep -qF -e 'unless Step 1'\''s `work-docs-path` stopped the run' "$( norm "$RECORD_BUILD_MD" )"; then
+  fail '/build Step 6 no longer ties the skip to work-docs-path alone' 'still present'
+else
+  pass '/build Step 6 no longer ties the skip to work-docs-path alone'
+fi
+# No hardcoded root: the folder is work-docs-path's to name.
+if grep -qF 'docs/prs' "$RECORD_BUILD_MD"; then
+  fail '/build hardcodes no work-docs root' "$( grep -nF 'docs/prs' "$RECORD_BUILD_MD" )"
+else
+  pass '/build hardcodes no work-docs root'
+fi
+# The reason for the `slice <id>` rule stays true: run-metrics attributes by
+# that regex. `-a`: the file is classified binary by grep.
+RUN_METRICS="$PLUGIN/scripts/run-metrics.mjs"
+if grep -qaF 'd.match(/slice\s*(\d+)/i)' "$RUN_METRICS"; then
+  pass 'run-metrics retryLedger still attributes a dispatch by `slice <n>` in its description'
+else
+  fail 'run-metrics retryLedger still attributes a dispatch by `slice <n>` in its description' \
+       'the regex /build'\''s dispatch-description rule relies on is gone from scripts/run-metrics.mjs'
+fi
+
+# --- executed: this unit's decisions.md holds to the grammar build.md states --
+#
+# Grammar (from the parsed build.md block, not restated): `## D<n> — <title>`
+# headings with ids contiguous from 1; the header keys, in the extracted order,
+# on the lines right after the title (the same ` · ` joining and trailing-
+# comment rule as above); `kind` and `decidedBy` in the extracted enums; `slice`
+# a number or `—`; `sources` a non-empty `[…]`; `rejected` non-empty;
+# `supersedes` either `—` or earlier ids `D<m>[, D<m>…]`; at least one prose
+# line. A `## ` heading that is not a D title is malformed. Every error names
+# its entry.
+wdp_line=$( python3 "$PLUGIN/scripts/work-docs-path.py" --item "$RECORD_ITEM" --repo "$RECORD_ROOT" 2>&1 | tail -n 1 )
+record_dir=$( printf '%s' "$wdp_line" | sed -n 's/.* outcome=ok .*path=\([^ ]*\).*/\1/p' )
+if [ -z "$record_dir" ]; then
+  fail "work-docs-path resolves $RECORD_ITEM's record folder" "verdict: $wdp_line"
+elif [ ! -f "$TMP/d-grammar.json" ]; then
+  fail "$RECORD_ITEM decisions.md holds to build.md's D-entry grammar" 'no grammar was extracted from build.md (see above)'
+else
+  case $record_dir in /*) ;; *) record_dir="$RECORD_ROOT/$record_dir" ;; esac
+  DECISIONS="$record_dir/decisions.md"
+  "$MARKER_PY" - "$TMP/d-grammar.json" "$DECISIONS" > "$TMP/decisions-out" 2>&1 <<'PYDEC'
+import json, os, re, sys
+g = json.load(open(sys.argv[1]))
+path = sys.argv[2]
+if not os.path.isfile(path):
+    sys.exit("no decisions.md at %s" % path)
+KEY = re.compile(r"([a-z][A-Za-z_]*):(?:\s+(.*))?$")
+def split_comment(v):
+    m = re.search(r"\s+#\s", v)
+    return v[:m.start()] if m else v
+lines = open(path, encoding="utf-8").read().splitlines()
+entries, fence = [], False
+for i, l in enumerate(lines):
+    if l.startswith("```"):
+        fence = not fence
+    if fence or not l.startswith("## "):
+        if entries:
+            entries[-1][2].append(l)
+        continue
+    m = re.fullmatch(r"## D([1-9][0-9]*) — (\S.*)", l)
+    if not m:
+        entries.append(("line %d" % (i + 1), None, []))
+        print("line %d: heading is not a `## D<n> — <title>` entry: %r" % (i + 1, l))
+        continue
+    entries.append(("D" + m.group(1), int(m.group(1)), []))
+errors = 0
+if not entries:
+    print("decisions.md has no `## D<n> — ` entries"); errors += 1
+for pos, (name, n, body) in enumerate(entries, 1):
+    if n is None:
+        errors += 1; continue
+    def err(msg):
+        global errors
+        errors += 1
+        print("%s: %s" % (name, msg))
+    if n != pos:
+        err("id out of sequence — expected D%d" % pos)
+    keys, vals, j = [], {}, 0
+    while j < len(body):
+        segs = split_comment(body[j]).split(" · ")
+        ms = [KEY.fullmatch(s.strip()) for s in segs]
+        if not all(ms):
+            break
+        for mm in ms:
+            keys.append(mm.group(1)); vals[mm.group(1)] = (mm.group(2) or "").strip()
+        j += 1
+    if keys != g["keys"]:
+        missing = [k for k in g["keys"] if k not in keys]
+        extra = [k for k in keys if k not in g["keys"]]
+        err("header keys %s, want %s%s%s" % (" ".join(keys) or "(none)", " ".join(g["keys"]),
+            ("; missing: " + " ".join(missing)) if missing else "", ("; unexpected: " + " ".join(extra)) if extra else ""))
+    if "kind" in vals and vals["kind"] not in g["kind"]:
+        err("kind %r is not one of %s" % (vals["kind"], " | ".join(g["kind"])))
+    if "decidedBy" in vals and vals["decidedBy"] not in g["decidedBy"]:
+        err("decidedBy %r is not one of %s" % (vals["decidedBy"], " | ".join(g["decidedBy"])))
+    if "slice" in vals and not re.fullmatch(r"[0-9]+|—", vals["slice"]):
+        err("slice %r is neither a number nor —" % vals["slice"])
+    if "step" in vals and not re.fullmatch(r"[a-z][a-z-]*", vals["step"]):
+        err("step %r is not a step name" % vals["step"])
+    if "sources" in vals and not re.fullmatch(r"\[\s*\S.*\]", vals["sources"]):
+        err("sources %r is not a non-empty [ … ] list" % vals["sources"])
+    if "rejected" in vals and not vals["rejected"]:
+        err("rejected is empty")
+    if "supersedes" in vals:
+        s = vals["supersedes"]
+        if s != "—":
+            if not re.fullmatch(r"D[0-9]+(, D[0-9]+)*", s):
+                err("supersedes %r is neither — nor a D-id list" % s)
+            else:
+                for ref in re.findall(r"D([0-9]+)", s):
+                    if not 1 <= int(ref) < n:
+                        err("supersedes D%s, which is not an earlier entry" % ref)
+    if not any(l.strip() for l in body[j:]):
+        err("no prose after the header")
+if errors:
+    sys.exit(1)
+print("entries=%d" % len(entries))
+PYDEC
+  if [ $? -ne 0 ]; then
+    set --
+    while IFS= read -r e; do set -- "$@" "$e"; done < "$TMP/decisions-out"
+    fail "$RECORD_ITEM decisions.md holds to build.md's D-entry grammar (${DECISIONS#"$RECORD_ROOT"/})" "$@"
+  else
+    pass "$RECORD_ITEM decisions.md holds to build.md's D-entry grammar — $( cat "$TMP/decisions-out" )"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+printf '\nSeam — concerns: an owner'"'"'s bar, captured and checked, failing closed\n\n'
+# ---------------------------------------------------------------------------
+#
+# Presence: record/SKILL.md's dangling reference now resolves to the concern
+# skill; design.md Step 1 seeds concerns from explicit bars in the ticket.
+CONCERN_SKILL_MD="$PLUGIN/skills/concern/SKILL.md"
+CONCERNS_CHECK_PY="$PLUGIN/scripts/concerns-check.py"
+CONCERNS_CHECK_BIN="$PLUGIN/bin/concerns-check"
+
+present "$PLUGIN/skills/record/SKILL.md" '(../concern/SKILL.md)' \
+  "record/SKILL.md's dangling concern reference resolves to the concern skill"
+present "$DESIGN_MD" 'Seed concerns from explicit bars in the ticket' \
+  '/design Step 1 seeds concerns from explicit bars in the ticket'
+present "$DESIGN_MD" 'capture it now with the `concern` skill' \
+  '/design Step 1 uses the concern skill to seed concerns'
+
+# PARSED, not presence-only: extract the ONE fenced block in concern/SKILL.md
+# whose first line is `## C1 — ` and read its `bar:`/`verdict:` comment enums,
+# then compare them against concerns-check.py's own declared enums. The two
+# files are one contract with two readers (the model writing an entry, the
+# script ruling it) and a drift between them — the skill's example gaining a
+# verdict value the checker does not know, or vice versa — must go red here
+# rather than surface as a silent pass on a shape the checker never rejects.
+"$MARKER_PY" - "$CONCERN_SKILL_MD" "$TMP/concern-template.md" > "$TMP/concern-shape" 2>"$TMP/err" <<'PYCONCERN'
+import re, sys
+lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+blocks, cur = [], None
+for l in lines:
+    if l.startswith("```"):
+        if cur is None:
+            cur = []
+        else:
+            blocks.append(cur)
+            cur = None
+    elif cur is not None:
+        cur.append(l)
+if cur is not None:
+    sys.exit("unterminated fence in concern/SKILL.md")
+c = [b for b in blocks if b and re.match(r"## C1 — ", b[0])]
+if len(c) != 1:
+    sys.exit("expected exactly one fenced block starting `## C1 — ` in concern/SKILL.md, found %d" % len(c))
+KEY = re.compile(r"([a-zA-Z][A-Za-z]*):(?:\s+(.*))?$")
+keys, enums = [], {}
+for l in c[0][1:]:
+    m = re.match(r"^([a-zA-Z][A-Za-z]*):(.*)$", l)
+    if not m:
+        break
+    key, rest = m.group(1), m.group(2)
+    keys.append(key)
+    cm = re.search(r"\s+#\s*(.*)$", rest)
+    if cm:
+        comment = re.split(r"\s+\u2014\s+", cm.group(1))[0]
+        enums[key] = [t.strip() for t in comment.split("|") if t.strip()]
+# The same block, every whole <…> placeholder value replaced by filler and the
+# `# …` comments KEPT, is what a model copying the example writes: argv[2].
+with open(sys.argv[2], "w", encoding="utf-8") as fh:
+    for l in c[0]:
+        fh.write(re.sub(r'"?<[^<>]*>"?', "filler text", l) + "\n")
+print("c.keys\t" + " ".join(keys))
+print("c.enum.bar\t" + " ".join(enums.get("bar", [])))
+print("c.enum.verdict\t" + " ".join(enums.get("verdict", [])))
+PYCONCERN
+if [ $? -ne 0 ]; then
+  fail 'concern/SKILL.md states the C-entry block as a parseable fenced block' "$( cat "$TMP/err" )"
+else
+  pass 'concern/SKILL.md states the C-entry block as a parseable fenced block'
+  cshape(){ awk -F '\t' -v k="$1" '$1 == k { sub(/^[^\t]*\t/, ""); print }' "$TMP/concern-shape"; }
+  cexpect(){
+    got=$( cshape "$2" )
+    if [ "$got" = "$3" ]; then pass "$1"; else fail "$1" "want: $3" "got:  $got"; fi
+  }
+  cexpect 'the C-entry header keys are exactly bar, raisedBy, quote, why, verify, verdict, evidence' \
+    c.keys 'bar raisedBy quote why verify verdict evidence'
+  cexpect 'the C-entry bar enum is hard | soft' c.enum.bar 'hard soft'
+  cexpect 'the C-entry verdict enum is met | partial | unmet | cannot-determine | waived' \
+    c.enum.verdict 'met partial unmet cannot-determine waived'
+
+  # concerns-check.py's own declared enums (grepped, not imported, so this
+  # oracle never depends on the checker's internal shape beyond its constants).
+  py_bar=$( grep -o 'BAR_VALUES = ([^)]*)' "$CONCERNS_CHECK_PY" | grep -o '"[a-z-]*"' | tr -d '"' | tr '\n' ' ' | sed 's/ $//' )
+  py_verdict=$( grep -o 'VERDICT_VALUES = ([^)]*)' "$CONCERNS_CHECK_PY" | grep -o '"[a-zA-Z-]*"' | tr -d '"' | tr '\n' ' ' | sed 's/ $//' )
+  if [ "$py_bar" = "hard soft" ]; then
+    pass "concerns-check.py's BAR_VALUES matches the skill's bar enum (hard soft)"
+  else
+    fail "concerns-check.py's BAR_VALUES matches the skill's bar enum" "got: $py_bar"
+  fi
+  # concerns-check.py's VERDICT_VALUES also carries the placeholder `—`
+  # (unset), which the skill's enum comment never lists — that value is not a
+  # concern's RULED verdict, it is the "not yet ruled" marker, so the two
+  # enums are the ruled-verdict set plus that one sentinel, not identical sets.
+  py_verdict_ruled=$( printf '%s' "$py_verdict" | sed 's/\xe2\x80\x94//' | tr -s ' ' | sed 's/^ //; s/ $//' )
+  if [ "$py_verdict_ruled" = "met partial unmet cannot-determine waived" ]; then
+    pass "concerns-check.py's VERDICT_VALUES (minus the — sentinel) matches the skill's verdict enum"
+  else
+    fail "concerns-check.py's VERDICT_VALUES (minus the — sentinel) matches the skill's verdict enum" "got: $py_verdict_ruled"
+  fi
+
+  # The skill's own example, copied as a model would copy it (comments and
+  # all, placeholders filled), must parse: an unruled entry, not malformed.
+  tmpl_out=$( "$PLUGIN/bin/concerns-check" "$TMP/concern-template.md" 2>&1 )
+  tmpl_rc=$?
+  if printf '%s' "$tmpl_out" | grep -qF 'outcome=fail hard=1 soft=0 unmet=none missing=C1 reason=missing-verdict' && [ "$tmpl_rc" -eq 1 ]; then
+    pass "concern/SKILL.md's C-entry example, copied with its comments, parses in concerns-check (fail missing-verdict)"
+  else
+    fail "concern/SKILL.md's C-entry example, copied with its comments, parses in concerns-check (fail missing-verdict)" "got (rc=$tmpl_rc): $tmpl_out"
+  fi
+fi
+
+# fixtures/concerns, driven through the shipped bin/concerns-check launcher —
+# never the .py directly, so a change to the launcher's interpreter/path
+# resolution is exercised too. Each assertion reads the VERDICT LINE fields, not
+# just the exit code, per ADR-004: a wrapper that swallowed the exit status and
+# always returned 0 would still be caught by the outcome= token below.
+CONCERNS_FIXTURES="$ROOT/scripts/fixtures/concerns"
+concerns_check(){
+  # concerns_check <fixture> <expected-outcome-substring> <label>
+  out=$( "$CONCERNS_CHECK_BIN" "$CONCERNS_FIXTURES/$1" 2>&1 )
+  rc=$?
+  if printf '%s' "$out" | grep -qF "CONCERNS-CHECK:v1 $2"; then
+    pass "$3"
+  else
+    fail "$3" "expected verdict containing: CONCERNS-CHECK:v1 $2" "got (rc=$rc): $out"
+  fi
+}
+concerns_check 'all-met.md'               'outcome=pass hard=1 soft=1 unmet=none' \
+  'all concerns met -> pass'
+concerns_check 'hard-unmet.md'            'outcome=fail hard=1 soft=0 unmet=C1' \
+  'a hard concern unmet -> fail, naming the id'
+concerns_check 'hard-partial.md'          'outcome=fail hard=1 soft=0 unmet=C1' \
+  'a hard concern partial -> fail, naming the id'
+concerns_check 'hard-cannot-determine.md' 'outcome=fail hard=1 soft=0 unmet=C1' \
+  'a hard concern cannot-determine -> fail, naming the id'
+concerns_check 'soft-unmet.md'            'outcome=pass hard=1 soft=1 unmet=C2' \
+  'a soft concern unmet -> pass, but named in unmet='
+concerns_check 'missing-verdict.md'       'outcome=fail hard=1 soft=0 unmet=none missing=C1' \
+  'a concern still at verdict: — -> fail, naming the id'
+concerns_check 'waived-without-quote.md'  'outcome=error reason=malformed-waived-without-quote id=C1' \
+  'waived with an empty quote -> error, never a pass'
+concerns_check 'waived-with-quote.md'     'outcome=pass hard=1 soft=0 unmet=none missing=none' \
+  'waived, raising quote kept, evidence citing a decisions.md#D<n> waiver record -> pass'
+concerns_check 'waived-without-waiver-record.md' 'outcome=error reason=malformed-waived-without-waiver-record id=C1' \
+  'waived with evidence: — (no cited waiver record) -> error, never a pass'
+concerns_check 'waived-prose-evidence-no-citation.md' 'outcome=error reason=malformed-waived-without-waiver-record id=C1' \
+  'waived with non-empty prose evidence but no decisions.md#D<n> citation -> error, never a pass'
+concerns_check 'trailing-comments-hard-unmet.md' 'outcome=fail hard=1 soft=0 unmet=C1 missing=none reason=hard-unmet' \
+  'a trailing # comment after bar:/verdict: is ignored (bar: hard  # hard | soft, verdict: unmet # met)'
+concerns_check 'malformed-verdict-comment-only.md' 'outcome=error reason=malformed-verdict-value id=C1' \
+  'verdict: # met (a comment and no value) -> error'
+concerns_check 'malformed-verdict-comment-no-space.md' 'outcome=error reason=malformed-verdict-value id=C1' \
+  'verdict: met#x (no whitespace before #, not a comment) -> error'
+concerns_check 'malformed-bar-two-words-comment.md' 'outcome=error reason=malformed-bar-value id=C1' \
+  'bar: hard soft # x (two words before the comment) -> error'
+concerns_check 'waived-placeholder-quote.md' 'outcome=error reason=malformed-waived-without-quote id=C1' \
+  'waived with quote: — (a placeholder is an empty quote) -> error, never a pass'
+concerns_check 'malformed-empty-raisedby.md' 'outcome=error reason=malformed-empty-field id=C1 field=raisedBy' \
+  'raisedBy: — -> error naming the empty field'
+concerns_check 'malformed-template-quote.md' 'outcome=error reason=malformed-empty-field id=C1 field=quote' \
+  'quote: "<verbatim>" (the template placeholder) -> error naming the empty field'
+concerns_check 'malformed-met-without-evidence.md' 'outcome=error reason=malformed-empty-field id=C1 field=evidence' \
+  'a ruled verdict with evidence: — -> error naming the empty field'
+concerns_check 'malformed-unknown-field.md' 'outcome=error reason=malformed-unknown-field id=C1 field=Note' \
+  'a key outside the seven C-entry fields -> error, never silently ignored'
+concerns_check 'malformed-prose-in-entry.md' 'outcome=error reason=malformed-entry id=C1 line=6' \
+  'a prose line inside an entry -> error naming the line'
+# Near-miss headers and content outside any entry: each file below carries a
+# hard bar ruled unmet, so a parser that skips what it does not recognise
+# would read it as "zero concerns" and pass.
+concerns_check 'malformed-header-h3.md'            'outcome=error reason=malformed-header line=1' \
+  '### C1 — (h3) -> error, never skipped as zero concerns'
+concerns_check 'malformed-header-hyphen.md'        'outcome=error reason=malformed-header line=1' \
+  '## C1 - (hyphen, not em dash) -> error, never skipped'
+concerns_check 'malformed-header-lowercase.md'     'outcome=error reason=malformed-header line=1' \
+  '## c1 — (lowercase) -> error, never skipped'
+concerns_check 'malformed-header-concern-word.md'  'outcome=error reason=malformed-header line=1' \
+  '## Concern 1 — -> error, never skipped'
+concerns_check 'malformed-header-no-label.md'      'outcome=error reason=malformed-header line=1' \
+  '## C1 — with no label -> error, never skipped'
+concerns_check 'malformed-title-line.md'           'outcome=error reason=malformed-header line=1' \
+  'a # title line (the skill never writes one) -> error'
+concerns_check 'malformed-header-then-valid.md'    'outcome=error reason=malformed-header line=1' \
+  'a malformed C1 header before a valid C2 -> error, C1'"'"'s bar never silently vanishes'
+concerns_check 'malformed-prose-only.md'           'outcome=error reason=malformed-unrecognised-content line=1' \
+  'a prose-only file -> error, never "zero concerns"'
+concerns_check 'malformed-bullet-list.md'          'outcome=error reason=malformed-unrecognised-content line=1' \
+  'a bullet-list bar outside the C-entry grammar -> error, never "zero concerns"'
+concerns_check 'bom-before-valid-header.md'        'outcome=fail hard=1 soft=0 unmet=C1' \
+  'a UTF-8 BOM before a valid header is stripped and the entry parses'
+concerns_check 'malformed-missing-bar.md'      'outcome=error reason=malformed-missing-field id=C1 field=bar' \
+  'an entry missing bar: -> error loudly, naming the entry'
+concerns_check 'malformed-unknown-bar.md'      'outcome=error reason=malformed-bar-value id=C1' \
+  'an entry with an unknown bar value -> error loudly, naming the entry'
+concerns_check 'malformed-unknown-verdict.md'  'outcome=error reason=malformed-verdict-value id=C1' \
+  'an entry with an unknown verdict value -> error loudly, naming the entry'
+concerns_check 'malformed-duplicate-id.md'     'outcome=error reason=malformed-entry id=C1' \
+  'a duplicated id -> error loudly, never silently merged'
+concerns_check 'noncontiguous-ids.md'          'outcome=pass hard=1 soft=1 unmet=none' \
+  'non-contiguous ids (a retired concern'"'"'s id never reused) -> pass, not malformed'
+concerns_check 'empty.md'                      'outcome=pass hard=0 soft=0 unmet=none missing=none' \
+  'a zero-byte file -> pass (nothing was raised, distinct from the file being absent)'
+
+# Verdict-line values are percent-escaped (space, tab, %, =, control bytes) so
+# a key=value reader splits the line correctly and a spaced value round-trips.
+spaced_out=$( "$CONCERNS_CHECK_BIN" "$CONCERNS_FIXTURES/malformed-spaced-verdict.md" 2>&1 )
+if printf '%s' "$spaced_out" | "$MARKER_PY" -c '
+import sys, urllib.parse
+kv = dict(t.split("=", 1) for t in sys.stdin.read().split()[1:])
+sys.exit(0 if kv.get("reason") == "malformed-verdict-value" and urllib.parse.unquote(kv.get("value", "")) == "unmet (see PR)" else 1)
+' 2>/dev/null; then
+  pass 'a spaced verdict value (unmet (see PR)) is escaped and round-trips through a key=value split'
+else
+  fail 'a spaced verdict value (unmet (see PR)) is escaped and round-trips through a key=value split' "got: $spaced_out"
+fi
+spaced_path="$TMP/no such dir/concerns.md"
+spaced_path_out=$( "$CONCERNS_CHECK_BIN" "$spaced_path" 2>&1 )
+if printf '%s' "$spaced_path_out" | SPACED_PATH="$spaced_path" "$MARKER_PY" -c '
+import os, sys, urllib.parse
+kv = dict(t.split("=", 1) for t in sys.stdin.read().split()[1:])
+sys.exit(0 if urllib.parse.unquote(kv.get("path", "")) == os.environ["SPACED_PATH"] else 1)
+' 2>/dev/null; then
+  pass 'a spaced path is escaped and round-trips through a key=value split'
+else
+  fail 'a spaced path is escaped and round-trips through a key=value split' "got: $spaced_path_out"
+fi
+
+# The absent-file case is fail-closed and distinct from the empty-file pass
+# above: a caller passing a path that does not resolve must never read as "no
+# concerns were raised".
+absent_out=$( "$CONCERNS_CHECK_BIN" "$CONCERNS_FIXTURES/does-not-exist.md" 2>&1 )
+absent_rc=$?
+if printf '%s' "$absent_out" | grep -qF 'CONCERNS-CHECK:v1 outcome=error reason=file-not-found' && [ "$absent_rc" -eq 2 ]; then
+  pass 'an absent concerns.md fails closed (outcome=error), never a silent pass'
+else
+  fail 'an absent concerns.md fails closed (outcome=error), never a silent pass' "got (rc=$absent_rc): $absent_out"
+fi
+
+# A wrapper swallowing the exit code cannot turn a fail into a pass: the
+# verdict line is read, not $?. Prove it against the same hard-unmet fixture.
+wrapped_out=$( "$CONCERNS_CHECK_BIN" "$CONCERNS_FIXTURES/hard-unmet.md" >/dev/null 2>&1; echo wrapped-exit-code-ignored )
+if [ "$wrapped_out" = 'wrapped-exit-code-ignored' ] && \
+   "$CONCERNS_CHECK_BIN" "$CONCERNS_FIXTURES/hard-unmet.md" 2>&1 | grep -qF 'outcome=fail'; then
+  pass 'a wrapper swallowing the exit code still finds outcome=fail on the verdict line'
+else
+  fail 'a wrapper swallowing the exit code still finds outcome=fail on the verdict line' "$wrapped_out"
+fi
+
+# ---------------------------------------------------------------------------
+printf '\nSeam — /verify-build measures the run before the PR (XL-27 F3b)\n\n'
+# ---------------------------------------------------------------------------
+
+# The usage numbers must reach build-summary.md in a commit the PR carries, so
+# the measure step has to sit BEFORE the step that pushes and opens the PR.
+# Presence cannot see a step moved below it; line numbers can.
+# first_line / last_line <file> <literal> — a line number holding it, or empty.
+first_line(){ grep -nF -e "$2" "$1" | head -1 | cut -d: -f1; }
+last_line(){ grep -nF -e "$2" "$1" | tail -1 | cut -d: -f1; }
+pr_step=$( first_line "$VERIFY_BUILD_MD" '## Step 6 — Open the PR' )
+pr_create=$( first_line "$VERIFY_BUILD_MD" 'gh pr create' )
+for probe in 'run-metrics --usage-fragment' 'run-metrics --emit --quiet' 'docs(record): measure the run'; do
+  at=$( last_line "$VERIFY_BUILD_MD" "$probe" )
+  if [ -n "$at" ] && [ -n "$pr_step" ] && [ -n "$pr_create" ] && [ "$at" -lt "$pr_step" ] && [ "$at" -lt "$pr_create" ]; then
+    pass "/verify-build: \`$probe\` comes before the step that opens the PR"
+  else
+    fail "/verify-build: \`$probe\` comes before the step that opens the PR" \
+         "last \`$probe\` at line ${at:-<absent>}; Step 6 heading at ${pr_step:-<absent>}; gh pr create at ${pr_create:-<absent>}"
+  fi
+done
+present "$VERIFY_BUILD_MD" 'Usage is generated by `run-metrics`, never hand-written.' \
+  '/verify-build states usage is generated by run-metrics, never hand-written'
+present "$VERIFY_BUILD_MD" 'each slice entry in `build-summary.md` gets the `usage:` of the fragment entry with the same `id`' \
+  '/verify-build fills each slice'\''s usage block in build-summary.md from the fragment'
+present "$VERIFY_BUILD_MD" '`verifyBuild.usage` is the fragment'\''s' \
+  '/verify-build fills verifyBuild.usage from the fragment'
+present "$VERIFY_BUILD_MD" 'write `usage: null` on every slice and `verifyBuild.usage: null`' \
+  '/verify-build writes a failure to measure as usage: null'
+present "$VERIFY_BUILD_MD" 'Never invent numbers.' '/verify-build never invents usage numbers'
+# F3's verifyBuild block is /verify-build's to fill, and no other slice owns
+# its non-usage keys: each one's source step is named, with F3's sub-fields.
+for needle in \
+  '`verifyBuild.gate`, `verifyBuild.coherence`, `verifyBuild.fixSlicesAdded` and `verifyBuild.adrs` are this run'\''s own results' \
+  '`gate: { mode, verdict, skipped, inconclusive }` from Step 2'\''s report block' \
+  '`coherence: { critical, medium, low, shippedUnresolved }` from Step 3' \
+  '`fixSlicesAdded:` the number of fix slices Step 3 added' \
+  '`adrs:` the ADRs Step 5 wrote or amended' \
+  '`verifyBuild.concerns` is copied from Step 5a'\''s verdict line' \
+  'copied from those steps'\'' own reports, never estimated'; do
+  present "$VERIFY_BUILD_MD" "$needle" "/verify-build fills verifyBuild: $needle"
+done
+# R7: a worker in a detached pool worktree is not attributed — the undercount
+# must reach the record, never stay silent.
+present "$VERIFY_BUILD_MD" 'droppedDetached=' '/verify-build reads droppedDetached off the verdict line'
+# D78: the bullet says what the code counts, and that a fleet lane's 0 is "not measured".
+present "$VERIFY_BUILD_MD" 'dispatches whose transcript is stamped `gitBranch: HEAD` (a detached checkout, such as a pool worktree)' \
+  '/verify-build: droppedDetached counts transcripts stamped gitBranch: HEAD (D78)'
+present "$VERIFY_BUILD_MD" 'a `/start-multi` unit reports 0 because it is never branch-filtered — 0 means not measured' \
+  '/verify-build: a /start-multi unit'\''s droppedDetached=0 means not measured (D78)'
+present "$VERIFY_BUILD_MD" 'ran in a detached pool worktree and were not attributed' \
+  '/verify-build names a detached-worktree undercount in ## What shipped'
+present "$VERIFY_BUILD_MD" 'A failure to measure must never block landing the work' \
+  '/verify-build keeps: a failure to measure never blocks landing'
+present "$VERIFY_BUILD_MD" 'work-docs-path --item <work_item>' \
+  '/verify-build resolves build-summary.md through work-docs-path'
+present "$VERIFY_BUILD_MD" 'the reader form, no `--owner-branch`' \
+  '/verify-build calls work-docs-path in its reader form'
+if grep -qF -e 'docs/prs' "$VERIFY_BUILD_MD"; then
+  fail '/verify-build hardcodes no work-docs root' "$( grep -nF -e 'docs/prs' "$VERIFY_BUILD_MD" )"
+else
+  pass '/verify-build hardcodes no work-docs root'
+fi
+# The fragment attributes a dispatch through retryLedger itself, so the report's
+# ledger and build-summary.md cannot disagree about a slice. `-a`: binary-flagged.
+if grep -qaF -e 'retryLedger([r])' "$RUN_METRICS"; then
+  pass 'run-metrics --usage-fragment attributes slices through retryLedger, not a second regex'
+else
+  fail 'run-metrics --usage-fragment attributes slices through retryLedger, not a second regex' \
+       'no `retryLedger([r])` call in scripts/run-metrics.mjs'
+fi
+
+# ---------------------------------------------------------------------------
+printf '\nSeam — concerns-check --decisions verifies a waiver against THIS unit'"'"'s decisions.md\n\n'
+# ---------------------------------------------------------------------------
+
+# slice 5's checker accepts any `decisions.md#D<n>` substring in a waived
+# entry's evidence (D63, D69). With --decisions the citation must resolve, in
+# the named file only, to an entry with kind: waiver, decidedBy: human and a
+# non-empty body. Every case reads the VERDICT LINE (ADR-004), never $?.
+WAIVER_FIXTURES="$CONCERNS_FIXTURES/waiver"
+WAIVER_DECISIONS="$WAIVER_FIXTURES/decisions.md"
+concerns_check_decisions(){
+  # concerns_check_decisions <concerns> <decisions> <expected-substring> <label>
+  out=$( "$CONCERNS_CHECK_BIN" --decisions "$2" "$1" 2>&1 )
+  rc=$?
+  if printf '%s' "$out" | grep -qF -e "CONCERNS-CHECK:v1 $3"; then
+    pass "$4"
+  else
+    fail "$4" "expected verdict containing: CONCERNS-CHECK:v1 $3" "got (rc=$rc): $out"
+  fi
+}
+concerns_check_decisions "$WAIVER_FIXTURES/cites-waiver.md" "$WAIVER_DECISIONS" \
+  'outcome=pass hard=1 soft=0 unmet=none missing=none' \
+  '--decisions: a waived entry citing an existing kind: waiver, decidedBy: human entry -> pass'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-missing-id.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-missing id=C1 decision=D9' \
+  '--decisions: a citation to an id absent from decisions.md -> error naming C1 and D9'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-deviation.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-not-waiver id=C1 decision=D5 value=deviation' \
+  '--decisions: a citation to a kind: deviation entry (decidedBy: human) -> error'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-executor.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-not-human id=C1 decision=D3 value=executor' \
+  '--decisions: a kind: waiver entry decided by an executor -> error, only the owner waives'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-empty-body.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-empty id=C1 decision=D4' \
+  '--decisions: a waiver entry with no body (no verbatim quote) -> error'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-foreign-path.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-foreign-file id=C1 decision=D2' \
+  '--decisions: a path-prefixed citation to another unit'\''s decisions.md -> error, even where D2 is a valid waiver here'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-negated.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-not-waiver id=C1 decision=D1' \
+  '--decisions: "not decisions.md#D1" where D1 is not a waiver -> error'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-waiver-and-executor.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-not-human id=C1 decision=D3' \
+  '--decisions: every citation is verified, not just the first valid one'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-waiver.md" "$WAIVER_FIXTURES/decisions-duplicate-d2.md" \
+  'outcome=error reason=waiver-record-ambiguous id=C1 decision=D2' \
+  '--decisions: a cited id allocated twice in decisions.md -> error, never the first match'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-waiver.md" "$WAIVER_FIXTURES/does-not-exist.md" \
+  'outcome=error reason=waiver-decisions-not-found id=C1' \
+  '--decisions: pointing at a missing file while an entry is waived -> error'
+concerns_check_decisions "$CONCERNS_FIXTURES/waived-with-quote.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-missing id=C1 decision=D999' \
+  '--decisions: slice 5'\''s fake-id waiver fixture, passing without the flag, is caught with it'
+concerns_check_decisions "$WAIVER_FIXTURES/no-waiver-all-met.md" "$WAIVER_FIXTURES/does-not-exist.md" \
+  'outcome=pass hard=1 soft=0 unmet=none missing=none' \
+  '--decisions: no waived entry -> the decisions file is not needed, so a unit with no decisions.md still passes'
+concerns_check_decisions "$CONCERNS_FIXTURES/hard-unmet.md" "$WAIVER_DECISIONS" \
+  'outcome=fail hard=1 soft=0 unmet=C1 missing=none reason=hard-unmet' \
+  '--decisions: a file with no waiver keeps its slice-5 outcome (hard unmet -> fail)'
+concerns_check_decisions "$CONCERNS_FIXTURES/malformed-missing-bar.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=malformed-missing-field id=C1 field=bar' \
+  '--decisions: a malformed concerns.md keeps its slice-5 error'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-other-concern.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-other-concern id=C2 decision=D2' \
+  '--decisions: a hard C2 citing a waiver whose title names only C1 -> error, one concern'\''s waiver never backs another'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-near-miss-id.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-other-concern id=C1 decision=D7' \
+  '--decisions: a waiver titled for C12 and XC1 does not name C1 -> error'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-no-quote.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-no-quote id=C1 decision=D6' \
+  '--decisions: a waiver body with no quoted span (no verbatim owner words) -> error'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-curly-quote.md" "$WAIVER_DECISIONS" \
+  'outcome=pass hard=1 soft=0 unmet=none missing=none' \
+  '--decisions: a waiver quote in curly quotes counts as a quoted span -> pass'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-fenced-waiver.md" "$WAIVER_FIXTURES/decisions-fenced-waiver.md" \
+  'outcome=error reason=waiver-record-missing id=C1 decision=D7' \
+  '--decisions: a waiver entry inside a code fence is prose (as Seam I reads it), never a record -> error'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-backtick.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=malformed-waived-without-waiver-record id=C1' \
+  '--decisions: a backticked citation is not a citation -> error (Step 5a says write it without backticks)'
+concerns_check 'waiver/cites-backtick.md' 'outcome=error reason=malformed-waived-without-waiver-record id=C1' \
+  'without --decisions a backticked citation errors the same way'
+flagless_out=$( "$CONCERNS_CHECK_BIN" "$WAIVER_FIXTURES/cites-missing-id.md" 2>&1 )
+if printf '%s' "$flagless_out" | grep -qF -e 'CONCERNS-CHECK:v1 outcome=pass'; then
+  pass 'without --decisions the checker behaves as slice 5 shipped (a missing-id citation is not resolved)'
+else
+  fail 'without --decisions the checker behaves as slice 5 shipped (a missing-id citation is not resolved)' "got: $flagless_out"
+fi
+usage_out=$( "$CONCERNS_CHECK_BIN" "$WAIVER_FIXTURES/cites-waiver.md" --decisions 2>&1 )
+usage_rc=$?
+if [ "$usage_rc" -eq 2 ] && ! printf '%s' "$usage_out" | grep -qF -e 'outcome=pass'; then
+  pass '--decisions with no value is a usage error, never a pass'
+else
+  fail '--decisions with no value is a usage error, never a pass' "got (rc=$usage_rc): $usage_out"
+fi
+
+# ---------------------------------------------------------------------------
+printf '\nSeam — /verify-build rules every concern, opens the PR either way, posts flow/concerns (XL-27 F4)\n\n'
+# ---------------------------------------------------------------------------
+
+# ORDER, by line number: the ruling precedes Step 5b (whose commit carries the
+# result), Step 5b precedes the PR, and the status is posted on the PR's head.
+rule_step=$( first_line "$VERIFY_BUILD_MD" '## Step 5a — Rule every concern' )
+measure_step=$( first_line "$VERIFY_BUILD_MD" '## Step 5b — Measure the run' )
+status_step=$( first_line "$VERIFY_BUILD_MD" '## Step 6b — Post the' )
+cost_step=$( first_line "$VERIFY_BUILD_MD" '## Step 7 — Put what the run cost' )
+check_call=$( first_line "$VERIFY_BUILD_MD" 'concerns-check --decisions' )
+status_call=$( first_line "$VERIFY_BUILD_MD" 'statuses/<head-sha>' )
+in_order(){
+  # in_order <label> <n1> <n2> ... — every value present and strictly increasing
+  label=$1; shift
+  prev=''; detail="$*"
+  for n in "$@"; do
+    if [ -z "$n" ] || { [ -n "$prev" ] && [ "$n" -le "$prev" ]; }; then
+      fail "$label" "line numbers (empty = absent): $detail"
+      return
+    fi
+    prev=$n
+  done
+  pass "$label"
+}
+in_order '/verify-build ORDER: Step 5a (rule concerns) < its concerns-check call < Step 5b < Step 6 (open the PR)' \
+  "$rule_step" "$check_call" "$measure_step" "$pr_step"
+in_order '/verify-build ORDER: gh pr create < Step 6b heading < the statuses/<head-sha> post < Step 7' \
+  "$pr_create" "$status_step" "$status_call" "$cost_step"
+
+# Every structural rule below is parsed by one python pass over the file, so a
+# sentence that INVERTS a rule is refuted, not merely outvoted by a needle.
+"$MARKER_PY" - "$VERIFY_BUILD_MD" > "$TMP/vb-concerns" 2>&1 <<'PYVB'
+import re, sys
+path = sys.argv[1]
+text = open(path, encoding="utf-8").read()
+lines = text.splitlines()
+out = []
+def check(ok, label, detail=""):
+    out.append(("ok" if ok else "bad") + "|" + label + "|" + detail.replace("|", "/").replace("\n", " "))
+
+# 1. outcome -> state mapping, grammar: a bullet at column 0 of the exact shape
+#    - `outcome=<o>` → `state=<s>` ...
+MAP = re.compile(r"^- `outcome=([a-z-]+)` → `state=([a-z-]+)`")
+pairs = [MAP.match(l).groups() for l in lines if MAP.match(l)]
+outcomes = [o for o, _ in pairs]
+check(sorted(outcomes) == ["error", "fail", "pass"],
+      "status mapping names each concerns-check outcome exactly once (pass, fail, error)",
+      "got outcomes: %s" % outcomes)
+check(dict(pairs) == {"pass": "success", "fail": "failure", "error": "failure"} and len(pairs) == 3,
+      "status mapping is exactly pass -> success, fail -> failure, error -> failure",
+      "got: %s" % pairs)
+bad_error = [l for l in lines if re.search(r"outcome=error\S*\s.*(?:→|->|\bmaps? to\b|\breads? as\b|\bis\b)\s*`?(?:state=)?success\b", l)]
+check(not bad_error, "no line reads outcome=error as success", " || ".join(bad_error))
+
+# 2. Sentences, with markdown emphasis stripped and whitespace normalised.
+flat = re.sub(r"\s+", " ", text.replace("**", ""))
+sentences = re.split(r"(?<=[.!?])\s+", flat)
+STOP = re.compile(r"(do not|don't|never|must not|cannot|can't|won't|refuse to) (open|push) (the|a) PR"
+                  r"|skip(s|ping)? (opening|Step 6|the PR)|stop(s)? before (opening|Step 6|the PR)"
+                  r"|blocks? (opening|Step 6|the PR)|instead of opening the PR", re.I)
+stops = [s for s in sentences if re.search(r"concern", s, re.I) and STOP.search(s)]
+check(not stops, "no sentence stops or skips opening the PR on a concern", " || ".join(stops))
+
+AGENT_WAIVES = re.compile(r"\b(you|the agent|an agent|agents|the executor|the verifier|the orchestrator|the lane|/verify-build)"
+                          r" (may|can|should|could|is allowed to|decides? to) (set `?verdict: waived`?|waive)", re.I)
+agent = [s for s in sentences if AGENT_WAIVES.search(s)]
+check(not agent, "no sentence lets an agent waive a concern", " || ".join(agent))
+
+# 3. --decisions wherever concerns-check is invoked (the name followed by an argument).
+calls = re.findall(r"concerns-check\s+[^\s`'’),.;:]\S*", text)
+check(bool(calls) and all(c.split()[1] == "--decisions" for c in calls),
+      "every concerns-check invocation in verify-build.md passes --decisions",
+      "calls: %s" % calls)
+
+# 4. No git hook for human pushes; no Actions workflow or App-backed Check Run.
+hooks = re.findall(r"pre-push|post-commit|post-receive|\.git/hooks|core\.hooksPath|husky|lefthook|\.github/workflows|checks API|check-runs", text, re.I)
+check(not hooks, "verify-build.md proposes no git hook, Actions workflow or Check Run for the status", "found: %s" % hooks)
+
+# 5. The PR-body template: the fenced block opening `## <TICKET-ID>`.
+blocks = re.findall(r"^```\n(## <TICKET-ID>.*?)^```$", text, re.S | re.M)
+check(len(blocks) == 1, "exactly one PR-body template block (## <TICKET-ID>)", "found %d" % len(blocks))
+tpl = blocks[0] if blocks else ""
+for f in ("design.md", "decisions.md", "concerns.md", "build-summary.md"):
+    check(re.search(r"\]\(https://github\.com/<owner>/<repo>/blob/<branch>/<path>/%s\)" % re.escape(f), tpl) is not None,
+          "PR-body template links %s as a blob on the branch" % f)
+for h in ("### Slices", "### Verification", "### Unmet hard concerns"):
+    check(("\n" + h + "\n") in ("\n" + tpl), "PR-body template keeps the section %s" % h)
+check(not re.search(r"promot|design narrative", tpl, re.I),
+      "PR-body template no longer promotes the design narrative", tpl[:120])
+promo = [m.group(0) for m in re.finditer(r"Promote the design|promoted from the (?:committed )?design|not\*? committed as a standalone doc", text)]
+check(not promo, "verify-build.md no longer says the design is promoted into the PR body", "found: %s" % promo)
+
+for l in out:
+    print(l)
+PYVB
+if [ ! -s "$TMP/vb-concerns" ] || grep -qv -e '^ok|' -e '^bad|' "$TMP/vb-concerns"; then
+  fail 'the verify-build.md concerns parser ran' "$( cat "$TMP/vb-concerns" )"
+fi
+while IFS='|' read -r verdict_word label detail; do
+  case "$verdict_word" in
+    ok)  pass "/verify-build: $label" ;;
+    bad) fail "/verify-build: $label" "$detail" ;;
+  esac
+done < "$TMP/vb-concerns"
+
+# Presence — each of these is a rule a later edit could drop without anything
+# else going red. The inversions of the load-bearing ones are refuted above.
+present "$VERIFY_BUILD_MD" 'opens the PR either way' '/verify-build opens the PR either way'
+present "$VERIFY_BUILD_MD" 'work-docs-path --item <work_item>' '/verify-build resolves concerns.md through work-docs-path'
+present "$VERIFY_BUILD_MD" 'Only the owner waives.' '/verify-build: only the owner waives'
+present "$VERIFY_BUILD_MD" 'Never waive on an agent'\''s own judgment' '/verify-build: never waive on an agent'\''s judgment'
+present "$VERIFY_BUILD_MD" '`kind: waiver`, `decidedBy: human`' '/verify-build: a waiver appends kind: waiver, decidedBy: human'
+present "$VERIFY_BUILD_MD" 'the owner'\''s verbatim waiver quote' '/verify-build: the decisions.md entry carries the owner'\''s verbatim waiver quote'
+present "$VERIFY_BUILD_MD" 'cites it as `decisions.md#D<n>`' '/verify-build: the C-entry'\''s evidence cites the waiver as decisions.md#D<n>'
+present "$VERIFY_BUILD_MD" '`quote:` stays the raising quote' '/verify-build: quote: stays the raising quote'
+present "$VERIFY_BUILD_MD" 'gh api repos/{owner}/{repo}/statuses/<head-sha> -f context=flow/concerns -f state=<failure|success>' \
+  '/verify-build posts the design'\''s flow/concerns status command shape'
+present "$VERIFY_BUILD_MD" 'context=flow/concerns -f state=<failure|success> -f description="<description>" -f target_url=<blob URL of concerns.md on the branch>' \
+  '/verify-build: the status target_url is the concerns.md blob on the branch'
+present "$VERIFY_BUILD_MD" 'a status cannot be required, so the red mark is advisory in a single flow' \
+  '/verify-build states R5: the status is advisory in a private free-plan repo'
+present "$VERIFY_BUILD_MD" '`/merge-multi` is the hard block' '/verify-build names /merge-multi as the hard block'
+present "$VERIFY_BUILD_MD" 'nothing in this flow reads it back' '/verify-build: the status is display, never read back'
+present "$VERIFY_BUILD_MD" 'A failed status post never blocks landing' '/verify-build: a failed status post never blocks landing'
+present "$VERIFY_BUILD_MD" 'nothing re-posts on a human'\''s push' '/verify-build: no status re-post on a human push (no hook)'
+present "$VERIFY_BUILD_MD" 'every later push this flow makes' '/verify-build re-posts on every push the flow makes'
+present "$VERIFY_BUILD_MD" '140 characters' '/verify-build states the status description length it assumes'
+present "$VERIFY_BUILD_MD" 'with `origin: verify-build`' '/verify-build: a fix slice carries origin: verify-build (D50)'
+present "$VERIFY_BUILD_MD" 'one slice commit per slice' '/verify-build Step 1: one slice commit per slice (D49)'
+present "$VERIFY_BUILD_MD" 'except the counts Step 5b records' '/verify-build Step 3: the review is uncommitted except the counts Step 5b records (D78)'
+present "$VERIFY_BUILD_MD" 'Its title names every C-entry it waives by id (`## D<n> — The owner waives C<n>: <label>`)' \
+  '/verify-build: a waiver entry'\''s title names every C-entry it waives by id'
+present "$VERIFY_BUILD_MD" '`concerns-check` refuses a citation from a C-entry the title does not name' \
+  '/verify-build: the checker refuses a waiver cited by a concern its title does not name'
+present "$VERIFY_BUILD_MD" 'written without backticks' '/verify-build: the waiver citation is written without backticks'
+present "$VERIFY_BUILD_MD" 'post Step 6b'\''s status again, unchanged, on the new head' \
+  '/verify-build Step 9: the lane-step-record push gets the same flow/concerns status on its new head'
+present "$VERIFY_BUILD_MD" 'Among verdicts, only Step 2'\''s `FAIL` holds this step back' \
+  '/verify-build Step 6: among verdicts, only the gate FAIL holds the PR back'
+present "$VERIFY_BUILD_MD" 'no concerns recorded' '/verify-build: an empty concerns.md is "no concerns recorded"'
+for refuted in 'one commit per slice' 'follow-up slice' '`verifyBuild.concerns` is `null` until' 'no concerns raised' 'none raised'; do
+  if grep -qF -e "$refuted" "$( norm "$VERIFY_BUILD_MD" )"; then
+    fail "/verify-build no longer says: $refuted" "found in ${VERIFY_BUILD_MD#"$ROOT"/}"
+  else
+    pass "/verify-build no longer says: $refuted"
+  fi
+done
+
+# ADR-005 reversed the founding "Nothing else is kept" principle: a work item's
+# record (design, decisions, concerns, build summary) is committed beside the
+# code. Neither sentence of the old rule may survive anywhere in the plugin —
+# not in the README's Core principles, not in /verify-build's Principles.
+for refuted in 'Nothing else is kept' 'committed scratch docs'; do
+  hits=$( grep -rlF -e "$refuted" "$PLUGIN" )
+  if [ -n "$hits" ]; then
+    fail "the plugin no longer states the reversed rule: $refuted (ADR-005)" $hits
+  else
+    pass "the plugin no longer states the reversed rule: $refuted (ADR-005)"
+  fi
+done
+
 printf '\n'
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"

@@ -4,7 +4,7 @@ description: Cut the resolved design into vertical slices (tracer bullet first, 
 
 # /plan — cut into vertical slices
 
-Turn `.work/design.md` into an ordered set of **vertical slices** using the `vertical-slicing` skill. Default: write them to `.work/slices.yaml` (local). With `--publish`: also publish each slice as a Jira sub-task for team / AFK-agent pickup.
+Turn the committed design (`design.md` in the folder `work-docs-path` names) into an ordered set of **vertical slices** using the `vertical-slicing` skill. Default: write them to `.work/slices.yaml` (local). With `--publish`: also publish each slice as a Jira sub-task for team / AFK-agent pickup.
 
 ## Argument: $ARGUMENTS
 Optional ticket id. Flags: `--publish` (also create Jira sub-tasks).
@@ -19,9 +19,9 @@ Never accept these facts at the invocation instead. A step that learns a fact fr
 
 ## Step 1 — Read the design
 
-**Record the mode first.** Overwrite `.work/mode.yaml` with `mode: plan` and the current work item before reading anything else — full rewrite, never an append, so the marker names the command running now instead of the one that ran last on this branch.
+**Record the mode first.** Overwrite `.work/mode.yaml` with `mode: plan` and the current work item (`work_item:` carried forward exactly as `/start` recorded it — read it from the existing `.work/mode.yaml` before the rewrite; never re-dated or re-derived from the branch) before reading anything else — full rewrite, never an append, so the marker names the command running now instead of the one that ran last on this branch.
 
-Read `.work/design.md` (if absent: "No design found. Run `/design` first."). Read the relevant `CONTEXT.md` so slice names use the **ubiquitous language**, and respect existing ADRs in the area you're touching.
+Resolve the design's folder with `work-docs-path`, passing the work item exactly as `/design` Step 4 does, and read `<path>/design.md` from its verdict line's `path=` (if absent: "No design found. Run `/design` first."). An `outcome=error` line stops the step with its `reason=`; there is no second location to try. Read the relevant `CONTEXT.md` so slice names use the **ubiquitous language**, and respect existing ADRs in the area you're touching.
 
 ## Step 2 — Look for prefactoring
 
@@ -109,4 +109,4 @@ End your output with this line, at column 0, as the **final** line — nothing a
 
 - Vertical, never horizontal; tracer bullet first; prefactor before feature.
 - The breakdown is reviewed and approved before anything is written or published.
-- `slices.yaml` is ephemeral; the durable record is the per-slice commits + the PR (and the Jira sub-tasks, if published).
+- `slices.yaml` is ephemeral; the durable record is the per-slice commits, the work item's committed record beside the code (`design.md`, `decisions.md`, `concerns.md`, `build-summary.md`) and the PR that links it (and the Jira sub-tasks, if published).

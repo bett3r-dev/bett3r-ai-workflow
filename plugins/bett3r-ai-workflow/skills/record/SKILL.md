@@ -26,4 +26,4 @@ Then **carry on** with what you were doing. Do **not** stop to classify, route, 
 
 `record` only *captures*. It does not route to repos, file issues, or update rules/memory. Drain the buffer with `/capture-learnings` before finishing the work — and before `/start` replaces `.work/` — so a flow-level insight isn't lost with the ticket.
 
-(Sibling pattern: a *concern* — something to re-check before landing — is the same capture-now / process-later shape, consumed by `/verify-build` instead.)
+(Sibling pattern: a *[concern](../concern/SKILL.md)* — an owner's stated bar, captured with attribution — is the same capture-now / process-later shape, consumed by `/verify-build` instead.)

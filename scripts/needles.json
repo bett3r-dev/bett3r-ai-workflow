@@ -897,6 +897,48 @@
       "commit": null,
       "was_in": "plugins/bett3r-ai-workflow/CONTEXT-PROVIDERS.md",
       "note": "ADR-003 (ESAS-94). The hard limit that forced two seams into the BASE plugin rather than an overlay: a hook fires around a tool call, an MCP call cannot see the slash command, and the place a contribution must land is a fork in an interview. Without this, the next reader re-proposes the overlay-only design that cannot work."
+    },
+    {
+      "needle": "Reset before every take, unconditionally",
+      "issue": null,
+      "commit": "14d9083",
+      "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
+      "note": "ADR-005 (XL-27). A reused pool worktree is switched to the task-branch tip, cleaned, installed and built before EVERY slice, whether or not anything changed: a reused tree inherits stale .tsbuildinfo and stray compiled .js shadowing sources (remote-ai-agents D6). Skipping the install because the lockfile did not move turns a cost in time into a cost in correctness."
+    },
+    {
+      "needle": "is the single writer of `decisions.md` and `build-summary.md`",
+      "issue": null,
+      "commit": "6f16140",
+      "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
+      "note": "ADR-005 (XL-27). Only /build's orchestrator writes the committed record; executors, verifiers and pool workers report decisions and facts in their result. Every worker appending to one file would make every cherry-pick of a pool land conflict (design critique C1)."
+    },
+    {
+      "needle": "ruled partial, unmet or cannot-determine",
+      "issue": null,
+      "commit": "d3aa21c",
+      "was_in": "plugins/bett3r-ai-workflow/commands/verify-build.md",
+      "note": "ADR-005 (XL-27). Concerns fail closed: a hard concern that is partial, unmet, cannot-determine or unruled is a failure, never a pass. What the verifier could not check is cannot-determine, never met."
+    },
+    {
+      "needle": "is not-success, exactly like `outcome=fail`",
+      "issue": null,
+      "commit": "d3aa21c",
+      "was_in": "plugins/bett3r-ai-workflow/commands/verify-build.md",
+      "note": "ADR-005 (XL-27). concerns-check's outcome=error (malformed file, missing file, fabricated or foreign waiver citation) is read as failure exactly like fail, never as a pass or as 'no concerns' — the fail-closed half a reader is most likely to soften."
+    },
+    {
+      "needle": "Only the owner waives.",
+      "issue": null,
+      "commit": "d3aa21c",
+      "was_in": "plugins/bett3r-ai-workflow/commands/verify-build.md",
+      "note": "ADR-005 (XL-27). A concern is waived only in the owner's own words, recorded as a decisions.md entry with kind: waiver and decidedBy: human whose title names the concern, and concerns-check --decisions verifies the citation against the unit's own decisions.md. An agent never waives on its own judgment."
+    },
+    {
+      "needle": "This command is the hard block",
+      "issue": null,
+      "commit": "f69025c",
+      "was_in": "plugins/bett3r-ai-workflow/commands/merge-multi.md",
+      "note": "ADR-005 (XL-27). The flow/concerns commit status is advisory (a private free-plan repo cannot require it, and a post can fail); /merge-multi runs concerns-check itself on each unit head and refuses to merge anything but outcome=pass (design critique C2)."
     }
   ]
 }

@@ -3,7 +3,7 @@ name: handoff
 description: "Use when context must be compressed for another session, a context compaction, or an AFK agent: capture certainties, open questions, the next move, a skill runbook, and references — without duplicating existing `.work/` artifacts. Carries the flow's inter-step link (start → design → plan → build → verify-build) so a resumed session knows where it sits in the pipeline."
 ---
 
-Mine the session for consolidated context. Do not restate artifacts that already exist — `.work/design.md`, `.work/slices.yaml`, the per-slice commits, ADRs, the PR — reference them by path / id / sha.
+Mine the session for consolidated context. Do not restate artifacts that already exist — the committed design (cite `<path>/design.md` as `work-docs-path` prints it, so a resumed session opens it without re-deriving the folder), `.work/slices.yaml`, the per-slice commits, ADRs, the PR — reference them by path / id / sha.
 
 A handoff is usually the baton for the immediate next move in the flow. The flow is itself the forward projection: `/plan` **rises** the upcoming work as slices and each command hands off to the next, but those forecasts are re-earned — `/build` re-checks each slice, the flow is idempotent and resumable. Do not mine work that has not happened.
 
@@ -35,4 +35,4 @@ A handoff is usually the baton for the immediate next move in the flow. The flow
   The `flow` block must let a resumed session resolve its place in the pipeline: the step it is at, the prior steps whose `.work/` state and commits are preserved for it, and the projected next step. The sequence is soft and resumable: the flow re-checks (slices already `passes: true` are skipped), so re-entering may add, drop, or reorder the remaining work.
 4. **Finish.** Persist `.work/handoff/<slug>.md` (create `.work/handoff/` if missing — `.work/` is gitignored and ephemeral). Derive `<slug>` from the ticket id or a concise description. In a `/start-multi` fleet run, nest it under the unit: `.work/multi/<run-id>/handoff/<unit>.md`.
 
-Like the `record` buffer, a handoff lives in disposable `.work/`: consume it with `/handon` before `/start` replaces `.work/`, or fold its `## Durable` region into ADRs / the PR body first — `/handon` should prompt on an undrained `## Durable` region the same way the flow already shouts about an undrained `.work/learnings.md`. Git and the PR are the system of record; the handoff is only the baton.
+Like the `record` buffer, a handoff lives in disposable `.work/`: consume it with `/handon` before `/start` replaces `.work/`, or fold its `## Durable` region into ADRs / the PR body first — `/handon` should prompt on an undrained `## Durable` region the same way the flow already shouts about an undrained `.work/learnings.md`. Git is the system of record — the commits and the work item's committed record beside the code, which the PR links; the handoff is only the baton.
