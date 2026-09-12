@@ -14,7 +14,7 @@ Optional ticket id. Default: the active work in `.work/slices.yaml`.
 
 ## Step 1 — Preconditions
 
-Read `.work/slices.yaml` and `.work/design.md`. All slices should be `passes: true` and committed (`git log` shows one commit per slice). If slices remain unpassed, stop: "Slices N… not yet green — run `/build` first."
+Read `.work/slices.yaml` and the committed design — `<path>/design.md`, `path=` being `work-docs-path`'s verdict for this work item, called exactly as `/design` Step 4 calls it. All slices should be `passes: true` and committed (`git log` shows one commit per slice). If slices remain unpassed, stop: "Slices N… not yet green — run `/build` first."
 
 ## Step 2 — Run the gate
 
@@ -40,7 +40,7 @@ Then diff the full branch against that resolved base (`git diff <base>...HEAD`).
 
 - **Cross-slice invariants** — does the feature hold as a whole; do the slices compose correctly; any contract that two slices had to agree on?
 - **Coherence** — consistent patterns across slices, no duplication introduced between them, no slice undone by a later one.
-- **Design fidelity** — does the assembled result deliver what `.work/design.md` resolved? Note any deliberate deviation.
+- **Design fidelity** — does the assembled result deliver what the design resolved? Note any deliberate deviation.
 - **Quality** — real bugs, unsafe casts, security, dead code introduced across the diff. Look for accidental complexity, technical debt or anti-patterns relentlessly and be critical.
 
 ### Concrete ripple sweeps (run them; don't eyeball)
@@ -96,15 +96,15 @@ Produce a single **developer verification checklist**: the things a human should
 
 ## Step 5 — Finalize the durable record
 
-- **ADR(s):** ensure the decisions from `.work/design.md` that aren't recoverable from code are captured as committed ADR(s) in the repo's ADR location. Commit them if not already.
+- **ADR(s):** ensure the decisions from the design that aren't recoverable from code are captured as committed ADR(s) in the repo's ADR location. Commit them if not already.
   - **An ADR owed by the resolved design is written BEFORE the PR is opened, never filed as a follow-up.** Deferring is the *reasonable* default here and a competent lane proposes it from good reasoning — which is why this is a stated requirement rather than a preference. Writing it now is not a formality: **this is the last point at which the deciding evidence is in hand**, and re-measuring the design's own figures against the built code is part of writing it. Quote the measurement and the command, not the design's number — two lanes that deferred were made to write the ADR now, and **both re-measured figures their own designs had wrong.** The cost of deferring is invisible: the ADR still gets written, just from a worse source. If it cannot be written now, that is an **escalation** — the decision is not actually resolved.
   - **Never take the next number from a directory listing** — it shows only numbers that reached *your* branch, and numbers on unmerged siblings, open PRs and other stacks are already claimed. Scan every ref: `git log --all --name-only --pretty=format: | grep -oE 'ADR-[0-9]+' | sort -u | tail -5`, then go above it. This is the last point where a collision is still cheap: a rename after merge breaks every inbound `ADR-0NN` citation permanently.
   - **Check uniqueness against the merge target, not the branch.** The failure shape is a *filename* difference with a *number* collision, which no git mechanism surfaces — different names never conflict, so both land.
   - **Re-resolve every path and symbol the ADR cites** before committing it. A wrong `file:line` in an ADR outlives the PR and misleads whoever reads it next (§3) — one shipped citing a path that did not exist as written, an abbreviation having dropped a directory.
   - **A deferral naming a sibling unit is not done until it is tracked somewhere the sibling reads.** Grep your resolved block for one (`deferred to <UNIT>` is the written form, so this is a grep, not a judgement) and refuse to report done while the obligation lives only in your block — the sibling never sees it, and nothing in the flow errors.
   - If a composition finding traces to text the design or an existing ADR *also* asserts, **amending that text is part of the fix**, not a follow-up — otherwise the next reader re-derives the bug from the record.
-  - **If this work discovered a rule that's true beyond this ticket** (a framework rule, a decomposition heuristic, a flow-methodology finding), it needs a stated destination, not just prose in the narrative above: put it in an ADR's optional **Principle** section (`domain-modeling`'s ADR template), or, if it's about the flow/a shared skill rather than this feature, route it via `/capture-learnings` instead. Reasoning left only in the PR narrative is exactly the shape that gets lost — the PR body itself is promoted from `.work/design.md` and discarded once this PR merges.
-- **Promote the design:** the design narrative + conclusions from `.work/design.md` become the **PR description** — they are *not* committed as a standalone doc.
+  - **If this work discovered a rule that's true beyond this ticket** (a framework rule, a decomposition heuristic, a flow-methodology finding), it needs a stated destination, not just prose in the narrative above: put it in an ADR's optional **Principle** section (`domain-modeling`'s ADR template), or, if it's about the flow/a shared skill rather than this feature, route it via `/capture-learnings` instead. Reasoning left only in the PR narrative is exactly the shape that gets lost — the PR body itself is promoted from the design and nobody re-reads it once this PR merges.
+- **Promote the design:** the design narrative + conclusions from the committed design become the **PR description**.
 - **If the PR adds an enforcement mechanism** (a CI gate, lint rule, schema check, hook), state **which commit is its first live proof** — or, if none is, say why. A gate that never fired is indistinguishable from a gate that cannot fire.
 - **A worked example the suite does not consume is a claim nobody is checking.** Where an ADR, design doc or config sample ships one, make it a fixture the tests read, render and assert on — it then fails the build the day it stops being true. If it genuinely cannot be executable, say so at its top and anchor it to the command or commit that verified it; a hand-maintained example on no build path (one named a unit that did not exist) is a liability to delete, not neutral documentation.
 
@@ -131,7 +131,7 @@ The PR **body is the record**:
 ```
 ## <TICKET-ID> — <title>
 
-<design narrative + key decisions, promoted from .work/design.md>
+<design narrative + key decisions, promoted from the committed design.md>
 
 ### Slices
 - slice 1 — <name> (<commit>)
@@ -178,7 +178,7 @@ Report the duty cycle in your summary to the user **only when it is low and the 
 
 ## Step 8 — Cleanup
 
-The ephemeral `.work/` (design.md, slices.yaml) has now been fully promoted (ADRs + PR body + per-slice commits). It is gitignored and may be discarded. Report the PR URL.
+The ephemeral `.work/` (slices.yaml, mode.yaml) has now been fully promoted (ADRs + PR body + per-slice commits); the design was never in it — `/design` committed it. It is gitignored and may be discarded. Report the PR URL.
 
 > If this work surfaced an improvement to the *flow or a shared skill/plugin* (not this feature), run `/capture-learnings` to route it to the repo that owns it.
 

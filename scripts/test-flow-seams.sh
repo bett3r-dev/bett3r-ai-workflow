@@ -1084,6 +1084,294 @@ done
 present "$PROVISIONER_MD" 'Use from `/start-multi` step 2, once per unit' 'the provisioner still serves /start-multi'
 present "$PROVISIONER_MD" 'or from `/build` step 2, once per `worktree-pool` worktree' 'the provisioner is dispatchable for a /build pool worktree'
 
+# ---------------------------------------------------------------------------
+# The design is committed beside the code, at the work-docs root (XL-27)
+# ---------------------------------------------------------------------------
+#
+# `/design` writes and commits `<root>/<id>/design.md`, and there is ONE copy:
+# no reader may fall back to the old gitignored scratch path (operator decision
+# C3). The folder is named by `bin/work-docs-path`, executed by
+# `scripts/test-work-docs-path.sh`; what is asserted here is that the prose
+# around it moved with it.
+#
+# CENSUS_ROOT may be overridden by the environment so a mutation test can point
+# the census at a scratch copy of the plugin tree without touching tracked
+# files. The override is checked for being a plugin tree at all: a census run
+# over a directory holding nothing reports zero occurrences of anything, green.
+CENSUS_ROOT=${CENSUS_ROOT:-$PLUGIN}
+OLD_DESIGN_PATH='.work/design.md'
+
+if [ ! -f "$CENSUS_ROOT/commands/design.md" ]; then
+  fail 'the census root is a plugin tree' "no commands/design.md under $CENSUS_ROOT"
+else
+  pass 'the census root is a plugin tree'
+fi
+
+# ZERO occurrences, structurally: every file under the plugin, whatever its
+# extension, read as text (`-a` — `scripts/run-metrics.mjs` is classified binary
+# by grep, and a binary file only prints "matches", never the line). The needle
+# is the literal path and nothing else, so prose cannot trip it except by
+# spelling the path — and there are no exclusions, so a sentence recalling the
+# old location historically must be reworded rather than allowlisted. The
+# trailing /dev/null forces the file-name prefix even when `find` hands grep a
+# single file. Byte-compile caches are not source and are gitignored.
+census="$TMP/old-design-path.census"
+find "$CENSUS_ROOT" -type f ! -path '*/__pycache__/*' \
+  -exec grep -naF -e "$OLD_DESIGN_PATH" /dev/null {} + > "$census"
+if [ -s "$census" ]; then
+  # One context line per offending site: file:line, then the text, so the
+  # message names every file and line without anyone re-running the grep.
+  set --
+  while IFS= read -r site; do
+    set -- "$@" "${site#"$CENSUS_ROOT"/}"
+  done < "$census"
+  fail "no \`$OLD_DESIGN_PATH\` remains in the plugin — $( wc -l < "$census" | tr -d ' ' ) site(s)" "$@"
+else
+  pass "no \`$OLD_DESIGN_PATH\` remains anywhere in the plugin (no fallback reader)"
+fi
+
+# The positive half: every artifact that reads or writes the design reaches it
+# through `work-docs-path` by name, instead of restating the root/id table. A
+# ZERO census alone stays green when a reader's reference is simply deleted.
+for f in commands/design.md commands/plan.md commands/verify-build.md agents/verifier.md \
+         skills/handoff/SKILL.md skills/handon/SKILL.md skills/critique/SKILL.md \
+         skills/esas-design/SKILL.md skills/esas-design/BOARD-SETUP.md README.md; do
+  if [ ! -f "$CENSUS_ROOT/$f" ]; then
+    fail "$f reaches the design through work-docs-path" "file not found: $f"
+  elif grep -qF 'work-docs-path' "$CENSUS_ROOT/$f"; then
+    pass "$f reaches the design through work-docs-path"
+  else
+    fail "$f reaches the design through work-docs-path" "no \`work-docs-path\` in $f"
+  fi
+done
+
+CENSUS_DESIGN_MD="$CENSUS_ROOT/commands/design.md"
+present "$CENSUS_DESIGN_MD" '## Step 4 — Write and commit the design' '/design Step 4 writes AND commits the design'
+present "$CENSUS_DESIGN_MD" 'commit it on every pass' '/design commits the design file on every pass, re-runs included (C4 noise accepted)'
+present "$CENSUS_DESIGN_MD" 'git commit -m' '/design names the commit command for the design file'
+present "$CENSUS_DESIGN_MD" 'outcome=error' '/design has a reading for a work-docs-path error'
+present "$CENSUS_DESIGN_MD" 'Never fall back' '/design forbids a fallback location when the root cannot be resolved'
+# Ownership of an existing folder is RECORDED in the design (a frontmatter
+# header) and DECIDED by work-docs-path from that header — never inferred from
+# git history, which falsely claimed another work item's folder in stacked,
+# merged-feature and stale-origin topologies. The script's behaviour is executed
+# in test-work-docs-path.sh; here the command is held to reading its verdict.
+present "$CENSUS_DESIGN_MD" 'work-docs-path --item <work_item> --owner-branch "$(git branch --show-current)"' '/design asks work-docs-path for ownership, with the current branch'
+present "$CENSUS_DESIGN_MD" '`work-docs-path --item <work_item>` — a Jira key, `#<n>` for a GitHub issue, or with no id the `<yyyy-mm-dd>-<slug>`' \
+  '/design passes the recorded work_item through --item untouched, a dated no-id id included'
+present "$CENSUS_DESIGN_MD" '**The same rule holds for a `--item` folder**' '/design applies the owner=self rule to ticket folders too'
+present "$CENSUS_DESIGN_MD" 'A renamed branch is likewise a false stop' '/design names the renamed-branch false stop as the accepted direction'
+present "$CENSUS_DESIGN_MD" '**on the same day** gets the same dated `work_item`' \
+  '/design states the same-day reused-branch overwrite as the accepted residual'
+# The retired flags: a command still passing them is a command re-deriving the
+# date `/start` fixed. No exclusions — the script's own docs avoid the literal.
+wdp_retired="$TMP/wdp-retired.census"
+find "$CENSUS_ROOT" -type f ! -path '*/__pycache__/*' \
+  -exec grep -naE -e 'work-docs-path[^|;]*--(slug|date)([^a-z-]|$)' -e '`--(slug|date)`' /dev/null {} + > "$wdp_retired"
+if [ -s "$wdp_retired" ]; then
+  set --
+  while IFS= read -r site; do set -- "$@" "${site#"$CENSUS_ROOT"/}"; done < "$wdp_retired"
+  fail 'no command passes the retired work-docs-path --slug / --date flags' "$@"
+else
+  pass 'no command passes the retired work-docs-path --slug / --date flags'
+fi
+step4="$TMP/design-step4.md"
+awk '/^## Step 4/{f=1} /^## Step 5/{f=0} f' "$CENSUS_DESIGN_MD" > "$step4"
+if [ ! -s "$step4" ]; then
+  fail '/design Step 4 is extractable' 'no `## Step 4` … `## Step 5` span in commands/design.md'
+else
+  pass '/design Step 4 is extractable'
+  # The retired git-history rule is gone, not merely joined by the new one.
+  for old in 'git merge-base' 'git cat-file -e' '"$mb"..HEAD' 'git log' 'known-baseline-failures'; do
+    if grep -qF -e "$old" "$step4"; then
+      fail "/design Step 4 no longer decides ownership from git history: $old" "still present in Step 4: $old"
+    else
+      pass "/design Step 4 no longer decides ownership from git history: $old"
+    fi
+  done
+  # The header's shape is the fenced ```yaml block in Step 4 — the only
+  # specification of it, parsed like the mode.yaml block: frontmatter fences,
+  # `key: value` lines, and exactly the two ownership keys, spelled as
+  # `.work/mode.yaml` spells them.
+  awk '/^```yaml$/{f=1;next} /^```$/{if(f)exit} f' "$step4" > "$TMP/owner-header.yaml"
+  if [ ! -s "$TMP/owner-header.yaml" ]; then
+    fail '/design Step 4 shows the ownership header as a fenced yaml block' 'no ```yaml block in Step 4'
+  else
+    pass '/design Step 4 shows the ownership header as a fenced yaml block'
+    "$MARKER_PY" - "$TMP/owner-header.yaml" > "$TMP/owner-keys" 2>"$TMP/err" <<'PY2'
+import re, sys
+lines = [l.rstrip("\n") for l in open(sys.argv[1], encoding="utf-8") if l.strip()]
+if len(lines) < 2 or lines[0] != "---" or lines[-1] != "---":
+    sys.exit("the header block is not a frontmatter block (--- … ---): %r" % lines)
+keys = []
+for line in lines[1:-1]:
+    m = re.fullmatch(r"([a-z_][a-z0-9_]*):\s+(\S+)", line.strip())
+    if not m:
+        sys.exit("unparseable header line: %r" % line)
+    keys.append(m.group(1))
+print(" ".join(keys))
+PY2
+    if [ $? -ne 0 ]; then
+      fail 'the documented ownership header parses' "$( cat "$TMP/err" )"
+    else
+      pass 'the documented ownership header parses'
+      check_keys=$( cat "$TMP/owner-keys" )
+      if [ "$check_keys" = 'work_item branch' ]; then
+        pass 'the ownership header is exactly work_item / branch (mode.yaml spelling)'
+      else
+        fail 'the ownership header is exactly work_item / branch (mode.yaml spelling)' "got: $check_keys"
+      fi
+    fi
+  fi
+
+  # --- executed: Step 4's outcome → action map ---------------------------------
+  # Presence of the right sentences stays green with a wrong one beside them
+  # (an `owner=unowned — overwrite` bullet added above the stop bullet), or with
+  # the right bullet's action rewritten (the detached-HEAD bullet told to "write
+  # fresh"). So the owner-decision list is PARSED into outcome → action and the
+  # map itself is asserted.
+  #
+  # The grammar the parser relies on — any Step 4 edit outside it fails loudly,
+  # it never skips:
+  #   * the list is the run of `- ` lines right after the one line ending
+  #     `Act on it and nothing else:` (blank lines before the first bullet are
+  #     allowed; the list ends at the first blank line after one);
+  #   * every bullet is ONE source line: `- ` + one or more code-span outcome
+  #     labels joined by `, ` / ` or ` / `, or `, then ` — `, then the action;
+  #   * an action is `stop` iff it says end `blocked-on`, `write` iff it carries
+  #     a write/overwrite/rewrite verb once `Write nothing` is removed — exactly
+  #     one of the two, so a bullet pairing a stop with a write verb, or saying
+  #     neither, is a grammar error;
+  #   * the labels are exactly the verdict readings below, each exactly once.
+  "$MARKER_PY" - "$step4" > "$TMP/owner-map" 2>"$TMP/err" <<'PY3'
+import re, sys
+lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+anchors = [i for i, l in enumerate(lines) if l.rstrip().endswith("Act on it and nothing else:")]
+if len(anchors) != 1:
+    sys.exit("expected exactly one line ending 'Act on it and nothing else:' in Step 4, found %d" % len(anchors))
+i = anchors[0] + 1
+while i < len(lines) and not lines[i].strip():
+    i += 1
+bullets = []
+while i < len(lines) and lines[i].strip():
+    if not lines[i].startswith("- "):
+        sys.exit("line %r inside the owner-decision list is not a one-line `- ` bullet" % lines[i])
+    bullets.append(lines[i])
+    i += 1
+if not bullets:
+    sys.exit("no bullets after 'Act on it and nothing else:'")
+label_run = r"`[^`]+`(?:(?:, or |, | or )`[^`]+`)*"
+for b in bullets:
+    m = re.fullmatch(r"- (%s) — (.+)" % label_run, b)
+    if not m:
+        sys.exit("bullet outside the grammar (`label` [or `label`] — action): %r" % b)
+    action = m.group(2).replace("**", "")
+    stop = re.search(r"\bend `blocked-on`", action, re.I) is not None
+    write = re.search(r"\b(?:over|re)?writes?\b", re.sub(r"(?i)\bwrite nothing\b", "", action), re.I) is not None
+    if stop == write:
+        sys.exit("bullet is %s: %r" % ("both a stop and a write" if stop else "neither a stop nor a write", b))
+    for label in re.findall(r"`([^`]+)`", m.group(1)):
+        print("%s\t%s" % (label, "stop" if stop else "write"))
+PY3
+  if [ $? -ne 0 ]; then
+    fail '/design Step 4 owner-decision list parses into outcome → action' "$( cat "$TMP/err" )"
+  else
+    pass '/design Step 4 owner-decision list parses into outcome → action'
+    for want in 'owner=none	write' 'owner=self	write' 'owner=other	stop' 'owner=unowned	stop' \
+                'outcome=error reason=malformed-owner-branch	stop' 'outcome=error reason=<any other>	stop' \
+                'no verdict line	stop'; do
+      label=${want%%	*} action=${want#*	}
+      seen=$( awk -F '\t' -v l="$label" '$1 == l' "$TMP/owner-map" )
+      n=$( printf '%s' "$seen" | grep -c . )
+      if [ "$n" -ne 1 ]; then
+        fail "Step 4 maps \`$label\` exactly once" "found $n bullet label(s):" "$( cat "$TMP/owner-map" )"
+      elif [ "$seen" != "$want" ]; then
+        fail "Step 4 maps \`$label\` → $action" "got: ${seen#*	}"
+      else
+        pass "Step 4 maps \`$label\` → $action"
+      fi
+    done
+    extra=$( awk -F '\t' '$1 !~ /^(owner=(none|self|other|unowned)|outcome=error reason=(malformed-owner-branch|<any other>)|no verdict line)$/' "$TMP/owner-map" )
+    if [ -n "$extra" ]; then
+      fail 'Step 4 maps no outcome outside the verdict vocabulary' "$extra"
+    else
+      pass 'Step 4 maps no outcome outside the verdict vocabulary'
+    fi
+  fi
+fi
+
+# The marker's work_item must be something work-docs-path accepts: a no-id
+# work item is `<yyyy-mm-dd>-<slug>`, dated ONCE by /start and carried forward,
+# never a branch name with `/` in it and never re-dated by a later command. The
+# spec comment is read from the parsed marker block itself, not the prose.
+marker_item_comment=$( sed -n 's/^work_item:[^#]*#//p' "$TMP/marker.yaml" )
+case $marker_item_comment in
+  *'<yyyy-mm-dd>-<slug>'*'/start'*'fixed once'*)
+    pass 'the marker block specifies a no-id work_item as <yyyy-mm-dd>-<slug>, dated at /start, fixed once' ;;
+  *)
+    fail 'the marker block specifies a no-id work_item as <yyyy-mm-dd>-<slug>, dated at /start, fixed once' \
+         "work_item comment in start.md's block: ${marker_item_comment:-(none)}" ;;
+esac
+present "$START_MD" 'last path segment of the branch' '/start says how the no-id slug is derived from the branch'
+present "$START_MD" 'The date is the day `/start` ran, in the local time zone, recorded once and never re-derived' \
+  '/start fixes the no-id date once, local time, never re-derived'
+present "$START_MD" 'carries `work_item:` forward unchanged' '/start says later commands carry work_item forward unchanged'
+present "$START_MD" '**ask the user for a slug**' '/start says what to do when the derived slug is empty (Q8)'
+# Every command after /start that fully rewrites `.work/mode.yaml` must carry
+# `work_item:` forward, not re-derive it: the date /start fixed is not
+# recoverable from the branch, so a re-derived id is malformed and a re-dated
+# one splits the record into a second folder.
+carry='carried forward exactly as `/start` recorded it'
+for f in commands/design.md commands/plan.md commands/build.md; do
+  if [ ! -f "$CENSUS_ROOT/$f" ]; then
+    fail "$f carries work_item forward when it rewrites mode.yaml" "file not found: $f"
+  elif grep -qF -e "$carry" "$( norm "$CENSUS_ROOT/$f" )"; then
+    pass "$f carries work_item forward when it rewrites mode.yaml"
+  else
+    fail "$f carries work_item forward when it rewrites mode.yaml" "no \"$carry\" in $f"
+  fi
+done
+if grep -qF 'lower-case dash-separated slug when there is no id' "$( norm "$START_MD" )"; then
+  fail 'the marker spec no longer calls an undated slug a work_item' 'still present: lower-case dash-separated slug when there is no id'
+else
+  pass 'the marker spec no longer calls an undated slug a work_item'
+fi
+if grep -qF 'or the branch slug when there is no id' "$( norm "$START_MD" )"; then
+  fail 'the marker spec no longer calls a raw branch slug a work_item' 'still present: or the branch slug when there is no id'
+else
+  pass 'the marker spec no longer calls a raw branch slug a work_item'
+fi
+present "$CENSUS_DESIGN_MD" '.claude/bett3r-ai-workflow.json' '/design names the config file the root is read from'
+present "$CENSUS_ROOT/commands/plan.md" 'No design found' '/plan still stops when the design is absent'
+
+# The reversed sentences are gone. Presence of the new rule alone stays green
+# with the old one beside it, and "not committed" is the shorter to follow.
+for old in 'ephemeral and **not committed**' '`design.md` is ephemeral' 'It holds `design.md` and `slices.yaml`'; do
+  hit=
+  for f in commands/design.md commands/start.md; do
+    grep -qF "$old" "$( norm "$CENSUS_ROOT/$f" )" && hit="$hit $f"
+  done
+  if [ -n "$hit" ]; then
+    fail "the design is no longer described as ephemeral scratch: $old" "still present in:$hit"
+  else
+    pass "the design is no longer described as ephemeral scratch: $old"
+  fi
+done
+
+# ADR-003: the root is the plugin's own key, never another tool's config. The
+# script is checked for existence first: grepping a missing file finds nothing,
+# and "nothing" is exactly the passing answer.
+WDP_PY="$PLUGIN/scripts/work-docs-path.py"
+if [ ! -f "$WDP_PY" ]; then
+  fail 'work-docs-path does not read .esas.config.json (ADR-003)' 'scripts/work-docs-path.py does not exist'
+elif grep -qF '.esas.config.json' "$WDP_PY"; then
+  fail 'work-docs-path does not read .esas.config.json (ADR-003)' "scripts/work-docs-path.py names .esas.config.json"
+elif ! grep -qF '.claude", "bett3r-ai-workflow.json' "$WDP_PY"; then
+  fail 'work-docs-path reads its own .claude/bett3r-ai-workflow.json' 'the config path literal is not in scripts/work-docs-path.py'
+else
+  pass 'work-docs-path reads .claude/bett3r-ai-workflow.json, not .esas.config.json (ADR-003)'
+fi
+
 printf '\n'
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"

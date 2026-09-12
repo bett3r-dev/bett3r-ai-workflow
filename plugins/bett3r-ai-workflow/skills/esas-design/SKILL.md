@@ -230,8 +230,8 @@ name, and the module it lands in. So on the board a label is not a caption:
 Board collaboration happens in the **main checkout**, never a worktree. A fleet
 worktree has no `.esas/` and every tool answers `ESAS_DIR_MISSING` — the correct
 answer, not a setup problem. Creating one there enrols a throwaway tree in a
-design session and splits the layer in two. In a worktree, design in
-`.work/design.md` and leave the board alone.
+design session and splits the layer in two. In a worktree, write the design
+to the folder `work-docs-path` names, as always, and leave the board alone.
 
 One design session per checkout. If `status` warns another session is designing
 here, say so — two sessions sharing one cursor lose each other's syncs quietly.

@@ -53,7 +53,7 @@ You are **project-agnostic**: the invariants you enforce come from the host repo
 
 The checklist above proves the diff isn't a *known* mistake. It cannot catch a **new** one — every entry exists because someone was already burned by that class, so the checklist is always exactly one incident behind reality, and a diff that passes it still reads as "verified" while shipping a novel defect. This pass is a different cognitive move, and it is the only one that catches novel defects: instead of walking a list, **attack the diff's own reasoning.**
 
-For each **load-bearing claim** — in a comment, an oracle name, the commit message, the PR body, **and in `.work/design.md` / `decisions.md` / any drafted ADR** — ask: **"what would have to be true for this to be false, and is it?"** Then go check that thing specifically.
+For each **load-bearing claim** — in a comment, an oracle name, the commit message, the PR body, **and in the committed `design.md` (the folder `work-docs-path` names) / `decisions.md` / any drafted ADR** — ask: **"what would have to be true for this to be false, and is it?"** Then go check that thing specifically.
 
 **The design docs are an independent defect surface, and the one that survives into the durable record.** A wrong `file:line`, a wrongly-scoped grep, a "zero producers / no consumers" claim, an "X is safe because Y" — each outlives the PR and misleads whoever reads it next. Expect the code to be fine and the *justifications* to be partly wrong; that is the common shape. A conformance check ("does the code match the design?") returns PASS on all of it, because the code implements the design faithfully and the design is what is false.
 
@@ -83,7 +83,7 @@ This is the failure RED→GREEN does **not** cover. That rule rules out a *tauto
 
 ## PASS-with-follow-ups is not available for a named mitigation
 
-Before returning PASS with follow-ups, cross-check every deferrable finding against the design's **Risks / mitigations** list (`.work/design.md` and the ADRs it cites). If a finding leaves a **named mitigation** unverified — the design accepted a risk *because* this behavior exists — it is **not** a follow-up. Return **RETRY** and say which risk is left bare.
+Before returning PASS with follow-ups, cross-check every deferrable finding against the design's **Risks / mitigations** list (the committed `design.md` — `work-docs-path` names its folder — and the ADRs it cites). If a finding leaves a **named mitigation** unverified — the design accepted a risk *because* this behavior exists — it is **not** a follow-up. Return **RETRY** and say which risk is left bare.
 
 A mitigation the design names is load-bearing for a risk the team consciously accepted; shipping it untested silently converts a mitigated risk into an unmitigated one, and no later gate re-checks that. **"The suite is green without it" is the symptom, not a reason to defer.** PASS-with-follow-ups is your weakest signal and the one least likely to be re-litigated — in practice, anything parked there ships. That is fine for polish and not for this. When such a finding is escalated, require the fix to be **mutation-tested**: delete the mitigating line, show the suite stays green, then show the new test fails.
 

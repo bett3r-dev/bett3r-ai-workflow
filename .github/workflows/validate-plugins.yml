@@ -132,6 +132,19 @@ jobs:
           sh scripts/test-worktree-pool.sh
           POOL_SH=dash dash scripts/test-worktree-pool.sh
           POOL_SH=bash bash scripts/test-worktree-pool.sh
+      # Every command that reads or writes a work item's committed design reaches
+      # its folder through `bin/work-docs-path` (root from the repo's
+      # `.claude/bett3r-ai-workflow.json` `workDocsRoot`, else `docs/prs`; the id
+      # normalised). A new script under plugins/ is collected by no step above,
+      # and its load-bearing half is a refusal — an unusable config must be a
+      # loud error, never a silent default — whose failure is invisible in any
+      # session that happens to have a clean config. WDP_SH varies the launcher's
+      # interpreter with the suite's.
+      - name: Test the work-docs path rule (throwaway git repos)
+        run: |
+          sh scripts/test-work-docs-path.sh
+          WDP_SH=dash dash scripts/test-work-docs-path.sh
+          WDP_SH=bash bash scripts/test-work-docs-path.sh
 
       # `bin/check-skill-shadows` runs in HOST repos, not here — it compares a
       # repo's `.claude/` against the plugins actually installed on that machine,

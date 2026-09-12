@@ -3,7 +3,7 @@ name: handoff
 description: "Use when context must be compressed for another session, a context compaction, or an AFK agent: capture certainties, open questions, the next move, a skill runbook, and references — without duplicating existing `.work/` artifacts. Carries the flow's inter-step link (start → design → plan → build → verify-build) so a resumed session knows where it sits in the pipeline."
 ---
 
-Mine the session for consolidated context. Do not restate artifacts that already exist — `.work/design.md`, `.work/slices.yaml`, the per-slice commits, ADRs, the PR — reference them by path / id / sha.
+Mine the session for consolidated context. Do not restate artifacts that already exist — the committed design (cite `<path>/design.md` as `work-docs-path` prints it, so a resumed session opens it without re-deriving the folder), `.work/slices.yaml`, the per-slice commits, ADRs, the PR — reference them by path / id / sha.
 
 A handoff is usually the baton for the immediate next move in the flow. The flow is itself the forward projection: `/plan` **rises** the upcoming work as slices and each command hands off to the next, but those forecasts are re-earned — `/build` re-checks each slice, the flow is idempotent and resumable. Do not mine work that has not happened.
 

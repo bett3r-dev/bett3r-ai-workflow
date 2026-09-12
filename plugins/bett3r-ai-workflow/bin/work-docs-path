@@ -1,0 +1,10 @@
+#!/bin/sh
+# Launcher for scripts/work-docs-path.py — the folder a work item's committed
+# record (design.md, …) lives in: `<root>/<id>`, root from the repo's
+# `.claude/bett3r-ai-workflow.json` `workDocsRoot` or `docs/prs`. Ends in a
+# `WORK-DOCS-PATH:v1` verdict line.
+#
+# Here for the same reason as `lane-step`: `CLAUDE_PLUGIN_ROOT` is substituted for
+# hook invocations only, while every enabled plugin's `bin/` is on `PATH`, keyed
+# by the version the session loaded.
+exec python3 "$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)/scripts/work-docs-path.py" "$@"

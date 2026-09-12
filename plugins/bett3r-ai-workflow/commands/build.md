@@ -19,7 +19,7 @@ Never accept these facts at the invocation instead. A step that learns a fact fr
 
 ## Step 1 — Load state
 
-**Record the mode first.** Overwrite `.work/mode.yaml` with `mode: build` and the current work item before reading anything else — full rewrite, never an append, so the marker names the command running now instead of the one that ran last on this branch.
+**Record the mode first.** Overwrite `.work/mode.yaml` with `mode: build` and the current work item (`work_item:` carried forward exactly as `/start` recorded it — read it from the existing `.work/mode.yaml` before the rewrite; never re-dated or re-derived from the branch) before reading anything else — full rewrite, never an append, so the marker names the command running now instead of the one that ran last on this branch.
 
 Read `.work/slices.yaml`. If it doesn't exist: "No slices found. Run `/plan` first."
 

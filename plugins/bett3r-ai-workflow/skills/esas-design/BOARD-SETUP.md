@@ -33,13 +33,13 @@ Then **stop the command** with this, verbatim:
 > **RESTART REQUIRED — `esas-mcp` is registered but not running.**
 > Registration takes effect only at session start: Claude Code spawns stdio MCP servers when a session boots, so the tools do not exist in *this* one no matter what the file now says.
 > Exit this session, start a new one in this repo, approve the `esas` server when Claude Code asks (repos with `enableAllProjectMcpServers` are not asked), and run `/design` again.
-> No design write is lost — nothing has been written to `.esas/`, and `.work/design.md` is written at the end of the interview, not now. What the restart does cost is this session's reading: the grounding pass, and any forks already answered. The new session re-does them.
+> No design write is lost — nothing has been written to `.esas/`, and the design file (`design.md`, in the folder `work-docs-path` names) is written at the end of the interview, not now. What the restart does cost is this session's reading: the grounding pass, and any forks already answered. The new session re-does them.
 
 Three rules while this session lasts:
 
 - **Do not call any `mcp__esas__*` tool for the rest of this session.** They are not there. A "no such tool" is not a transient failure to retry around.
 - **Never substitute for the missing server.** Do not create or edit `.esas/design.json`, `.esas/ops.jsonl` or `.esas/.claude-cursor` by hand.
-- **If the user does not restart** ("just keep going"): run Steps 1–4 with board mode off. That is a complete, correct `/design` — it produces `.work/design.md` and nothing else. Say once that the board layer will be there next session, then drop it.
+- **If the user does not restart** ("just keep going"): run Steps 1–4 with board mode off. That is a complete, correct `/design` — it produces the committed `design.md` and nothing else. Say once that the board layer will be there next session, then drop it.
 
 ## Seeding the design layer
 
@@ -67,4 +67,4 @@ The board claims **:3727 strictly**. It never drifts to the next free port, so `
 - **Read reality with `get_flow`**, one command flow at a time, never by re-reading the whole graph. `scope.boundary` defaults to `'end-to-end'`; `'subdomain'` keeps a flow's cross-subdomain hand-offs visible as leaves rather than pretending the ripple stops at the boundary.
 - **Open the summon channel once the board is up, and keep it open for the rest of the session.** It is one `Monitor({ ws: { url: 'ws://127.0.0.1:3727/api/esas/ws' }, persistent: true })` call, and it needs no timing rule: a persistent socket is held for the life of the session, so there is no moment it must be armed at and no re-arming after a wake. That replaces a watcher that had to be armed on exactly the right turn and re-armed after every one — the arming, not the transport, was what kept failing. Open it early rather than late; the only cost of an early open is a wake on a press with nothing new behind it, which the skill's first invariant already tolerates. What the channel *is*, how the wake behaves, the two surviving invariants and the rule that reopens a channel reported closed are the `esas-design` skill's half; Step 0 decides only that it goes up.
 - **The gestures live in the `esas-design` skill** — the sync point, the summon, corrections, restarts, and the fleet rule. Follow it; it is the behavioural half of Step 0.
-- **Step 3 still writes `.work/design.md`.** The two surfaces are complementary, not redundant: `.work/design.md` carries the decisions — the forks, the why, the rejected options — and `design.json` (structure) carries the verbs. Both feed `/plan`, so do not thin one because the other exists.
+- **Step 4 still writes and commits `design.md`**, in the folder `work-docs-path` names. The two surfaces are complementary, not redundant: `design.md` carries the decisions — the forks, the why, the rejected options — and `design.json` (structure) carries the verbs. Both feed `/plan`, so do not thin one because the other exists.

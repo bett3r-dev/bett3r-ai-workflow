@@ -50,7 +50,7 @@ Fixed once here, or paid N times in parallel by lanes that each get it wrong ind
 
 **Archive (never delete) a reused worktree's `.work/`.**
 
-- The dangerous files are exactly the ones the flow reads back: `design.md`, `slices.yaml`, `pr-body.md`, `decisions.md`. A populated `slices.yaml` gives a lane every reason to build a **different ticket**, confidently.
+- The dangerous files are exactly the ones the flow reads back: `slices.yaml`, `pr-body.md`, `decisions.md` — plus a `design.md`, which is legacy residue from checkouts before 0.68.0 (the design is now committed, not kept in `.work/`) and is archived like the rest. A populated `slices.yaml` gives a lane every reason to build a **different ticket**, confidently.
 - Stale and current are distinguishable **only by mtime**. `.work/` is gitignored, so `git status` is clean either way — there is no ordinary tell.
 - Archive into the run directory rather than removing: those buffers include the `learnings.md` that the fleet's rescue step exists to recover. Deleting them destroys the run's highest-signal output.
 
