@@ -1,0 +1,8 @@
+#!/bin/sh
+# Launcher for scripts/concerns-check.py — rules a concerns.md and refuses to
+# pass while any hard bar is unmet.
+#
+# Here for the same reason as `lane-step`: `CLAUDE_PLUGIN_ROOT` is substituted for
+# hook invocations only, while every enabled plugin's `bin/` is on `PATH`, keyed
+# by the version the session loaded.
+exec python3 "$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)/scripts/concerns-check.py" "$@"

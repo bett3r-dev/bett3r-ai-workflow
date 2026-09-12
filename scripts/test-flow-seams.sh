@@ -1764,6 +1764,252 @@ PYDEC
   fi
 fi
 
+# ---------------------------------------------------------------------------
+printf '\nSeam — concerns: an owner'"'"'s bar, captured and checked, failing closed\n\n'
+# ---------------------------------------------------------------------------
+#
+# Presence: record/SKILL.md's dangling reference now resolves to the concern
+# skill; design.md Step 1 seeds concerns from explicit bars in the ticket.
+CONCERN_SKILL_MD="$PLUGIN/skills/concern/SKILL.md"
+CONCERNS_CHECK_PY="$PLUGIN/scripts/concerns-check.py"
+CONCERNS_CHECK_BIN="$PLUGIN/bin/concerns-check"
+
+present "$PLUGIN/skills/record/SKILL.md" '(../concern/SKILL.md)' \
+  "record/SKILL.md's dangling concern reference resolves to the concern skill"
+present "$DESIGN_MD" 'Seed concerns from explicit bars in the ticket' \
+  '/design Step 1 seeds concerns from explicit bars in the ticket'
+present "$DESIGN_MD" 'capture it now with the `concern` skill' \
+  '/design Step 1 uses the concern skill to seed concerns'
+
+# PARSED, not presence-only: extract the ONE fenced block in concern/SKILL.md
+# whose first line is `## C1 — ` and read its `bar:`/`verdict:` comment enums,
+# then compare them against concerns-check.py's own declared enums. The two
+# files are one contract with two readers (the model writing an entry, the
+# script ruling it) and a drift between them — the skill's example gaining a
+# verdict value the checker does not know, or vice versa — must go red here
+# rather than surface as a silent pass on a shape the checker never rejects.
+"$MARKER_PY" - "$CONCERN_SKILL_MD" "$TMP/concern-template.md" > "$TMP/concern-shape" 2>"$TMP/err" <<'PYCONCERN'
+import re, sys
+lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+blocks, cur = [], None
+for l in lines:
+    if l.startswith("```"):
+        if cur is None:
+            cur = []
+        else:
+            blocks.append(cur)
+            cur = None
+    elif cur is not None:
+        cur.append(l)
+if cur is not None:
+    sys.exit("unterminated fence in concern/SKILL.md")
+c = [b for b in blocks if b and re.match(r"## C1 — ", b[0])]
+if len(c) != 1:
+    sys.exit("expected exactly one fenced block starting `## C1 — ` in concern/SKILL.md, found %d" % len(c))
+KEY = re.compile(r"([a-zA-Z][A-Za-z]*):(?:\s+(.*))?$")
+keys, enums = [], {}
+for l in c[0][1:]:
+    m = re.match(r"^([a-zA-Z][A-Za-z]*):(.*)$", l)
+    if not m:
+        break
+    key, rest = m.group(1), m.group(2)
+    keys.append(key)
+    cm = re.search(r"\s+#\s*(.*)$", rest)
+    if cm:
+        comment = re.split(r"\s+\u2014\s+", cm.group(1))[0]
+        enums[key] = [t.strip() for t in comment.split("|") if t.strip()]
+# The same block, every whole <…> placeholder value replaced by filler and the
+# `# …` comments KEPT, is what a model copying the example writes: argv[2].
+with open(sys.argv[2], "w", encoding="utf-8") as fh:
+    for l in c[0]:
+        fh.write(re.sub(r'"?<[^<>]*>"?', "filler text", l) + "\n")
+print("c.keys\t" + " ".join(keys))
+print("c.enum.bar\t" + " ".join(enums.get("bar", [])))
+print("c.enum.verdict\t" + " ".join(enums.get("verdict", [])))
+PYCONCERN
+if [ $? -ne 0 ]; then
+  fail 'concern/SKILL.md states the C-entry block as a parseable fenced block' "$( cat "$TMP/err" )"
+else
+  pass 'concern/SKILL.md states the C-entry block as a parseable fenced block'
+  cshape(){ awk -F '\t' -v k="$1" '$1 == k { sub(/^[^\t]*\t/, ""); print }' "$TMP/concern-shape"; }
+  cexpect(){
+    got=$( cshape "$2" )
+    if [ "$got" = "$3" ]; then pass "$1"; else fail "$1" "want: $3" "got:  $got"; fi
+  }
+  cexpect 'the C-entry header keys are exactly bar, raisedBy, quote, why, verify, verdict, evidence' \
+    c.keys 'bar raisedBy quote why verify verdict evidence'
+  cexpect 'the C-entry bar enum is hard | soft' c.enum.bar 'hard soft'
+  cexpect 'the C-entry verdict enum is met | partial | unmet | cannot-determine | waived' \
+    c.enum.verdict 'met partial unmet cannot-determine waived'
+
+  # concerns-check.py's own declared enums (grepped, not imported, so this
+  # oracle never depends on the checker's internal shape beyond its constants).
+  py_bar=$( grep -o 'BAR_VALUES = ([^)]*)' "$CONCERNS_CHECK_PY" | grep -o '"[a-z-]*"' | tr -d '"' | tr '\n' ' ' | sed 's/ $//' )
+  py_verdict=$( grep -o 'VERDICT_VALUES = ([^)]*)' "$CONCERNS_CHECK_PY" | grep -o '"[a-zA-Z-]*"' | tr -d '"' | tr '\n' ' ' | sed 's/ $//' )
+  if [ "$py_bar" = "hard soft" ]; then
+    pass "concerns-check.py's BAR_VALUES matches the skill's bar enum (hard soft)"
+  else
+    fail "concerns-check.py's BAR_VALUES matches the skill's bar enum" "got: $py_bar"
+  fi
+  # concerns-check.py's VERDICT_VALUES also carries the placeholder `—`
+  # (unset), which the skill's enum comment never lists — that value is not a
+  # concern's RULED verdict, it is the "not yet ruled" marker, so the two
+  # enums are the ruled-verdict set plus that one sentinel, not identical sets.
+  py_verdict_ruled=$( printf '%s' "$py_verdict" | sed 's/\xe2\x80\x94//' | tr -s ' ' | sed 's/^ //; s/ $//' )
+  if [ "$py_verdict_ruled" = "met partial unmet cannot-determine waived" ]; then
+    pass "concerns-check.py's VERDICT_VALUES (minus the — sentinel) matches the skill's verdict enum"
+  else
+    fail "concerns-check.py's VERDICT_VALUES (minus the — sentinel) matches the skill's verdict enum" "got: $py_verdict_ruled"
+  fi
+
+  # The skill's own example, copied as a model would copy it (comments and
+  # all, placeholders filled), must parse: an unruled entry, not malformed.
+  tmpl_out=$( "$PLUGIN/bin/concerns-check" "$TMP/concern-template.md" 2>&1 )
+  tmpl_rc=$?
+  if printf '%s' "$tmpl_out" | grep -qF 'outcome=fail hard=1 soft=0 unmet=none missing=C1 reason=missing-verdict' && [ "$tmpl_rc" -eq 1 ]; then
+    pass "concern/SKILL.md's C-entry example, copied with its comments, parses in concerns-check (fail missing-verdict)"
+  else
+    fail "concern/SKILL.md's C-entry example, copied with its comments, parses in concerns-check (fail missing-verdict)" "got (rc=$tmpl_rc): $tmpl_out"
+  fi
+fi
+
+# fixtures/concerns, driven through the shipped bin/concerns-check launcher —
+# never the .py directly, so a change to the launcher's interpreter/path
+# resolution is exercised too. Each assertion reads the VERDICT LINE fields, not
+# just the exit code, per ADR-004: a wrapper that swallowed the exit status and
+# always returned 0 would still be caught by the outcome= token below.
+CONCERNS_FIXTURES="$ROOT/scripts/fixtures/concerns"
+concerns_check(){
+  # concerns_check <fixture> <expected-outcome-substring> <label>
+  out=$( "$CONCERNS_CHECK_BIN" "$CONCERNS_FIXTURES/$1" 2>&1 )
+  rc=$?
+  if printf '%s' "$out" | grep -qF "CONCERNS-CHECK:v1 $2"; then
+    pass "$3"
+  else
+    fail "$3" "expected verdict containing: CONCERNS-CHECK:v1 $2" "got (rc=$rc): $out"
+  fi
+}
+concerns_check 'all-met.md'               'outcome=pass hard=1 soft=1 unmet=none' \
+  'all concerns met -> pass'
+concerns_check 'hard-unmet.md'            'outcome=fail hard=1 soft=0 unmet=C1' \
+  'a hard concern unmet -> fail, naming the id'
+concerns_check 'hard-partial.md'          'outcome=fail hard=1 soft=0 unmet=C1' \
+  'a hard concern partial -> fail, naming the id'
+concerns_check 'hard-cannot-determine.md' 'outcome=fail hard=1 soft=0 unmet=C1' \
+  'a hard concern cannot-determine -> fail, naming the id'
+concerns_check 'soft-unmet.md'            'outcome=pass hard=1 soft=1 unmet=C2' \
+  'a soft concern unmet -> pass, but named in unmet='
+concerns_check 'missing-verdict.md'       'outcome=fail hard=1 soft=0 unmet=none missing=C1' \
+  'a concern still at verdict: — -> fail, naming the id'
+concerns_check 'waived-without-quote.md'  'outcome=error reason=malformed-waived-without-quote id=C1' \
+  'waived with an empty quote -> error, never a pass'
+concerns_check 'waived-with-quote.md'     'outcome=pass hard=1 soft=0 unmet=none missing=none' \
+  'waived, raising quote kept, evidence citing a decisions.md#D<n> waiver record -> pass'
+concerns_check 'waived-without-waiver-record.md' 'outcome=error reason=malformed-waived-without-waiver-record id=C1' \
+  'waived with evidence: — (no cited waiver record) -> error, never a pass'
+concerns_check 'waived-prose-evidence-no-citation.md' 'outcome=error reason=malformed-waived-without-waiver-record id=C1' \
+  'waived with non-empty prose evidence but no decisions.md#D<n> citation -> error, never a pass'
+concerns_check 'trailing-comments-hard-unmet.md' 'outcome=fail hard=1 soft=0 unmet=C1 missing=none reason=hard-unmet' \
+  'a trailing # comment after bar:/verdict: is ignored (bar: hard  # hard | soft, verdict: unmet # met)'
+concerns_check 'malformed-verdict-comment-only.md' 'outcome=error reason=malformed-verdict-value id=C1' \
+  'verdict: # met (a comment and no value) -> error'
+concerns_check 'malformed-verdict-comment-no-space.md' 'outcome=error reason=malformed-verdict-value id=C1' \
+  'verdict: met#x (no whitespace before #, not a comment) -> error'
+concerns_check 'malformed-bar-two-words-comment.md' 'outcome=error reason=malformed-bar-value id=C1' \
+  'bar: hard soft # x (two words before the comment) -> error'
+concerns_check 'waived-placeholder-quote.md' 'outcome=error reason=malformed-waived-without-quote id=C1' \
+  'waived with quote: — (a placeholder is an empty quote) -> error, never a pass'
+concerns_check 'malformed-empty-raisedby.md' 'outcome=error reason=malformed-empty-field id=C1 field=raisedBy' \
+  'raisedBy: — -> error naming the empty field'
+concerns_check 'malformed-template-quote.md' 'outcome=error reason=malformed-empty-field id=C1 field=quote' \
+  'quote: "<verbatim>" (the template placeholder) -> error naming the empty field'
+concerns_check 'malformed-met-without-evidence.md' 'outcome=error reason=malformed-empty-field id=C1 field=evidence' \
+  'a ruled verdict with evidence: — -> error naming the empty field'
+concerns_check 'malformed-unknown-field.md' 'outcome=error reason=malformed-unknown-field id=C1 field=Note' \
+  'a key outside the seven C-entry fields -> error, never silently ignored'
+concerns_check 'malformed-prose-in-entry.md' 'outcome=error reason=malformed-entry id=C1 line=6' \
+  'a prose line inside an entry -> error naming the line'
+# Near-miss headers and content outside any entry: each file below carries a
+# hard bar ruled unmet, so a parser that skips what it does not recognise
+# would read it as "zero concerns" and pass.
+concerns_check 'malformed-header-h3.md'            'outcome=error reason=malformed-header line=1' \
+  '### C1 — (h3) -> error, never skipped as zero concerns'
+concerns_check 'malformed-header-hyphen.md'        'outcome=error reason=malformed-header line=1' \
+  '## C1 - (hyphen, not em dash) -> error, never skipped'
+concerns_check 'malformed-header-lowercase.md'     'outcome=error reason=malformed-header line=1' \
+  '## c1 — (lowercase) -> error, never skipped'
+concerns_check 'malformed-header-concern-word.md'  'outcome=error reason=malformed-header line=1' \
+  '## Concern 1 — -> error, never skipped'
+concerns_check 'malformed-header-no-label.md'      'outcome=error reason=malformed-header line=1' \
+  '## C1 — with no label -> error, never skipped'
+concerns_check 'malformed-title-line.md'           'outcome=error reason=malformed-header line=1' \
+  'a # title line (the skill never writes one) -> error'
+concerns_check 'malformed-header-then-valid.md'    'outcome=error reason=malformed-header line=1' \
+  'a malformed C1 header before a valid C2 -> error, C1'"'"'s bar never silently vanishes'
+concerns_check 'malformed-prose-only.md'           'outcome=error reason=malformed-unrecognised-content line=1' \
+  'a prose-only file -> error, never "zero concerns"'
+concerns_check 'malformed-bullet-list.md'          'outcome=error reason=malformed-unrecognised-content line=1' \
+  'a bullet-list bar outside the C-entry grammar -> error, never "zero concerns"'
+concerns_check 'bom-before-valid-header.md'        'outcome=fail hard=1 soft=0 unmet=C1' \
+  'a UTF-8 BOM before a valid header is stripped and the entry parses'
+concerns_check 'malformed-missing-bar.md'      'outcome=error reason=malformed-missing-field id=C1 field=bar' \
+  'an entry missing bar: -> error loudly, naming the entry'
+concerns_check 'malformed-unknown-bar.md'      'outcome=error reason=malformed-bar-value id=C1' \
+  'an entry with an unknown bar value -> error loudly, naming the entry'
+concerns_check 'malformed-unknown-verdict.md'  'outcome=error reason=malformed-verdict-value id=C1' \
+  'an entry with an unknown verdict value -> error loudly, naming the entry'
+concerns_check 'malformed-duplicate-id.md'     'outcome=error reason=malformed-entry id=C1' \
+  'a duplicated id -> error loudly, never silently merged'
+concerns_check 'noncontiguous-ids.md'          'outcome=pass hard=1 soft=1 unmet=none' \
+  'non-contiguous ids (a retired concern'"'"'s id never reused) -> pass, not malformed'
+concerns_check 'empty.md'                      'outcome=pass hard=0 soft=0 unmet=none missing=none' \
+  'a zero-byte file -> pass (nothing was raised, distinct from the file being absent)'
+
+# Verdict-line values are percent-escaped (space, tab, %, =, control bytes) so
+# a key=value reader splits the line correctly and a spaced value round-trips.
+spaced_out=$( "$CONCERNS_CHECK_BIN" "$CONCERNS_FIXTURES/malformed-spaced-verdict.md" 2>&1 )
+if printf '%s' "$spaced_out" | "$MARKER_PY" -c '
+import sys, urllib.parse
+kv = dict(t.split("=", 1) for t in sys.stdin.read().split()[1:])
+sys.exit(0 if kv.get("reason") == "malformed-verdict-value" and urllib.parse.unquote(kv.get("value", "")) == "unmet (see PR)" else 1)
+' 2>/dev/null; then
+  pass 'a spaced verdict value (unmet (see PR)) is escaped and round-trips through a key=value split'
+else
+  fail 'a spaced verdict value (unmet (see PR)) is escaped and round-trips through a key=value split' "got: $spaced_out"
+fi
+spaced_path="$TMP/no such dir/concerns.md"
+spaced_path_out=$( "$CONCERNS_CHECK_BIN" "$spaced_path" 2>&1 )
+if printf '%s' "$spaced_path_out" | SPACED_PATH="$spaced_path" "$MARKER_PY" -c '
+import os, sys, urllib.parse
+kv = dict(t.split("=", 1) for t in sys.stdin.read().split()[1:])
+sys.exit(0 if urllib.parse.unquote(kv.get("path", "")) == os.environ["SPACED_PATH"] else 1)
+' 2>/dev/null; then
+  pass 'a spaced path is escaped and round-trips through a key=value split'
+else
+  fail 'a spaced path is escaped and round-trips through a key=value split' "got: $spaced_path_out"
+fi
+
+# The absent-file case is fail-closed and distinct from the empty-file pass
+# above: a caller passing a path that does not resolve must never read as "no
+# concerns were raised".
+absent_out=$( "$CONCERNS_CHECK_BIN" "$CONCERNS_FIXTURES/does-not-exist.md" 2>&1 )
+absent_rc=$?
+if printf '%s' "$absent_out" | grep -qF 'CONCERNS-CHECK:v1 outcome=error reason=file-not-found' && [ "$absent_rc" -eq 2 ]; then
+  pass 'an absent concerns.md fails closed (outcome=error), never a silent pass'
+else
+  fail 'an absent concerns.md fails closed (outcome=error), never a silent pass' "got (rc=$absent_rc): $absent_out"
+fi
+
+# A wrapper swallowing the exit code cannot turn a fail into a pass: the
+# verdict line is read, not $?. Prove it against the same hard-unmet fixture.
+wrapped_out=$( "$CONCERNS_CHECK_BIN" "$CONCERNS_FIXTURES/hard-unmet.md" >/dev/null 2>&1; echo wrapped-exit-code-ignored )
+if [ "$wrapped_out" = 'wrapped-exit-code-ignored' ] && \
+   "$CONCERNS_CHECK_BIN" "$CONCERNS_FIXTURES/hard-unmet.md" 2>&1 | grep -qF 'outcome=fail'; then
+  pass 'a wrapper swallowing the exit code still finds outcome=fail on the verdict line'
+else
+  fail 'a wrapper swallowing the exit code still finds outcome=fail on the verdict line' "$wrapped_out"
+fi
+
 printf '\n'
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"
