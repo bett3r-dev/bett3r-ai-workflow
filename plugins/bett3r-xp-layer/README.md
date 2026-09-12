@@ -1,4 +1,4 @@
-# bett3r-knowledge-store
+# bett3r-xp-layer
 
 A **capture overlay** for the `bett3r-ai-workflow` flow. It ships two hooks, no
 commands and no skills, and in a repo that has not opted in it does nothing at
@@ -22,10 +22,10 @@ any existing command**.
 Everything below the first line of each hook is gated on a single test:
 
 ```sh
-[ -x "${CLAUDE_PROJECT_DIR:-.}/.knowledge-store/capture" ] || exit 0
+[ -x "${CLAUDE_PROJECT_DIR:-.}/.xp-layer/capture" ] || exit 0
 ```
 
-`.knowledge-store/capture` is a repo-local adapter **you** install. Make it
+`.xp-layer/capture` is a repo-local adapter **you** install. Make it
 executable and the repo is configured; delete it and the repo is not. There is
 no config file, no environment variable and no registry — the sentinel is the
 seam. That is deliberate on both counts:
@@ -40,15 +40,15 @@ seam. That is deliberate on both counts:
 
 ### Where the adapter lives today
 
-The knowledge store lives in
+The experience layer lives in
 [`bett3r-dev/bett3r-xp-layer`](https://github.com/bett3r-dev/bett3r-xp-layer).
 It moved there from `bett3r-dev/esas` on 2026-09-11, and its Jira keys moved
 from ESAS to XL. The reference adapter is
-`bett3r-xp-layer/.knowledge-store/capture`.
+`bett3r-xp-layer/.xp-layer/capture`.
 
-That adapter only works **inside a repo that contains the knowledge-store
-packages**. It runs `yarn knowledge-capture` and loads
-`packages/knowledge-capture/build` from its own repo root. esas no longer ships
+That adapter only works **inside a repo that contains the xp-layer
+packages**. It runs `yarn xp:capture` and loads
+`packages/xp-capture/build` from its own repo root. esas no longer ships
 an adapter (esas PR #82 removed it along with the store), and neither do the
 consumer repos (esas, teselly, pv3). So the hooks are inert in those repos
 today. Re-enabling capture for consumers is tracked by XL-11.
@@ -58,8 +58,8 @@ today. Re-enabling capture for consumers is tracked by XL-11.
 It is invoked in exactly two shapes:
 
 ```
-.knowledge-store/capture worktree-remove <worktree-path> <cwd>
-.knowledge-store/capture pr-create       <pr-url>        <cwd>
+.xp-layer/capture worktree-remove <worktree-path> <cwd>
+.xp-layer/capture pr-create       <pr-url>        <cwd>
 ```
 
 and it must be **idempotent on its second argument**. That argument is the
@@ -119,7 +119,7 @@ is agent-written prose that can say anything.
 
 ## Oracle
 
-`scripts/test-knowledge-store-hooks.sh`, at the repo root, driven in CI under
+`scripts/test-xp-layer-hooks.sh`, at the repo root, driven in CI under
 `sh`, `dash` and `bash`. There is no other runner in this repo that collects
 these hooks — `scripts/test-hooks.sh` is hardcoded to the base plugin — so a
 change here that the oracle does not cover is a change nothing observes.

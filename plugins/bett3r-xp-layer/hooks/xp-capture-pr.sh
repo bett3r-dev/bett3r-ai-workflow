@@ -1,10 +1,10 @@
 #!/bin/sh
-[ -x "${CLAUDE_PROJECT_DIR:-.}/.knowledge-store/capture" ] || exit 0
+[ -x "${CLAUDE_PROJECT_DIR:-.}/.xp-layer/capture" ] || exit 0
 #
 # PostToolUse(Bash) — capture a PR that was just opened, and kick extraction.
 #
 # Line 2, the sentinel and the exit-0 discipline are the sibling hook's; read
-# `ks-capture-teardown.sh` for why they are written that way. The scanner below
+# `xp-capture-teardown.sh` for why they are written that way. The scanner below
 # is duplicated from it **on purpose**: each hook is a single file with no
 # sibling to resolve at runtime, so neither can fail by not finding the other
 # after a packaging change. The oracle drives both independently, so drift
@@ -14,7 +14,7 @@
 #
 # XL-30 (capture the PR body), XL-21 (kick extraction) and XL-14 (export
 # freshness) all attach here. None of them is named in this file: the hook
-# reports *what happened* to `.knowledge-store/capture` and the store decides
+# reports *what happened* to `.xp-layer/capture` and the store decides
 # who cares. That is the coupling invariant — the store adapts to the flow,
 # never the reverse — applied one level down, so adding a fourth consumer never
 # touches this plugin.
@@ -32,15 +32,15 @@
 # and racing it loses data; this is neither.
 #
 # Because it is detached it cannot be loud in front of the user, so failures go
-# to `.knowledge-store/capture.log`. A dropped PR capture is recoverable — the
+# to `.xp-layer/capture.log`. A dropped PR capture is recoverable — the
 # PR is still there and the natural key is the PR URL, so the next run captures
 # it — which is exactly why it is allowed to be the quiet half.
 
 root=${CLAUDE_PROJECT_DIR:-.}
-capture=$root/.knowledge-store/capture
-log=$root/.knowledge-store/capture.log
+capture=$root/.xp-layer/capture
+log=$root/.xp-layer/capture.log
 
-KS_SCAN='
+XP_SCAN='
 function unesc( s,   o, i, c, n ){
   o = ""; n = length( s )
   for ( i = 1; i <= n; i++ ){
@@ -83,7 +83,7 @@ END {
   if ( found ) printf "%s", out
 }'
 
-KS_TOKENS='
+XP_TOKENS='
 { doc = doc $0 "\n" }
 END {
   n = length( doc ); tok = ""; q = ""
@@ -101,7 +101,7 @@ END {
 payload=$( cat 2>/dev/null )
 [ -n "$payload" ] || exit 0
 
-command_line=$( printf '%s\n' "$payload" | awk -v want=tool_input.command "$KS_SCAN" 2>/dev/null )
+command_line=$( printf '%s\n' "$payload" | awk -v want=tool_input.command "$XP_SCAN" 2>/dev/null )
 [ -n "$command_line" ] || exit 0
 
 case $command_line in
@@ -109,7 +109,7 @@ case $command_line in
   ( * ) exit 0 ;;
 esac
 
-tokens=$( printf '%s\n' "$command_line" | awk -v sq="'" "$KS_TOKENS" 2>/dev/null )
+tokens=$( printf '%s\n' "$command_line" | awk -v sq="'" "$XP_TOKENS" 2>/dev/null )
 [ -n "$tokens" ] || exit 0
 
 # `gh pr create`, three adjacent tokens. `gh pr view`, `gh pr edit` and
@@ -127,9 +127,9 @@ while IFS= read -r tok; do
   fi
   p2=$p1
   p1=$tok
-done <<KS_TOKEN_LIST
+done <<XP_TOKEN_LIST
 $tokens
-KS_TOKEN_LIST
+XP_TOKEN_LIST
 
 [ "$matched" = yes ] || exit 0
 
@@ -143,21 +143,21 @@ KS_TOKEN_LIST
 # No URL means `gh pr create` did not create a PR (it failed, or it was a
 # `--dry-run`). There is nothing to capture and nothing to enqueue, so this is
 # a silent exit rather than a capture under a guessed key.
-stdout_text=$( printf '%s\n' "$payload" | awk -v want=tool_response.stdout "$KS_SCAN" 2>/dev/null )
+stdout_text=$( printf '%s\n' "$payload" | awk -v want=tool_response.stdout "$XP_SCAN" 2>/dev/null )
 url=$( printf '%s\n' "$stdout_text" \
        | tr ' \t' '\n\n' \
        | sed -n 's|^\(https://[^ ]*/pull/[0-9][0-9]*\)$|\1|p' \
        | head -1 )
 [ -n "$url" ] || exit 0
 
-cwd=$( printf '%s\n' "$payload" | awk -v want=cwd "$KS_SCAN" 2>/dev/null )
+cwd=$( printf '%s\n' "$payload" | awk -v want=cwd "$XP_SCAN" 2>/dev/null )
 
 # Detached. `>/dev/null 2>&1 </dev/null` on the subshell as well as the child,
 # so nothing this ever prints can land in front of the user after the hook has
 # already returned.
 {
   if ! "$capture" pr-create "$url" "$cwd" >>"$log" 2>&1; then
-    printf 'knowledge-store: pr-create capture failed for %s\n' "$url" >>"$log" 2>/dev/null
+    printf 'xp-layer: pr-create capture failed for %s\n' "$url" >>"$log" 2>/dev/null
   fi
 } >/dev/null 2>&1 </dev/null &
 

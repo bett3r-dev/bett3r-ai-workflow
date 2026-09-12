@@ -187,3 +187,26 @@ since it was written.
 - **The hook seam is unchanged.** The line-2 sentinel, the two invocation
   shapes and the exit-0 discipline are the same. The move needed no hook change,
   which is the "interface rather than location" property this ADR claimed.
+
+## Update — 2026-09-12
+
+The decision above stands unchanged. This note records a rename (XL-43). The
+operator decided that no name may contain the word "knowledge": the product is
+the **experience layer**, and old names get a hard cut. The decision text above
+keeps its original wording as the historical record.
+
+- **The plugin is renamed.** `bett3r-knowledge-store` is now `bett3r-xp-layer`,
+  in `plugins/bett3r-xp-layer/`. Its hooks are `hooks/xp-capture-teardown.sh`
+  and `hooks/xp-capture-pr.sh`, and the oracle is `scripts/test-xp-layer-hooks.sh`.
+  The version goes `0.1.1` → `0.2.0`.
+- **The seam moved, as a hard cut.** The line-2 sentinel and the adapter path are
+  now `.xp-layer/capture`, and the PR hook's log is `.xp-layer/capture.log`.
+  There is no fallback to `.knowledge-store/capture`: a repo with only the old
+  path is inert, exactly as a repo with no adapter. This pairs with the
+  bett3r-xp-layer rename, which moves its reference adapter to
+  `bett3r-xp-layer/.xp-layer/capture` (it runs `yarn xp:capture` and loads
+  `packages/xp-capture/build`). The two invocation shapes and the exit-0
+  discipline did not change.
+- **Consumers must reinstall.** A renamed plugin is a new install id, so the
+  version bump alone reaches nobody. Uninstall `bett3r-knowledge-store` and
+  install `bett3r-xp-layer@bett3r-ai-workflow`.
