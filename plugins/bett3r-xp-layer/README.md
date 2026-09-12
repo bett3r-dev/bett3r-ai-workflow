@@ -129,4 +129,4 @@ change here that the oracle does not cover is a change nothing observes.
 The version in `.claude-plugin/plugin.json` is the release contract, not
 metadata: the plugin is copied into the version-keyed cache only when that
 string changes. See `docs/adr/ADR-001-plugin-version-is-a-release-contract.md`
-and `docs/adr/ADR-002-the-knowledge-store-is-a-hook-overlay.md`.
+and `docs/adr/ADR-002-the-experience-layer-is-a-hook-overlay.md`.
