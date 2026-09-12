@@ -59,7 +59,7 @@ For each **load-bearing claim** — in a comment, an oracle name, the commit mes
 
 Report as a **falsification table** — `claim → probe run → holds / FALSE` — so the reader sees what was actually challenged rather than that a box was ticked.
 
-**A sentence describing behaviour is a clause, and EVIDENCE.md's one-to-one rule is owed to it.** That rule — name the mutation that kills each clause and the assertion that catches it — governs *guards*; claims are owed the same discipline, because nothing type-checks a sentence. In one run this class hit **six times** and was the **only** defect class that survived every lane's own mutation testing: it compiles, commits and reviews clean. So enumerate every load-bearing claim the diff adds and **name the test that pins it, or delete the sentence.** Four shapes are greppable and worth sweeping outright:
+**A sentence describing behaviour is a clause, and EVIDENCE.md's one-to-one rule is owed to it.** That rule — name the mutation that kills each clause and the assertion that catches it — governs *guards*; claims are owed the same discipline, because nothing type-checks a sentence. In one run this class hit **six times** and was the **only** defect class that survived every lane's own mutation testing: it compiles, commits and reviews clean. So enumerate every load-bearing claim the diff adds and **name the test that pins it, or delete the sentence.** For a sentence that attributes — to an ADR, a decision, a source line — open the source and check it **says** the claim, not that the citation resolves; an executor's all-"yes" resolution table is not that check. Four shapes are greppable and worth sweeping outright:
 
 - an **ADR whose decision names a behaviour with no call site** — the ADR-to-code link is unchecked in both directions, and *Accepted* looks like the work being done;
 - an exported symbol or state literal with **zero non-test callers**, shipped as though wired (a whole session state was persisted, reduced and queried while every mint of it was in a test);
@@ -77,9 +77,9 @@ The highest-yield target is a claim of the form **"X is necessary/correct becaus
 
 ## Adjudicate what the executor flagged
 
-Its report's **issues / deviations** section is a required input, not context. The executor has already done the hard part — noticing a doubt and writing it down — and that signal is discarded at the step boundary unless you spend it. Return a **per-item verdict**; a flagged item you do not mention reads as an incomplete verification, not an implicit pass. (One such item was a watermark no gesture could clear: every oracle green, typecheck clean, full suite passing, and the wrong rule sitting in the oracle as a settled-looking `describe`. Reproduced against the real modules, it was worse than described.)
+Its report's **issues / deviations** section is a required input, not context. The executor has already done the hard part — noticing a doubt and writing it down — and that signal is discarded at the step boundary unless you spend it. Return a **per-item verdict**; a flagged item you do not mention reads as an incomplete verification, not an implicit pass.
 
-This is the failure RED→GREEN does **not** cover. That rule rules out a *tautological* oracle; it gives no protection against a **confidently wrong** one — genuinely red first, genuinely discriminating, encoding the wrong rule. Such a test is indistinguishable from a good one at the mechanical gate and actively entrenches the defect, because the next reader treats a named `describe` as settled. You are the only gate positioned to catch it.
+This is the failure RED→GREEN does **not** cover — the **confidently wrong** oracle of [EVIDENCE.md](../EVIDENCE.md) §2, genuinely red first and encoding the wrong rule. You are the only gate positioned to catch it.
 
 ## PASS-with-follow-ups is not available for a named mitigation
 
