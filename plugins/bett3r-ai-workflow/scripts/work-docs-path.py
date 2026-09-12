@@ -25,6 +25,14 @@ the calling command never classifies it, re-dates it or rewrites it:
   --item TV1-2400              a Jira key, used as-is                  -> <root>/TV1-2400
   --item '#268'                a GitHub issue (`gh-268` is accepted)  -> <root>/gh-268
   --item 2026-09-12-add-widget no id: the date `/start` ran + a slug   -> <root>/2026-09-12-add-widget
+  --item multi-ESAS-93-94      a fleet run id (`run.yaml`'s runId)     -> <root>/multi-ESAS-93-94
+
+  A fleet run id is the lower-case prefix `multi-`, then the unit ids joined
+  by `-`, as written: letters (either case) and digits in dash-separated words.
+  The folder is the run id exactly, never case-folded. It names the run-level
+  folder `/merge-multi` writes decisions.md into. `multi-`, `multi--x`,
+  `multi-x-` or `multi-x_y` is reason=malformed-item, and upper-case `MULTI-7`
+  stays a Jira key (that shape is checked first).
 
   A Jira key is upper-case letters/digits/underscore, a dash, digits. A no-id
   work item is `<yyyy-mm-dd>-<slug>`: a real calendar date in exactly that shape
@@ -120,6 +128,10 @@ KNOWN_FLAGS = ("--item", "--repo", "--owner-branch")
 JIRA_KEY = re.compile(r"[A-Z][A-Z0-9_]*-[0-9]+")
 GH_ISSUE = re.compile(r"(?:#|gh-)([1-9][0-9]*)")
 SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+# A fleet run id (`run.yaml`'s `runId:`): the lower-case prefix `multi-`, then
+# the unit ids as written — mixed-case letters and digits in dash-joined words.
+# Checked after the Jira key and GitHub issue shapes, so `MULTI-7` stays a key.
+RUN_ID = re.compile(r"multi-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*")
 # A no-id work item: the date half, then (after one dash) whatever claims to be
 # the slug. A value that is a date alone, or a date then `-`, is a dated id,
 # well-formed or not (`2026-09-12x` is not one: malformed-item).
@@ -170,6 +182,8 @@ def normalise_item(item):
     gh = GH_ISSUE.fullmatch(item)
     if gh:
         return f"gh-{gh.group(1)}"
+    if RUN_ID.fullmatch(item):
+        return item
     dated = DATED.fullmatch(item)
     if dated:
         date, slug = dated.group(1), dated.group(2)

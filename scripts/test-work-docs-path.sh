@@ -183,6 +183,24 @@ expect_ok 'no id: another date for the same slug is never reused (no lookup)' \
   docs/prs/2026-03-04-resume-me 2026-03-04-resume-me docs/prs default --item 2026-03-04-resume-me
 check 'the same slug on another date reports exists=false' "$( attr "$LINE" exists )" false "$LINE"
 mkdir -p "$REPO/docs/prs/2026-02-03-twice" "$REPO/docs/prs/2026-04-05-twice"
+# A fleet run id — `run.yaml`'s `runId:`, `multi-<slug>` — is the run-level
+# folder `/merge-multi` writes decisions.md into. Lower-case `multi-` then the
+# same slug grammar the dated id uses; it cannot be a Jira key (lower-case), a
+# GitHub issue or a dated id (it starts with `multi-`, not a date).
+expect_ok 'fleet run id multi-<slug>, as-is' \
+  docs/prs/multi-tv1-2400-tv1-2401 multi-tv1-2400-tv1-2401 docs/prs default --item multi-tv1-2400-tv1-2401
+expect_ok 'fleet run id whose slug starts with a date, as-is (not a dated id)' \
+  docs/prs/multi-2026-09-12-fleet multi-2026-09-12-fleet docs/prs default --item multi-2026-09-12-fleet
+# After the lower-case prefix the unit ids are kept as written, mixed case
+# included, and the folder is the run id exactly (no case folding).
+expect_ok 'fleet run id over Jira unit ids, as-is' \
+  docs/prs/multi-ESAS-29 multi-ESAS-29 docs/prs default --item multi-ESAS-29
+expect_ok 'fleet run id over two Jira unit ids, as-is' \
+  docs/prs/multi-ESAS-93-94 multi-ESAS-93-94 docs/prs default --item multi-ESAS-93-94
+# Upper-case MULTI-7 is a Jira key and stays one: only a lower-case `multi-`
+# prefix makes a run id.
+expect_ok 'MULTI-7 is still a Jira key'   docs/prs/MULTI-7 MULTI-7 docs/prs default --item MULTI-7
+
 expect_ok 'two dated folders for one slug are not ambiguous: the id names one' \
   docs/prs/2026-04-05-twice 2026-04-05-twice docs/prs default --item 2026-04-05-twice
 
@@ -241,6 +259,11 @@ done
 # letters and digits in dash-separated words.
 for bad in 'Add-Widget' 'feat/widget' 'add--widget' '-add' 'add widget' ''; do
   expect_error "malformed slug in a dated id '2026-09-12-$bad'" malformed-slug --item "2026-09-12-$bad"
+done
+# A fleet run id is `multi-` then a slug; anything else starting `multi` is no
+# work item at all.
+for bad in multi multi- 'multi--x' 'multi-x-' 'multi-x_y' 'multi-a/b' 'multi-a b' 'multi-a.b' 'Multi-ESAS-29'; do
+  expect_error "malformed run id '$bad'" malformed-item --item "$bad"
 done
 expect_error 'a date with no slug'           malformed-slug    --item 2026-09-12
 # Its date half is a real calendar day in exactly that shape.
@@ -303,6 +326,13 @@ expect_owner(){
   check "$xd: owner=$xo"   "$( attr "$LINE" owner )"   "$xo" "$LINE"
   check "$xd: exit 0"      "$rc" 0
 }
+
+new_repo runowner
+# A run-id folder answers ownership by the same header rule as any other id.
+header "$REPO/docs/prs/multi-fleet" multi-fleet int/multi-fleet
+expect_owner 'run id: header names this run id and this branch' self  --item multi-fleet --owner-branch int/multi-fleet
+header "$REPO/docs/prs/multi-fleet" multi-other int/multi-fleet
+expect_owner 'run id: header names another run id'              other --item multi-fleet --owner-branch int/multi-fleet
 
 new_repo owner
 D="$REPO/docs/prs/2026-01-02-bar"

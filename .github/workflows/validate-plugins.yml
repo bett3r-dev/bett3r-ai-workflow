@@ -145,6 +145,17 @@ jobs:
           sh scripts/test-work-docs-path.sh
           WDP_SH=dash dash scripts/test-work-docs-path.sh
           WDP_SH=bash bash scripts/test-work-docs-path.sh
+      # /merge-multi rules each unit's own concerns from its head commit before
+      # merging it — the hard block design F4/C2 puts here, never trusting the
+      # advisory `flow/concerns` GitHub status. A presence-only check on that
+      # prose would pass an inverted meaning (reading the working tree, or a
+      # missing --decisions) silently, so this drives merge-multi.md's own
+      # fenced command block for real, against throwaway unit branches.
+      - name: Test /merge-multi rules each unit's concerns before merging (throwaway git repo)
+        run: |
+          sh scripts/test-merge-multi-concerns.sh
+          dash scripts/test-merge-multi-concerns.sh
+          bash scripts/test-merge-multi-concerns.sh
       # /verify-build copies build-summary.md's usage numbers from
       # `run-metrics --usage-fragment` before it opens the PR. No step above
       # executes run-metrics, and its slice attribution is a regex over a
