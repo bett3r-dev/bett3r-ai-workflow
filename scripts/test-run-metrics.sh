@@ -36,11 +36,12 @@
 # Run locally:  sh scripts/test-run-metrics.sh
 # Exit code is non-zero if anything is broken, so CI fails the PR.
 #
-# RM_NODE selects the node binary, RM_PY the python that parses the YAML.
+# RM_NODE selects the node binary, RM_PY the python that parses the YAML,
+# RM_SCRIPT a scratch copy of run-metrics.mjs (mutation checks).
 
 ROOT=$( CDPATH= cd -- "$( dirname -- "$0" )/.." && pwd )
 PLUGIN="$ROOT/plugins/bett3r-ai-workflow"
-RUN_METRICS="$PLUGIN/scripts/run-metrics.mjs"
+RUN_METRICS=${RM_SCRIPT:-"$PLUGIN/scripts/run-metrics.mjs"}
 BUILD_MD="$PLUGIN/commands/build.md"
 VERIFY_BUILD_MD="$PLUGIN/commands/verify-build.md"
 FIXTURE="$ROOT/scripts/fixtures/run-metrics"
@@ -439,6 +440,66 @@ if grep -qF 'RETRY LEDGER' "$TMP/emit1.txt" && ! grep -qF 'RUN-METRICS-USAGE' "$
   pass '--emit still prints the report, and no fragment'
 else
   fail '--emit still prints the report, and no fragment' "$( head -3 "$TMP/emit1.txt" )"
+fi
+
+# ---------------------------------------------------------------------------
+printf '\n--fleet: a unit resolves through agents.yaml, or the run is refused (#350)\n\n'
+# ---------------------------------------------------------------------------
+# fleet/ is a serial-mode run: UA-1 has a live lane agent; UB-2's lane row is
+# superseded and the orchestrator drove UB-2 itself on feat/unit-b, 10:00 ->
+# 13:00. The cwd is a git checkout on master and master transcripts are on disk,
+# so any fall-through to the cwd branch would print a plausible report.
+
+H3="$TMP/home-fleet"
+mkdir -p "$H3/.claude" "$H3/cwd"
+cp -R "$FIXTURE/fleet/projects" "$H3/.claude/projects"
+RUN="$FIXTURE/fleet"
+git -C "$H3/cwd" init -q -b master
+git -C "$H3/cwd" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -q --allow-empty -m init
+
+json_get(){ "$RM_PY" -c 'import json,sys; print(json.load(open(sys.argv[1])).get(sys.argv[2]))' "$1" "$2" 2>/dev/null; }
+
+# expect_refused <label> <args…> — non-zero, the units listed, no report printed.
+expect_refused(){
+  label=$1; shift
+  rm_run "$H3" --fleet "$RUN" "$@" > "$TMP/refused.out" 2> "$TMP/refused.err"
+  rc=$?
+  if [ "$rc" -ne 0 ] && grep -qF 'UA-1' "$TMP/refused.err" && grep -qF 'UB-2' "$TMP/refused.err" \
+     && grep -qF 'feat/unit-b' "$TMP/refused.err" && ! grep -qF 'WHERE THE CLOCK WENT' "$TMP/refused.out"; then
+    pass "$label"
+  else
+    fail "$label" "rc=$rc" "stdout: $( head -3 "$TMP/refused.out" )" "stderr: $( head -4 "$TMP/refused.err" )"
+  fi
+}
+expect_refused '--fleet with no unit exits non-zero listing the units, never reporting the cwd branch'
+expect_refused '--fleet with a branch that is no unit (master) exits non-zero listing the units'
+
+rm_run "$H3" --fleet "$RUN" UA-1 --json > "$TMP/fleet-a.json" 2> "$TMP/fleet-a.err"
+a_branch=$( json_get "$TMP/fleet-a.json" branch )
+a_res=$( json_get "$TMP/fleet-a.json" resolution )
+a_el=$( json_get "$TMP/fleet-a.json" runElapsedMs )
+case "$a_branch|$a_el|$a_res" in
+  'feat/unit-a|1080000|'*lanea*) pass 'a live lane row still resolves its unit to the lane agent, and says so' ;;
+  *) fail 'a live lane row still resolves its unit to the lane agent, and says so' "branch=$a_branch elapsed=$a_el resolution=$a_res" "$( head -2 "$TMP/fleet-a.err" )" ;;
+esac
+
+for unit in UB-2 feat/unit-b; do
+  rm_run "$H3" --fleet "$RUN" "$unit" --json > "$TMP/fleet-b.json" 2> "$TMP/fleet-b.err"
+  b_branch=$( json_get "$TMP/fleet-b.json" branch )
+  b_res=$( json_get "$TMP/fleet-b.json" resolution )
+  b_el=$( json_get "$TMP/fleet-b.json" runElapsedMs )
+  case "$b_branch|$b_el|$b_res" in
+    'feat/unit-b|10800000|'*branch*superseded*) pass "a superseded lane row is never the resolution: $unit resolves by its branch (3h), and says so" ;;
+    *) fail "a superseded lane row is never the resolution: $unit resolves by its branch (3h), and says so" \
+            "branch=$b_branch elapsed=$b_el resolution=$b_res" "$( head -2 "$TMP/fleet-b.err" )" ;;
+  esac
+done
+
+rm_run "$H3" --fleet "$RUN" UB-2 --quiet > "$TMP/fleet-b.txt" 2>&1
+if grep -F 'resolved:' "$TMP/fleet-b.txt" | grep -qF 'superseded'; then
+  pass 'the printed report names the resolution path it used'
+else
+  fail 'the printed report names the resolution path it used' "$( head -6 "$TMP/fleet-b.txt" )"
 fi
 
 printf '\n'
