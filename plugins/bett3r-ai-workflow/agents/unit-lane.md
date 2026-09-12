@@ -10,6 +10,7 @@ tools:
   - Bash
   - Agent
   - SlashCommand
+  - Skill
 ---
 
 # Unit lane
@@ -86,15 +87,17 @@ else, neither the brief nor a pointer to it:
 
 A step that learns a fact from you is a step the scheduler cannot run.
 
-**Before step 1, assert you can actually call them.** Confirm you hold both
-`SlashCommand` (to invoke the five steps) and `Agent` (for `/build`'s executor,
-test-runner, verifier and scope-check). **If either is missing, stop and report
-`blocked-on=lane-tools`** — do not read the command files and execute their
+**Before step 1, assert you can actually call them.** Confirm you hold `Agent`
+(for `/build`'s executor, test-runner, verifier and scope-check) and **a tool that
+invokes a step — `SlashCommand` or `Skill`**, whichever this harness names it; one
+harness has only `Skill`, so demanding `SlashCommand` by name blocks every lane.
+**If either capability is missing, stop and report `blocked-on=lane-tools`**,
+naming the tools you do hold — do not read the command files and execute their
 substance inline. That substitution is the failure this assertion exists for:
 it produces good work, green gates and a plausible report, while `/build`'s
 dual gate never runs and **no `LANE-STEP:` line is ever emitted by any step**,
 so a scheduler classifying lanes by marker absence reads the whole fleet as
-`infra` — nine lanes across four fleets rediscovered this, most of them silently.
+`infra` — nine lanes across four fleets rediscovered this.
 
 | # | Command | Its marker | On anything but `outcome=success` |
 |---|---------|-----------|------------------------------------|
@@ -166,10 +169,8 @@ Three things about it:
 
 **Have the child's result in hand before you proceed — never end a turn on
 "waiting".** Do not assume a dispatch flag makes `Agent` synchronous: check the
-tool's actual schema in your harness, and where no such flag exists (it has been
-absent in every harness observed since 2026-08 — three lanes independently
-rediscovered this, one by deadlocking) block on the child's completion
-notification. Never `SendMessage` a child you are waiting on — that leaves you
+tool's actual schema in your harness, and where no such flag exists (absent in
+every harness observed so far) block on the child's completion notification. Never `SendMessage` a child you are waiting on — that leaves you
 **idle, not working**, because its resumes notify the top-level session and yours
 do not; a fix pass is a fresh `Agent` dispatch, accepting the lost context.
 
