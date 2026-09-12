@@ -225,7 +225,7 @@ present "$PENDING_MD"   'telemetry, never a trigger' \
 present "$PROVIDERS_MD" 'esas-pending.sh' \
   'the rejected surface is named by the file that implements it'
 
-# Neither seam may mention a knowledge store: the base flow plugin stays
+# Neither seam may mention the experience layer: the base flow plugin stays
 # store-agnostic and the store adapts to the flow, never the reverse. This is
 # the coupling invariant, and it is asserted as a TABLE of (seam file x
 # forbidden consumer term) rather than one hard-coded grep over five hard-coded
@@ -245,8 +245,8 @@ provisioner.md|$PROVISIONER_MD"}
 
 # COUPLING_FORBIDDEN_TERMS may likewise be overridden, one term per line.
 # Terms are combined into a single case-insensitive alternation.
-COUPLING_FORBIDDEN_TERMS=${COUPLING_FORBIDDEN_TERMS:-"knowledge store
-knowledge-store"}
+COUPLING_FORBIDDEN_TERMS=${COUPLING_FORBIDDEN_TERMS:-"experience layer
+xp-layer"}
 
 coupling_regex=$( printf '%s' "$COUPLING_FORBIDDEN_TERMS" | tr '\n' '|' )
 coupling_regex=${coupling_regex%|}
@@ -278,8 +278,8 @@ plan.md
 build.md
 unit-lane.md
 provisioner.md'
-COUPLING_REQUIRED_TERMS='knowledge store
-knowledge-store'
+COUPLING_REQUIRED_TERMS='experience layer
+xp-layer'
 
 # Blank rows are dropped once, here, so that the row count the loop reconciles
 # against is the same number of rows the loop actually sees.

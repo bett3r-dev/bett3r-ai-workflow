@@ -1,6 +1,6 @@
 #!/bin/sh
-# Oracle for the shipped knowledge-store hooks
-# (plugins/bett3r-knowledge-store/hooks/ks-capture-teardown.sh and ks-capture-pr.sh).
+# Oracle for the shipped experience-layer hooks
+# (plugins/bett3r-xp-layer/hooks/xp-capture-teardown.sh and xp-capture-pr.sh).
 #
 # ## Why this file had to exist before the hooks could ship
 #
@@ -25,25 +25,25 @@
 #
 # ## How the store is stubbed
 #
-# `.knowledge-store/capture` is the seam: a repo-local executable the store
+# `.xp-layer/capture` is the seam: a repo-local executable the store
 # installs. (The reference adapter lives in bett3r-xp-layer, not esas, since
 # 2026-09-11.) Every case here installs a **stub** that records its argv, so the
 # assertions are about what the hook *decided* and what key it computed — not
 # about any real store, which is not this repo's code and cannot be a
 # dependency of this repo's CI.
 #
-# Run locally:  sh scripts/test-knowledge-store-hooks.sh
+# Run locally:  sh scripts/test-xp-layer-hooks.sh
 # Exit code is non-zero if anything is broken, so CI fails the PR.
 #
 # HOOK_SH selects the interpreter the *hooks* run under (the suite itself is
 # POSIX sh either way). Claude Code spawns them as `sh <script>`, and `sh` is
 # dash on Debian/Ubuntu and bash-in-POSIX-mode on macOS, so:
-#     for s in sh dash bash; do HOOK_SH=$s sh scripts/test-knowledge-store-hooks.sh; done
+#     for s in sh dash bash; do HOOK_SH=$s sh scripts/test-xp-layer-hooks.sh; done
 
 ROOT=$( CDPATH= cd -- "$( dirname -- "$0" )/.." && pwd )
-PLUGIN="$ROOT/plugins/bett3r-knowledge-store"
-TEARDOWN_HOOK="$PLUGIN/hooks/ks-capture-teardown.sh"
-PR_HOOK="$PLUGIN/hooks/ks-capture-pr.sh"
+PLUGIN="$ROOT/plugins/bett3r-xp-layer"
+TEARDOWN_HOOK="$PLUGIN/hooks/xp-capture-teardown.sh"
+PR_HOOK="$PLUGIN/hooks/xp-capture-pr.sh"
 HOOKS_JSON="$PLUGIN/hooks/hooks.json"
 HOOK_SH=${HOOK_SH:-sh}
 
@@ -78,16 +78,16 @@ fi
 # ── The world each case runs in ──────────────────────────────────────────────
 #
 # A fresh work dir per case. `setup_repo <mode>`:
-#   bare      no .knowledge-store at all — the unconfigured repo, i.e. almost
+#   bare      no .xp-layer at all — the unconfigured repo, i.e. almost
 #             every repo the plugin is enabled in
-#   inert     a .knowledge-store/ directory but a capture that is NOT executable
+#   inert     a .xp-layer/ directory but a capture that is NOT executable
 #   ok        a stub capture that records argv and succeeds
 #   down      a stub capture that records argv and exits 1 (store unreachable)
 #   slow      a stub capture that sleeps, then records argv
 # **Every case gets its own directory.** Not tidiness: the PR hook detaches its
 # capture, so that child can still be running when the next case starts. With a
 # single reused work dir it wrote its record into the *next* case's freshly
-# recreated `.knowledge-store/`, and the suite read one case's capture as
+# recreated `.xp-layer/`, and the suite read one case's capture as
 # another's. Both directions of that are poison — it manufactures a pass for a
 # case that captured nothing and a failure for a case that behaved perfectly.
 # A unique directory per case makes a straggler harmless by construction.
@@ -100,32 +100,32 @@ setup_repo(){
   rm -rf "$WORK"
   mkdir -p "$WORK"
   [ "$1" = bare ] && return 0
-  mkdir -p "$WORK/.knowledge-store"
-  cat > "$WORK/.knowledge-store/capture" <<'STUB'
+  mkdir -p "$WORK/.xp-layer"
+  cat > "$WORK/.xp-layer/capture" <<'STUB'
 #!/bin/sh
 # argv, one invocation per line, unambiguously delimited.
 printf '%s|%s|%s\n' "$1" "$2" "$3" >>"$( dirname -- "$0" )/argv.log"
 STUB
   case $1 in
     inert )
-      chmod 644 "$WORK/.knowledge-store/capture" ;;
+      chmod 644 "$WORK/.xp-layer/capture" ;;
     down )
       printf 'printf "store unreachable: connection refused\\n" >&2\nexit 1\n' \
-        >>"$WORK/.knowledge-store/capture"
-      chmod +x "$WORK/.knowledge-store/capture" ;;
+        >>"$WORK/.xp-layer/capture"
+      chmod +x "$WORK/.xp-layer/capture" ;;
     slow )
       # Sleep AFTER recording, so the marker appears promptly while the process
       # is still alive — the detached case asserts the hook returned before the
       # child did, which needs the child to still be running.
-      printf 'sleep 3\n' >>"$WORK/.knowledge-store/capture"
-      chmod +x "$WORK/.knowledge-store/capture" ;;
+      printf 'sleep 3\n' >>"$WORK/.xp-layer/capture"
+      chmod +x "$WORK/.xp-layer/capture" ;;
     * )
-      chmod +x "$WORK/.knowledge-store/capture" ;;
+      chmod +x "$WORK/.xp-layer/capture" ;;
   esac
   return 0
 }
 
-argv_log(){ cat "$WORK/.knowledge-store/argv.log" 2>/dev/null; }
+argv_log(){ cat "$WORK/.xp-layer/argv.log" 2>/dev/null; }
 
 # pre_payload <command> — a PreToolUse(Bash) event.
 pre_payload(){
@@ -233,7 +233,7 @@ assert_capture_async(){
 # call. Silence on BOTH streams is the contract, not a nicety: a shell
 # diagnostic here would print in front of the user's work forever.
 
-printf '\ninert in a repo that never heard of the knowledge store\n'
+printf '\ninert in a repo that never heard of the experience layer\n'
 
 if [ ! -f "$TEARDOWN_HOOK" ]; then
   fail 'the teardown hook ships' "no file at $TEARDOWN_HOOK"
@@ -270,7 +270,7 @@ else
   pass 'bare repo, real gh pr create: exit 0, no output at all'
 fi
 
-# A `.knowledge-store/` that exists but whose capture is not executable. The
+# A `.xp-layer/` that exists but whose capture is not executable. The
 # sentinel is `-x`, not `-f`: a half-installed store must read as not installed,
 # because the alternative is a hook that tries to exec a non-executable file
 # before every teardown.
@@ -434,7 +434,7 @@ else
 fi
 # ...and it really did dispatch it. A hook that matched nothing would also be fast.
 i=0
-while [ ! -s "$WORK/.knowledge-store/argv.log" ] && [ "$i" -lt 40 ]; do
+while [ ! -s "$WORK/.xp-layer/argv.log" ] && [ "$i" -lt 40 ]; do
   i=$(( i + 1 ))
   sleep 0.1 2>/dev/null || sleep 1
 done
@@ -558,9 +558,9 @@ else
   # no tool and fire never.
   assert_json 'both matchers select the Bash tool by name' '"matcher": *"Bash"'
   assert_json 'it points at the shipped teardown script via ${CLAUDE_PLUGIN_ROOT}' \
-    'CLAUDE_PLUGIN_ROOT}/hooks/ks-capture-teardown.sh'
+    'CLAUDE_PLUGIN_ROOT}/hooks/xp-capture-teardown.sh'
   assert_json 'it points at the shipped pr script via ${CLAUDE_PLUGIN_ROOT}' \
-    'CLAUDE_PLUGIN_ROOT}/hooks/ks-capture-pr.sh'
+    'CLAUDE_PLUGIN_ROOT}/hooks/xp-capture-pr.sh'
   assert_json 'it sets an explicit timeout on each hook' '"timeout":'
   if python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$HOOKS_JSON" 2>/dev/null; then
     pass 'hooks.json is valid JSON'
@@ -589,7 +589,7 @@ for h in "$TEARDOWN_HOOK" "$PR_HOOK"; do
   name=$( basename "$h" )
   line2=$( sed -n '2p' "$h" 2>/dev/null )
   case $line2 in
-    '[ -x "${CLAUDE_PROJECT_DIR:-.}/.knowledge-store/capture" ] || exit 0' )
+    '[ -x "${CLAUDE_PROJECT_DIR:-.}/.xp-layer/capture" ] || exit 0' )
       pass "$name line 2 is the single existence test, before anything else" ;;
     * )
       fail "$name line 2 is the single existence test, before anything else" \

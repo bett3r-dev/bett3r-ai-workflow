@@ -1,5 +1,5 @@
 #!/bin/sh
-[ -x "${CLAUDE_PROJECT_DIR:-.}/.knowledge-store/capture" ] || exit 0
+[ -x "${CLAUDE_PROJECT_DIR:-.}/.xp-layer/capture" ] || exit 0
 #
 # PreToolUse(Bash) — capture the artifacts a `git worktree remove` is about to
 # destroy.
@@ -10,7 +10,7 @@
 # `hooks/esas-pending.sh`, and for the same reason: there is no per-directory
 # matcher for hooks. A `PreToolUse` hook on `Bash` runs **before every Bash
 # call in every repo where this plugin is enabled** — every fleet worktree,
-# every repo that has never heard of the knowledge store. So the first thing
+# every repo that has never heard of the experience layer. So the first thing
 # that happens is one `test` against a path that does not exist, and then this
 # process is gone. Everything below line 2 is for the one checkout in a session
 # that is actually configured.
@@ -20,13 +20,13 @@
 #   * one `stat`, no read, no parse, no interpreter start — the design run
 #     rejected "a config-file parse at hook start" precisely because it is I/O
 #     paid by every repo that gains nothing from it;
-#   * it is also the seam. `.knowledge-store/capture` is a repo-local adapter
+#   * it is also the seam. `.xp-layer/capture` is a repo-local adapter
 #     the store installs; this hook hardcodes no path into the store's repo,
 #     no package name and no transport. If the capture CLI moves, is renamed,
 #     or is reimplemented, nothing in this plugin changes. A repo opts in by
 #     making that one file executable and opts out by removing it. (The store
 #     moved from esas to bett3r-xp-layer on 2026-09-11 with no change here; the
-#     reference adapter is bett3r-xp-layer/.knowledge-store/capture, and
+#     reference adapter is bett3r-xp-layer/.xp-layer/capture, and
 #     consumer repos have none until XL-11.)
 #
 # ## Exit 0 on every path, always
@@ -71,7 +71,7 @@
 # must not become an inability to clean up worktrees.
 
 root=${CLAUDE_PROJECT_DIR:-.}
-capture=$root/.knowledge-store/capture
+capture=$root/.xp-layer/capture
 
 # ── Reading the event ────────────────────────────────────────────────────────
 #
@@ -85,7 +85,7 @@ capture=$root/.knowledge-store/capture
 # `tool_input.description`, which is agent-written prose. "Run git worktree
 # remove on the stale lane" in a description is not a teardown, and treating it
 # as one files a capture under a natural key parsed out of English.
-KS_SCAN='
+XP_SCAN='
 function unesc( s,   o, i, c, n ){
   o = ""; n = length( s )
   for ( i = 1; i <= n; i++ ){
@@ -132,7 +132,7 @@ END {
 # line. Adjacency of two tokens is the entire matcher, so it has to be tokens
 # and not a substring: `git worktree list && echo remove` contains both words
 # and is not a teardown.
-KS_TOKENS='
+XP_TOKENS='
 { doc = doc $0 "\n" }
 END {
   n = length( doc ); tok = ""; q = ""
@@ -150,7 +150,7 @@ END {
 payload=$( cat 2>/dev/null )
 [ -n "$payload" ] || exit 0
 
-command_line=$( printf '%s\n' "$payload" | awk -v want=tool_input.command "$KS_SCAN" 2>/dev/null )
+command_line=$( printf '%s\n' "$payload" | awk -v want=tool_input.command "$XP_SCAN" 2>/dev/null )
 [ -n "$command_line" ] || exit 0
 
 # Cheap reject before tokenising: the vast majority of Bash calls in a
@@ -160,7 +160,7 @@ case $command_line in
   ( * ) exit 0 ;;
 esac
 
-tokens=$( printf '%s\n' "$command_line" | awk -v sq="'" "$KS_TOKENS" 2>/dev/null )
+tokens=$( printf '%s\n' "$command_line" | awk -v sq="'" "$XP_TOKENS" 2>/dev/null )
 [ -n "$tokens" ] || exit 0
 
 # `worktree` immediately followed by `remove`. This accepts every spelling
@@ -182,9 +182,9 @@ while IFS= read -r tok; do
     seen_remove=1
   fi
   prev=$tok
-done <<KS_TOKEN_LIST
+done <<XP_TOKEN_LIST
 $tokens
-KS_TOKEN_LIST
+XP_TOKEN_LIST
 
 [ "$matched" = yes ] || exit 0
 
@@ -198,7 +198,7 @@ KS_TOKEN_LIST
 # requirement rather than an accident — a key carrying a timestamp would make
 # every re-run a new record and the idempotence claim false.
 [ -n "$target" ] || exit 0
-cwd=$( printf '%s\n' "$payload" | awk -v want=cwd "$KS_SCAN" 2>/dev/null )
+cwd=$( printf '%s\n' "$payload" | awk -v want=cwd "$XP_SCAN" 2>/dev/null )
 
 out=$( "$capture" worktree-remove "$target" "$cwd" 2>&1 )
 rc=$?
@@ -208,9 +208,9 @@ if [ "$rc" -ne 0 ]; then
   # going to be lost — but never fatal. Stderr, not stdout: stdout from a
   # PreToolUse hook is context injected into the session, and a store outage is
   # an operator problem, not something the model should start reasoning about.
-  printf 'knowledge-store: capture FAILED for `%s` (exit %d) — these artifacts are about to be destroyed and are NOT captured.\n' "$target" "$rc" >&2
+  printf 'xp-layer: capture FAILED for `%s` (exit %d) — these artifacts are about to be destroyed and are NOT captured.\n' "$target" "$rc" >&2
   if [ -n "$out" ]; then
-    printf 'knowledge-store: %s\n' "$out" >&2
+    printf 'xp-layer: %s\n' "$out" >&2
   fi
 fi
 
