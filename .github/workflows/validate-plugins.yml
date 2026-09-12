@@ -145,6 +145,21 @@ jobs:
           sh scripts/test-work-docs-path.sh
           WDP_SH=dash dash scripts/test-work-docs-path.sh
           WDP_SH=bash bash scripts/test-work-docs-path.sh
+      # /verify-build copies build-summary.md's usage numbers from
+      # `run-metrics --usage-fragment` before it opens the PR. No step above
+      # executes run-metrics, and its slice attribution is a regex over a
+      # dispatch's description whose failure is a quietly wrong number, not an
+      # error. The suite drives the real script over a transcript fixture under
+      # a temp HOME and recomputes token sums, attribution and proration from the
+      # fixture rows (mirroring only the branch filter and the gap rule).
+      # The script is run by node directly, so only the suite's shell varies.
+      # Its judge needs PyYAML: installed here when missing, and the suite fails
+      # loudly (never skips) if it still cannot import it.
+      - name: Test the run-metrics usage fragment (transcript fixture)
+        run: |
+          python3 -c 'import yaml' 2>/dev/null || sudo apt-get install -y python3-yaml
+          sh scripts/test-run-metrics.sh
+          dash scripts/test-run-metrics.sh
 
       # `bin/check-skill-shadows` runs in HOST repos, not here — it compares a
       # repo's `.claude/` against the plugins actually installed on that machine,
