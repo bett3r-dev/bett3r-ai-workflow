@@ -21,10 +21,13 @@
 #     rejected "a config-file parse at hook start" precisely because it is I/O
 #     paid by every repo that gains nothing from it;
 #   * it is also the seam. `.knowledge-store/capture` is a repo-local adapter
-#     the store installs; this hook hardcodes no path into esas, no package
-#     name and no transport. If the capture CLI moves, is renamed, or is
-#     reimplemented, nothing in this plugin changes. A repo opts in by making
-#     that one file executable and opts out by removing it.
+#     the store installs; this hook hardcodes no path into the store's repo,
+#     no package name and no transport. If the capture CLI moves, is renamed,
+#     or is reimplemented, nothing in this plugin changes. A repo opts in by
+#     making that one file executable and opts out by removing it. (The store
+#     moved from esas to bett3r-xp-layer on 2026-09-11 with no change here; the
+#     reference adapter is bett3r-xp-layer/.knowledge-store/capture, and
+#     consumer repos have none until XL-11.)
 #
 # ## Exit 0 on every path, always
 #
@@ -37,7 +40,7 @@
 #
 # ## Why `git worktree remove` and not "the PR was merged"
 #
-# ESAS-85 names "the command that closes the PR". No such command exists in the
+# XL-30 names "the command that closes the PR". No such command exists in the
 # flow: `/verify-build` *opens* PRs, and `gh pr merge`, `--delete-branch`,
 # `git branch -d` and `git push --delete` return zero matches across the whole
 # base plugin. The real destruction point is `/start-multi` step 7, "Teardown."

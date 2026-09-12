@@ -9,7 +9,7 @@ all.
 > **The base flow plugin stays store-agnostic. The store adapts to the flow,
 > never the reverse.**
 
-Three tickets (ESAS-85 capture, ESAS-87 extraction, ESAS-92 export freshness)
+Three tickets (XL-30 capture, XL-21 extraction, XL-14 export freshness)
 each needed an invocation point inside the development flow, and all three
 attach to the same two events. The obvious implementation — editing
 `/verify-build` and `/start-multi` to call a store — was rejected: it would make
@@ -34,9 +34,24 @@ seam. That is deliberate on both counts:
   *every* repo where the plugin is enabled. One `stat` against a path that does
   not exist is the entire cost in all of them. A config parse at hook start was
   considered and rejected for exactly this reason.
-* **Coupling.** This plugin hardcodes no path into esas, no package name and no
-  transport. If the capture CLI moves, is renamed or is reimplemented, nothing
-  here changes.
+* **Coupling.** This plugin hardcodes no path into the store's repo, no package
+  name and no transport. If the capture CLI moves, is renamed or is
+  reimplemented, nothing here changes. (It already moved once: see below.)
+
+### Where the adapter lives today
+
+The knowledge store lives in
+[`bett3r-dev/bett3r-xp-layer`](https://github.com/bett3r-dev/bett3r-xp-layer).
+It moved there from `bett3r-dev/esas` on 2026-09-11, and its Jira keys moved
+from ESAS to XL. The reference adapter is
+`bett3r-xp-layer/.knowledge-store/capture`.
+
+That adapter only works **inside a repo that contains the knowledge-store
+packages**. It runs `yarn knowledge-capture` and loads
+`packages/knowledge-capture/build` from its own repo root. esas no longer ships
+an adapter (esas PR #82 removed it along with the store), and neither do the
+consumer repos (esas, teselly, pv3). So the hooks are inert in those repos
+today. Re-enabling capture for consumers is tracked by XL-11.
 
 ### The contract your `capture` must satisfy
 

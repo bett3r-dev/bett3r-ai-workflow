@@ -26,7 +26,8 @@
 # ## How the store is stubbed
 #
 # `.knowledge-store/capture` is the seam: a repo-local executable the store
-# installs. Every case here installs a **stub** that records its argv, so the
+# installs. (The reference adapter lives in bett3r-xp-layer, not esas, since
+# 2026-09-11.) Every case here installs a **stub** that records its argv, so the
 # assertions are about what the hook *decided* and what key it computed — not
 # about any real store, which is not this repo's code and cannot be a
 # dependency of this repo's CI.

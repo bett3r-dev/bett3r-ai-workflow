@@ -166,3 +166,24 @@ that direction on purpose — the failure ADR-001 documents is somebody bumping
 - **Git hooks.** `git config core.hooksPath` is empty in the working tree that
   motivated this — `.githooks/` exists and is not active — so a git hook would
   have been a capture that never ran, reporting nothing.
+
+## Update — 2026-09-11
+
+The decision above stands unchanged. This note records where things moved
+since it was written.
+
+- **The store moved.** The knowledge store moved from `bett3r-dev/esas` to
+  `github.com/bett3r-dev/bett3r-xp-layer`, keeping its history and relative
+  paths. Its Jira issues moved from project ESAS to project XL. The key map is
+  `docs/jira-key-map.tsv` in bett3r-xp-layer. The ESAS keys cited above map to:
+  ESAS-85 → XL-30, ESAS-87 → XL-21, ESAS-92 → XL-14.
+- **esas has no adapter any more.** esas PR #82 removed the store and
+  `.knowledge-store/capture` from esas. The reference adapter is now
+  `bett3r-xp-layer/.knowledge-store/capture`. It only works inside a repo that
+  contains the knowledge-store packages, because it runs `yarn knowledge-capture`
+  and loads `packages/knowledge-capture/build` from its own repo root. Consumer
+  repos (esas, teselly, pv3) have no adapter, so the hooks are inert there until
+  XL-11 (formerly ESAS-151) re-enables capture for consumers.
+- **The hook seam is unchanged.** The line-2 sentinel, the two invocation
+  shapes and the exit-0 discipline are the same. The move needed no hook change,
+  which is the "interface rather than location" property this ADR claimed.
