@@ -46,7 +46,13 @@ around a non-constraint reads exactly like one shaped around a real one.
    pass back into a re-derivation, or ships a confident no-op. Cite as
    `symbol (file:line)` — the lane that consumes your draft is dozens of commits
    downstream. A sizing hint ("this is one file") never overrides an acceptance
-   criterion written repo-scoped — say so where they differ.
+   criterion written repo-scoped — say so where they differ. **Your shell may
+   be zsh:** quote every glob (`--include="*.ts"`), never call a command stored
+   in a variable, and a zero-hit grep is evidence only once its filter has
+   matched a file ([EVIDENCE.md](../EVIDENCE.md) *Probe hygiene*). A fact of the
+   form *"F returns X over corpus C"* is established by **running F over C**
+   (`node_modules/.bin/tsx` on a scratchpad script importing `src/`), never by
+   grepping F's regexes.
 
    **A citation comes only from output that carries its own line number** —
    `grep -n`, `cat -n`, or the Read tool. Never compute one from `sed -n 'A,Bp'`,
