@@ -46,7 +46,7 @@ Do **not** defer invariants to "a later slice" — every invariant belongs on it
 
 ## Each slice carries its own oracle — at the layer where its claim lives
 
-Every slice declares the **test** that proves it (its oracle) and a `passes` flag. The slice is "done" only when that test is green **and** the verifier confirms the project's invariants — the dual gate. Then it is committed (one commit per slice).
+Every slice declares the **test** that proves it (its oracle) and a `passes` flag. The slice is "done" only when that test is green **and** the verifier confirms the project's invariants — the dual gate. Then it is committed (one slice commit per slice).
 
 **An oracle for a write-side guarantee asserts that guarantee's own artifact.** Where the behavior names convergence, idempotency, exactly-once, ordering or dedup, the assertion is on the event stream, the event count or the version — never on a read-model row or a query result, because the projection's own `upsert` dedups independently and passes a non-convergent implementation green. "The same message twice yields ONE row" was satisfied by an implementation that wrote a fresh random stream per delivery; asserting the **stream set across the whole eventstore** caught two wrong mechanisms before implementation, one of them a silent cross-tenant collapse. A thin complete path still asserts at the layer its claim lives.
 

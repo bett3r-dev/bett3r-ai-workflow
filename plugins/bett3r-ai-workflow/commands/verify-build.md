@@ -1,10 +1,10 @@
 ---
-description: Land the work — one whole-PR coherence review across all slices, a dev verification checklist, finalize ADRs, and open the PR as the system of record.
+description: Land the work — one whole-PR coherence review across all slices, a dev verification checklist, finalize ADRs, complete the committed record, and open a PR that links it.
 ---
 
 # /verify-build — land the work
 
-The per-slice `verifier` already checked each slice in isolation during `/build`. This is the **cross-slice** pass: does the *assembled* feature hold together, and then turn the ephemeral working state into the durable record (ADRs + a PR).
+The per-slice `verifier` already checked each slice in isolation during `/build`. This is the **cross-slice** pass: does the *assembled* feature hold together, and then turn the ephemeral working state into the durable record (ADRs, the work item's committed record beside the code, and a PR that links it).
 
 ## Argument: $ARGUMENTS
 
@@ -272,7 +272,7 @@ Report the duty cycle in your summary to the user **only when it is low and the 
 
 ## Step 8 — Cleanup
 
-The ephemeral `.work/` (slices.yaml, mode.yaml) has now been fully promoted (ADRs + PR body + per-slice commits); the design was never in it — `/design` committed it. It is gitignored and may be discarded. Report the PR URL.
+The ephemeral `.work/` (slices.yaml, mode.yaml) has now been fully promoted (ADRs, the committed record, per-slice commits, and a PR body that links them); the design was never in it — `/design` committed it. It is gitignored and may be discarded. Report the PR URL.
 
 > If this work surfaced an improvement to the *flow or a shared skill/plugin* (not this feature), run `/capture-learnings` to route it to the repo that owns it.
 

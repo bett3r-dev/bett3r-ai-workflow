@@ -109,4 +109,4 @@ End your output with this line, at column 0, as the **final** line — nothing a
 
 - Vertical, never horizontal; tracer bullet first; prefactor before feature.
 - The breakdown is reviewed and approved before anything is written or published.
-- `slices.yaml` is ephemeral; the durable record is the per-slice commits + the PR (and the Jira sub-tasks, if published).
+- `slices.yaml` is ephemeral; the durable record is the per-slice commits, the work item's committed record beside the code (`design.md`, `decisions.md`, `concerns.md`, `build-summary.md`) and the PR that links it (and the Jira sub-tasks, if published).
