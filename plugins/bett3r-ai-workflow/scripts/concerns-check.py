@@ -6,7 +6,7 @@ from any step; `/verify-build` rules each concern with evidence before this
 script runs. This script does one thing: read the ruled file and say whether
 the unit may land, in ONE line (ADR-004) — never an exit code alone.
 
-    CONCERNS-CHECK:v1 outcome=pass|fail|error hard=<n> soft=<n> unmet=<ids|none> missing=<ids|none> [reason=<reason>] [id=<Cn>] [field=<name>] [line=<n>] [value=<v>] [path=<p>] [detail=<d>]
+    CONCERNS-CHECK:v1 outcome=pass|fail|error hard=<n> soft=<n> unmet=<ids|none> missing=<ids|none> [reason=<reason>] [id=<Cn>] [decision=<Dn>] [field=<name>] [line=<n>] [value=<v>] [path=<p>] [detail=<d>]
 
 `unmet=` names every concern (hard or soft) ruled `partial`, `unmet` or
 `cannot-determine` — a soft one there still passes; a hard one there fails
@@ -96,15 +96,67 @@ in a `decisions.md` entry (kind: waiver, decidedBy: human) and cited from
 - `evidence:` citing the waiver record as `decisions.md#D<n>` — else
   `malformed-waived-without-waiver-record`.
 
-The regex checks only that a `decisions.md#D<n>` citation is present, so
-`evidence: not decisions.md#D3` passes here; /verify-build's cross-file
-check (slice 6) is the real authorisation gate. Whether the cited D-entry exists, and is kind: waiver / decidedBy: human, is
-OUT of this checker's scope: it reads one concerns.md and nothing else.
-`/verify-build` owns that cross-file check.
+Without `--decisions` the check stops there: a `decisions.md#D<n>`
+substring is enough, so `evidence: not decisions.md#D3` and a path-prefixed
+`docs/prs/X/decisions.md#D3` both pass. That is the behaviour slice 5
+shipped, and it is kept exactly.
 
-Usage: concerns-check <concerns.md>
-Exit 0 on outcome=pass, 1 on outcome=fail, 2 on outcome=error — a coarse
-cross-check only; read the line.
+`--decisions <decisions.md>` makes the citation an authorisation, verified
+against THAT file — the unit's own `decisions.md` (`/verify-build` always
+passes it). For every `waived` entry, after the entry's own field checks,
+EVERY `decisions.md#D<n>` in its `evidence:` must hold, or the line is
+`outcome=error id=<Cn> decision=D<n>` with one of these reasons:
+
+- `waiver-record-foreign-file` — the citation is prefixed by a path or any
+  other character (`docs/prs/X/decisions.md#D3`, `./decisions.md#D3`, a
+  URL). Only a bare `decisions.md#D<n>` names this unit's own file: it
+  follows the start of the value, a space, a tab or `(` — the non-path
+  prefixes `WAIVER_RECORD` already accepts.
+- `waiver-record-missing` — no `## D<n> — ` entry with that id in the file.
+- `waiver-record-ambiguous` — the id heads two entries; neither is picked.
+- `waiver-record-not-waiver` (`value=<kind>`) — its `kind:` is not `waiver`.
+- `waiver-record-not-human` (`value=<decidedBy>`) — its `decidedBy:` is not
+  `human`.
+- `waiver-record-other-concern` (`value=<title>`) — the entry's `## D<n> — `
+  title does not name this C-entry's id; one concern's waiver never backs
+  another. The id matches only whole: `C1` is not in `C12` or `XC1`.
+- `waiver-record-empty` — no body: nothing after the header fields, so no
+  place for the owner's verbatim waiver quote.
+- `waiver-record-no-quote` — the body holds no quoted span: no non-blank
+  text between straight double quotes (`"…"`) or curly ones (`“…”`). Single
+  quotes do not count — they are apostrophes in prose too often.
+- `waiver-decisions-not-found` / `waiver-decisions-unreadable` (`path=`) —
+  the `--decisions` file is absent or unreadable while a waived entry needs
+  it. The file is read only then: a unit that raised no waiver (and may have
+  written no `decisions.md` at all) is ruled exactly as without the flag.
+
+The D-entry grammar is not a second one: it is the header `commands/build.md`
+fixes in *The committed record* —
+
+    ## D1 — <one-line decision>
+    kind: silent-seam        # ... | waiver
+    step: build · slice: 2 · decidedBy: executor    # ... | human
+    sources: [...]
+    rejected: <option> — <why not>
+    supersedes: —
+    <prose: why>
+
+An entry runs from its `## D<n> — ` header to the next `## ` line; anything
+before the first header (a title, an intro) is ignored. A line starting with
+a code fence toggles fenced mode, as the Seam I reader in test-flow-seams.sh
+does: the fence line and every line inside it are body, never a header or a
+field, so a fenced example of a waiver entry is never read as one. The title
+is everything after `— ` on the header line. `kind` is the first
+`kind:` line's value, a trailing ` # …` comment removed. `decidedBy` is read
+from the first `step:` line's `decidedBy:` segment, its comment removed. The
+body is every non-blank line that is not one of the five header fields.
+
+Prose negation is not parsed: `not decisions.md#D3` fails only because D3 is
+not a waiver; a negated citation of a real waiver entry still verifies.
+
+Usage: concerns-check [--decisions <decisions.md>] <concerns.md>
+Exit 0 on outcome=pass, 1 on outcome=fail, 2 on outcome=error or a usage
+error — a coarse cross-check only; read the line.
 """
 import os
 import re
@@ -127,6 +179,17 @@ HEADER_LIKE = re.compile(r"^\s*#")
 FIELD = re.compile(r"^([A-Za-z]+):\s*(.*)$")
 TEMPLATE = re.compile(r"^<[^<>]*>$")
 WAIVER_RECORD = re.compile(r"(?:^|[\s/(])decisions\.md#D[1-9][0-9]*\b")
+
+# --decisions: the decisions.md header grammar from commands/build.md.
+CITATION = re.compile(r"decisions\.md#D([1-9][0-9]*)\b")
+CITATION_OWN_FILE_PREFIX = " \t("
+DECISION_HEADER = re.compile(r"^## D([1-9][0-9]*) — (.*)$")
+FENCE = "```"
+QUOTED = re.compile(r"\"[^\"]*\S[^\"]*\"|“[^”]*\S[^”]*”")
+H2 = re.compile(r"^## ")
+DECISION_FIELD = re.compile(r"^(kind|step|sources|rejected|supersedes):\s*(.*)$")
+DECIDED_BY = re.compile(r"decidedBy:\s*([^\s#·]*)")
+COMMENT = re.compile(r"\s+#.*$")
 
 
 def escape(val):
@@ -203,11 +266,100 @@ def parse(text):
     return entries, None
 
 
+def parse_decisions(text):
+    """Return {id: [record, ...]}; a record is {title, kind, decidedBy, body}."""
+    records = {}
+    current = None
+    fence = False
+    for line in text.splitlines():
+        if line.startswith(FENCE):
+            # As Seam I reads decisions.md: a fence line toggles, and it and
+            # everything inside it is body — never a header or a field.
+            fence = not fence
+            if current is not None:
+                current["body"].append(line)
+            continue
+        if fence:
+            if current is not None:
+                current["body"].append(line)
+            continue
+        m = DECISION_HEADER.match(line)
+        if m:
+            current = {"title": m.group(2), "kind": None, "decidedBy": None, "body": []}
+            records.setdefault(f"D{m.group(1)}", []).append(current)
+            continue
+        if H2.match(line):
+            current = None
+            continue
+        if current is None or line.strip() == "":
+            continue
+        fm = DECISION_FIELD.match(line)
+        if not fm:
+            current["body"].append(line)
+            continue
+        key, val = fm.group(1), COMMENT.sub("", fm.group(2)).strip()
+        if key == "kind" and current["kind"] is None:
+            current["kind"] = val
+        elif key == "step" and current["decidedBy"] is None:
+            dm = DECIDED_BY.search(val)
+            current["decidedBy"] = dm.group(1) if dm else ""
+    return records
+
+
+def verify_waiver(cid, evidence, records):
+    """Return None, or the verdict attributes of the first bad citation."""
+    for m in CITATION.finditer(evidence):
+        did = f"D{m.group(1)}"
+        if m.start() > 0 and evidence[m.start() - 1] not in CITATION_OWN_FILE_PREFIX:
+            start = m.start()
+            while start > 0 and not evidence[start - 1].isspace():
+                start -= 1
+            return {"reason": "waiver-record-foreign-file", "id": cid, "decision": did,
+                    "value": evidence[start:m.end()]}
+        found = records.get(did, [])
+        if not found:
+            return {"reason": "waiver-record-missing", "id": cid, "decision": did}
+        if len(found) > 1:
+            return {"reason": "waiver-record-ambiguous", "id": cid, "decision": did}
+        rec = found[0]
+        if rec["kind"] != "waiver":
+            return {"reason": "waiver-record-not-waiver", "id": cid, "decision": did,
+                    "value": rec["kind"] or "none"}
+        if rec["decidedBy"] != "human":
+            return {"reason": "waiver-record-not-human", "id": cid, "decision": did,
+                    "value": rec["decidedBy"] or "none"}
+        if not re.search(r"(?<![A-Za-z0-9])%s(?![0-9])" % re.escape(cid), rec["title"]):
+            return {"reason": "waiver-record-other-concern", "id": cid, "decision": did,
+                    "value": rec["title"]}
+        if not rec["body"]:
+            return {"reason": "waiver-record-empty", "id": cid, "decision": did}
+        if not QUOTED.search("\n".join(rec["body"])):
+            return {"reason": "waiver-record-no-quote", "id": cid, "decision": did}
+    return None
+
+
+def usage():
+    sys.stderr.write("usage: concerns-check [--decisions <decisions.md>] <concerns.md>\n")
+    return 2
+
+
 def main(argv):
-    if len(argv) != 2:
-        sys.stderr.write("usage: concerns-check <concerns.md>\n")
-        return 2
-    path = argv[1]
+    args = argv[1:]
+    decisions_path = None
+    paths = []
+    i = 0
+    while i < len(args):
+        if args[i] == "--decisions":
+            if decisions_path is not None or i + 1 >= len(args):
+                return usage()
+            decisions_path = args[i + 1]
+            i += 2
+            continue
+        paths.append(args[i])
+        i += 1
+    if len(paths) != 1:
+        return usage()
+    path = paths[0]
     if not os.path.isfile(path):
         return verdict("error", reason="file-not-found", path=path)
     try:
@@ -229,6 +381,7 @@ def main(argv):
         # entry; kept so a future parser change cannot turn content into a pass.
         return verdict("error", reason="malformed-no-entries")
 
+    decisions = None  # parsed lazily: only a waived entry needs the file
     for cid, fields in entries:
         missing_fields = [f for f in REQUIRED_FIELDS if f not in fields]
         if missing_fields:
@@ -248,6 +401,20 @@ def main(argv):
                 return verdict("error", reason="malformed-empty-field", id=cid, field=name)
         if fields["verdict"] != "—" and is_empty(fields["evidence"]):
             return verdict("error", reason="malformed-empty-field", id=cid, field="evidence")
+        if fields["verdict"] == "waived" and decisions_path is not None:
+            if decisions is None:
+                if not os.path.isfile(decisions_path):
+                    return verdict("error", reason="waiver-decisions-not-found",
+                                   id=cid, path=decisions_path)
+                try:
+                    with open(decisions_path, encoding="utf-8") as fh:
+                        decisions = parse_decisions(fh.read().lstrip(BOM))
+                except (OSError, UnicodeDecodeError):
+                    return verdict("error", reason="waiver-decisions-unreadable",
+                                   id=cid, path=decisions_path)
+            bad = verify_waiver(cid, fields["evidence"], decisions)
+            if bad:
+                return verdict("error", **bad)
 
     hard = sum(1 for _, f in entries if f["bar"] == "hard")
     soft = sum(1 for _, f in entries if f["bar"] == "soft")

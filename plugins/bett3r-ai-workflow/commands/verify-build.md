@@ -14,7 +14,7 @@ Optional ticket id. Default: the active work in `.work/slices.yaml`.
 
 ## Step 1 — Preconditions
 
-Read `.work/slices.yaml` and the committed design — `<path>/design.md`, `path=` being `work-docs-path`'s verdict for this work item, called exactly as `/design` Step 4 calls it. All slices should be `passes: true` and committed (`git log` shows one commit per slice). If slices remain unpassed, stop: "Slices N… not yet green — run `/build` first."
+Read `.work/slices.yaml` and the committed design — `<path>/design.md`, `path=` being `work-docs-path`'s verdict for this work item, called exactly as `/design` Step 4 calls it. All slices should be `passes: true` and committed (`git log` shows one slice commit per slice). If slices remain unpassed, stop: "Slices N… not yet green — run `/build` first."
 
 ## Step 2 — Run the gate
 
@@ -88,7 +88,7 @@ Apply the `critique` skill's tone throughout: substance over compliments, no hed
 
 **Disprove every Critical/High before propagating it.** A plausible-sounding Critical that's actually a false positive is *more* expensive than a missed nit — "fixing" it introduces a regression. Before reporting or acting on any Critical/High finding, attempt to **disprove** it: (a) read the actual call site — not the diff hunk in isolation; (b) run a `git blame` / base-branch check — "is this pre-existing on the base, not introduced by this PR? Y/N"; (c) construct a concrete failing input that reproduces it. Drop or downgrade any Critical that can't survive all three. (Real miss: 3 of 4 reported Criticals on TV1-1950 were false positives — a truthy `'0'` misread as falsy, a verbatim-from-`master` pre-existing line, and a "double increment" that was load-bearing for restart determinism — each would have introduced a bug if "fixed"; the git-blame check alone kills two of them.)
 
-Surface findings by severity (Critical / Medium / Low). Fix Critical/Medium before opening the PR (small fixes inline or a follow-up slice). For anything left open, state your recommendation and why it can ship unresolved. This review is **not** committed to a file — its conclusions go into the PR body (Step 6).
+Surface findings by severity (Critical / Medium / Low). Fix Critical/Medium before opening the PR (small fixes inline, or a fix slice appended to `.work/slices.yaml` with `origin: verify-build` — `/build`'s build-summary rule reads a slice's `origin:` and records a slice without one as `plan`). For anything left open, state your recommendation and why it can ship unresolved. This review is **not** committed to a file, except the counts Step 5b records in `build-summary.md` — its conclusions go into the PR body (Step 6).
 
 ## Step 4 — Dev verification checklist
 
@@ -103,10 +103,40 @@ Produce a single **developer verification checklist**: the things a human should
   - **Re-resolve every path and symbol the ADR cites** before committing it. A wrong `file:line` in an ADR outlives the PR and misleads whoever reads it next (§3) — one shipped citing a path that did not exist as written, an abbreviation having dropped a directory.
   - **A deferral naming a sibling unit is not done until it is tracked somewhere the sibling reads.** Grep your resolved block for one (`deferred to <UNIT>` is the written form, so this is a grep, not a judgement) and refuse to report done while the obligation lives only in your block — the sibling never sees it, and nothing in the flow errors.
   - If a composition finding traces to text the design or an existing ADR *also* asserts, **amending that text is part of the fix**, not a follow-up — otherwise the next reader re-derives the bug from the record.
-  - **If this work discovered a rule that's true beyond this ticket** (a framework rule, a decomposition heuristic, a flow-methodology finding), it needs a stated destination, not just prose in the narrative above: put it in an ADR's optional **Principle** section (`domain-modeling`'s ADR template), or, if it's about the flow/a shared skill rather than this feature, route it via `/capture-learnings` instead. Reasoning left only in the PR narrative is exactly the shape that gets lost — the PR body itself is promoted from the design and nobody re-reads it once this PR merges.
-- **Promote the design:** the design narrative + conclusions from the committed design become the **PR description**.
+  - **If this work discovered a rule that's true beyond this ticket** (a framework rule, a decomposition heuristic, a flow-methodology finding), it needs a stated destination, not just prose in the narrative above: put it in an ADR's optional **Principle** section (`domain-modeling`'s ADR template), or, if it's about the flow/a shared skill rather than this feature, route it via `/capture-learnings` instead. Reasoning left only in the PR narrative is exactly the shape that gets lost — the PR body is a short summary plus links, and nobody re-reads it once this PR merges.
+- **Link the record, don't copy it:** the PR body is a short summary plus blob links to the four committed files — `design.md`, `decisions.md`, `concerns.md` and `build-summary.md`, in the folder `work-docs-path` names (Step 6's template). The design narrative is not copied into the body: `design.md` is committed, and a second copy is one nothing checks against the first.
 - **If the PR adds an enforcement mechanism** (a CI gate, lint rule, schema check, hook), state **which commit is its first live proof** — or, if none is, say why. A gate that never fired is indistinguishable from a gate that cannot fire.
 - **A worked example the suite does not consume is a claim nobody is checking.** Where an ADR, design doc or config sample ships one, make it a fixture the tests read, render and assert on — it then fails the build the day it stops being true. If it genuinely cannot be executable, say so at its top and anchor it to the command or commit that verified it; a hand-maintained example on no build path (one named a unit that did not exist) is a liability to delete, not neutral documentation.
+
+## Step 5a — Rule every concern, before the record is committed
+
+This step sits after the gate (Step 2), the review (Step 3) and the ADRs (Step 5), because those produce the evidence a ruling cites, and before Step 5b, because Step 5b's `build-summary.md` commit carries the result as `verifyBuild.concerns`.
+
+**Resolve the file.** `concerns.md` is in the folder `work-docs-path --item <work_item>` names: the same reader-form call Step 5b makes (no `--owner-branch`, the `work_item` from `.work/mode.yaml`), its last line read, never its exit code (ADR-004). On `outcome=error` nothing can be ruled: say so, treat this step's result as `outcome=error` with that `reason=` everywhere below (Step 5b writes `concerns: null`, Step 6b posts `failure`), and carry on.
+
+**No `concerns.md` in that folder means this unit raised none.** The `concern` skill creates the file with a unit's first entry, in the folder this same call names. Say so in one line, and write an **empty** `concerns.md` there. `concerns-check` reads an empty file as `outcome=pass hard=0 soft=0`, so "no concerns recorded" becomes a committed, checkable record, like `postDesignDecisions: []`, and a missing file is never silently read as a pass. Write no entry into it, and never create it outside that folder.
+
+**Rule each C-entry.** For every `## C<n>` entry, following its `verify:` instruction, set:
+
+- `verdict:` — one of `met | partial | unmet | cannot-determine | waived`.
+- `evidence:` — what you actually checked and saw: a test and its result, a `file:line`, the Step 2 gate line, a measurement with its command. Evidence is what was observed in this run, never assumed. A slice's `passes:` flag does not stand in for a check. What you could not check is `cannot-determine`, with why — never `met`.
+
+Change no other field: `quote:` stays the raising quote, and `bar:` stays what the owner said. Never delete or renumber an entry.
+
+**Waivers. Only the owner waives.** A C-entry is `waived` only when the owner — the human who owns this unit — gives a waiver in their own words, during this `/verify-build` or earlier in this conversation or the ticket. Never waive on an agent's own judgment (yours, a sub-agent's, a review bot's), and never from a paraphrase. A hard concern the owner has not waived keeps its ruling, and the PR names it. When the owner waives:
+
+1. Append a `decisions.md` entry in the header `/build` fixes (*The committed record* in [build.md](build.md)), with `kind: waiver`, `decidedBy: human`, `sources: [human]`. Its title names every C-entry it waives by id (`## D<n> — The owner waives C<n>: <label>`), and its body carries the owner's verbatim waiver quote, in quotes. `concerns-check` refuses a citation from a C-entry the title does not name. Allocate the id the way `/build` does: one more than the highest id in the file, read at the moment you append.
+2. Set the C-entry's `verdict: waived`; its `evidence:` cites it as `decisions.md#D<n>`, written without backticks or a path (`evidence: owner waiver, decisions.md#D4`) — a backticked or path-prefixed citation is refused, because the citation resolves only against this unit's own `decisions.md`. `quote:` stays the raising quote.
+
+**Check it.** One command, redirected, always with `--decisions`:
+
+```bash
+concerns-check --decisions "<path>/decisions.md" "<path>/concerns.md" > "${TMPDIR:-/tmp}/concerns-check.txt" 2>&1
+```
+
+(`concerns-check` is on `PATH` from this plugin's `bin/`.) Read its last line, `CONCERNS-CHECK:v1 outcome=pass|fail|error …`, never the exit code. With `--decisions`, every `waived` entry's citation must name this unit's own `decisions.md` and resolve to exactly one entry with `kind: waiver`, `decidedBy: human` and a non-empty body. Anything else — a missing id, another kind, another `decidedBy`, a path-prefixed citation, no `decisions.md` while an entry is waived — is `outcome=error` naming the C-entry and the D-id. **`outcome=error` is not-success, exactly like `outcome=fail`:** a malformed file or a bad waiver record is never read as a pass or as "no concerns". A command that printed no verdict line is `outcome=error`.
+
+Commit `concerns.md`, plus `decisions.md` when a waiver was appended, on its own (`docs(record): rule the concerns`). Never re-rule a concern to turn the line green. Whatever the outcome, `/verify-build` opens the PR either way: a `fail` or `error` becomes Step 6's *Unmet hard concerns* section and a `failure` status in Step 6b.
 
 ## Step 5b — Measure the run, and complete `build-summary.md`, before the PR
 
@@ -139,9 +169,9 @@ verifyBuild:
 ```
 
 - **`outcome=ok`** → each slice entry in `build-summary.md` gets the `usage:` of the fragment entry with the same `id`; a role the fragment prints as `null` had no dispatch found — or its only dispatches ran in a detached pool worktree (see `droppedDetached`, below) — and stays `null`. A slice with no fragment entry gets `usage: null`, named in `## What shipped` with why (no dispatch named `slice <id>` was found — e.g. it ran in a session whose transcripts are gone). `verifyBuild.usage` is the fragment's — every `/verify-build` invocation on the branch, up to this step, with executor, verifier and test-runner dispatches excluded; `null` when no `/verify-build` invocation was found. No other key of `build-summary.md` changes, except the `verifyBuild` keys in the next bullet.
-- **`verifyBuild.gate`, `verifyBuild.coherence`, `verifyBuild.fixSlicesAdded` and `verifyBuild.adrs` are this run's own results**, written on every outcome of the fragment: `gate: { mode, verdict, skipped, inconclusive }` from Step 2's report block (the mode run, its verdict, and the steps it reported `SKIP` and `INCONCLUSIVE`); `coherence: { critical, medium, low, shippedUnresolved }` from Step 3 (its finding counts by severity, and the findings shipped unresolved); `fixSlicesAdded:` the number of fix slices Step 3 added; `adrs:` the ADRs Step 5 wrote or amended. `verifyBuild.concerns` is `null` until the concerns ruling writes it. Every value is copied from those steps' own reports, never estimated — a step that produced no report writes `null` for its key.
+- **`verifyBuild.gate`, `verifyBuild.coherence`, `verifyBuild.fixSlicesAdded` and `verifyBuild.adrs` are this run's own results**, written on every outcome of the fragment: `gate: { mode, verdict, skipped, inconclusive }` from Step 2's report block (the mode run, its verdict, and the steps it reported `SKIP` and `INCONCLUSIVE`); `coherence: { critical, medium, low, shippedUnresolved }` from Step 3 (its finding counts by severity, and the findings shipped unresolved); `fixSlicesAdded:` the number of fix slices Step 3 added; `adrs:` the ADRs Step 5 wrote or amended. `verifyBuild.concerns` is copied from Step 5a's verdict line: on `outcome=pass` or `outcome=fail`, `concerns: { hard, soft, unmet }` — `hard=` and `soft=` as numbers, `unmet=` as a list of its ids (`none` is `[]`; like the line, it names soft concerns too); on `outcome=error`, `concerns: null` and one line in `## What shipped`, `Concerns not checked: <the reason= value>.` Every value is copied from those steps' own reports, never estimated — a step that produced no report writes `null` for its key.
 - **How a usage cell is made.** `model` and `effort` are the values carrying the most tokens across that role's runs, read as the transcripts record them: a sonnet executor retried on opus records only `opus`, and the retry stays visible in the slice's `retries`. `activeMs` sums the runs, so parallel dispatches can exceed wall time. The `/build` orchestrator's own usage appears in no block.
-- **`droppedDetached=<n>`** on the verdict line counts dispatches `run-metrics` skipped because their transcript is stamped `gitBranch: HEAD` — workers in a detached pool worktree. When it is above 0, add one sentence to `## What shipped`: `<n>` dispatches ran in a detached pool worktree and were not attributed, so the usage above undercounts them.
+- **`droppedDetached=<n>`** on the verdict line counts the dispatches `run-metrics` skipped: dispatches whose transcript is stamped `gitBranch: HEAD` (a detached checkout, such as a pool worktree). Its 0 is not always a measurement: a `/start-multi` unit reports 0 because it is never branch-filtered — 0 means not measured. When it is above 0, add one sentence to `## What shipped`: `<n>` dispatches ran in a detached pool worktree and were not attributed, so the usage above undercounts them.
 - **`unattributed`** is not frontmatter. When the fragment's block is not `null`, add one sentence to `## What shipped` quoting its tokens and `activeMs` per role, as dispatches whose description named no slice.
 - **`outcome=error`, no verdict line, or a command that did not run** is a failure to measure: write `usage: null` on every slice and `verifyBuild.usage: null`, and one line in `## What shipped` — `Usage not measured: <the reason= value, or the error's first line>.` Never invent numbers.
 
@@ -150,6 +180,8 @@ Commit `build-summary.md` on its own (`docs(record): measure the run`), then go 
 ## Step 6 — Open the PR (the system of record)
 
 Push the branch and open the PR **ready for review, not a draft** (compose the repo's `create-pr` flow if it has one, overriding any draft default it carries; otherwise `gh pr create --base <resolved-base>`, which opens a review-ready PR — do **not** pass `--draft`, and pass the base resolved in Step 3, not a hardcoded `master`). **Verify the created PR's base after the fact:** `gh pr create` succeeds silently even when it targets the wrong ref, so confirm the PR's `changed_files`/`commits` roughly match the local `git log <base>..HEAD` count/diffstat. If they don't, retarget with `gh pr edit --base <true-base>`.
+
+**`/verify-build` opens the PR either way on concerns.** Step 5a's `outcome=fail` or `outcome=error` never delays it or turns it into a draft: the unmet hard concerns go into the body's *Unmet hard concerns* section, and Step 6b posts a red `flow/concerns` status. Among verdicts, only Step 2's `FAIL` holds this step back.
 
 **"PR opened" is not "done" — report its mergeability.** Re-fetch and compare `origin/<default>` against the base you branched from: a merge by anyone outside this work invalidates the pin, and the cost lands at the worst moment, with gates green and the PR declared ready. **It invalidates the green checks too, and nothing marks them stale:** a gate that reads the *diff* (a version-bump gate, a changed-files guard) stated its verdict about a base that is gone, and GitHub does not re-run it when the base moves. Compare each check's sha and timestamp against the current base; where the base moved, **re-run the diff-reading gates locally against it and report that**, rather than reading the green. Two same-base PRs that agree on a version string produce no conflict at all — the one case a merge conflict cannot surface. Read `gh pr view --json mergeable,mergeStateStatus` after a short settle (GitHub returns `UNKNOWN` for a few seconds after a push) and say so. The remedy for a conflict is rebasing **this branch, in its own worktree** — safe, and not to be confused with the real prohibitions (never modify the default branch or another unit's branch; never rewrite history something is stacked on).
 
@@ -165,17 +197,28 @@ for n in <every issue the PR references>; do printf '%s %s\n' "$n" "$(gh issue v
 
 **One line per reference, every one `CLOSED`** — check the line count *before* the states, because a `gh` failure prints a blank state and greps clean. Report the ones that did not close, and close them (`gh issue close <n> -c "landed in #<pr>"`). Bulk form when the set is long: `comm -13 <(gh issue list --state closed --limit 500 --json number -q '.[].number' | sort) <(printf '%s\n' <referenced> | sort)` — what it prints is what stayed open.
 
-The PR **body is the record**:
+The PR body is **a short summary plus links to the committed record**. `<path>` is Step 5a's `path=` (repo-relative) and `<branch>` is this branch:
 
 ```
 ## <TICKET-ID> — <title>
 
-<design narrative + key decisions, promoted from the committed design.md>
+<two to four sentences: what shipped and why — a summary, not the design>
+
+### Record
+- [design.md](https://github.com/<owner>/<repo>/blob/<branch>/<path>/design.md) — the design as resolved
+- [decisions.md](https://github.com/<owner>/<repo>/blob/<branch>/<path>/decisions.md) — every decision made after it
+- [concerns.md](https://github.com/<owner>/<repo>/blob/<branch>/<path>/concerns.md) — the owners' bars, ruled
+- [build-summary.md](https://github.com/<owner>/<repo>/blob/<branch>/<path>/build-summary.md) — the run's telemetry
 
 ### Slices
 - slice 1 — <name> (<commit>)
 - slice 2 — <name> (<commit>)
 - ...
+
+### Unmet hard concerns
+<only when Step 5a's outcome is fail or error; omit the section on pass.
+fail: one bullet per bar: hard entry ruled partial, unmet or cannot-determine (or still at verdict: —) — `C<n>` — <its label> — the bar as raised: <quote:> — evidence: <evidence:>
+error: the reason= and the C-entry and D-id the verdict line names>
 
 ### Verification
 <the Step 2 gate report block, verbatim — or "Full gate deferred to the fleet gate, run `<runId>`." plus the `--fast` result>
@@ -188,6 +231,30 @@ The PR **body is the record**:
 ### Coherence review
 <Critical/Medium findings and how resolved; or "clean">
 ```
+
+## Step 6b — Post the `flow/concerns` commit status
+
+Once the PR is open, post Step 5a's result on the head sha — `git rev-parse HEAD` after the push, which must equal `gh pr view --json headRefOid -q .headRefOid`:
+
+```bash
+gh api repos/{owner}/{repo}/statuses/<head-sha> -f context=flow/concerns -f state=<failure|success> -f description="<description>" -f target_url=<blob URL of concerns.md on the branch> > "${TMPDIR:-/tmp}/flow-concerns-status.txt" 2>&1
+```
+
+`gh` fills `{owner}` and `{repo}` from the current repository. The `target_url` is the same `concerns.md` link as the body's *Record* section. Commit statuses need only the `repo` scope the `gh` token already has, so there is no GitHub App and no Actions workflow.
+
+The state comes from Step 5a's verdict line. There is one bullet per outcome, in the grammar `` - `outcome=<o>` → `state=<s>` — <description> ``, and each outcome is mapped exactly once:
+
+- `outcome=pass` → `state=success` — `concerns met: <hard> hard, <soft> soft`, or `no concerns recorded` when both are 0.
+- `outcome=fail` → `state=failure` — `<k> hard concerns unmet: C1, C3`, naming the `unmet=` ids whose `bar:` is `hard`; with `reason=missing-verdict`, `<k> concerns unruled: <the missing= ids>`.
+- `outcome=error` → `state=failure` — `concerns not checked: <the reason= value>`. No verdict line, or a `work-docs-path` error, lands on this row too.
+
+The description is limited to 140 characters (the limit assumed here for GitHub's status API). When it would be longer, drop C-ids from the end of the list and close it with `, +<n> more` so it fits; every id is still named in the PR body and at the `target_url`.
+
+**Re-post on every later push this flow makes.** A status belongs to one sha and does not follow a push. Whenever this flow pushes to the branch after the PR opens — a Step 6 rebase, a fix after review — re-run Step 5a's check on the new head and post again on the new sha. The flow re-posts; nothing re-posts on a human's push. A head pushed outside the flow carries no `flow/concerns` status until the flow runs again, and it looks clean. That seam is deliberately unspecified, and no git hook is added to cover it.
+
+**The status is advisory (R5).** In a private repository on GitHub's free plan, branch protection and rulesets are unavailable: a status cannot be required, so the red mark is advisory in a single flow, and a human can merge over `flow/concerns` = failure. `/merge-multi` is the hard block — it runs the check on each unit head itself, never trusting this status. The status is display; nothing in this flow reads it back.
+
+**A failed status post never blocks landing.** Read the output file. A non-zero exit or an error body (auth, a non-GitHub remote) becomes one line in your report — `flow/concerns not posted: <its first error line>` — and you carry on to Step 7.
 
 ## Step 7 — Put what the run cost in the PR body
 
@@ -215,7 +282,7 @@ End your output with this line, at column 0, as the **final** line — nothing a
 
     LANE-STEP:v1 step=verify-build outcome=<success|gate-red|blocked-on>
 
-`success` when the gate is green and the PR is open. `gate-red` when Step 2's gate returned `FAIL` — which already blocks Step 6, so this reports a branch that is red rather than a step that failed. `blocked-on` when the PR cannot be opened for a reason a human must resolve (a conflict, a missing base). A `SKIP` or `INCONCLUSIVE` step is **not** `gate-red`: name it in the PR body and report `success`. **Immediately before printing it**, run `lane-step-record '<the identical line>'`: it commits the verdict to your branch when `.work/lane.yaml` carries `verdictOnBranch: true` and does nothing otherwise; a non-zero exit is reported in your prose, never by changing the line. Never emit `infra` — its signal is the line's absence. The format contract is stated once in [unit-lane](../agents/unit-lane.md); do not restate it here.
+`success` when the gate is green and the PR is open. `gate-red` when Step 2's gate returned `FAIL` — which already blocks Step 6, so this reports a branch that is red rather than a step that failed. `blocked-on` when the PR cannot be opened for a reason a human must resolve (a conflict, a missing base). A `SKIP` or `INCONCLUSIVE` step is **not** `gate-red`: name it in the PR body and report `success`. Nor is a concerns `fail` or `error` from Step 5a: the PR is open with them named, so report `success`. **Immediately before printing it**, run `lane-step-record '<the identical line>'`: it commits the verdict to your branch when `.work/lane.yaml` carries `verdictOnBranch: true` and does nothing otherwise; a non-zero exit is reported in your prose, never by changing the line. That commit is pushed, so it moves the head off the sha Step 6b posted on: when it recorded and pushed, post Step 6b's status again, unchanged, on the new head sha — the verdict commit is empty, so the tree is the one Step 5a checked and nothing is re-run. A failed post is one line in your prose, as in Step 6b. Never emit `infra` — its signal is the line's absence. The format contract is stated once in [unit-lane](../agents/unit-lane.md); do not restate it here.
 
 ## Principles
 

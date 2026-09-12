@@ -2048,13 +2048,18 @@ for needle in \
   '`coherence: { critical, medium, low, shippedUnresolved }` from Step 3' \
   '`fixSlicesAdded:` the number of fix slices Step 3 added' \
   '`adrs:` the ADRs Step 5 wrote or amended' \
-  '`verifyBuild.concerns` is `null` until the concerns ruling writes it' \
+  '`verifyBuild.concerns` is copied from Step 5a'\''s verdict line' \
   'copied from those steps'\'' own reports, never estimated'; do
   present "$VERIFY_BUILD_MD" "$needle" "/verify-build fills verifyBuild: $needle"
 done
 # R7: a worker in a detached pool worktree is not attributed — the undercount
 # must reach the record, never stay silent.
 present "$VERIFY_BUILD_MD" 'droppedDetached=' '/verify-build reads droppedDetached off the verdict line'
+# D78: the bullet says what the code counts, and that a fleet lane's 0 is "not measured".
+present "$VERIFY_BUILD_MD" 'dispatches whose transcript is stamped `gitBranch: HEAD` (a detached checkout, such as a pool worktree)' \
+  '/verify-build: droppedDetached counts transcripts stamped gitBranch: HEAD (D78)'
+present "$VERIFY_BUILD_MD" 'a `/start-multi` unit reports 0 because it is never branch-filtered — 0 means not measured' \
+  '/verify-build: a /start-multi unit'\''s droppedDetached=0 means not measured (D78)'
 present "$VERIFY_BUILD_MD" 'ran in a detached pool worktree and were not attributed' \
   '/verify-build names a detached-worktree undercount in ## What shipped'
 present "$VERIFY_BUILD_MD" 'A failure to measure must never block landing the work' \
@@ -2076,6 +2081,251 @@ else
   fail 'run-metrics --usage-fragment attributes slices through retryLedger, not a second regex' \
        'no `retryLedger([r])` call in scripts/run-metrics.mjs'
 fi
+
+# ---------------------------------------------------------------------------
+printf '\nSeam — concerns-check --decisions verifies a waiver against THIS unit'"'"'s decisions.md\n\n'
+# ---------------------------------------------------------------------------
+
+# slice 5's checker accepts any `decisions.md#D<n>` substring in a waived
+# entry's evidence (D63, D69). With --decisions the citation must resolve, in
+# the named file only, to an entry with kind: waiver, decidedBy: human and a
+# non-empty body. Every case reads the VERDICT LINE (ADR-004), never $?.
+WAIVER_FIXTURES="$CONCERNS_FIXTURES/waiver"
+WAIVER_DECISIONS="$WAIVER_FIXTURES/decisions.md"
+concerns_check_decisions(){
+  # concerns_check_decisions <concerns> <decisions> <expected-substring> <label>
+  out=$( "$CONCERNS_CHECK_BIN" --decisions "$2" "$1" 2>&1 )
+  rc=$?
+  if printf '%s' "$out" | grep -qF -e "CONCERNS-CHECK:v1 $3"; then
+    pass "$4"
+  else
+    fail "$4" "expected verdict containing: CONCERNS-CHECK:v1 $3" "got (rc=$rc): $out"
+  fi
+}
+concerns_check_decisions "$WAIVER_FIXTURES/cites-waiver.md" "$WAIVER_DECISIONS" \
+  'outcome=pass hard=1 soft=0 unmet=none missing=none' \
+  '--decisions: a waived entry citing an existing kind: waiver, decidedBy: human entry -> pass'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-missing-id.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-missing id=C1 decision=D9' \
+  '--decisions: a citation to an id absent from decisions.md -> error naming C1 and D9'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-deviation.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-not-waiver id=C1 decision=D5 value=deviation' \
+  '--decisions: a citation to a kind: deviation entry (decidedBy: human) -> error'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-executor.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-not-human id=C1 decision=D3 value=executor' \
+  '--decisions: a kind: waiver entry decided by an executor -> error, only the owner waives'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-empty-body.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-empty id=C1 decision=D4' \
+  '--decisions: a waiver entry with no body (no verbatim quote) -> error'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-foreign-path.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-foreign-file id=C1 decision=D2' \
+  '--decisions: a path-prefixed citation to another unit'\''s decisions.md -> error, even where D2 is a valid waiver here'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-negated.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-not-waiver id=C1 decision=D1' \
+  '--decisions: "not decisions.md#D1" where D1 is not a waiver -> error'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-waiver-and-executor.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-not-human id=C1 decision=D3' \
+  '--decisions: every citation is verified, not just the first valid one'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-waiver.md" "$WAIVER_FIXTURES/decisions-duplicate-d2.md" \
+  'outcome=error reason=waiver-record-ambiguous id=C1 decision=D2' \
+  '--decisions: a cited id allocated twice in decisions.md -> error, never the first match'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-waiver.md" "$WAIVER_FIXTURES/does-not-exist.md" \
+  'outcome=error reason=waiver-decisions-not-found id=C1' \
+  '--decisions: pointing at a missing file while an entry is waived -> error'
+concerns_check_decisions "$CONCERNS_FIXTURES/waived-with-quote.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-missing id=C1 decision=D999' \
+  '--decisions: slice 5'\''s fake-id waiver fixture, passing without the flag, is caught with it'
+concerns_check_decisions "$WAIVER_FIXTURES/no-waiver-all-met.md" "$WAIVER_FIXTURES/does-not-exist.md" \
+  'outcome=pass hard=1 soft=0 unmet=none missing=none' \
+  '--decisions: no waived entry -> the decisions file is not needed, so a unit with no decisions.md still passes'
+concerns_check_decisions "$CONCERNS_FIXTURES/hard-unmet.md" "$WAIVER_DECISIONS" \
+  'outcome=fail hard=1 soft=0 unmet=C1 missing=none reason=hard-unmet' \
+  '--decisions: a file with no waiver keeps its slice-5 outcome (hard unmet -> fail)'
+concerns_check_decisions "$CONCERNS_FIXTURES/malformed-missing-bar.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=malformed-missing-field id=C1 field=bar' \
+  '--decisions: a malformed concerns.md keeps its slice-5 error'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-other-concern.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-other-concern id=C2 decision=D2' \
+  '--decisions: a hard C2 citing a waiver whose title names only C1 -> error, one concern'\''s waiver never backs another'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-near-miss-id.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-other-concern id=C1 decision=D7' \
+  '--decisions: a waiver titled for C12 and XC1 does not name C1 -> error'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-no-quote.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=waiver-record-no-quote id=C1 decision=D6' \
+  '--decisions: a waiver body with no quoted span (no verbatim owner words) -> error'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-curly-quote.md" "$WAIVER_DECISIONS" \
+  'outcome=pass hard=1 soft=0 unmet=none missing=none' \
+  '--decisions: a waiver quote in curly quotes counts as a quoted span -> pass'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-fenced-waiver.md" "$WAIVER_FIXTURES/decisions-fenced-waiver.md" \
+  'outcome=error reason=waiver-record-missing id=C1 decision=D7' \
+  '--decisions: a waiver entry inside a code fence is prose (as Seam I reads it), never a record -> error'
+concerns_check_decisions "$WAIVER_FIXTURES/cites-backtick.md" "$WAIVER_DECISIONS" \
+  'outcome=error reason=malformed-waived-without-waiver-record id=C1' \
+  '--decisions: a backticked citation is not a citation -> error (Step 5a says write it without backticks)'
+concerns_check 'waiver/cites-backtick.md' 'outcome=error reason=malformed-waived-without-waiver-record id=C1' \
+  'without --decisions a backticked citation errors the same way'
+flagless_out=$( "$CONCERNS_CHECK_BIN" "$WAIVER_FIXTURES/cites-missing-id.md" 2>&1 )
+if printf '%s' "$flagless_out" | grep -qF -e 'CONCERNS-CHECK:v1 outcome=pass'; then
+  pass 'without --decisions the checker behaves as slice 5 shipped (a missing-id citation is not resolved)'
+else
+  fail 'without --decisions the checker behaves as slice 5 shipped (a missing-id citation is not resolved)' "got: $flagless_out"
+fi
+usage_out=$( "$CONCERNS_CHECK_BIN" "$WAIVER_FIXTURES/cites-waiver.md" --decisions 2>&1 )
+usage_rc=$?
+if [ "$usage_rc" -eq 2 ] && ! printf '%s' "$usage_out" | grep -qF -e 'outcome=pass'; then
+  pass '--decisions with no value is a usage error, never a pass'
+else
+  fail '--decisions with no value is a usage error, never a pass' "got (rc=$usage_rc): $usage_out"
+fi
+
+# ---------------------------------------------------------------------------
+printf '\nSeam — /verify-build rules every concern, opens the PR either way, posts flow/concerns (XL-27 F4)\n\n'
+# ---------------------------------------------------------------------------
+
+# ORDER, by line number: the ruling precedes Step 5b (whose commit carries the
+# result), Step 5b precedes the PR, and the status is posted on the PR's head.
+rule_step=$( first_line "$VERIFY_BUILD_MD" '## Step 5a — Rule every concern' )
+measure_step=$( first_line "$VERIFY_BUILD_MD" '## Step 5b — Measure the run' )
+status_step=$( first_line "$VERIFY_BUILD_MD" '## Step 6b — Post the' )
+cost_step=$( first_line "$VERIFY_BUILD_MD" '## Step 7 — Put what the run cost' )
+check_call=$( first_line "$VERIFY_BUILD_MD" 'concerns-check --decisions' )
+status_call=$( first_line "$VERIFY_BUILD_MD" 'statuses/<head-sha>' )
+in_order(){
+  # in_order <label> <n1> <n2> ... — every value present and strictly increasing
+  label=$1; shift
+  prev=''; detail="$*"
+  for n in "$@"; do
+    if [ -z "$n" ] || { [ -n "$prev" ] && [ "$n" -le "$prev" ]; }; then
+      fail "$label" "line numbers (empty = absent): $detail"
+      return
+    fi
+    prev=$n
+  done
+  pass "$label"
+}
+in_order '/verify-build ORDER: Step 5a (rule concerns) < its concerns-check call < Step 5b < Step 6 (open the PR)' \
+  "$rule_step" "$check_call" "$measure_step" "$pr_step"
+in_order '/verify-build ORDER: gh pr create < Step 6b heading < the statuses/<head-sha> post < Step 7' \
+  "$pr_create" "$status_step" "$status_call" "$cost_step"
+
+# Every structural rule below is parsed by one python pass over the file, so a
+# sentence that INVERTS a rule is refuted, not merely outvoted by a needle.
+"$MARKER_PY" - "$VERIFY_BUILD_MD" > "$TMP/vb-concerns" 2>&1 <<'PYVB'
+import re, sys
+path = sys.argv[1]
+text = open(path, encoding="utf-8").read()
+lines = text.splitlines()
+out = []
+def check(ok, label, detail=""):
+    out.append(("ok" if ok else "bad") + "|" + label + "|" + detail.replace("|", "/").replace("\n", " "))
+
+# 1. outcome -> state mapping, grammar: a bullet at column 0 of the exact shape
+#    - `outcome=<o>` → `state=<s>` ...
+MAP = re.compile(r"^- `outcome=([a-z-]+)` → `state=([a-z-]+)`")
+pairs = [MAP.match(l).groups() for l in lines if MAP.match(l)]
+outcomes = [o for o, _ in pairs]
+check(sorted(outcomes) == ["error", "fail", "pass"],
+      "status mapping names each concerns-check outcome exactly once (pass, fail, error)",
+      "got outcomes: %s" % outcomes)
+check(dict(pairs) == {"pass": "success", "fail": "failure", "error": "failure"} and len(pairs) == 3,
+      "status mapping is exactly pass -> success, fail -> failure, error -> failure",
+      "got: %s" % pairs)
+bad_error = [l for l in lines if re.search(r"outcome=error\S*\s.*(?:→|->|\bmaps? to\b|\breads? as\b|\bis\b)\s*`?(?:state=)?success\b", l)]
+check(not bad_error, "no line reads outcome=error as success", " || ".join(bad_error))
+
+# 2. Sentences, with markdown emphasis stripped and whitespace normalised.
+flat = re.sub(r"\s+", " ", text.replace("**", ""))
+sentences = re.split(r"(?<=[.!?])\s+", flat)
+STOP = re.compile(r"(do not|don't|never|must not|cannot|can't|won't|refuse to) (open|push) (the|a) PR"
+                  r"|skip(s|ping)? (opening|Step 6|the PR)|stop(s)? before (opening|Step 6|the PR)"
+                  r"|blocks? (opening|Step 6|the PR)|instead of opening the PR", re.I)
+stops = [s for s in sentences if re.search(r"concern", s, re.I) and STOP.search(s)]
+check(not stops, "no sentence stops or skips opening the PR on a concern", " || ".join(stops))
+
+AGENT_WAIVES = re.compile(r"\b(you|the agent|an agent|agents|the executor|the verifier|the orchestrator|the lane|/verify-build)"
+                          r" (may|can|should|could|is allowed to|decides? to) (set `?verdict: waived`?|waive)", re.I)
+agent = [s for s in sentences if AGENT_WAIVES.search(s)]
+check(not agent, "no sentence lets an agent waive a concern", " || ".join(agent))
+
+# 3. --decisions wherever concerns-check is invoked (the name followed by an argument).
+calls = re.findall(r"concerns-check\s+[^\s`'’),.;:]\S*", text)
+check(bool(calls) and all(c.split()[1] == "--decisions" for c in calls),
+      "every concerns-check invocation in verify-build.md passes --decisions",
+      "calls: %s" % calls)
+
+# 4. No git hook for human pushes; no Actions workflow or App-backed Check Run.
+hooks = re.findall(r"pre-push|post-commit|post-receive|\.git/hooks|core\.hooksPath|husky|lefthook|\.github/workflows|checks API|check-runs", text, re.I)
+check(not hooks, "verify-build.md proposes no git hook, Actions workflow or Check Run for the status", "found: %s" % hooks)
+
+# 5. The PR-body template: the fenced block opening `## <TICKET-ID>`.
+blocks = re.findall(r"^```\n(## <TICKET-ID>.*?)^```$", text, re.S | re.M)
+check(len(blocks) == 1, "exactly one PR-body template block (## <TICKET-ID>)", "found %d" % len(blocks))
+tpl = blocks[0] if blocks else ""
+for f in ("design.md", "decisions.md", "concerns.md", "build-summary.md"):
+    check(re.search(r"\]\(https://github\.com/<owner>/<repo>/blob/<branch>/<path>/%s\)" % re.escape(f), tpl) is not None,
+          "PR-body template links %s as a blob on the branch" % f)
+for h in ("### Slices", "### Verification", "### Unmet hard concerns"):
+    check(("\n" + h + "\n") in ("\n" + tpl), "PR-body template keeps the section %s" % h)
+check(not re.search(r"promot|design narrative", tpl, re.I),
+      "PR-body template no longer promotes the design narrative", tpl[:120])
+promo = [m.group(0) for m in re.finditer(r"Promote the design|promoted from the (?:committed )?design|not\*? committed as a standalone doc", text)]
+check(not promo, "verify-build.md no longer says the design is promoted into the PR body", "found: %s" % promo)
+
+for l in out:
+    print(l)
+PYVB
+if [ ! -s "$TMP/vb-concerns" ] || grep -qv -e '^ok|' -e '^bad|' "$TMP/vb-concerns"; then
+  fail 'the verify-build.md concerns parser ran' "$( cat "$TMP/vb-concerns" )"
+fi
+while IFS='|' read -r verdict_word label detail; do
+  case "$verdict_word" in
+    ok)  pass "/verify-build: $label" ;;
+    bad) fail "/verify-build: $label" "$detail" ;;
+  esac
+done < "$TMP/vb-concerns"
+
+# Presence — each of these is a rule a later edit could drop without anything
+# else going red. The inversions of the load-bearing ones are refuted above.
+present "$VERIFY_BUILD_MD" 'opens the PR either way' '/verify-build opens the PR either way'
+present "$VERIFY_BUILD_MD" 'work-docs-path --item <work_item>' '/verify-build resolves concerns.md through work-docs-path'
+present "$VERIFY_BUILD_MD" 'Only the owner waives.' '/verify-build: only the owner waives'
+present "$VERIFY_BUILD_MD" 'Never waive on an agent'\''s own judgment' '/verify-build: never waive on an agent'\''s judgment'
+present "$VERIFY_BUILD_MD" '`kind: waiver`, `decidedBy: human`' '/verify-build: a waiver appends kind: waiver, decidedBy: human'
+present "$VERIFY_BUILD_MD" 'the owner'\''s verbatim waiver quote' '/verify-build: the decisions.md entry carries the owner'\''s verbatim waiver quote'
+present "$VERIFY_BUILD_MD" 'cites it as `decisions.md#D<n>`' '/verify-build: the C-entry'\''s evidence cites the waiver as decisions.md#D<n>'
+present "$VERIFY_BUILD_MD" '`quote:` stays the raising quote' '/verify-build: quote: stays the raising quote'
+present "$VERIFY_BUILD_MD" 'gh api repos/{owner}/{repo}/statuses/<head-sha> -f context=flow/concerns -f state=<failure|success>' \
+  '/verify-build posts the design'\''s flow/concerns status command shape'
+present "$VERIFY_BUILD_MD" 'context=flow/concerns -f state=<failure|success> -f description="<description>" -f target_url=<blob URL of concerns.md on the branch>' \
+  '/verify-build: the status target_url is the concerns.md blob on the branch'
+present "$VERIFY_BUILD_MD" 'a status cannot be required, so the red mark is advisory in a single flow' \
+  '/verify-build states R5: the status is advisory in a private free-plan repo'
+present "$VERIFY_BUILD_MD" '`/merge-multi` is the hard block' '/verify-build names /merge-multi as the hard block'
+present "$VERIFY_BUILD_MD" 'nothing in this flow reads it back' '/verify-build: the status is display, never read back'
+present "$VERIFY_BUILD_MD" 'A failed status post never blocks landing' '/verify-build: a failed status post never blocks landing'
+present "$VERIFY_BUILD_MD" 'nothing re-posts on a human'\''s push' '/verify-build: no status re-post on a human push (no hook)'
+present "$VERIFY_BUILD_MD" 'every later push this flow makes' '/verify-build re-posts on every push the flow makes'
+present "$VERIFY_BUILD_MD" '140 characters' '/verify-build states the status description length it assumes'
+present "$VERIFY_BUILD_MD" 'with `origin: verify-build`' '/verify-build: a fix slice carries origin: verify-build (D50)'
+present "$VERIFY_BUILD_MD" 'one slice commit per slice' '/verify-build Step 1: one slice commit per slice (D49)'
+present "$VERIFY_BUILD_MD" 'except the counts Step 5b records' '/verify-build Step 3: the review is uncommitted except the counts Step 5b records (D78)'
+present "$VERIFY_BUILD_MD" 'Its title names every C-entry it waives by id (`## D<n> — The owner waives C<n>: <label>`)' \
+  '/verify-build: a waiver entry'\''s title names every C-entry it waives by id'
+present "$VERIFY_BUILD_MD" '`concerns-check` refuses a citation from a C-entry the title does not name' \
+  '/verify-build: the checker refuses a waiver cited by a concern its title does not name'
+present "$VERIFY_BUILD_MD" 'written without backticks' '/verify-build: the waiver citation is written without backticks'
+present "$VERIFY_BUILD_MD" 'post Step 6b'\''s status again, unchanged, on the new head' \
+  '/verify-build Step 9: the lane-step-record push gets the same flow/concerns status on its new head'
+present "$VERIFY_BUILD_MD" 'Among verdicts, only Step 2'\''s `FAIL` holds this step back' \
+  '/verify-build Step 6: among verdicts, only the gate FAIL holds the PR back'
+present "$VERIFY_BUILD_MD" 'no concerns recorded' '/verify-build: an empty concerns.md is "no concerns recorded"'
+for refuted in 'one commit per slice' 'follow-up slice' '`verifyBuild.concerns` is `null` until' 'no concerns raised' 'none raised'; do
+  if grep -qF -e "$refuted" "$( norm "$VERIFY_BUILD_MD" )"; then
+    fail "/verify-build no longer says: $refuted" "found in ${VERIFY_BUILD_MD#"$ROOT"/}"
+  else
+    pass "/verify-build no longer says: $refuted"
+  fi
+done
 
 printf '\n'
 if [ "$failed" -eq 0 ]; then
