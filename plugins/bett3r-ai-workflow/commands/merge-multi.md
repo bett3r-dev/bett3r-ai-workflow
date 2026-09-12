@@ -46,7 +46,7 @@ Print one row per unit and stop on any of these, naming the unit:
 
 **2 — Merge into integration, in dependency order.**
 
-Follow `run.yaml`'s waves — a stacked child after its parent. Merge each unit PR into `int/<run-id>`.
+Follow `run.yaml`'s waves — a stacked child after its parent. Merge each unit PR into `int/<run-id>`. **A stacked child's PR targets its parent's branch**, so `gh pr edit <n> --base int/<run-id>` before merging it — merged in place it reports MERGED and delivers nothing to integration — and delete no unit branch while a PR still targets it: deleting a base closes the child unmerged ([verify-build](./verify-build.md) step 6).
 
 **Resolve conflicts in the integration worktree, as merge commits. Never by rewriting a unit branch** — the unit branch is the artifact the human reviewed and approved, and rebasing it invalidates that review silently. Rules that apply to any merge in this flow apply here:
 
@@ -72,7 +72,7 @@ A red gate is **fixed on integration**, not deferred. If a failure traces cleanl
 
 So collect the union of issues referenced across every unit PR, and carry them into the **integration** PR body — **one `closes` keyword per issue**, repeated. `Closes #56, closes #62, closes #63`. A bare list (`Closes #56, #62`) closes the first and turns the rest into mentions.
 
-**RECONCILE the manifest before you open the PR.** `run.yaml` declares the run's units and you have just enumerated what merged: compute **`declared − landed`**. If it is non-empty, the integration PR body states it **under its own heading** and the report leads with it; a unit deliberately dropped is recorded **as dropped, with a reason**, because deliberate omission and silent disappearance must not look identical. One line of set arithmetic against state you already hold — and without it a nine-unit run once landed eight, with every per-unit gate green and correct, the integration gate green and correct, and the PR merged honestly. Nothing anywhere asks *"is anything missing?"*, and **the integration branch name is not evidence of scope** — it is derived from the requested unit list at cut time and never revised, so it asserts a scope the run may not have delivered and reads as confirmation rather than contradiction. The only other place the gap was visible was the tracker, to someone who went looking.
+**RECONCILE the manifest before you open the PR.** `run.yaml` declares the run's units and you have just enumerated what merged: compute **`declared − landed`**. If it is non-empty, the integration PR body states it **under its own heading** and the report leads with it; a unit deliberately dropped is recorded **as dropped, with a reason**, because deliberate omission and silent disappearance must not look identical. One line of set arithmetic against state you already hold — without it a nine-unit run once landed eight with every gate green and correct. **The integration branch name is not evidence of scope**: it is derived from the requested unit list at cut time and never revised, so it reads as confirmation of a scope the run may not have delivered.
 
 **The epic's goal oracle is reported here, red or green.** A fleet that lands every unit with the goal oracle still red is a **reportable outcome, not a silent success**.
 
