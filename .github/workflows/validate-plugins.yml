@@ -120,6 +120,18 @@ jobs:
           sh scripts/test-esas-design.sh
           PREFLIGHT_SH=dash sh scripts/test-esas-design.sh
           PREFLIGHT_SH=bash sh scripts/test-esas-design.sh
+      # /build runs ready slices concurrently in a reusable worktree pool, and
+      # the git half of that (size, provision, unconditional reset, cherry-pick
+      # land, guarded teardown) is `bin/worktree-pool`. A new script under
+      # plugins/ is collected by no step above — the hook suites hardcode their
+      # scripts — so without this step it would ship with the workflow green.
+      # The suite drives it over throwaway git repos with stub install/build
+      # commands. POOL_SH varies the launcher's interpreter with the suite's.
+      - name: Test the worktree pool (throwaway git repos)
+        run: |
+          sh scripts/test-worktree-pool.sh
+          POOL_SH=dash dash scripts/test-worktree-pool.sh
+          POOL_SH=bash bash scripts/test-worktree-pool.sh
 
       # `bin/check-skill-shadows` runs in HOST repos, not here — it compares a
       # repo's `.claude/` against the plugins actually installed on that machine,

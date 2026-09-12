@@ -1,6 +1,6 @@
 ---
 name: provisioner
-description: Makes one already-cut worktree actually ready to build — install *and* build, scrub inherited `.work/`, lay multi-repo checkouts out, capture the baseline. Use from `/start-multi` step 2, once per unit, before any unit agent is dispatched.
+description: Makes one already-cut worktree actually ready to build — install *and* build, scrub inherited `.work/`, lay multi-repo checkouts out, capture the baseline. Use from `/start-multi` step 2, once per unit, before any unit agent is dispatched; or from `/build` step 2, once per `worktree-pool` worktree, serially, before any slice runs in it.
 tools:
   - Read
   - Write
@@ -21,6 +21,14 @@ You take **one worktree that has already been cut** and make it ready. You do no
 The orchestrator hands you: the unit id, the worktree path, the repo kind (`standard` | `multi-repo` | `cross-repo/no-build`), the run id and its integration branch, the run directory, and the scratchpad subdirectory allocated to this unit. If any is missing, ask for it rather than inferring — inferring a path here writes into another lane.
 
 A **cross-repo / no-build** unit has no worktree at all. If that is the kind you were given, there is nothing to provision: report READY immediately and say so.
+
+### When `/build` dispatches you for a pool worktree
+
+A `/build` pool worktree is **not a lane**: the task branch's slices run in it one after another, and it is reset between them. So your input is the worktree path, the task branch, the host repo's install and build commands, and a scratchpad subdirectory — there is no run id, integration branch or run directory, and you do not ask for them.
+
+- **1 applies, with the install and build made by the script.** Stage the local config and probe the test tiers as written, then run install and build as `worktree-pool reset <worktree> <task-branch> --install '<cmd>' --build '<cmd>'` and report its `WORKTREE-POOL:v1` line. Not a hand-run install: `/build` resets through the same call before every slice, so the pool has one definition of what readiness runs.
+- **4 applies** as written.
+- **Skip 2, 3, 5, 6 and 7.** The worktree was cut moments ago, so there is no inherited `.work/`; the pool is laid out by `worktree-pool`, not by repo; and the brief, the design layer and the baseline stay the orchestrator's, in its own checkout. **Never write `.work/lane.yaml` into a pool worktree** — a brief there claims a lane that does not exist.
 
 ## 1 — Install *and* build
 

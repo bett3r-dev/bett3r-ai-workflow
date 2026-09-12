@@ -4,16 +4,16 @@ description: Drive each vertical slice to green through the dual gate (executor 
 
 # /build — drive the slices
 
-Execute the slices in `.work/slices.yaml`, one at a time, each through the **dual gate**, committing each as it passes. You are the orchestrator: you **dispatch agents and commit** — you do not implement code yourself.
+Execute the slices in `.work/slices.yaml` — one at a time in the main tree, or, when Step 2 finds more than one ready at once, concurrently in a worktree pool — each through the **dual gate**, committing each as it passes (and, in the pool, landing it on the task branch). You are the orchestrator: you **dispatch agents and commit** — you do not implement code yourself.
 
 ## Argument: $ARGUMENTS
-Optional slice id(s) to run (e.g. `2` or `2,3`). Default: all `passes: false` slices.
+Optional slice id(s) to run (e.g. `2` or `2,3`). Default: all `passes: false` slices. `--max-parallel N` caps how many slices run at once (Step 2); absent, only the plan's width and the brief's `worktreePoolMax` do.
 
 ---
 
 ## Step 0 — Read your brief, if there is one
 
-**If `.work/lane.yaml` exists, read it before anything else.** It is this unit's whole brief — written into the worktree from the outside — and it is where your inputs come from, not the caller. Take from it: `runners` (the host repo's runner/glob map — which command runs which test paths, so the mechanical gate resolves the slice's artifact to a runner that actually collects it), `preconditions` (the host repo's build/test preconditions), `modelRouting`, and `adrAllocations`. Its **absence is a valid state** (a single `/start` flow has no brief), so say which of the two you ran under rather than defaulting silently: a missing brief and a unit that legitimately has none are indistinguishable, and that is exactly how a lane runs on the wrong defaults with nothing red.
+**If `.work/lane.yaml` exists, read it before anything else.** It is this unit's whole brief — written into the worktree from the outside — and it is where your inputs come from, not the caller. Take from it: `runners` (the host repo's runner/glob map — which command runs which test paths, so the mechanical gate resolves the slice's artifact to a runner that actually collects it), `preconditions` (the host repo's build/test preconditions), `modelRouting`, `adrAllocations`, and `worktreePoolMax` (the venue's cap on the worktree pool, Step 2 — read only; the venue writes it). Its **absence is a valid state** (a single `/start` flow has no brief), so say which of the two you ran under rather than defaulting silently: a missing brief and a unit that legitimately has none are indistinguishable, and that is exactly how a lane runs on the wrong defaults with nothing red.
 
 Never accept these facts at the invocation instead. A step that learns a fact from whoever called it is a step **the other caller cannot run** — the per-step surface exists so that a step invoked on its own, by a caller it never spoke to, behaves identically.
 
@@ -25,9 +25,29 @@ Read `.work/slices.yaml`. If it doesn't exist: "No slices found. Run `/plan` fir
 
 The `passes` flags + the git history **are** the progress — there is no separate progress file. Skip any slice already `passes: true` (report "resuming").
 
-## Step 2 — Order the slices
+## Step 2 — Order the slices, and size the worktree pool
 
-Order by `depends_on` (topological). The **tracer-bullet slice runs first**. Slices with no unmet `depends_on` are independent and *may* be run in parallel (dispatch their executors concurrently) — but commit them one at a time so each commit stays coherent. When unsure, go sequential.
+Order by `depends_on` (topological). The **tracer-bullet slice runs first**. Slices ready at the same moment — every `depends_on` already landed — run concurrently, **each in its own worktree from a reusable pool**, and never side by side in one tree: one tree shares whole-repo build output, half-written files another slice's typecheck reads, generators, the lockfile and the git index. Everything else runs sequentially **in the main tree**, as it always has.
+
+**The git mechanics are `worktree-pool`'s; the decisions are yours.** It sizes, provisions, resets, lands and tears down, and ends every call with one `WORKTREE-POOL:v1 cmd=… outcome=…` line. Redirect its output to a file and **read that line** — never the exit code alone (ADR-004). What is ready, which commit lands first, and what a refusal means are decided here, not by the script.
+
+A call that prints **no verdict line** died before concluding. That is never a pass and never an outcome to reconstruct from git state: stop using the pool, check `git status` in the main checkout (a land may have died mid-cherry-pick), report it, and finish the remaining slices sequentially in the main tree.
+
+1. **Size it.** `worktree-pool size .work/slices.yaml [--only <ids>] [--max-parallel N] [--pool-max N]`. Pass `--only` with the slice ids from `$ARGUMENTS` when this run is targeted, so the pool is sized for the slices that will actually run, not the whole plan. Pass `--pool-max` only with the brief's `worktreePoolMax` (a venue's disk cap — read it from `.work/lane.yaml`, never write it; a brief without the key means no cap), and `--max-parallel` only when this invocation was given one. The width is the largest set of those slices that can be ready at once. **`pool=0` means no pool** — width 1, or a cap below 2: run every slice sequentially in the main tree, provision nothing, and skip the rest of this step. **`outcome=error` → stop before dispatching anything** and report the `reason=`: `dependency-cycle`, `unknown-dependency` and `unreadable-plan` are `/plan` defects; `unmet-dependency-outside-only` means a targeted slice's parent is neither passed nor targeted — ask for the parent to be included rather than building the child on a branch without it.
+2. **Provision once, serially, before any slice runs.** Resolve the host repo's install and build commands (the brief's `preconditions`, else its CLAUDE.md and `.claude/rules/`; say which, and pass `''` for one the repo does not have). Run `worktree-pool provision <pool>` and require `outcome=provisioned`. Then dispatch the `provisioner` agent for each listed worktree **one at a time**, and never while any gate of yours is running: concurrent cold builds contend for the same cores, and a gate under load fails falsely. `outcome=refused` (a path in the way that is not a worktree — never delete it; or `reason=reused-worktree-holds-work`, a previous run's worktree still holding an escalated slice's files or an unlanded commit — name its `path=` in the report as held work for a human, and never reset or remove it) or `outcome=failed` → no pool this run: `worktree-pool teardown` whatever it added, run the slices sequentially in the main tree, and report the reason. That costs speed, never correctness.
+3. **Reset before every take, unconditionally.** Before a worktree takes a slice — its first included — run `worktree-pool reset <worktree> <task-branch> --install '<cmd>' --build '<cmd>'` and require `outcome=reset`. Its install and build run **whether or not anything changed**, and that is the point: a reused tree inherits stale `.tsbuildinfo` and stray compiled `.js` shadowing sources, and a warm tree must cost time, never correctness (`remote-ai-agents` D6). Never skip it because the lockfile did not move. `outcome=failed step=install|build` → retry that reset once (an install is the likeliest thing here to be environmental), then retire the worktree. `outcome=refused reason=unlanded|dirty` → the worktree holds work: retire it. A retired worktree's slice goes to another worktree, or to the main tree once none is left.
+   **A worktree whose slice did not land takes no further slice until teardown** — whether the slice escalated at the gate, exhausted its retries, or conflicted at the land. Its reset would switch and `git clean -fd` the slice's work away, and a slice that escalated at the gate has **no commit** to protect it: a new-files-only slice is nothing but untracked files, which the reset's dirty check deliberately does not count. So it is retired, never reset, and teardown's refusal is what keeps that work on disk for a human.
+4. **Dispatch into the worktree.** Each ready slice runs its full Step 3 dual gate there — executor, test-runner, scope-check and verifier are all handed the worktree path as the project directory — and its Step 4 commit is made in that worktree. A dependent slice becomes ready only after its parent's commit **landed**: its reset takes the task-branch tip, so a parent still sitting in a worktree does not exist for it.
+5. **Land in dependency order, parents first.** For each green slice, `worktree-pool land <worktree> <sha> --base <reset tip>`, where `<reset tip>` is the `tip=` of that worktree's last reset verdict — only a sha strictly after it can be this slice's commit. Read by outcome:
+   - `outcome=landed` → Step 4's `passes: true` happens now, recording the verdict's `sha=` — the **landed** sha, never the worker's — in `.work/slices.yaml`. **`already=true` reads the same way**: the change was already on the branch (a resumed run re-landing after a crash between the land and the record), and `sha=` names the commit carrying it. Record it; do not re-run the slice.
+   - `outcome=conflict` → the task branch is untouched: ESCALATE that slice with the verdict's `paths=`, do not resolve it by hand, and do not dispatch its dependants. Its worktree keeps the commit and is retired (step 3).
+   - `outcome=refused reason=main-checkout-dirty` → your own main tree has tracked modifications, which is Step 4's contamination: stop landing and surface them — never commit or discard them to make a land go through. Untracked files in the main checkout do not refuse a land.
+   - `outcome=refused reason=sha-not-in-worktree` → the worker reported a sha its worktree does not hold. Read that worktree's `git log` yourself: if exactly one commit is in `<reset tip>..HEAD` of that worktree, land it; otherwise ESCALATE. Never land a sha from another worktree.
+   - `outcome=refused reason=sha-not-after-base` → the sha is the reset tip or older, so the worker made no commit for this slice: it is not built. Never set `passes: true`; read it as a gate failure: re-dispatch the executor into the same worktree within the retry budget (its uncommitted work stays where it is, as a main-tree retry's would), and once the retries are spent, ESCALATE and retire the worktree (step 3).
+   - `outcome=failed step=cherry-pick` → git refused before any conflict (an untracked main-tree file the commit would overwrite, or an empty pick with no equivalent on the branch). The branch is untouched: ESCALATE the slice with the output.
+   - `outcome=error` → a usage defect, or `reason=tip-moved-after-abort`: stop all landing and inspect the task branch before anything else.
+6. **Workers never write the record.** A worker reports facts in its result — its commit sha, gate verdicts, the deviations it flagged — and you alone write `.work/slices.yaml`, in the main tree, after the land. One writer, so a resumed run reads one file that cannot disagree with itself.
+7. **Tear down once every slice landed.** `worktree-pool teardown`; `outcome=removed` ends the pool. `outcome=refused reason=unlanded|dirty` names worktrees still holding work — a commit on no branch, or the uncommitted files of a slice that escalated at the gate. Leave them, name them in the Step 5 report, and never remove them by hand. `outcome=failed step=worktree-remove` → report the path; never retry with force.
 
 ## Model routing — every dispatch names its model
 
@@ -59,6 +79,14 @@ For each slice, in order, in a **fresh agent context**:
    `provisioner` copies `design.json` + `graph.json` into `.work/design-snapshot/` and the
    scaffolder is pointed at them (`--design` / `--graph`). Emitted paths still resolve against the
    worktree. **Never create a `.esas/` in a worktree to enable this.**
+
+   **In a pool worktree, read the main checkout's design layer, never a copy.** The worktree was
+   reset from the task branch the main checkout has checked out, so its `.esas/design.json` and
+   `.esas/graph.json` are this slice's design layer: run the scaffolder from the worktree with
+   `--design` / `--graph` pointed at those two files, so emitted paths resolve against the worktree,
+   and never create a `.esas/` there. Trust it only while the worktree's reset tip is still the main
+   checkout's `HEAD`; once a sibling has landed since, skip the step and say *snapshot sha ≠ this
+   worktree's base*.
 
    **Re-check the snapshot's sha before trusting it.** `manifest.yaml` records the sha its
    `graph.json` was extracted from; if that is not this worktree's base commit, the graph is wrong
@@ -137,7 +165,7 @@ For each slice, in order, in a **fresh agent context**:
    - **test green AND verifier PASS** → **commit the slice** (Step 4).
    - **RETRY or test fail** → re-dispatch the `executor` with the specific feedback. **Max 2 retries**, then ESCALATE. Re-dispatch on `opus` if the first pass ran on `sonnet` — a retry is the evidence that slice was mis-routed.
    - **Every retry is classified, in one line, before it is dispatched.** A second executor pass is the single most expensive event in this loop — it re-pays a whole context — so the rate is worth driving down, and it cannot be driven down without knowing which of these it was: `oracle-wrong` (the test encoded the wrong rule) · `design-silent` (the slice under-specified a seam the executor had to guess) · `ripple` (something outside the slice's surface broke) · `invariant` (the repo rule was not followed) · `mis-routed` (too cheap a model) · `flake` (environment, not the slice). Carry the tally into the Step 5 summary and the PR body. **Retry *rate* is already measured** — `/run-report` prints first-pass green per `/build` invocation — but the rate alone names no fix; the classification is what turns 43%-not-green into a change to `/plan` or to a slice's `gates`.
-   - **ESCALATE** → stop this slice and surface it to the user (do not silently proceed). Independent already-committed slices stay committed.
+   - **ESCALATE** → stop this slice and surface it to the user (do not silently proceed). Independent already-committed slices stay committed. **In a pool, read "committed" as *landed*:** a slice committed in its worktree but not landed is on no branch, and an escalated slice's worktree takes no further slice until teardown (Step 2).
 
 ## Step 4 — Commit the slice
 
@@ -153,6 +181,8 @@ When a slice passes both gates:
    ```
    One slice = **one commit** — do not re-group across slices the way a bulk `/commit` would.
 3. **Set `passes: true` for that slice in `.work/slices.yaml`, in the same turn as the commit** — and, when running under a fleet, append the commit sha to the unit's state file in the same breath. **The flag is the resume point.** A resumed agent decides what to redo from it, so a committed slice left `passes: false` gets **re-executed** — including the subtle reversals that cost the most to get right the first time. This is not bookkeeping and it is not hypothetical: a transport error has killed four lanes in the same second, and one lane sat on six committed slices with a state file reading `slicesDone: 1`.
+
+   **In a pool, this happens at the land, with the landed sha** — never at the worker's commit, which is on no branch yet: set `passes: true` when `worktree-pool land` reads `outcome=landed` (Step 2), and append the verdict's `sha=`, not the worker's, to a fleet's state file.
 
    Then **re-read the file.** Do not infer the edit's effect from the edit's own success output — a fix-up regex that matched nothing on an indentation mismatch still printed success.
 

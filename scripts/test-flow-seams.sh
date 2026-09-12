@@ -1045,6 +1045,45 @@ else
   pass 'an inline marker missing run= is refused despite run= in the prose'
 fi
 
+printf '\nSeam H — /build runs ready slices in a worktree pool, through the script\n\n'
+# ---------------------------------------------------------------------------
+#
+# The git mechanics are executed by scripts/test-worktree-pool.sh. What no
+# suite can execute is /build CHOOSING to call them, so these needles pin the
+# calls and the one rule most likely to be "optimised" away: the reset that runs
+# install and build even when nothing changed.
+for sub in size provision reset land teardown; do
+  present "$BUILD_MD" "worktree-pool $sub" "/build calls worktree-pool $sub"
+done
+present "$BUILD_MD" 'unconditionally' '/build resets a pool worktree unconditionally'
+present "$BUILD_MD" 'Never skip it because the lockfile did not move' \
+  '/build refuses the lockfile-conditional reset by name'
+present "$BUILD_MD" 'worktreePoolMax' '/build reads the brief'\''s worktreePoolMax'
+present "$BUILD_MD" 'the **landed** sha, never the worker'\''s' '/build records the landed sha'
+present "$BUILD_MD" 'Workers never write the record' '/build keeps the orchestrator the single writer'
+present "$BUILD_MD" 'takes no further slice until teardown' \
+  '/build retires a worktree whose slice did not land (its uncommitted work survives to teardown)'
+present "$BUILD_MD" '[--only <ids>]' '/build sizes a targeted run by the slices it will run'
+present "$BUILD_MD" 'already=true' '/build reads an idempotent re-land as landed'
+present "$BUILD_MD" 'reason=main-checkout-dirty' '/build has a reading for a refused land, not only landed/conflict'
+present "$BUILD_MD" 'no verdict line' '/build reads a missing verdict line as the script dying, never as a pass'
+present "$BUILD_MD" 'In a pool worktree' '/build says where step 0 reads the design layer for a pool slice'
+present "$BUILD_MD" 'at the land, with the landed sha' '/build Step 4 sets passes: true at the land for a pool slice'
+
+# And the same-tree parallelism it replaced is gone. Asserting only the new
+# text would stay green with both procedures present, and the old one is the
+# shorter and more tempting to follow.
+for old in 'be run in parallel (dispatch their executors concurrently)' 'When unsure, go sequential'; do
+  if grep -qF "$old" "$( norm "$BUILD_MD" )"; then
+    fail '/build no longer carries the same-tree "may be run in parallel" procedure' "still present: $old"
+  else
+    pass "/build no longer carries: $old"
+  fi
+done
+
+present "$PROVISIONER_MD" 'Use from `/start-multi` step 2, once per unit' 'the provisioner still serves /start-multi'
+present "$PROVISIONER_MD" 'or from `/build` step 2, once per `worktree-pool` worktree' 'the provisioner is dispatchable for a /build pool worktree'
+
 printf '\n'
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"
