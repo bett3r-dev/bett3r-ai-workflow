@@ -172,7 +172,7 @@ Three things about it:
 tool's actual schema in your harness, and where no such flag exists (absent in
 every harness observed so far) block on the child's completion notification. Never `SendMessage` a child you are waiting on — that leaves you
 **idle, not working**, because its resumes notify the top-level session and yours
-do not; a fix pass is a fresh `Agent` dispatch, accepting the lost context.
+do not; a fix round is a fresh `Agent` dispatch carrying `/build`'s fix-round brief, accepting the lost context.
 
 **Name the model on every dispatch** — an unnamed child inherits the session's,
 which is the most expensive one available. Your brief carries the routing;

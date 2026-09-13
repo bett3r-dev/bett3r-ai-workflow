@@ -59,6 +59,10 @@ The same discipline applies to source: read the region you need rather than a wh
 
 **Run every build/test/git command in the foreground.** A backgrounded Bash job's completion re-invokes the *main* loop, never a subagent, so ending your turn to await one deadlocks you permanently. Note the ceiling that makes this more than a preference: Bash auto-backgrounds at 600 s, so a gate that exceeds it is backgrounded *against* your instruction. The recovery is a blocking waiter on the pid or a sentinel file — never a re-run, never arming a watch. And never pipe a gate — redirect it, per the rule above.
 
+## Fix rounds
+
+When verifier findings come back to you — continued in this context, or in a fresh brief — fix **those findings** and nothing adjacent, re-run the oracle, and answer each one: `Fn → what changed (file:line)`, or `Fn → disputed: <evidence>` where you believe it is wrong. A dispute with evidence costs less than a fix to a non-defect. Continuing you exists to save the re-read: go back to the rules or the design only where a finding sends you.
+
 ## Report
 
 **Status:** COMPLETED | PARTIAL | BLOCKED
@@ -67,7 +71,9 @@ The same discipline applies to source: read the region you need rather than a wh
 
 **Behavior delivered:** [how the slice's behavior is now exercisable end-to-end]
 
-**Oracle status:** [does the slice's declared test exist and pass? if you couldn't run it, say so]
+**Oracle status:** [does the slice's declared test exist and pass? Paste the runner's own summary lines from your last run verbatim (`Tests: …`, `Test Suites: …`) with the command — on a fix round `/build` reads its test gate from them. If you couldn't run it, say so.]
+
+**Per-finding response:** [fix rounds only — one line per finding, as above]
 
 **RED evidence:** [the failure message you saw when the oracle ran *before* implementation, confirming it failed for absent behavior — not a typo/import/compile error. If you couldn't get a clean RED, say so.]
 

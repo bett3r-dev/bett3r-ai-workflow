@@ -260,8 +260,24 @@ function analyzeRun(rows, meta = {}) {
   const top = (m) => [...m.entries()].sort((a, b) => b[1] - a[1])
   const dominant = (m) => (top(m)[0]?.[0]) ?? 'unknown'
 
+  // A fix round sent to an agent that already reported (SendMessage) writes no
+  // new transcript: the resume lands in THIS one, as a later user row carrying
+  // text. Count those, so a continued executor is still a second pass. The one
+  // other later text row seen in real transcripts is the background-wake
+  // banner, which is not a pass.
+  const userText = (r) => {
+    const c = r.message?.content
+    if (typeof c === 'string') return c
+    if (!Array.isArray(c) || c.some(x => x.type === 'tool_result')) return null
+    const t = c.filter(x => x.type === 'text').map(x => x.text ?? '')
+    return t.length ? t.join('\n') : null
+  }
+  const texts = ev.filter(r => r.type === 'user').map(userText).filter(t => t !== null)
+  const resumes = texts.slice(1).filter(t => !t.startsWith('[SYSTEM NOTIFICATION')).length
+
   return {
     agentType: meta.agentType ?? null,
+    resumes,
     description: meta.description ?? null,
     spawnDepth: meta.spawnDepth ?? 0,
     start: span0, end: span1,
@@ -595,7 +611,9 @@ function collectRun(branch, sessionFiles) {
 /**
  * Executor attempts per slice — the lever, since a failed gate costs a whole
  * extra pass. Scoped to ONE build invocation: across two `/build` passes the
- * same slice legitimately has two executors and that is not a retry.
+ * same slice legitimately has two executors and that is not a retry. A dispatch
+ * is one pass, and each resume of it (a fix round continued with SendMessage)
+ * is another.
  */
 function retryLedger(runs) {
   const slices = new Map()
@@ -606,10 +624,10 @@ function retryLedger(runs) {
     const m = d.match(/slice\s*(\d+)/i) ?? d.match(/\bS(\d+)\b/)
     const key = m ? `slice ${m[1]}` : 'unattributed'
     const s = slices.get(key) ?? { slice: key, executor: 0, verifier: 0, test: 0, activeMs: 0, tokens: 0, added: 0, removed: 0, rework: false }
-    if (role === 'executor') s.executor++
-    if (role === 'verifier') s.verifier++
+    if (role === 'executor') s.executor += 1 + (r.resumes ?? 0)
+    if (role === 'verifier') s.verifier += 1 + (r.resumes ?? 0)
     if (role === 'test-runner') s.test++
-    if (/rework|retry|correction/i.test(d)) s.rework = true
+    if (/rework|retry|fix round|correction/i.test(d) || r.resumes) s.rework = true
     s.activeMs += r.activeMs
     s.tokens += r.tokens.input + r.tokens.cacheWrite + r.tokens.cacheRead + r.tokens.output
     s.added += r.linesAdded; s.removed += r.linesRemoved

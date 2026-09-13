@@ -97,9 +97,20 @@ Before emitting any finding at **Critical/High** severity, attempt to **disprove
 
 Report only findings that survive this. State the disproof attempt for each Critical you *do* report (call site read, blame result, repro), so the reader can trust it without re-deriving it.
 
+## Re-check mode — a fix round
+
+Your prompt says **re-check mode** when you already returned RETRY on this slice and its executor has answered. It carries your previous findings verbatim (whether you were continued or dispatched fresh), the diff since the tree you reviewed, and the executor's response per finding. You are the same gate over a narrower surface:
+
+- **Judge each finding against the diff, never against the response.** `FIXED` names the hunk that fixes it; `NOT FIXED` names what still holds, at `file:line`; a finding the executor disputed instead of changing is `UPHELD` or `WITHDRAWN`, with the evidence. A "fixed" with no hunk behind it is `NOT FIXED`.
+- **Read every hunk no finding explains as new work**, under whichever checks above apply to it — a fix that introduces a defect is the common shape.
+- **Do not reload the standard.** Re-read only the rules and design sections that govern the hunks in this diff; the rest of your first verdict stands.
+- **Widen to a full pass, and say which trigger fired,** when the diff touches a file none of your findings named, removes or skips a test, edits the oracle, or changes a claim in the design docs — or when a fix shows your first pass misread the slice.
+
 ## Report
 
 **Status:** PASS | RETRY | ESCALATE
+
+**Findings (re-check mode only):** a table — `Fn → FIXED | NOT FIXED | UPHELD | WITHDRAWN → evidence` — and the trigger, if you widened. A section a narrow re-check did not revisit reads "unchanged from the first verdict".
 
 **Behavior:** VERIFIED | FAILED — [evidence]
 

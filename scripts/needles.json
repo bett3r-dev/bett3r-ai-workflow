@@ -939,6 +939,20 @@
       "commit": "f69025c",
       "was_in": "plugins/bett3r-ai-workflow/commands/merge-multi.md",
       "note": "ADR-005 (XL-27). The flow/concerns commit status is advisory (a private free-plan repo cannot require it, and a post can fail); /merge-multi runs concerns-check itself on each unit head and refuses to merge anything but outcome=pass (design critique C2)."
+    },
+    {
+      "needle": "a continued agent never takes another slice",
+      "issue": 361,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
+      "note": "A fix round continued with SendMessage stays in the transcript it resumes: run-metrics attributes by dispatch description and counts each resume as a pass, so an agent resumed onto another slice bills its whole life to the first (one verifier resumed across ten slices did)."
+    },
+    {
+      "needle": "with no hunk behind it",
+      "issue": 361,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/agents/verifier.md",
+      "note": "Re-check mode judges each finding against the fix-round diff, never the executor's response — the narrowed pass must not become a relay of 'fixed'."
     }
   ]
 }
