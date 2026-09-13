@@ -71,6 +71,8 @@ slices:
     behavior: "<the one observable behavior, end to end, in the ubiquitous language>"
     oracle: "<the test that proves it — what it asserts>"
     gates: ["<project invariant the verifier must confirm>", ...]
+    surface: { files: 4, sites: 60 }  # counted at the base; over 10 files or 200 sites → split,
+                                   #   unless `atomic: <why it cannot compile half-done>`
     model: sonnet                  # OPTIONAL. Present only on mechanical slices; absent means opus.
     designs: [subdomain_pol_slug]  # OPTIONAL. Design node ids this slice delivers, when the
                                    #   unit has an .esas/design.json. Scopes /build's scaffold.
@@ -86,7 +88,7 @@ slices:
 ## Anti-patterns
 
 - **Slicing by component/layer** (one ticket per schema/aggregate/readmodel) — the trap *The principle* opens on, usually a sign the plan was shaped to fit specialized tooling. Re-cut by behavior.
-- **Over-slicing below an observable behavior.** The floor is "smallest *observable behavior*", not "smallest *change*". Below that you pay loop/setup overhead for sub-behaviors.
+- **Over-slicing below an observable behavior.** The floor is "smallest *observable behavior*", not "smallest *change*". Below that you pay loop/setup overhead for sub-behaviors. **The ceiling belongs to the fix round**: a sweep over 10 files or 200 sites is split (`/plan` Step 3), because one finding anywhere in it re-opens the whole sweep.
 - **Deferring invariants** to a later slice — produces half-formed aggregates that pass tests and ship defects.
 - **Slicing only one side of a contract.** When a unit introduces a contract between two parties — a producer and a consumer, a writer and a reader, a caller and a callee — name the slice that builds **each** side, or state which side is out of scope and why. A unit that ships one side is **green by construction**: the tests can only exercise the half that exists, and the specified degrade path is indistinguishable from the system working. One unit sliced the *reading* of a step contract three ways — spec, parser, reader, plus a uniqueness guard — shipped 41→77 tests, both gates green on every slice, and the marker was emitted by nothing. This is not the tracer bullet rule: every slice there was genuinely vertical and individually complete; the gap is **between** slices, in the set, which is why it belongs to `/plan` and no single slice's gate can see it. The check is one question over the slice list: *for every contract this unit introduces, which slice writes it and which slice reads it?*
 - **Pure-vertical-from-line-one** when a genuinely shared foundation (a schema five slices depend on, a migration) is needed first. That is exactly what prefactoring + the tracer bullet establish — just-enough shared skeleton, once, then go vertical.
