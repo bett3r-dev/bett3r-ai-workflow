@@ -355,11 +355,11 @@ function extractPhaseMarks(rows) {
  * The run dir is found from the worktree itself: `.work/lane.yaml`
  * names the run id, and the run dir is `.work/multi/<runId>/` in the main
  * checkout (`git rev-parse --git-common-dir` → its parent). `--fleet <dir>`
- * overrides both.
+ * overrides both — it is the only run dir consulted.
  */
 function fleetRunDirs(explicit, cwd) {
   const dirs = []
-  if (explicit) dirs.push(explicit)
+  if (explicit) return existsSync(join(explicit, 'agents.yaml')) ? [explicit] : []
   const git = (args) => { try { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() } catch { return null } }
   const marker = join(cwd, '.work', 'lane.yaml')
   if (existsSync(marker)) {
@@ -381,7 +381,7 @@ function fleetRunDirs(explicit, cwd) {
 /** Parse the flow-style `- { k: v, ... }` rows of agents.yaml without a yaml dependency. */
 function readAgentsYaml(runDir) {
   const text = readFileSync(join(runDir, 'agents.yaml'), 'utf8')
-  const out = { lanes: [], provisioners: [] }
+  const out = { lanes: [], provisioners: [], serial: [] }
   let section = null
   for (const line of text.split('\n')) {
     const h = line.match(/^(\w+):\s*$/)
@@ -420,17 +420,38 @@ function locateAgent(agentId) {
   return agentIndex.get(agentId) ?? null
 }
 
+/** Every unit an agents.yaml names, merged across its sections by unit id. */
+function fleetUnits(y) {
+  const units = new Map()
+  for (const r of [...y.lanes, ...y.serial, ...y.provisioners]) {
+    const key = r.unitId ?? r.branch
+    const prev = units.get(key) ?? {}
+    if (key) units.set(key, { unitId: prev.unitId ?? r.unitId, branch: prev.branch ?? r.branch })
+  }
+  return [...units.values()]
+}
+
 /**
  * Resolve `branch` (a unit branch, or a unit id) to its lane through the fleet
  * run dirs. Returns null when it is not a fleet unit.
+ *
+ * A lane row marked `status: superseded` is never the resolution: its agent
+ * stopped early and the unit was driven by someone else — serially, by the
+ * orchestrator after `EnterWorktree`, which stamps the unit branch on its
+ * records. With no live lane the unit resolves by that branch (`byBranch`).
  */
 function findFleetLane(branch, { fleet = null, cwd = process.cwd() } = {}) {
   for (const runDir of fleetRunDirs(fleet, cwd)) {
     const y = readAgentsYaml(runDir)
-    const lane = y.lanes.find(l => l.branch === branch || l.unitId === branch)
-    if (!lane) continue
-    const file = lane.agentId ? locateAgent(lane.agentId) : null
-    if (!file) continue
+    const matches = (r) => r.branch === branch || r.unitId === branch
+    const lane = y.lanes.find(l => matches(l) && l.status !== 'superseded')
+    const file = lane?.agentId ? locateAgent(lane.agentId) : null
+    if (!file) {
+      const unit = fleetUnits(y).find(matches)
+      const why = lane ? `lane agent ${lane.agentId} has no transcript on disk` : 'no live lane row (superseded or serial)'
+      if (unit?.branch) return { runDir, unit, byBranch: unit.branch, why }
+      continue
+    }
     const provIds = [...y.provisioners.filter(p => p.unitId === lane.unitId).map(p => p.agentId), lane.provisionerId].filter(Boolean)
     const provisioners = [...new Set(provIds)].map(locateAgent).filter(Boolean)
     return { runDir, lane, file, provisioners }
@@ -863,6 +884,7 @@ function render(s) {
   L.push(`  ${'─'.repeat(Math.max(20, s.branch.length))}`)
   L.push(`  ${new Date(s.runStart).toISOString().slice(0, 16).replace('T', ' ')} → ${new Date(s.runEnd).toISOString().slice(0, 16).replace('T', ' ')}   ${s.sessions} session(s), ${s.agentCount} agents`)
   L.push(`  plugin ${p.pluginVersion ?? '?'} @ ${p.pluginSha ?? '?'}${p.pluginDirty ? ' (dirty)' : ''}   models: ${s.models.join(', ') || '?'}   effort: ${s.efforts.join(', ') || 'unknown'}`)
+  if (s.resolution) L.push(`  resolved: ${s.resolution}`)
   L.push('')
 
   L.push('  WHERE THE CLOCK WENT')
@@ -1317,6 +1339,7 @@ run-metrics — where a unit of work's time and tokens actually went
   --fleet <run-dir> a /start-multi run dir (.work/multi/<run-id>) whose agents.yaml
                     maps the branch (or unit id) to its lane agent. Found automatically
                     from a lane worktree's .work/lane.yaml, or from ./.work/multi.
+                    A unit it cannot resolve is an error listing its units.
   --quiet           suppress the scan progress line
 `
 
@@ -1336,32 +1359,53 @@ function main() {
     return
   }
 
-  const branch = o.branch ?? currentBranch()
+  // --fleet names the subject: never fall back to the cwd's branch (#350).
+  const branch = o.branch ?? (o.fleet ? null : currentBranch())
   // --usage-fragment reports every failure as its verdict line on stdout, so the
   // caller reads a missing measurement instead of guessing one (ADR-004).
   const fragmentError = (reason, code) => {
     if (o.usageFragment) console.log(`# RUN-METRICS-USAGE:v1 outcome=error reason=${reason}`)
     process.exit(code)
   }
+  const fleetUnresolved = () => {
+    const hasYaml = existsSync(join(o.fleet, 'agents.yaml'))
+    console.error(branch ? `"${branch}" is not a unit of the fleet run ${o.fleet}.` : `--fleet ${o.fleet} needs a unit: pass its branch or unit id.`)
+    if (!hasYaml) console.error(`  no agents.yaml in ${o.fleet}`)
+    else {
+      const units = fleetUnits(readAgentsYaml(o.fleet))
+      console.error(units.length ? '  units in its agents.yaml:' : '  its agents.yaml names no units.')
+      for (const u of units) console.error(`    ${u.unitId ?? '?'}${u.branch ? `  ${u.branch}` : ''}`)
+    }
+    fragmentError('fleet-unit-unresolved', 2)
+  }
+  if (!branch && o.fleet) fleetUnresolved()
   if (!branch) { console.error('No branch given and not inside a git repo. Pass one, or use --list.'); fragmentError('no-branch', 2) }
 
   const quiet = o.quiet || o.json || o.usageFragment
   // A fleet unit's transcript is a subagent of the orchestrator's session and is
   // stamped with the orchestrator's branch — resolve it through the run dir first.
   const lane = findFleetLane(branch, { fleet: o.fleet })
-  let collected, reportBranch = branch
-  if (lane) {
+  if (o.fleet && !lane) fleetUnresolved()
+  let collected, reportBranch = branch, resolution = null
+  if (lane?.file) {
     reportBranch = lane.lane.branch ?? branch
-    if (!quiet) console.error(`  fleet unit ${lane.lane.unitId} — lane agent ${lane.lane.agentId} from ${lane.runDir}`)
+    resolution = `fleet unit ${lane.lane.unitId} — lane agent ${lane.lane.agentId} from ${lane.runDir}`
+    if (!quiet) console.error(`  ${resolution}`)
     collected = collectFleetUnit(lane)
   } else {
-    const files = findSessions(branch, { since: sinceToMs(o.since), quiet })
+    const scan = lane?.byBranch ?? branch
+    if (lane) {
+      reportBranch = scan
+      resolution = `fleet unit ${lane.unit.unitId ?? scan} — by branch ${scan}: ${lane.why} (${lane.runDir})`
+      if (!quiet) console.error(`  ${resolution}`)
+    }
+    const files = findSessions(scan, { since: sinceToMs(o.since), quiet })
     if (!files.length) {
-      console.error(`No transcripts found for branch "${branch}". Try --list to see what is on disk.`)
+      console.error(`No transcripts found for branch "${scan}". Try --list to see what is on disk.`)
       console.error('A /start-multi unit lives under the orchestrator session: run this from the lane worktree, or pass --fleet <.work/multi/<run-id>>.')
       fragmentError('no-transcripts', 1)
     }
-    collected = collectRun(branch, files)
+    collected = collectRun(scan, files)
   }
   if (o.usageFragment) {
     if (!collected.runs.length) { console.error('Transcripts found but nothing timestamped in them.'); fragmentError('no-timestamped-rows', 1) }
@@ -1370,6 +1414,7 @@ function main() {
   }
   const summary = summarize(reportBranch, collected)
   if (!summary) { console.error('Transcripts found but nothing timestamped in them.'); process.exit(1) }
+  if (resolution) summary.resolution = resolution
 
   if (o.json) console.log(JSON.stringify(summary, null, 2))
   else console.log(render(summary))

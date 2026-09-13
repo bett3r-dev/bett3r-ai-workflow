@@ -1,0 +1,2 @@
+{"type":"assistant","timestamp":"2026-01-10T09:02:00.000Z","gitBranch":"master","cwd":"/fixture/orch","message":{"id":"a1","model":"claude-opus-4","role":"assistant","content":[{"type":"tool_use","id":"at1","name":"Bash","input":{"command":"yarn build"}}],"usage":{"input_tokens":4,"output_tokens":2}}}
+{"type":"user","timestamp":"2026-01-10T09:20:00.000Z","gitBranch":"master","cwd":"/fixture/orch","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"at1","content":"ok"}]}}

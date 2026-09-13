@@ -17,7 +17,7 @@ Reconstructs a unit of work from Claude Code's own transcripts. Nothing is instr
 | `--agents` | **agent** performance across every run: role, model, effort, and what the repo checks cost |
 | `--emit` | also record the run to `~/.claude/bett3r-metrics/` (what `/verify-build` does) |
 | `--since <5d\|2w\|1m>` | limit the transcript scan (or the aggregation window) |
-| `--fleet <run-dir>` | resolve a `/start-multi` unit (branch or unit id) through that run's `agents.yaml` — automatic from a lane worktree's `.work/lane.yaml` or from `./.work/multi/` |
+| `--fleet <run-dir>` | resolve a `/start-multi` unit (branch or unit id) through that run's `agents.yaml` (no resolvable unit is an error listing its units) — automatic from a lane worktree's `.work/lane.yaml` or from `./.work/multi/` |
 
 ---
 

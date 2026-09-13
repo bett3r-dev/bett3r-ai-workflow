@@ -1,0 +1,6 @@
+# A serial-mode fleet (#350): UB-2's lane agent blocked after 3 calls and was
+# superseded; the orchestrator then drove UB-2 itself after EnterWorktree, so
+# UB-2's records carry feat/unit-b (10:00 -> 13:00 in the orchestrator session).
+lanes:
+  - { unitId: UA-1, agentId: lanea, branch: feat/unit-a, worktree: /fixture/wt-a }
+  - { unitId: UB-2, agentId: lanesup, branch: feat/unit-b, worktree: /fixture/wt-b, status: superseded }
