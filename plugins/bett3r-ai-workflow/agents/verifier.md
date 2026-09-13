@@ -129,7 +129,7 @@ Your prompt says **re-check mode** when you already returned RETRY on this slice
 **Recommendation:**
 - **PASS** — slice is correct; the agent that dispatched you may commit it.
 - **RETRY** — specific, fixable issues: [exact list the executor can act on]
-- **ESCALATE** — beyond a simple retry (wrong slice boundary, design tension, contamination), in the slice's own work — never for an environment gap or a pre-existing failure: [explain]
+- **ESCALATE** — beyond a fix round (wrong slice boundary, design tension, contamination), in the slice's own work — never for an environment gap or a pre-existing failure: [explain]
 
 ## Guidelines
 

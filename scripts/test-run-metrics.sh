@@ -20,7 +20,7 @@
 #            test-runner, verifier (a 280-second life with no tool call — only
 #            3 minutes of it active),
 #            scope-check (a role the fragment does not carry)
-#   slice 2  a sonnet executor, an opus `retry 1`, test-runner, verifier
+#   slice 2  a sonnet executor, an opus `retry 1` (a pre-rename description, still attributed), test-runner, verifier
 #   slice 12 an executor — must never be read as slice 1; woken once by a
 #            background-wake banner, which is not a pass
 #   an executor described `fix the flaky timing test` — unattributed
@@ -438,7 +438,7 @@ else
   fail '--emit twice leaves one row for the branch (replaced, not appended) and keeps the other row' \
        "rows total=$rows_total ours=$rows_ours other=$rows_other"
 fi
-if grep -qF 'RETRY LEDGER' "$TMP/emit1.txt" && ! grep -qF 'RUN-METRICS-USAGE' "$TMP/emit1.txt"; then
+if grep -qF 'FIX-ROUND LEDGER' "$TMP/emit1.txt" && ! grep -qF 'RUN-METRICS-USAGE' "$TMP/emit1.txt"; then
   pass '--emit still prints the report, and no fragment'
 else
   fail '--emit still prints the report, and no fragment' "$( head -3 "$TMP/emit1.txt" )"

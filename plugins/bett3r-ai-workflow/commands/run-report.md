@@ -41,7 +41,7 @@ If it reports no transcripts for the branch, run `--list` and check the name; a 
 Print the tables, then say what they mean. The point of the report is the tweak it implies, not the tables.
 
 1. **Duty cycle** (`≥1 agent alive` ÷ `run elapsed`). Low duty cycle means the run was slow because *nothing was running*, not because the agents were slow. Check `DEAD GAPS` before concluding anything: ten short pauses is a flow problem (the loop keeps stopping to ask you something), one long gap is just a night's sleep and needs no fix at all.
-2. **First-pass green**, per build invocation. Each retry costs a whole extra executor pass, so this is the largest single lever on total cost. Read it per invocation — never across a branch that ran `/build` twice.
+2. **First-pass green**, per build invocation. Each fix round costs a whole extra executor pass, so this is the largest single lever on total cost. Read it per invocation — never across a branch that ran `/build` twice.
 3. **tool vs reason**, per role. A role at ~95% reason is thinking, not waiting on your machine; speeding up the build won't touch it. A role heavy in `tool` is bounded by commands, and `WHERE COMMAND TIME WENT` names which.
 4. **Weighted tokens per line landed**. The efficiency number. Compare it against `--aggregate`, not against intuition.
 
@@ -82,7 +82,7 @@ Each of these was measured the wrong way first, and each wrong way looked entire
 - **One session is not one branch either.** A session that touched six branches will report all six as each other's work unless records are sliced by branch. Three unrelated branches once reported byte-identical totals.
 - **Wall time is not elapsed time.** `last − first` once claimed 3,587 minutes for an agent that worked 52. Every millisecond is classified, never subtracted.
 - **A long command is not a stall.** A 40-minute build is real work, so only *non-tool* silence counts as stalled. This is why the threshold applies to gaps between tool calls and not to the calls themselves.
-- **Each `/build` invocation is its own ledger.** Merging two passes over the same slices makes every slice look like a retry — a real branch read 0% first-pass-green purely from that, when its two passes were 33% and 100%.
+- **Each `/build` invocation is its own ledger.** Merging two passes over the same slices makes every slice look like it took a fix round — a real branch read 0% first-pass-green purely from that, when its two passes were 33% and 100%.
 
 ## Principles
 

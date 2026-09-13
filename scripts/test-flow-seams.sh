@@ -1534,7 +1534,7 @@ else
   expect 'the build-summary frontmatter /build writes is exactly work_item, plugin, base, slices' \
     s.top 'work_item plugin base slices'
   expect 'each build-summary slice entry carries exactly the F3 keys' \
-    s.item 'id name origin mode modeReason commit passed attempts retries verifier redBeforeGreen postDesignDecisions'
+    s.item 'id name origin mode modeReason commit passed attempts fixRounds verifier redBeforeGreen postDesignDecisions'
   for absent in usage verifyBuild workItem; do
     if shape s.all | tr ' ' '\n' | grep -qx "$absent"; then
       fail "/build's build-summary block does not write \`$absent\`" "keys seen: $( shape s.all )"
@@ -1606,6 +1606,7 @@ present "$RECORD_BUILD_MD" '`id` and `name` come from `.work/slices.yaml` and ar
 present "$RECORD_BUILD_MD" '`origin` is the slice'\''s own `origin:` field in `.work/slices.yaml`, else `plan`' \
   '/build sources origin from slices.yaml, defaulting to plan, never null'
 present "$RECORD_BUILD_MD" 'Every slice in `.work/slices.yaml` gets an entry' '/build lists every planned slice in build-summary.md'
+present "$RECORD_BUILD_MD" 'read it as `fixRounds:`' '/build still reads a build-summary entry written with the pre-rename `retries:` key'
 present "$RECORD_BUILD_MD" 'never an absent key' '/build writes zero decisions as [], never an absent key'
 present "$RECORD_BUILD_MD" 'Executors, verifiers and pool workers never write' \
   '/build names all three non-writers of the record (C1)'
@@ -1652,9 +1653,9 @@ fi
 # that regex. `-a`: the file is classified binary by grep.
 RUN_METRICS="$PLUGIN/scripts/run-metrics.mjs"
 if grep -qaF 'd.match(/slice\s*(\d+)/i)' "$RUN_METRICS"; then
-  pass 'run-metrics retryLedger still attributes a dispatch by `slice <n>` in its description'
+  pass 'run-metrics fixRoundLedger still attributes a dispatch by `slice <n>` in its description'
 else
-  fail 'run-metrics retryLedger still attributes a dispatch by `slice <n>` in its description' \
+  fail 'run-metrics fixRoundLedger still attributes a dispatch by `slice <n>` in its description' \
        'the regex /build'\''s dispatch-description rule relies on is gone from scripts/run-metrics.mjs'
 fi
 
@@ -2073,13 +2074,13 @@ if grep -qF -e 'docs/prs' "$VERIFY_BUILD_MD"; then
 else
   pass '/verify-build hardcodes no work-docs root'
 fi
-# The fragment attributes a dispatch through retryLedger itself, so the report's
+# The fragment attributes a dispatch through fixRoundLedger itself, so the report's
 # ledger and build-summary.md cannot disagree about a slice. `-a`: binary-flagged.
-if grep -qaF -e 'retryLedger([r])' "$RUN_METRICS"; then
-  pass 'run-metrics --usage-fragment attributes slices through retryLedger, not a second regex'
+if grep -qaF -e 'fixRoundLedger([r])' "$RUN_METRICS"; then
+  pass 'run-metrics --usage-fragment attributes slices through fixRoundLedger, not a second regex'
 else
-  fail 'run-metrics --usage-fragment attributes slices through retryLedger, not a second regex' \
-       'no `retryLedger([r])` call in scripts/run-metrics.mjs'
+  fail 'run-metrics --usage-fragment attributes slices through fixRoundLedger, not a second regex' \
+       'no `fixRoundLedger([r])` call in scripts/run-metrics.mjs'
 fi
 
 # ---------------------------------------------------------------------------
