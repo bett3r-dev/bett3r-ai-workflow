@@ -92,7 +92,7 @@ A mitigation the design names is load-bearing for a risk the team consciously ac
 Before emitting any finding at **Critical/High** severity, attempt to **disprove it** — a verifier that emits plausible-but-wrong Criticals turns the reader into the verifier-of-the-verifier, and propagating one as a "fix" actively introduces a regression (the cost is asymmetric: an unverified Critical is more expensive than a missed nit). For each Critical/High:
 
 1. **Read the actual call site** — not the diff hunk in isolation. The behavior may already be correct in context (e.g. a `'0'` string that reads as falsy but is truthy and checked against `undefined`).
-2. **`git blame` / base-branch check** — is this pre-existing on the base branch, not introduced by this slice? If so it's out of scope, not a finding.
+2. **`git blame` / base-branch check** — is this pre-existing on the base branch, not introduced by this slice? If so it's out of scope, not a finding — name it and leave it: the slice delivers its own behaviour, not unrelated repairs.
 3. **Construct a concrete failing input** — an actual reproduction. Drop or downgrade any Critical you cannot back with one.
 
 Report only findings that survive this. State the disproof attempt for each Critical you *do* report (call site read, blame result, repro), so the reader can trust it without re-deriving it.
@@ -124,10 +124,12 @@ Your prompt says **re-check mode** when you already returned RETRY on this slice
 
 **Executor's flagged deviations:** [one verdict per item it flagged, or "none flagged"]
 
+**Environment gaps:** each test that could not collect or run for a reason outside the slice — an unbuilt sibling package, a missing credential, a sandbox refusal — as `environment-gap: <exact cause>`, or "none". A gap is not a finding: PASS stands on the evidence that did run, and never when the gap is the slice's own oracle.
+
 **Recommendation:**
 - **PASS** — slice is correct; the agent that dispatched you may commit it.
 - **RETRY** — specific, fixable issues: [exact list the executor can act on]
-- **ESCALATE** — beyond a simple retry (wrong slice boundary, design tension, contamination): [explain]
+- **ESCALATE** — beyond a simple retry (wrong slice boundary, design tension, contamination), in the slice's own work — never for an environment gap or a pre-existing failure: [explain]
 
 ## Guidelines
 
