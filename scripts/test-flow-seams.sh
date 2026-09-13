@@ -1534,7 +1534,7 @@ else
   expect 'the build-summary frontmatter /build writes is exactly work_item, plugin, base, slices' \
     s.top 'work_item plugin base slices'
   expect 'each build-summary slice entry carries exactly the F3 keys' \
-    s.item 'id name origin mode commit passed attempts retries verifier redBeforeGreen postDesignDecisions'
+    s.item 'id name origin mode modeReason commit passed attempts retries verifier redBeforeGreen postDesignDecisions'
   for absent in usage verifyBuild workItem; do
     if shape s.all | tr ' ' '\n' | grep -qx "$absent"; then
       fail "/build's build-summary block does not write \`$absent\`" "keys seen: $( shape s.all )"

@@ -960,6 +960,20 @@
       "commit": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/plan.md",
       "note": "/plan splits a slice over 10 files or 200 call/string sites, counted at the base, unless it is atomic: one finding in an oversize sweep re-opens the whole sweep (TV2-21's ~26-file billing sweep ran 3 h 20 m and escalated)."
+    },
+    {
+      "needle": "never when the gap is the slice's own oracle",
+      "issue": 361,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/agents/verifier.md",
+      "note": "An environment gap (unbuilt sibling, missing credential, sandbox refusal) is reported, not escalated, and a slice may PASS on what did run — but an oracle that cannot run is a red mechanical gate, so the gap is never an escape for the slice's own test."
+    },
+    {
+      "needle": "names which Step 2 branch sent a `sequential` slice",
+      "issue": 361,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
+      "note": "Every main-tree slice records modeReason: TV2-21's pool sized width 4 and every slice ran sequentially with nothing saying why."
     }
   ]
 }
