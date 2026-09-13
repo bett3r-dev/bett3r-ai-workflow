@@ -79,4 +79,6 @@ claim below is executed as an assertion in `scripts/test-flow-seams.sh` (Seam C)
   a `Co-Authored-By:` trailer after it, which is where a model composing the
   message puts attribution. It is **no verdict** by the final-line rule, working
   as designed. It kills no parser clause the transcripts miss; it pins why
-  `lane-step-record` writes the message instead of the model (Seam C2).
+  `lane-step-record` writes the message instead of the model, and it is the
+  message the recorder's folded path must repair when it is the step's last,
+  unpushed commit (Seam C2).

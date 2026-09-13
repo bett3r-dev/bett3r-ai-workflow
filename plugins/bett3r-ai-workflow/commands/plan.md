@@ -104,7 +104,7 @@ End your output with this line, at column 0, as the **final** line — nothing a
 
     LANE-STEP:v1 step=plan outcome=<success|blocked-on> slices=<n>
 
-`success` when `.work/slices.yaml` is written; `slices=` is the number cut. `blocked-on` when the design cannot be sliced without an answer you do not have — do not emit a slice list you would not build. No gate runs here, so never `gate-red`. **Immediately before printing it**, run `lane-step-record '<the identical line>'`: it commits the verdict to your branch when `.work/lane.yaml` carries `verdictOnBranch: true` and does nothing otherwise; a non-zero exit is reported in your prose, never by changing the line. Never emit `infra` — its signal is the line's absence. The format contract is stated once in [unit-lane](../agents/unit-lane.md); do not restate it here.
+`success` when `.work/slices.yaml` is written; `slices=` is the number cut. `blocked-on` when the design cannot be sliced without an answer you do not have — do not emit a slice list you would not build. No gate runs here, so never `gate-red`. **Immediately before printing it**, run `lane-step-record '<the identical line>'`: it writes the verdict onto your branch when `.work/lane.yaml` carries `verdictOnBranch: true` and does nothing otherwise — a `success` with nothing committed writes nothing, a `blocked-on` writes an empty commit; a non-zero exit is reported in your prose, never by changing the line. Never emit `infra` — its signal is the line's absence. The format contract is stated once in [unit-lane](../agents/unit-lane.md); do not restate it here.
 
 ## Principles
 

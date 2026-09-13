@@ -587,12 +587,14 @@ printf '\nSeam C2 — the verdict on the branch head (#326)\n\n'
 #
 # A scheduler that dispatches a step to a hosted session cannot read that
 # session's stdout through any documented surface. So a brief carrying
-# `verdictOnBranch: true` makes each step also write its marker as an EMPTY
-# commit on its branch, via `bin/lane-step-record`, read back by the same
-# `lane-step` parser. Executed against a real bare remote, because every
-# property that matters is a git property: the line is the message's final
-# line, the commit changes no tree, it reached the remote, and a line the reader
-# cannot read is never recorded.
+# `verdictOnBranch: true` makes each step also write its marker onto a commit on
+# its branch, via `bin/lane-step-record`, read back by the same `lane-step`
+# parser: folded into the step's own unpushed last commit, else an EMPTY commit,
+# else — a `/start` or `/plan` success with nothing to commit — nothing (#371).
+# Executed against a real bare remote, because every property that matters is a
+# git property: the line is the message's final line, an empty commit changes no
+# tree, a fold adds no commit and rewrites nothing pushed, it reached the
+# remote, and a line the reader cannot read is never recorded.
 
 LANE_RECORD="$PLUGIN/bin/lane-step-record"
 
@@ -679,6 +681,87 @@ else
   fail 'a blocked-on with no work still reaches the remote as an empty commit lane-step reads' \
        "rc=$rc got: $( printf '%s' "${got:-<no verdict>}" | tr '\n' ' ' ) $( cat "$TMP/err" )" \
        'to a git-only reader, no commit is infra, and a real question gets retried as a flaky VM.'
+fi
+
+# --- #371: the verdict rides the step's own commit; empty only when it must ---
+rec_tip(){ git --git-dir="$rec_remote" rev-parse "${1:-claude/lane-x}" 2>/dev/null; }
+rec_msg(){ git --git-dir="$rec_remote" log -1 --format=%B "${1:-claude/lane-x}" 2>/dev/null; }
+
+# Skipped. DEPENDS ON THE READER: remote-ai-agents `classifyBranchVerdict` reads a
+# tip with no verdict as not concluded and a later non-final success as
+# progress. If it ever demands a verdict per step, this path must go.
+remote_before=$( rec_tip ); local_before=$( rec_head )
+out=$( rec_run 'LANE-STEP:v1 step=start outcome=success' ); rc=$?
+if [ "$rc" -eq 0 ] && [ "$out" = "recorded=skipped sha=$local_before" ] \
+   && [ "$( rec_head )" = "$local_before" ] && [ "$( rec_tip )" = "$remote_before" ]; then
+  pass 'a /start success with nothing to commit writes no verdict commit'
+else
+  fail 'a /start success with nothing to commit writes no verdict commit' "rc=$rc out=$out $( cat "$TMP/err" )" \
+       'an empty commit per no-op step lands in master on a merge-commit repo (TV2-21).'
+fi
+
+remote_before=$( rec_tip )
+out=$( rec_run 'LANE-STEP:v1 step=design outcome=success' ); rc=$?
+if [ "$rc" -eq 0 ] && [ "$out" = "recorded=empty sha=$( rec_tip )" ] \
+   && [ "$( rec_tip claude/lane-x~1 )" = "$remote_before" ]; then
+  pass 'only /start and /plan may skip: a /design success with nothing unpushed still records'
+else
+  fail 'only /start and /plan may skip: a /design success with nothing unpushed still records' "rc=$rc out=$out $( cat "$TMP/err" )"
+fi
+
+# (d) The last commit is already pushed: an empty commit, and nothing pushed is rewritten.
+( cd "$rec_tree" && printf 'summary\n' > summary.md && rec_git git add summary.md \
+  && rec_git git commit -q -m 'docs(record): measure the run' \
+  && rec_git git push -q origin claude/lane-x 2>/dev/null )
+pushed=$( rec_head )
+out=$( rec_run 'LANE-STEP:v1 step=verify-build outcome=success' ); rc=$?
+got=$( rec_msg | "$LANE_STEP" - 2>/dev/null )
+if [ "$rc" -eq 0 ] && [ "$got" = "$( printf 'step=verify-build\noutcome=success' )" ] \
+   && [ "$out" = "recorded=empty sha=$( rec_tip )" ] \
+   && [ "$( rec_tip claude/lane-x~1 )" = "$pushed" ] \
+   && [ "$( rec_msg claude/lane-x~1 )" = 'docs(record): measure the run' ] \
+   && git --git-dir="$rec_remote" diff --quiet claude/lane-x~1 claude/lane-x 2>/dev/null; then
+  pass 'a step whose last commit was pushed gets an empty verdict commit, never an amend'
+else
+  fail 'a step whose last commit was pushed gets an empty verdict commit, never an amend' \
+       "rc=$rc out=$out got: $( printf '%s' "${got:-<no verdict>}" | tr '\n' ' ' ) $( cat "$TMP/err" )" \
+       'amending a pushed commit needs a force-push, which a hosted venue refuses.'
+fi
+
+# (a) The step's last commit is unpushed: it carries the verdict, and no commit is added.
+remote_before=$( rec_tip )
+( cd "$rec_tree" && printf 'D1\n' > decisions.md && rec_git git add decisions.md \
+  && rec_git git commit -q -m 'docs(record): summarise the build' )
+out=$( rec_run 'LANE-STEP:v1 step=build outcome=success slices=3/3 commits=3' ); rc=$?
+got=$( rec_msg | "$LANE_STEP" - 2>/dev/null )
+if [ "$rc" -eq 0 ] && [ "$got" = "$( printf 'step=build\noutcome=success\nslices=3/3\ncommits=3' )" ] \
+   && [ "$out" = "recorded=folded sha=$( rec_tip )" ] \
+   && [ "$( rec_tip claude/lane-x~1 )" = "$remote_before" ] \
+   && [ "$( rec_msg | sed -n 1p )" = 'docs(record): summarise the build' ] \
+   && git --git-dir="$rec_remote" cat-file -e claude/lane-x:decisions.md 2>/dev/null; then
+  pass 'an unpushed last commit carries the verdict as its final line, with no extra commit'
+else
+  fail 'an unpushed last commit carries the verdict as its final line, with no extra commit' \
+       "rc=$rc out=$out got: $( printf '%s' "${got:-<no verdict>}" | tr '\n' ' ' ) $( cat "$TMP/err" )" \
+       'every empty verdict commit lands in master on a merge-commit repo (TV2-21: 4 per run).'
+fi
+
+# (c) The unpushed commit's message has a trailer after a marker: rewritten so ours is last.
+remote_before=$( rec_tip )
+( cd "$rec_tree" && printf 'design\n' > design.md && rec_git git add design.md \
+  && rec_git git commit -q --cleanup=verbatim -F "$lane_attrib" )
+out=$( rec_run 'LANE-STEP:v1 step=design outcome=success' ); rc=$?
+msg=$( rec_msg )
+got=$( printf '%s\n' "$msg" | "$LANE_STEP" - 2>/dev/null )
+markers=$( printf '%s\n' "$msg" | grep -c '^LANE-STEP:' )
+if [ "$rc" -eq 0 ] && [ "$got" = "$( printf 'step=design\noutcome=success' )" ] && [ "$markers" -eq 1 ] \
+   && [ "$out" = "recorded=folded sha=$( rec_tip )" ] \
+   && [ "$( rec_tip claude/lane-x~1 )" = "$remote_before" ] \
+   && printf '%s\n' "$msg" | rec_git git interpret-trailers --parse | grep -q '^Co-Authored-By: '; then
+  pass 'a marker followed by attribution is rewritten: one marker, last, and the trailer survives'
+else
+  fail 'a marker followed by attribution is rewritten: one marker, last, and the trailer survives' \
+       "rc=$rc out=$out markers=$markers got: $( printf '%s' "${got:-<no verdict>}" | tr '\n' ' ' ) $( cat "$TMP/err" )"
 fi
 
 # ---------------------------------------------------------------------------
@@ -956,6 +1039,15 @@ for f in "$START_MD" "$DESIGN_MD" "$PLAN_MD" "$BUILD_MD" "$VERIFY_BUILD_MD"; do
   present "$f" "run \`lane-step-record '<the identical line>'\`" \
     "$( basename "$f" .md ) records its verdict on the branch when the brief asks"
 done
+
+# The recorder folds the verdict into the step's commit only while that commit is
+# unpushed, so a step that pushes first pays an empty commit for nothing (#371).
+present "$BUILD_MD" 'normally `build-summary.md`'\''s, so do not push before it' \
+  '/build does not push before the verdict is folded into its last commit'
+present "$DESIGN_MD" 'while that commit is unpushed, so do not push before it' \
+  '/design does not push before the verdict is folded into design.md'\''s commit'
+present "$VERIFY_BUILD_MD" 'when it printed `recorded=empty`' \
+  '/verify-build re-posts flow/concerns only when an empty verdict commit moved the head'
 
 printf '\nSeam G — every step READS the lane brief\n\n'
 # ---------------------------------------------------------------------------
