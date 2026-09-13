@@ -63,15 +63,13 @@ An agent that names no model inherits the session's, which is the most expensive
 | `verifier` | `opus` — **never downgrade this one** | It is the only gate positioned to catch a confidently-wrong oracle, and cheapening it is the corner that ships defects. It is also ~11% of a run's cost, so there is nothing to win here. |
 | read-only sweeps (`Explore`, `general-purpose`) | `sonnet` | Grep-shaped, disjoint, and adjudicated by you afterwards. |
 
-**Every dispatch description names `slice <id>`** — executor, test-runner, scope-check and verifier alike, retries included (e.g. `slice 3 executor retry 1`). `run-metrics` attributes a dispatch to its slice by a regex over that description and nothing else (`d.match(/slice\s*(\d+)/i)` in `retryLedger`, `scripts/run-metrics.mjs:582`); a description that does not name the slice is counted `unattributed`, and its tokens and retries belong to no slice.
+**Every dispatch description names `slice <id>`** — executor, test-runner, scope-check and verifier alike, fix rounds included (e.g. `slice 3 executor fix round 1`). `run-metrics` attributes a dispatch to its slice by a regex over that description and nothing else (`d.match(/slice\s*(\d+)/i)` in `retryLedger`, `scripts/run-metrics.mjs`); a description that does not name the slice is counted `unattributed`, and its tokens and passes belong to no slice. A continued agent (Step 3, *Fix rounds*) keeps the description it was dispatched with and each resume counts as one more pass, so **a continued agent never takes another slice**: its whole transcript stays attributed to the first — one verifier resumed across ten slices billed all ten to slice 1.
 
 Effort is **not** settable per dispatch — it is inherited from the session (`/effort`), so it is a decision you make once before running, not per agent. `/build` is the mechanical phase and does not need the session's design-grade effort; `xhigh` here buys little and is where the token bill concentrates.
 
-A downgraded executor that fails shows up at the *mechanical* gate and is re-dispatched on `opus`; the verifier is unchanged either way. Record which model each slice ran on in the summary, so a retried `sonnet` slice can be re-marked next time.
-
 ## Step 3 — Per slice: the dual gate
 
-For each slice, in order, in a **fresh agent context**:
+For each slice, in order — its first pass in a **fresh agent context**, its fix rounds under *Fix rounds* below:
 
 0. **Scaffold what the design already fixed** — *only when the slice has a `designs:` list, a
    readable design layer is reachable (this checkout's own `.esas/`, or — in a fleet lane — the
@@ -134,7 +132,7 @@ For each slice, in order, in a **fresh agent context**:
    has to go RED first (step 1). A slice that is green immediately after scaffolding has an oracle
    asserting the stub.
 
-1. **Implement** — dispatch the `executor` agent **on the model this slice routes to** (above) with: the slice (`behavior`, `oracle`, `gates`, intended files), the ticket, and the host project directory. The executor reads the repo's own rules/skills. Instruct it to work **RED → GREEN**: write the oracle test first, **run it and confirm it FAILS** for the right reason (the behavior is genuinely absent — not a typo, missing import, or compile error), *then* implement the minimal code to make it pass. It must report the RED evidence (the failure it saw before implementing).
+1. **Implement** — dispatch the `executor` agent **on the model this slice routes to** (above) with: the slice (`behavior`, `oracle`, `gates`, intended files), the ticket, and the host project directory. The executor reads the repo's own rules/skills. Instruct it to work **RED → GREEN**: write the oracle test first, **run it and confirm it FAILS** for the right reason (the behavior is genuinely absent — not a typo, missing import, or compile error), *then* implement the minimal code to make it pass. It must report the RED evidence (the failure it saw before implementing), and paste the oracle's own summary lines from its last run — a fix round's test gate is read from them.
 
    **If the slice's deliverable is a test or a guard** (no new production behavior, so no natural RED is available): **mutation-test it instead**, to [EVIDENCE.md](../EVIDENCE.md) §2's rules — one mutation per clause, each naming the assertion that caught it; controls and a pinned traversal for an absence guard. Report the mutation table where RED evidence would go. This is not optional rigor: RED→GREEN is the anti-tautology gate, and for this slice type it is **structurally unavailable** — which is exactly the type whose entire value is "does this assertion actually bite?"
 
@@ -146,12 +144,12 @@ For each slice, in order, in a **fresh agent context**:
 
    **When the accept criterion is a measured delta over a fixed corpus** (a pinned repo, a golden file, a benchmark set), the slice must state *which shapes relevant to this change the corpus does not contain* before the delta is read as a pass. Any shape named there is covered by a fixture, or the delta is recorded as **silent about it**. A zero delta over a corpus lacking the shape reads as the strongest possible evidence and is, in the limit, none — and it is most dangerous precisely where it is most attractive, on a change whose risk register names a forbidden direction.
 
-2. **Mechanical gate** — dispatch the `test-runner` agent to run the slice's **oracle test**. It must pass — where "pass" is read from jest's own summary line, **never from a piped command's exit code** (`… | tail` reports `tail`'s status, not jest's, so a red run surfaces as exit 0). A run with no parsed `Tests:` summary is **inconclusive** — treat it as non-runnable, not a pass. Three ways this gate fails, all surfaced not swallowed:
+2. **Mechanical gate** — dispatch the `test-runner` agent to run the slice's **oracle test** (a fix round reads the executor's pasted summary instead, under *Fix rounds*). It must pass — where "pass" is read from jest's own summary line, **never from a piped command's exit code** (`… | tail` reports `tail`'s status, not jest's, so a red run surfaces as exit 0). A run with no parsed `Tests:` summary is **inconclusive** — treat it as non-runnable, not a pass. Three ways this gate fails, all surfaced not swallowed:
    - **non-runnable** oracle (won't compile/collect) is not a pass;
    - **always-green** oracle — the executor reported no credible RED before implementing (or claims it was red but the failure reads as a missing import / wrong path rather than absent behavior). A test that never failed proves nothing; treat as a fail and re-dispatch the executor to fix the oracle, not the code;
    - **red after implementing** — the obvious fail.
 
-3. **Judgment gate** — dispatch the `scope-check` agent and the `verifier` agent **concurrently**, in one message. `scope-check` (sonnet) runs the mechanical half — scope guard, escape-hatch grep, test-deletion diff — and returns a findings list. The `verifier` (opus) reads `${CLAUDE_PROJECT_DIR}/.claude/rules`, checks the slice's `gates` + the repo's invariants, does the falsification pass, and returns PASS / RETRY / ESCALATE.
+3. **Judgment gate** — dispatch the `scope-check` agent and the `verifier` agent **concurrently**, in one message. `scope-check` (sonnet) runs the mechanical half — scope guard, escape-hatch grep, test-deletion diff — and returns a findings list. The `verifier` (opus) reads `${CLAUDE_PROJECT_DIR}/.claude/rules`, checks the slice's `gates` + the repo's invariants, does the falsification pass, and returns PASS / RETRY / ESCALATE. On a fix round both run narrower, under *Fix rounds*.
 
    **Feed `scope-check`'s report into the verifier's prompt when it lands first; otherwise adjudicate it yourself against the verdict.** The split exists because those checks are grep-shaped and need no judgment — but a `scope-check` finding the verifier never saw is not resolved by having been produced. A CONTAMINATED scope guard blocks the commit on its own, whatever the verifier returned.
 
@@ -170,9 +168,18 @@ For each slice, in order, in a **fresh agent context**:
 
 4. **Resolve:**
    - **test green AND verifier PASS** → **commit the slice** (Step 4).
-   - **RETRY or test fail** → re-dispatch the `executor` with the specific feedback. **Max 2 retries**, then ESCALATE. Re-dispatch on `opus` if the first pass ran on `sonnet` — a retry is the evidence that slice was mis-routed.
-   - **Every retry is classified, in one line, before it is dispatched.** A second executor pass is the single most expensive event in this loop — it re-pays a whole context — so the rate is worth driving down, and it cannot be driven down without knowing which of these it was: `oracle-wrong` (the test encoded the wrong rule) · `design-silent` (the slice under-specified a seam the executor had to guess) · `ripple` (something outside the slice's surface broke) · `invariant` (the repo rule was not followed) · `mis-routed` (too cheap a model) · `flake` (environment, not the slice). Carry the tally into the Step 5 summary and the PR body. **Retry *rate* is already measured** — `/run-report` prints first-pass green per `/build` invocation — but the rate alone names no fix; the classification is what turns 43%-not-green into a change to `/plan` or to a slice's `gates`.
+   - **RETRY or test fail** → a **fix round**: the findings go back to be fixed, under *Fix rounds* below. **Max 2**, then ESCALATE. Move the executor to `opus` if the first pass ran on `sonnet` — a fix round is the evidence that slice was mis-routed.
+   - **Every fix round is classified, in one line, before it is dispatched.** A fix round is the single most expensive event in this loop, so the rate is worth driving down, and it cannot be driven down without knowing which of these it was: `oracle-wrong` (the test encoded the wrong rule) · `design-silent` (the slice under-specified a seam the executor had to guess) · `ripple` (something outside the slice's surface broke) · `invariant` (the repo rule was not followed) · `mis-routed` (too cheap a model) · `flake` (environment, not the slice). Carry the tally into the Step 5 summary and the PR body. **Retry *rate* is already measured** — `/run-report` prints first-pass green per `/build` invocation — but the rate alone names no fix; the classification is what turns 43%-not-green into a change to `/plan` or to a slice's `gates`.
    - **ESCALATE** → stop this slice and surface it to the user (do not silently proceed). Independent already-committed slices stay committed. **In a pool, read "committed" as *landed*:** a slice committed in its worktree but not landed is on no branch, and an escalated slice's worktree takes no further slice until teardown (Step 2).
+
+   **Fix rounds — hand the findings back; don't re-pay the gate.** On TV2-21 all 10 fix rounds came from verifier findings and none from a red test, yet each re-paid a fresh executor, a test re-run, a scope-check and an opus verifier re-reading every rule — 9 h 30 m for 6 of 8 slices. Before the verifier's first dispatch, snapshot the tree it reviews (in the slice's worktree, in a pool) — untracked files included, without touching the index or the stash stack — and again before each re-check; `git diff <previous> <new>` is the round's diff:
+
+       i="${TMPDIR:-/tmp}/slice-<id>.idx"; GIT_INDEX_FILE="$i" git read-tree HEAD && GIT_INDEX_FILE="$i" git add -A && GIT_INDEX_FILE="$i" git write-tree
+
+   - **Executor — continue it.** `SendMessage` the findings to the executor that built the slice when you are the top-level session (a subagent's resumes notify the top-level session, never it — `unit-lane`, *Dispatching your own children*), the model does not change, and the agent resumes. Otherwise dispatch a fresh one with a **fix-round brief**: the slice, the findings verbatim, the round's diff and its own previous report. Record `continued` or `fresh` for the round.
+   - **Test gate — read the executor's pasted summary**, by step 2's rules. Dispatch the `test-runner` again only when the round edited the oracle, or the report carries no `Tests:` line.
+   - **Scope-check — only when `git diff --name-only <previous> <new>` names a file outside the slice's intended files, or any test file.**
+   - **Verifier — re-check mode.** Continue it under the executor's conditions, else dispatch it fresh; either way pass its previous findings, the round's diff and the executor's per-finding response, and ask for [re-check mode](../agents/verifier.md). It stays `opus`, and it widens to a full pass on its own triggers.
 
 ## Step 4 — Commit the slice
 
@@ -234,7 +241,7 @@ slices:
     commit: <landed sha>             # null when it did not land, or when its landed sha cannot be proven
     passed: true
     attempts: 1                      # executor passes; 0 = never started; 1 = first-pass green; null = passed in an earlier session with no record of it
-    retries: []                      # classified, per Step 3 "Every retry is classified"; null = passed in an earlier session with no record of it
+    retries: []                      # one per fix round: { cause: <Step 3 class>, executor: continued | fresh }; null = passed in an earlier session with no record of it
     verifier: pass                   # the final verdict: pass | retry | escalate; null = no verifier ran
     redBeforeGreen: true             # true | mutation | null
     postDesignDecisions: [D1]        # ids into decisions.md; [] = explicitly none
@@ -254,7 +261,7 @@ slices:
 
 ## Step 5 — Done
 
-When all targeted slices are `passes: true` and committed, report: slices completed, the commit per slice, the **model each slice ran on**, the **retry tally by cause**, any **design elements the scaffolder blocked on** (these are open design questions, not build noise — they outlive the run), and any ESCALATEd items, **plus any out-of-`yarn test` suites flagged as un-run** (from the ripple check in Step 3).
+When all targeted slices are `passes: true` and committed, report: slices completed, the commit per slice, the **model each slice ran on**, the **fix-round tally by cause** and how many were continued, any **design elements the scaffolder blocked on** (these are open design questions, not build noise — they outlive the run), and any ESCALATEd items, **plus any out-of-`yarn test` suites flagged as un-run** (from the ripple check in Step 3).
 
 **Verify the carry-forward against HEAD before handing it to `/verify-build` — do not assert it from memory.** The summary's carry-forward note (which file rippled, which suite went red) is what `/verify-build`'s signature-ripple sweep builds on; a wrong file named there can hide real breakages. Re-check every named file against `HEAD` (it is actually the red/affected one) before writing it. (Real miss: TV1-1969's summary named only one of three broken suites and mis-attributed it — the real recovery-semantics break was in a different file.) Then:
 
@@ -272,9 +279,9 @@ End your output with this line, at column 0, as the **final** line — nothing a
 
 ## Principles
 
-- Dispatch to agents; don't implement. Each agent gets a fresh context. **Name a model on every dispatch** — an unnamed one is the session's, the most expensive available.
+- Dispatch to agents; don't implement. A slice's first pass gets a fresh context; its fix rounds continue it where the harness allows (Step 3). **Name a model on every dispatch** — an unnamed one is the session's, the most expensive available.
 - **Generate what is derivable; reserve judgment for what isn't.** Where a design graph fixes an artifact's identity, wiring and placement, deriving them mechanically is not a shortcut — it is what makes the design *converge*, because a hand-written artifact that drifts by one word in a label reads back as a different element and the board reports a phantom forever. What a graph cannot carry — payloads, invariants, handler bodies — is never guessed at.
-- **Context length is the bill, not thinking depth.** On a measured fleet run, cache reads were **97% of raw tokens** and 68% of the cost-weighted total; output was 11%. What makes a run expensive is how much context each turn re-sends, so the levers that matter are: keep command output out of agent contexts (redirect + `tail`), keep agent lifetimes short, and don't retry. Speeding up the repo's own commands is *not* one of them — build/test/typecheck/generate/lint together were 12% of agent active time.
+- **Context length is the bill, not thinking depth.** On a measured fleet run, cache reads were **97% of raw tokens** and 68% of the cost-weighted total; output was 11%. What makes a run expensive is how much context each turn re-sends, so the levers that matter are: keep command output out of agent contexts (redirect + `tail`), keep each agent to one slice, and hand findings back instead of re-paying a context for them. Speeding up the repo's own commands is *not* one of them — build/test/typecheck/generate/lint together were 12% of agent active time.
 - **Both gates, every slice; RED before GREEN.** Never commit on the test alone, never drop the verifier to save tokens, and **where no RED is available, mutation is the substitute, not an exemption.**
 - **Never end a turn awaiting a gate.** A backgrounded Bash job's completion re-invokes the main loop, never a subagent, so a unit agent that ends its turn awaiting one deadlocks permanently. A gate that can approach the 600 s ceiling runs **detached with a sentinel and is polled from foreground calls** (`full-gate` → *Reading the verdict*); never pipe a gate, and never read a wrapper's exit code as its verdict.
 - **An env-gated oracle records its exact invocation** (flag + services) in the slice, so `/verify-build` can re-run it without archaeology. A slice whose oracle is excluded from the default run cannot be certified by its `passes:` flag — that flag records the run that skipped it.

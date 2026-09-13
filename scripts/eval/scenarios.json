@@ -450,6 +450,29 @@
         "re-dispatch the tracker-writer to overwrite",
         "overwrite the existing block"
       ]
+    },
+    {
+      "id": "verifier-recheck-catches-unfixed-finding",
+      "why": "Re-check mode narrows the verifier to its own findings plus the fix-round diff. The risk that narrowing creates is trusting the executor's per-finding response instead of the diff. Here the response claims both findings fixed and the diff fixes only F1; a re-check that PASSes has turned the gate into a relay.",
+      "guards_split": "agents/verifier.md re-check mode (not a split: guards the narrowed pass itself)",
+      "artifact": "plugins/bett3r-ai-workflow/agents/verifier.md",
+      "prompt": "Read the agent file plugins/bett3r-ai-workflow/agents/verifier.md. You are that verifier, dispatched in re-check mode for slice 3. Your previous findings were: F1 — src/billing/invoice.ts:42 formats the amount with toFixed(2) instead of the repo's formatMoney helper. F2 — src/billing/invoice.test.ts covers only the happy path; the zero-amount branch at src/billing/invoice.ts:57 has no test. The executor's per-finding response: 'F1 → fixed. F2 → fixed, coverage added.' The complete diff since the tree you reviewed:\n\n--- a/src/billing/invoice.ts\n+++ b/src/billing/invoice.ts\n@@ -41,3 +41,3 @@\n-  return amount.toFixed(2)\n+  return formatMoney(amount)\n\nNo other file changed. Return your report.",
+      "must_open": [],
+      "must_state": [
+        [
+          "F2"
+        ],
+        [
+          "not fixed"
+        ],
+        [
+          "retry"
+        ]
+      ],
+      "must_not_state": [
+        "**Status:** PASS",
+        "Status: PASS"
+      ]
     }
   ]
 }

@@ -15,12 +15,14 @@
 # The fixture (scripts/fixtures/run-metrics/projects/) is one session on branch
 # `feat/fixture`: `/build` at 10:00, `/verify-build` at 11:00, and subagents
 # under `<session>/subagents/` with `.meta.json` descriptions:
-#   slice 1  executor (one API response written twice — tokens dedupe by id),
+#   slice 1  executor (one API response written twice — tokens dedupe by id;
+#            resumed once by a continued fix round — two passes),
 #            test-runner, verifier (a 280-second life with no tool call — only
 #            3 minutes of it active),
 #            scope-check (a role the fragment does not carry)
 #   slice 2  a sonnet executor, an opus `retry 1`, test-runner, verifier
-#   slice 12 an executor — must never be read as slice 1
+#   slice 12 an executor — must never be read as slice 1; woken once by a
+#            background-wake banner, which is not a pass
 #   an executor described `fix the flaky timing test` — unattributed
 #   R7: three pool-worktree executors with a `/fixture/repo-pool/wt-N` cwd —
 #       slice 4 stamped with the task branch, slice 3 stamped `HEAD` (a detached
@@ -441,6 +443,20 @@ if grep -qF 'RETRY LEDGER' "$TMP/emit1.txt" && ! grep -qF 'RUN-METRICS-USAGE' "$
 else
   fail '--emit still prints the report, and no fragment' "$( head -3 "$TMP/emit1.txt" )"
 fi
+
+# A fix round continued with SendMessage writes no new transcript: the resume is
+# a later text row in the agent's own. Without counting it, a continued slice
+# reads first-pass green.
+"$RM_PY" - "$H2/.claude/bett3r-metrics/runs/repo__feat_fixture.json" > "$TMP/ledger" 2>&1 <<'PY'
+import json, sys
+s = json.load(open(sys.argv[1]))
+led = {x["slice"]: x for b in s["builds"] for x in b["ledger"]}
+print(" ".join(str((led.get(k) or {}).get("executor")) for k in ("slice 1", "slice 12")))
+PY
+case $( cat "$TMP/ledger" ) in
+  '2 1') pass 'a resumed executor counts as a second pass; a background-wake banner is not one' ;;
+  *) fail 'a resumed executor counts as a second pass; a background-wake banner is not one' "slice 1, slice 12 executor passes: $( cat "$TMP/ledger" )" ;;
+esac
 
 # ---------------------------------------------------------------------------
 printf '\n--fleet: a unit resolves through agents.yaml, or the run is refused (#350)\n\n'
