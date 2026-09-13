@@ -524,7 +524,7 @@ function collectFleetUnit({ lane, file, provisioners }) {
  * Turn the marks into non-overlapping windows, each a distinct INVOCATION.
  *
  * Instances matter: a branch that ran `/build` twice has two passes over the
- * same slices, and merging them makes every slice look like it needed a retry
+ * same slices, and merging them makes every slice look like it needed a fix round
  * (a real branch read 0% first-pass-green purely from this). `build` and
  * `build #2` are therefore separate windows, never one bucket.
  */
@@ -606,16 +606,16 @@ function collectRun(branch, sessionFiles) {
   return { runs, marks, sessions, workDir, droppedDetached }
 }
 
-// ─────────────────────────────────────────────────────────── retry ledger
+// ─────────────────────────────────────────────────────────── fix-round ledger
 
 /**
  * Executor attempts per slice — the lever, since a failed gate costs a whole
  * extra pass. Scoped to ONE build invocation: across two `/build` passes the
- * same slice legitimately has two executors and that is not a retry. A dispatch
+ * same slice legitimately has two executors and that is not a fix round. A dispatch
  * is one pass, and each resume of it (a fix round continued with SendMessage)
  * is another.
  */
-function retryLedger(runs) {
+function fixRoundLedger(runs) {
   const slices = new Map()
   for (const r of runs) {
     const role = shortRole(r.agentType)
@@ -627,6 +627,7 @@ function retryLedger(runs) {
     if (role === 'executor') s.executor += 1 + (r.resumes ?? 0)
     if (role === 'verifier') s.verifier += 1 + (r.resumes ?? 0)
     if (role === 'test-runner') s.test++
+    // `retry` stays: dispatch descriptions written before the fix-round rename still say it
     if (/rework|retry|fix round|correction/i.test(d) || r.resumes) s.rework = true
     s.activeMs += r.activeMs
     s.tokens += r.tokens.input + r.tokens.cacheWrite + r.tokens.cacheRead + r.tokens.output
@@ -764,7 +765,7 @@ function summarize(branch, { runs, marks, sessions, workDir }) {
       tool: parts.reduce((t, p) => t + clipTotal(p.r.toolIntervals, w), 0),
       reason: parts.reduce((t, p) => t + clipTotal(p.r.reasonIntervals, w), 0),
       runs: agentParts.length, calls, tokens, added, removed,
-      ledger: w.phase === 'build' ? retryLedger(agentParts.map(p => p.r)) : [],
+      ledger: w.phase === 'build' ? fixRoundLedger(agentParts.map(p => p.r)) : [],
     }
   }).map(p => ({ ...p, firstPassGreen: p.ledger.length ? firstPassGreen(p.ledger) : null }))
 
@@ -939,7 +940,7 @@ function render(s) {
   L.push('')
 
   for (const b of s.builds) {
-    L.push(`  RETRY LEDGER — ${b.phase}   (executor passes per slice; a failed gate costs a whole extra pass)`)
+    L.push(`  FIX-ROUND LEDGER — ${b.phase}   (executor passes per slice; a failed gate costs a whole extra pass)`)
     L.push(table(['slice', 'executor', 'verifier', 'test', 'active', 'tokens', '+/- lines', 'rework?'],
       b.ledger.map(x => [x.slice, x.executor, x.verifier, x.test, fmtDur(x.activeMs), fmtTok(x.tokens),
         `+${x.added}/-${x.removed}`, x.rework ? 'yes' : ''])))
@@ -1000,8 +1001,8 @@ function render(s) {
  *
  *  - Per slice, per role (`executor`, `verifier`, `testRunner`): every dispatch
  *    of that role on the branch, in any window. The slice comes from
- *    `retryLedger` itself (one run at a time), so the fragment and the report's
- *    RETRY LEDGER can never disagree about which slice a dispatch belongs to. A
+ *    `fixRoundLedger` itself (one run at a time), so the fragment and the report's
+ *    FIX-ROUND LEDGER can never disagree about which slice a dispatch belongs to. A
  *    description naming no slice lands in `unattributed`, never in a slice.
  *  - `verifyBuild`: every OTHER run (the orchestrator, sweeps, scope-check…)
  *    clipped to the `/verify-build` windows, tokens prorated by active share the
@@ -1053,7 +1054,7 @@ function usageFragment(branch, { runs, marks, droppedDetached = 0 }) {
   for (const r of runs) {
     const role = FRAGMENT_ROLES[shortRole(r.agentType)]
     if (!role) continue
-    const key = retryLedger([r])[0]?.slice ?? 'unattributed'
+    const key = fixRoundLedger([r])[0]?.slice ?? 'unattributed'
     if (key === 'unattributed') unattributedRuns++
     const roles = bySlice.get(key) ?? { executor: [], verifier: [], testRunner: [] }
     roles[role].push({ r, share: 1, active: r.activeMs })

@@ -770,7 +770,7 @@
       "issue": null,
       "commit": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/run-report.md",
-      "note": "Merging two /build passes over the same slices makes every slice look retried — a real branch read 0% first-pass-green when its two passes were 33% and 100%."
+      "note": "Merging two /build passes over the same slices makes every slice look like it took a fix round — a real branch read 0% first-pass-green when its two passes were 33% and 100%."
     },
     {
       "needle": "A failure to measure must never block landing the work",
@@ -812,7 +812,7 @@
       "issue": null,
       "commit": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
-      "note": "Every retry is classified before it is dispatched (oracle-wrong / design-silent / ripple / invariant / mis-routed / flake). First-pass green is already measured; the rate alone names no fix, the classification is what turns it into a change to /plan or to a slice's gates."
+      "note": "Every fix round is classified before it is dispatched (oracle-wrong / design-silent / ripple / invariant / mis-routed / flake). First-pass green is already measured; the rate alone names no fix, the classification is what turns it into a change to /plan or to a slice's gates."
     },
     {
       "needle": "absent means opus",
