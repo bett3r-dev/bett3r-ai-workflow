@@ -953,6 +953,13 @@
       "commit": null,
       "was_in": "plugins/bett3r-ai-workflow/agents/verifier.md",
       "note": "Re-check mode judges each finding against the fix-round diff, never the executor's response — the narrowed pass must not become a relay of 'fixed'."
+    },
+    {
+      "needle": "The cap exists for the fix round, not the first pass",
+      "issue": 361,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/plan.md",
+      "note": "/plan splits a slice over 10 files or 200 call/string sites, counted at the base, unless it is atomic: one finding in an oversize sweep re-opens the whole sweep (TV2-21's ~26-file billing sweep ran 3 h 20 m and escalated)."
     }
   ]
 }
