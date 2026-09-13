@@ -164,17 +164,20 @@ function analyzeRun(rows, meta = {}) {
   if (!ev.length) return null
 
   // tool_use id -> when it was issued, and what it was
-  const useAt = new Map(), useName = new Map(), bashCmd = new Map()
+  const useAt = new Map(), useName = new Map(), useInput = new Map()
   for (const r of ev) {
     if (r.type !== 'assistant' || !Array.isArray(r.message?.content)) continue
     for (const c of r.message.content) {
       if (c.type !== 'tool_use') continue
       useAt.set(c.id, r.t); useName.set(c.id, c.name)
-      if (c.name === 'Bash') bashCmd.set(c.id, String(c.input?.command ?? '').replace(/\s+/g, ' ').trim())
+      const i = c.input ?? {}
+      useInput.set(c.id, String(i.command ?? i.file_path ?? i.pattern ?? i.description ?? '').replace(/\s+/g, ' ').trim())
     }
   }
 
-  const toolIv = [], childIv = [], byTool = new Map(), bashCalls = []
+  // `calls`: every non-spawn call on its own, so one blocked call can be named
+  // (BIGGEST SINGLE CALLS) instead of disappearing into `tool`.
+  const toolIv = [], childIv = [], byTool = new Map(), bashCalls = [], calls = []
   let added = 0, removed = 0
   const files = new Set()
 
@@ -191,8 +194,8 @@ function analyzeRun(rows, meta = {}) {
 
       // (4) a spawn's duration is the child's run, never the caller's work
       if (SPAWN_TOOLS.has(name)) childIv.push([a, b])
-      else toolIv.push([a, b])
-      if (name === 'Bash') bashCalls.push({ ms: dur, cmd: bashCmd.get(c.tool_use_id) ?? '' })
+      else { toolIv.push([a, b]); calls.push({ id: c.tool_use_id, tool: name, at: a, ms: dur, cmd: useInput.get(c.tool_use_id) }) }
+      if (name === 'Bash') bashCalls.push({ ms: dur, cmd: useInput.get(c.tool_use_id) ?? '' })
 
       const T = r.toolUseResult
       if (T && typeof T === 'object') {
@@ -278,7 +281,7 @@ function analyzeRun(rows, meta = {}) {
     toolCalls: [...byTool.values()].reduce((t, x) => t + x.n, 0),
     byTool: Object.fromEntries([...byTool.entries()].map(([k, v]) => [k, v])),
     linesAdded: added, linesRemoved: removed, filesTouched: files.size,
-    bashCalls, deadGaps,
+    bashCalls, calls, deadGaps,
   }
 }
 
@@ -1285,6 +1288,130 @@ function aggregate(sinceMs) {
   console.log('')
 }
 
+// ─────────────────────────────────────────────────────────── fleet whole run
+
+/**
+ * Collect one unit, through its lane agent when `lane.file` exists, else by
+ * branch (a unit whose lane was superseded or that ran serially, or no fleet at
+ * all). `collected` is null when the branch has no transcripts; `scan` names it.
+ */
+function resolveUnit(branch, lane, { since = null, quiet = false } = {}) {
+  if (lane?.file) {
+    const resolution = `fleet unit ${lane.lane.unitId} — lane agent ${lane.lane.agentId} from ${lane.runDir}`
+    if (!quiet) console.error(`  ${resolution}`)
+    return { collected: collectFleetUnit(lane), reportBranch: lane.lane.branch ?? branch, resolution, via: 'live lane' }
+  }
+  const scan = lane?.byBranch ?? branch
+  let resolution = null
+  if (lane) {
+    resolution = `fleet unit ${lane.unit.unitId ?? scan} — by branch ${scan}: ${lane.why} (${lane.runDir})`
+    if (!quiet) console.error(`  ${resolution}`)
+  }
+  const files = findSessions(scan, { since, quiet })
+  return { collected: files.length ? collectRun(scan, files) : null, reportBranch: scan, resolution, scan, via: `branch fallback: ${lane?.why ?? 'not a fleet unit'}` }
+}
+
+/** The N longest single calls a whole-run report names. */
+const BIGGEST_CALLS = 5
+
+/**
+ * `--fleet <dir> --all`: every unit in agents.yaml through the same resolution
+ * and `summarize` as the per-unit report, plus what no unit owns.
+ *
+ * ORCHESTRATOR-ONLY TIME — an approximation, defined here exactly:
+ *  - The orchestrator sessions are the parent sessions of every agent
+ *    agents.yaml names (lanes, superseded ones included, and provisioners) —
+ *    only the orchestrator spawns those. If none is on disk, the sessions the
+ *    units themselves were collected from stand in.
+ *  - A unit's window is its summary's [runStart, runEnd]: first → last activity
+ *    of everything attributed to it. The windows are unioned across units.
+ *  - wallMs   = the orchestrator sessions' first→last spans (unioned), minus
+ *               their overlap with the unit windows.
+ *  - activeMs = the sessions' active time (tool + reasoning, all branches, no
+ *               branch filter) minus the part of it inside the unit windows.
+ * Approximate because a window is an envelope: a hold or an escalation wait
+ * INSIDE a unit's first→last span is billed to that unit, and the orchestrator's
+ * own work during a parallel lane's window reads as unit time.
+ *
+ * BIGGEST SINGLE CALLS: every non-spawn call of every unit's runs, plus the
+ * orchestrator sessions' calls no unit already owns (by tool_use id), longest
+ * first. A spawn is the child's run and is never a call.
+ */
+function fleetWholeRun(runDir, { since = null, quiet = false } = {}) {
+  const y = readAgentsYaml(runDir)
+  const units = [], allCalls = [], owned = new Set(), unitSessions = new Set()
+  for (const u of fleetUnits(y)) {
+    const key = u.unitId ?? u.branch
+    const lane = findFleetLane(key, { fleet: runDir })
+    const res = lane ? resolveUnit(key, lane, { since, quiet }) : { collected: null, via: 'unresolved' }
+    const s = res.collected?.runs.length ? summarize(res.reportBranch, res.collected) : null
+    units.push({
+      unitId: u.unitId ?? null, branch: s?.branch ?? u.branch ?? null,
+      via: s ? res.via : res.collected ? 'no timestamped rows' : res.via === 'unresolved' ? 'unresolved' : 'no transcripts',
+      resolution: res.resolution ?? null,
+      ...(s ? {
+        runStart: s.runStart, runEnd: s.runEnd, runElapsedMs: s.runElapsedMs, aliveMs: s.aliveMs,
+        totalActiveMs: s.totalActiveMs, agentCount: s.agentCount, weightedTokens: s.weightedTokens,
+        linesAdded: s.linesAdded, linesRemoved: s.linesRemoved, firstPassGreen: s.firstPassGreen,
+      } : {}),
+    })
+    if (!s) continue
+    for (const x of res.collected.sessions) unitSessions.add(x.file)
+    for (const r of res.collected.runs) for (const c of r.calls) {
+      owned.add(c.id)
+      allCalls.push({ unitId: key, role: shortRole(r.agentType), agentId: r.agentId ?? 'main', ...c })
+    }
+  }
+
+  const agentIds = [...y.lanes, ...y.provisioners].flatMap(r => [r.agentId, r.provisionerId]).filter(Boolean)
+  const parents = new Set(agentIds.map(locateAgent).filter(Boolean).map(f => join(f, '..', '..') + '.jsonl'))
+  const orchFiles = [...(parents.size ? parents : unitSessions)].filter(f => existsSync(f))
+  const windows = unionMs(units.filter(u => u.runStart !== undefined).map(u => [u.runStart, u.runEnd])).merged
+    .map(([start, end]) => ({ start, end }))
+  const inWindows = (iv) => windows.reduce((t, w) => t + clipTotal(iv, w), 0)
+  const spans = [], orchOnly = { sessions: orchFiles.length, sessionElapsedMs: 0, wallMs: 0, activeMs: 0 }
+  for (const f of orchFiles) {
+    const a = analyzeRun(readJsonl(f), { agentType: 'orchestrator' })
+    if (!a) continue
+    spans.push([a.start, a.end])
+    orchOnly.activeMs += a.activeMs - inWindows(a.activeIntervals)
+    for (const c of a.calls) if (!owned.has(c.id)) allCalls.push({ unitId: '(orchestrator)', role: 'orchestrator', agentId: 'main', ...c })
+  }
+  const merged = unionMs(spans)
+  orchOnly.sessionElapsedMs = merged.total
+  orchOnly.wallMs = merged.total - inWindows(merged.merged)
+
+  const biggestCalls = allCalls.sort((a, b) => b.ms - a.ms).slice(0, BIGGEST_CALLS)
+    .map(({ id, at, ...c }) => ({ ...c, start: at, cmd: (c.cmd ?? '').slice(0, 80) }))
+  return { runDir, units, orchestratorOnly: orchOnly, biggestCalls }
+}
+
+function renderFleet(run) {
+  const L = ['', `  fleet ${run.runDir}`, `  ${'─'.repeat(40)}`, '']
+  const d = (x) => x === undefined ? '—' : fmtDur(x)
+  L.push('  UNITS   (each row is the per-unit report of that unit)')
+  L.push(table(['unit', 'branch', 'resolved via', 'elapsed', 'alive', 'active', 'agents', 'weighted tok', '+/- lines', 'first-pass green'],
+    run.units.map(u => [u.unitId ?? '?', u.branch ?? '?', u.via, d(u.runElapsedMs), d(u.aliveMs), d(u.totalActiveMs),
+      u.agentCount ?? '—', u.weightedTokens === undefined ? '—' : fmtTok(u.weightedTokens),
+      u.linesAdded === undefined ? '—' : `+${u.linesAdded}/-${u.linesRemoved}`,
+      u.firstPassGreen == null ? '—' : pct(u.firstPassGreen, 1)])))
+  L.push('')
+  const o = run.orchestratorOnly
+  L.push('  ORCHESTRATOR-ONLY TIME   (approximation: a unit owns its whole first → last window)')
+  L.push(table(['measure', 'value', 'meaning'], [
+    ['orchestrator sessions', `${fmtDur(o.sessionElapsedMs)}  (${o.sessions})`, 'first → last, every branch'],
+    ['outside every unit', `${fmtDur(o.wallMs)}  (${pct(o.wallMs, o.sessionElapsedMs)})`, 'holds, provisioning, escalation waits'],
+    ['  └ active', fmtDur(o.activeMs), 'the orchestrator working, not waiting'],
+  ]))
+  L.push('')
+  L.push('  BIGGEST SINGLE CALLS   (one call, issued → result; a multi-hour call is a block, not throughput)')
+  L.push(table(['unit', 'role', 'agent', 'tool', 'duration', 'started', 'command'],
+    run.biggestCalls.map(c => [c.unitId, c.role, c.agentId, c.tool, fmtDur(c.ms),
+      new Date(c.start).toISOString().slice(0, 16).replace('T', ' '), c.cmd.slice(0, 48)])))
+  L.push('')
+  return L.join('\n')
+}
+
 // ─────────────────────────────────────────────────────────── cli
 
 function parseArgs(argv) {
@@ -1293,6 +1420,7 @@ function parseArgs(argv) {
     const a = argv[i]
     if (a === '--emit') o.emit = true
     else if (a === '--fleet') o.fleet = argv[++i]
+    else if (a === '--all') o.all = true
     else if (a === '--json') o.json = true
     else if (a === '--list') o.list = true
     else if (a === '--aggregate') o.aggregate = true
@@ -1340,6 +1468,9 @@ run-metrics — where a unit of work's time and tokens actually went
                     maps the branch (or unit id) to its lane agent. Found automatically
                     from a lane worktree's .work/lane.yaml, or from ./.work/multi.
                     A unit it cannot resolve is an error listing its units.
+  --fleet <run-dir> --all
+                    the whole run: one row per unit, the orchestrator's time outside
+                    every unit, and the BIGGEST SINGLE CALLS across the run.
   --quiet           suppress the scan progress line
 `
 
@@ -1348,6 +1479,12 @@ function main() {
   if (o.help) { console.log(HELP); return }
 
   if (o.agents) { agentsReport(sinceToMs(o.since)); return }
+  if (o.all) {
+    if (!o.fleet || !existsSync(join(o.fleet, 'agents.yaml'))) { console.error('--all reports a whole fleet run: pass --fleet <.work/multi/<run-id>> (a dir holding agents.yaml).'); process.exit(2) }
+    const run = fleetWholeRun(o.fleet, { since: sinceToMs(o.since), quiet: o.quiet || o.json })
+    console.log(o.json ? JSON.stringify(run, null, 2) : renderFleet(run))
+    return
+  }
   if (o.aggregate) { aggregate(sinceToMs(o.since)); return }
 
   if (o.list) {
@@ -1386,26 +1523,11 @@ function main() {
   // stamped with the orchestrator's branch — resolve it through the run dir first.
   const lane = findFleetLane(branch, { fleet: o.fleet })
   if (o.fleet && !lane) fleetUnresolved()
-  let collected, reportBranch = branch, resolution = null
-  if (lane?.file) {
-    reportBranch = lane.lane.branch ?? branch
-    resolution = `fleet unit ${lane.lane.unitId} — lane agent ${lane.lane.agentId} from ${lane.runDir}`
-    if (!quiet) console.error(`  ${resolution}`)
-    collected = collectFleetUnit(lane)
-  } else {
-    const scan = lane?.byBranch ?? branch
-    if (lane) {
-      reportBranch = scan
-      resolution = `fleet unit ${lane.unit.unitId ?? scan} — by branch ${scan}: ${lane.why} (${lane.runDir})`
-      if (!quiet) console.error(`  ${resolution}`)
-    }
-    const files = findSessions(scan, { since: sinceToMs(o.since), quiet })
-    if (!files.length) {
-      console.error(`No transcripts found for branch "${scan}". Try --list to see what is on disk.`)
-      console.error('A /start-multi unit lives under the orchestrator session: run this from the lane worktree, or pass --fleet <.work/multi/<run-id>>.')
-      fragmentError('no-transcripts', 1)
-    }
-    collected = collectRun(scan, files)
+  const { collected, reportBranch, resolution, scan } = resolveUnit(branch, lane, { since: sinceToMs(o.since), quiet })
+  if (!collected) {
+    console.error(`No transcripts found for branch "${scan}". Try --list to see what is on disk.`)
+    console.error('A /start-multi unit lives under the orchestrator session: run this from the lane worktree, or pass --fleet <.work/multi/<run-id>>.')
+    fragmentError('no-transcripts', 1)
   }
   if (o.usageFragment) {
     if (!collected.runs.length) { console.error('Transcripts found but nothing timestamped in them.'); fragmentError('no-timestamped-rows', 1) }

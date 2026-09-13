@@ -18,6 +18,7 @@ Reconstructs a unit of work from Claude Code's own transcripts. Nothing is instr
 | `--emit` | also record the run to `~/.claude/bett3r-metrics/` (what `/verify-build` does) |
 | `--since <5d\|2w\|1m>` | limit the transcript scan (or the aggregation window) |
 | `--fleet <run-dir>` | resolve a `/start-multi` unit (branch or unit id) through that run's `agents.yaml` (no resolvable unit is an error listing its units) — automatic from a lane worktree's `.work/lane.yaml` or from `./.work/multi/` |
+| `--fleet <run-dir> --all` | the whole fleet run: one row per unit (and how it resolved), orchestrator-only time outside every unit's window (an approximation), and `BIGGEST SINGLE CALLS` so a multi-hour blocked call is named, not folded into `active` |
 
 ---
 

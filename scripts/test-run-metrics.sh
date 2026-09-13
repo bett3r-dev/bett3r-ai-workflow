@@ -502,6 +502,79 @@ else
   fail 'the printed report names the resolution path it used' "$( head -6 "$TMP/fleet-b.txt" )"
 fi
 
+# ---------------------------------------------------------------------------
+printf '\n--fleet <dir> --all: the whole run, one row per unit (#350 item 3)\n\n'
+# ---------------------------------------------------------------------------
+# Expected numbers, from the fixture by hand:
+#  - unit windows: UA-1 09:02-09:20 (lane), UB-2 10:00-13:00 (by branch).
+#  - the orchestrator session spans 09:00-13:05 (245m); outside both windows is
+#    245 - 18 - 180 = 47m = 2820000 ms.
+#  - its active intervals (tool + reasoning gaps capped at 3m; the Agent call is
+#    child time, not active): 09:00-09:01, 09:14-09:17, 10:00-13:03. Outside the
+#    windows: 09:00-09:01 and 13:00-13:03 = 4m = 240000 ms.
+#  - the biggest single call is UB-2's verifier Bash, 10:05-12:50 = 9900000 ms,
+#    ahead of the orchestrator's own 90m `yarn build` on feat/unit-b.
+
+rm_run "$H3" --fleet "$RUN" --all --json > "$TMP/fleet-all.json" 2> "$TMP/fleet-all.err"
+all_rc=$?
+rm_run "$H3" --fleet "$RUN" --all --quiet > "$TMP/fleet-all.txt" 2>&1
+"$RM_PY" - "$TMP/fleet-all.json" "$TMP/fleet-a.json" "$TMP/fleet-b.json" "$all_rc" > "$TMP/all-judged" 2>&1 <<'PY'
+import json, sys
+path, a_path, b_path, rc = sys.argv[1:5]
+out = []
+def check(label, ok, detail=""):
+    out.append("%s\t%s\t%s" % ("ok" if ok else "bad", label, str(detail).replace("\n", " ")))
+try:
+    doc = json.load(open(path))
+except Exception as e:
+    doc = {}
+    check("--all --json exits 0 and prints JSON", False, "rc=%s %s" % (rc, e))
+units = doc.get("units") or []
+ids = [u.get("unitId") for u in units]
+check("--all prints one row per agents.yaml unit (UA-1, UB-2)", rc == "0" and ids == ["UA-1", "UB-2"], "rc=%s ids=%s" % (rc, ids))
+by = {u.get("unitId"): u for u in units}
+ua, ub = by.get("UA-1") or {}, by.get("UB-2") or {}
+check("the UA-1 row resolved through its live lane (18m)",
+      ua.get("via") == "live lane" and ua.get("runElapsedMs") == 1080000, ua)
+check("the UB-2 row resolved by branch fallback, naming the superseded lane (3h)",
+      str(ub.get("via", "")).startswith("branch fallback") and "superseded" in str(ub.get("via")) and ub.get("runElapsedMs") == 10800000, ub)
+for u, p in (("UA-1", a_path), ("UB-2", b_path)):
+    single = json.load(open(p))
+    row = by.get(u) or {}
+    keys = ("totalActiveMs", "aliveMs", "weightedTokens", "agentCount")
+    check("the %s row carries the per-unit report's own numbers" % u,
+          all(row.get(k) == single.get(k) for k in keys), {k: (row.get(k), single.get(k)) for k in keys})
+oo = doc.get("orchestratorOnly") or {}
+check("orchestrator-only wall time is the session outside every unit window (47m)", oo.get("wallMs") == 2820000, oo)
+check("orchestrator-only active time is the session's active time outside every unit window (4m)", oo.get("activeMs") == 240000, oo)
+calls = doc.get("biggestCalls") or []
+top = calls[0] if calls else {}
+check("BIGGEST SINGLE CALLS names the blocked verifier call first, with unit, role, tool, duration and command",
+      top.get("unitId") == "UB-2" and top.get("role") == "verifier" and top.get("tool") == "Bash"
+      and top.get("ms") == 9900000 and "verify-isolation" in str(top.get("cmd")), top)
+check("BIGGEST SINGLE CALLS is at most 5 calls, longest first, spawns excluded",
+      0 < len(calls) <= 5 and [c.get("ms") for c in calls] == sorted([c.get("ms") for c in calls], reverse=True)
+      and all(c.get("tool") not in ("Agent", "Task", "Workflow") for c in calls), [(c.get("tool"), c.get("ms")) for c in calls])
+print("\n".join(out))
+PY
+while IFS='	' read -r verdict_word label detail; do
+  if [ "$verdict_word" = ok ]; then pass "$label"; elif [ "$verdict_word" = bad ]; then fail "$label" "$detail"; else fail 'the --all judge ran' "$verdict_word $label"; fi
+done < "$TMP/all-judged"
+
+if grep -qF 'ORCHESTRATOR-ONLY' "$TMP/fleet-all.txt" && grep -F 'verify-isolation' "$TMP/fleet-all.txt" | grep -qF 'verifier' \
+   && grep -qF 'BIGGEST SINGLE CALLS' "$TMP/fleet-all.txt" && grep -F 'UA-1' "$TMP/fleet-all.txt" | grep -qF 'live lane'; then
+  pass 'the printed --all report shows the unit rows, orchestrator-only time and the biggest calls'
+else
+  fail 'the printed --all report shows the unit rows, orchestrator-only time and the biggest calls' "$( head -12 "$TMP/fleet-all.txt" )"
+fi
+
+rm_run "$H3" --all > "$TMP/all-nofleet.out" 2> "$TMP/all-nofleet.err"
+if [ $? -ne 0 ] && grep -qF -e '--fleet' "$TMP/all-nofleet.err"; then
+  pass '--all without --fleet exits non-zero and says it needs --fleet'
+else
+  fail '--all without --fleet exits non-zero and says it needs --fleet' "$( head -3 "$TMP/all-nofleet.out" )" "$( head -3 "$TMP/all-nofleet.err" )"
+fi
+
 printf '\n'
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"
