@@ -38,16 +38,25 @@ artifacts is worse than scaffolding none. Say so and write by hand.
 
 ## Step 1 — Dry run, always first
 
+The command is whatever the repo declares as `designTooling.scaffold` in `.esas.config.json`
+(`yarn esas:scaffold` in teselly). With no declaration, a PV3 repo's default is
+`yarn pv3 g scaffold`. Run it from the repo root: that is where files are written and where
+existence is checked.
+
 ```bash
 # normal checkout — reads this repo's own .esas/
-npx esas-pv3-scaffold --repo "$PWD" --nodes <the slice's designs: ids, comma-separated>
+<scaffold> --nodes <the slice's designs: ids, comma-separated>
 
 # fleet lane — reads the read-only snapshot the provisioner left
-npx esas-pv3-scaffold --repo "$PWD" \
+<scaffold> \
   --design .work/design-snapshot/design.json \
   --graph  .work/design-snapshot/graph.json \
   --nodes  <ids>
 ```
+
+If the command is unknown to the repo's `pv3` (`error: unknown command 'scaffold'`), its
+`@bett3r-dev/pv3-cli` predates the scaffolder. Say so and write by hand; do not reach for the old
+`esas-pv3-scaffold` package, which no longer exists.
 
 Writes nothing. Prints what it *would* create, the fragments it will not write, and anything
 blocked.
@@ -84,7 +93,7 @@ Re-run the **same command** as step 1 with `--write` added — including
 there is no `.esas/` to fall back to.
 
 ```bash
-npx esas-pv3-scaffold --repo "$PWD" [--design … --graph …] --nodes <ids> --write
+<scaffold> [--design … --graph …] --nodes <ids> --write
 ```
 
 **Only files are written. Fragments never are.** A file is emitted only when its host file does
