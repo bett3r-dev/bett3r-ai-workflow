@@ -68,10 +68,13 @@ Five things about it, each of which someone has already got wrong:
   scheduler that dispatched a step to a hosted session has no documented way to
   read that session back, and "did a PR appear" folds `gate-red` into `infra`.
   So a brief carrying `verdictOnBranch: true` makes every step pass its line to
-  `lane-step-record` first: an **empty** commit whose message ends in the line,
-  pushed, read back with `git log -1 --format=%B <branch> | lane-step -`. Empty
-  so that a `blocked-on` before any work still leaves a commit — on the branch,
-  too, absence means only `infra`. You own your process; never set the flag.
+  `lane-step-record` first: a commit whose message ends in the line, pushed,
+  read back with `git log -1 --format=%B <branch> | lane-step -`. The step's own
+  last commit carries it while that commit is unpushed; otherwise an **empty**
+  commit does, so that a `blocked-on` before any work still leaves a commit — on
+  the branch, too, absence means only `infra`. A `/start` or `/plan` `success`
+  with nothing committed writes nothing: the next step's verdict is the
+  progress. You own your process; never set the flag.
 
 ## The five steps you run, and how you read each one
 

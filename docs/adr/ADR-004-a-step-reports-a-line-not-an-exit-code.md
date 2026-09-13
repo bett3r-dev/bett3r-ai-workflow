@@ -149,8 +149,27 @@ already a valid git trailer.
 One conflation remains, and it is bounded: a `/start` whose `blocked-on` is *the branch cannot be
 cut* has nowhere to write, so a git-only reader sees `infra`.
 
+## Amended: the verdict rides the step's own last commit
+
+*Empty, always* cost more than it bought. The owner's repos merge with merge commits only, so every
+verdict commit lands in the default branch's history: TV2-21 carried 4 empty verdict commits among
+17 (#371). So `lane-step-record` now picks the commit, and the line, parser and read-back are
+unchanged:
+
+* **Folded** when HEAD is unpushed and carries no verdict yet: its message is rewritten with the
+  marker as the final line, after any trailers. Amending an unpushed commit needs no force-push, and
+  the recorder never force-pushes — a hosted venue refuses one, and a commit anyone else can see is
+  never rewritten. `/design` and `/build` do not push before recording, so this is their normal path.
+* **Empty** when the last commit is already pushed or the step made none and did not succeed — the
+  `blocked-on` case above, still covered. `/verify-build` stays here: it must push to open the PR
+  before its verdict exists.
+* **Nothing** for a `/start` or `/plan` `success` with nothing to commit. This leans on the reader:
+  the delegated scheduler reads a tip with no verdict as not concluded, and any later non-final
+  `success` as progress, so no step needs its own verdict. If a reader ever requires one per step,
+  this is the path that breaks.
+
 ## Status
 
-Accepted; amended for the branch sink (#326). Supersedes nothing. Extends **ADR-003**'s seam discipline: the line and the brief file are
+Accepted; amended for the branch sink (#326) and for folding the verdict into the step's commit (#371). Supersedes nothing. Extends **ADR-003**'s seam discipline: the line and the brief file are
 both seams, and neither may name its first consumer — `scripts/test-flow-seams.sh` grows an
 assertion that generalises past the single hard-coded string it checks today.
