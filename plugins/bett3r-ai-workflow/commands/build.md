@@ -75,8 +75,11 @@ For each slice, in order, in a **fresh agent context**:
 
 0. **Scaffold what the design already fixed** — *only when the slice has a `designs:` list, a
    readable design layer is reachable (this checkout's own `.esas/`, or — in a fleet lane — the
-   snapshot below), and the host repo ships a design scaffolder* (in a PV3 repo, the
-   `scaffold-from-design` skill).
+   snapshot below), and the host repo declares a design scaffolder*: `designTooling.scaffold` in
+   its `.esas.config.json`. Run that command from the checkout root with the slice's ids as
+   `--nodes`. When `designTooling.scaffoldSkill` names a skill, follow it for reading the output.
+   **No declaration ⇒ skip the step and say so.** Do not go looking for a framework's tool by
+   name: the declaration is how this flow stays framework-agnostic.
 
    **In a fleet lane, read the snapshot instead.** A worktree has no `.esas/` — that layer is
    scoped to one unit of work while a run spans N, and a lane must never write it — so the

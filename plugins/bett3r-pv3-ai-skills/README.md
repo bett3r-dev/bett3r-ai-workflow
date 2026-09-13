@@ -15,8 +15,9 @@ A PV3 repo installs both; a non-PV3 repo installs just the workflow plugin.
 The design graph already fixes an artifact's file path, builder wiring, event names, placement,
 registration — and the **node id the ESAS extractor will read back**. `scaffold-from-design`
 generates that half with a tested program
-([`@bett3r-dev/esas-pv3-scaffold`](https://github.com/bett3r-dev/eventstorming--visual-editor)),
-so it is derived rather than retyped.
+([`@bett3r-dev/pv3-library-esas-scaffold`](https://github.com/bett3r-dev/pv3/tree/master/packages/pv3-library-esas-scaffold),
+run as `pv3 g scaffold`, the mirror of the extractor's `pv3 g esas`), so it is derived rather than
+retyped.
 
 That is not about typing speed. It is about **convergence**: a hand-written artifact that drifts by
 one word in a label reads back as a different node, the design's proposal never flips to
@@ -83,6 +84,30 @@ Every PV3 repo carries an `.esas.config.json` at its root. The skills resolve th
 > doesn't follow that convention. The PV3 framework packages (`@bett3r-dev/pv3-types`,
 > `@bett3r-dev/jsonschema-definer`, the `ports` module) are identical in every PV3 repo and are
 > not config-driven.
+
+### `designTooling` — how the flow finds the adapter
+
+The workflow plugin knows no framework. It finds the design tooling through one block, and skips a
+step (saying so) when the block does not name its command:
+
+```json
+"designTooling": {
+  "framework": "pv3",
+  "extract": "yarn esas",
+  "scaffold": "yarn esas:scaffold",
+  "scaffoldSkill": "bett3r-pv3-ai-skills:scaffold-from-design"
+}
+```
+
+| Field | Contract |
+|---|---|
+| `framework` | The adapter pair's framework. |
+| `extract` | Rewrites `.esas/graph.json` from code. In any PV3 repo, `yarn pv3 g esas`. |
+| `scaffold` | Accepts `--nodes`, `--design`, `--graph`, `--write`, `--json`, runs from the repo root, exits `0` clean · `1` unreadable input · `3` blocked. In any PV3 repo, `yarn pv3 g scaffold`. |
+| `scaffoldSkill` | The skill that reads the scaffold output and owns what it leaves unwritten. |
+
+Teselly routes both through its `scripts/pv3Cli.js` wrapper, so its values are the `yarn esas*`
+scripts shown above.
 
 ## Relationship to the host repo
 
