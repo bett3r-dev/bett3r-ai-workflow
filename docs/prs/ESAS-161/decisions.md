@@ -79,3 +79,35 @@ sources: [code:map.html saveAnswer (esas 1a1d24c), design:answers/<forkId>]
 rejected: one aggregate answers.json
 supersedes: —
 One file per db doc, holding {pick, comment, updatedAt}; dot-files ignored, other entries refused. The slice-3 skill must materialise read_db results in exactly this layout. Unknown-fork answers are refused, not dropped.
+
+## D11 — a wake never runs --final
+kind: silent-seam
+step: build · slice: 3 · decidedBy: verifier
+sources: [design:F3, design:F4, code:skills/esas-design/SKILL.md "the notification is the doorbell"]
+rejected: a page comment saying "done" counts as the owner finishing — would convert unreached forks to decided(recommendation) indistinguishably
+supersedes: —
+A page-comment wake may only read_db and apply-answers without --final. --final, and the D8 resolution of a printed comment, need the owner's word in the terminal.
+
+## D12 — after a wake, report the fold in the terminal and wait
+kind: silent-seam
+step: build · slice: 3 · decidedBy: executor
+sources: [design:F4, verifier]
+rejected: —
+supersedes: —
+The design is silent on what follows a wake. The skill tells the agent to report what the fold shows in the terminal and wait for the owner there. Slice 4's measurement may revise it.
+
+## D13 — the skill's presence oracle catches deletion and named inversions only
+kind: shipped-finding
+step: build · slice: 3 · decidedBy: verifier
+sources: [code:scripts/test-design-map.sh, design:test seams]
+rejected: —
+supersedes: —
+Needles for "not a refusal", "not an error" and "A wake never runs --final" are inversion-proof; other instruction sentences can be inverted around a surviving needle. Needles that occur several times survive a section deletion. Accepted by the design's test-seams table; slice 4 is the behavioural check.
+
+## D14 — "act on a fork once every fork it depends on is resolved" has no schema backing
+kind: shipped-finding
+step: build · slice: 3 · decidedBy: verifier
+sources: [design:F4, code:map.schema.json]
+rejected: —
+supersedes: —
+The skill repeats F4's dependency rule, but D1's schema has no fork-to-fork dependency field, so an agent cannot act on it. Follow-up for the design / ESAS-167.
