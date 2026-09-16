@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bett3r-dev/bett3r-ai-workflow/plugins/bett3r-ai-workflow/skills/design-map/map.schema.json",
+  "title": "map.json",
+  "$comment": "A design's reasoning as forks, laid out as an impact map (goal -> mapActor -> impact -> deliverable) or as a decision tree. The who-level is spelled mapActor: a bare \"actor\" key is refused anywhere in a payload, so a map role can never be joined to an op's ActorId. scripts/design-map.py validates against this file with the standard library; it implements type, const, enum, required, properties, additionalProperties:false, items, minItems, minLength, pattern, $ref (#/$defs/...), allOf and if/then — nothing else.",
+  "type": "object",
+  "required": ["schemaVersion", "layout", "title", "forks"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "layout": { "enum": ["impactMap", "decisionTree"] },
+    "title": { "type": "string", "minLength": 1 },
+    "goal": { "$ref": "#/$defs/node" },
+    "mapActors": { "type": "array", "items": { "$ref": "#/$defs/node" } },
+    "impacts": { "type": "array", "items": { "$ref": "#/$defs/impact" } },
+    "deliverables": { "type": "array", "items": { "$ref": "#/$defs/deliverable" } },
+    "forks": { "type": "array", "items": { "$ref": "#/$defs/fork" } }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "layout": { "const": "impactMap" } } },
+      "then": {
+        "required": ["goal", "mapActors", "impacts", "deliverables"],
+        "properties": {
+          "mapActors": { "minItems": 1 },
+          "impacts": { "minItems": 1 },
+          "deliverables": { "minItems": 1 }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$" },
+    "node": {
+      "type": "object",
+      "required": ["id", "title"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1 }
+      }
+    },
+    "impact": {
+      "type": "object",
+      "required": ["id", "title", "mapActor"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1 },
+        "mapActor": { "$ref": "#/$defs/id" }
+      }
+    },
+    "deliverable": {
+      "type": "object",
+      "required": ["id", "title", "impact"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1 },
+        "impact": { "$ref": "#/$defs/id" },
+        "forks": { "type": "array", "items": { "$ref": "#/$defs/id" } }
+      }
+    },
+    "option": {
+      "type": "object",
+      "required": ["key", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "$ref": "#/$defs/id" },
+        "label": { "type": "string", "minLength": 1 },
+        "recommended": { "type": "boolean" }
+      }
+    },
+    "fork": {
+      "type": "object",
+      "required": ["id", "title", "status", "problem", "options", "recommendation"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["open", "decided", "moot"] },
+        "by": { "enum": ["owner", "recommendation"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "problem": { "type": "string", "minLength": 1 },
+        "options": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/option" } },
+        "recommendation": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        { "if": { "properties": { "status": { "const": "decided" } } }, "then": { "required": ["by"] } },
+        { "if": { "properties": { "status": { "const": "moot" } } }, "then": { "required": ["reason"] } }
+      ]
+    }
+  }
+}
