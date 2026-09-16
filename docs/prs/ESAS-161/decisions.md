@@ -47,3 +47,35 @@ sources: [code:docs/prs/ESAS-156/map.html:467-474 (esas 1a1d24c), design:groundi
 rejected: —
 supersedes: —
 Re-grounded at 1a1d24c; the answers writer and CONTEXT.md Fork/Actor (map) are unchanged.
+
+## D7 — fork gains an optional `pick` (option key)
+kind: deviation
+step: build · slice: 2 · decidedBy: executor
+sources: [decisions:D1, design:F3, verifier]
+rejected: decided(owner) without recording the chosen option
+supersedes: —
+Amends D1's fork shape so decided(owner) keeps the owner's choice. A hand-written map's pick is not checked against its options (consistent with D2). --final sets pick only when exactly one option is recommended.
+
+## D8 — --final also decides comment-only forks
+kind: silent-seam
+step: build · slice: 2 · decidedBy: verifier
+sources: [design:--final, code:CONTEXT.md "open question" (esas 1a1d24c)]
+rejected: keeping commented forks open under --final
+supersedes: —
+--final is the owner saying they are done; comments are still printed. The skill (slice 3) must resolve printed comments before running --final.
+
+## D9 — an invalid pick on a moot fork refuses the whole run
+kind: shipped-finding
+step: build · slice: 2 · decidedBy: verifier
+sources: [code:design-map.py fold/docstring, design:open question on re-render (design.md:150)]
+rejected: —
+supersedes: —
+A valid pick on a moot fork is ignored as documented, but a pick that is not an option key refuses with unknown-pick — contradicting the docstring. Also shipped: an in-place write narrows the map's mode to 0600. Both are optional follow-ups.
+
+## D10 — answers dir layout is <answers-dir>/<forkId>.json
+kind: silent-seam
+step: build · slice: 2 · decidedBy: executor
+sources: [code:map.html saveAnswer (esas 1a1d24c), design:answers/<forkId>]
+rejected: one aggregate answers.json
+supersedes: —
+One file per db doc, holding {pick, comment, updatedAt}; dot-files ignored, other entries refused. The slice-3 skill must materialise read_db results in exactly this layout. Unknown-fork answers are refused, not dropped.
