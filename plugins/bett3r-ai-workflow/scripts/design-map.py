@@ -2,6 +2,7 @@
 """The map verbs over a design's map.json. It says what it did in ONE line.
 
     DESIGN-MAP:v1 outcome=ok verb=render expected=<n> payload=<n> rendered=<n> page=<path>
+    DESIGN-MAP:v1 outcome=ok verb=apply-answers final=<bool> open=<n> owner=<n> recommendation=<n> moot=<n> commented=<ids|none> map=<path>
     DESIGN-MAP:v1 outcome=error verb=<verb> reason=<reason> [key=value ...]
 
 Read the line, never the exit code alone (ADR-004): 0 for ok, 2 for error, and
@@ -12,6 +13,7 @@ Usage:
 
   design-map render <map.json> --expect <n> [--out <page.html>]
   design-map check-page <map.json> <page.html> --expect <n>
+  design-map apply-answers <map.json> <answers-dir> [--final]
 
 `render` validates the payload against the committed schema
 (`skills/design-map/map.schema.json`), then writes a self-contained HTML page
@@ -49,6 +51,35 @@ reason=out-is-map. Other reasons:
   bare-actor (at=<json pointer>), schema-invalid (at=<json pointer> rule=<keyword>),
   duplicate-fork-id (id=<id>), out-path-whitespace, out-dir-missing, out-is-map,
   missing-page, page-unreadable
+
+`apply-answers` folds the owner's saved answers into the map's fork statuses,
+which follow esas CONTEXT.md "Fork": open, decided (by the owner, or on
+recommendation), or moot with a reason, and never deleted. The answers dir
+holds one file per saved answer, `<answers-dir>/<forkId>.json`, containing the
+`answers/<forkId>` document as the page wrote it, `{pick, comment, updatedAt}`
+(dot-files are ignored; any other entry is reason=answer-unexpected-file).
+
+  - an answer with a pick     -> decided, by owner, pick=<option key> — also
+                                 when the fork was posted decided(recommendation)
+  - no answer                 -> status unchanged
+  - a comment with no pick    -> status unchanged; the comment is printed as
+                                 `comment <forkId>: <text>` before the verdict,
+                                 and an open fork's id is listed in commented=
+  - a moot fork               -> left exactly as it is, answer or not
+  - --final                   -> every fork still open after the fold becomes
+                                 decided, by recommendation, with pick= the
+                                 option marked recommended when exactly one is
+
+Without --final no fork is ever made decided(recommendation): a fork the owner
+has not reached yet must stay distinguishable from one they let stand.
+
+The map is updated in place, and only whole: the folded payload is validated
+against the schema, written to a temporary file beside the map and moved over
+it. Every refusal leaves the author's map byte-identical. Reasons:
+
+  missing-answers, answers-dir-missing, answer-unexpected-file (name=<entry>),
+  answer-unreadable, answer-unparseable, answer-malformed, unknown-fork,
+  unknown-pick (each with id=<forkId>), map-unwritable, and the map reasons above
 
 A bare `actor` key is refused anywhere in the payload, before the schema runs:
 the map's who-level is `mapActor`, never `actor`, so a map role can never be
@@ -94,7 +125,10 @@ def parse_args(args):
     positional, flags, i = [], {}, 0
     while i < len(args):
         a = args[i]
-        if a.startswith("--"):
+        if a == "--final":
+            flags["final"] = True
+            i += 1
+        elif a.startswith("--"):
             name = a[2:]
             if name not in ("expect", "out"):
                 raise Refusal(f"unknown-flag-{name}")
@@ -285,7 +319,7 @@ let answers = {};
 function stateOf(id) {
   const f = FORKS[id];
   if (f.status === "moot") return "moot";
-  if (answers[id]) return "done";
+  if (answers[id] && answers[id].pick) return "done";
   return f.status === "decided" ? "mine" : "open";
 }
 function recKey(f) {
@@ -520,7 +554,103 @@ def check(positional, flags):
     return dict(expected=expected, payload=count, rendered=rendered)
 
 
-VERBS = {"render": render, "check-page": check}
+# --- answers ----------------------------------------------------------------
+
+ANSWER_FILE = re.compile(r"([A-Za-z0-9_-]+)\.json\Z")
+
+
+def load_answers(directory):
+    """{forkId: {pick, comment}} from <directory>/<forkId>.json."""
+    if not os.path.isdir(directory):
+        raise Refusal("answers-dir-missing")
+    answers = {}
+    for name in sorted(os.listdir(directory)):
+        if name.startswith("."):
+            continue
+        match = ANSWER_FILE.fullmatch(name)
+        if not match or not os.path.isfile(os.path.join(directory, name)):
+            raise Refusal("answer-unexpected-file", name=re.sub(r"\s", "?", name))
+        fid = match.group(1)
+        try:
+            with open(os.path.join(directory, name), encoding="utf-8") as fh:
+                text = fh.read()
+        except (OSError, UnicodeDecodeError):
+            raise Refusal("answer-unreadable", id=fid)
+        try:
+            doc = json.loads(text)
+        except ValueError:
+            raise Refusal("answer-unparseable", id=fid)
+        pick = doc.get("pick") if isinstance(doc, dict) else None
+        comment = doc.get("comment") if isinstance(doc, dict) else None
+        if not isinstance(doc, dict) or not isinstance(pick, (str, type(None))) \
+                or not isinstance(comment, (str, type(None))):
+            raise Refusal("answer-malformed", id=fid)
+        answers[fid] = {"pick": pick or None, "comment": (comment or "").strip()}
+    return answers
+
+
+def fold(payload, answers, final):
+    """Apply answers (and --final) to the forks in place; returns the comments."""
+    forks = {f["id"]: f for f in payload["forks"]}
+    for fid, answer in answers.items():
+        if fid not in forks:
+            raise Refusal("unknown-fork", id=fid)
+        pick = answer["pick"]
+        if pick is not None and pick not in [o["key"] for o in forks[fid]["options"]]:
+            raise Refusal("unknown-pick", id=fid)
+    comments = []
+    for fork in payload["forks"]:
+        answer = answers.get(fork["id"])
+        if fork["status"] == "moot" or answer is None:
+            continue
+        if answer["pick"] is not None:
+            fork["status"], fork["by"], fork["pick"] = "decided", "owner", answer["pick"]
+        if answer["comment"]:
+            comments.append((fork, answer["comment"]))
+    commented = [f["id"] for f, _ in comments if f["status"] == "open"]
+    if final:
+        for fork in payload["forks"]:
+            if fork["status"] == "open":
+                fork["status"], fork["by"] = "decided", "recommendation"
+                recommended = [o["key"] for o in fork["options"] if o.get("recommended")]
+                if len(recommended) == 1:
+                    fork["pick"] = recommended[0]
+    return comments, commented
+
+
+def apply_answers(positional, flags):
+    if not positional:
+        raise Refusal("missing-map")
+    if len(positional) < 2:
+        raise Refusal("missing-answers")
+    map_path, answers_dir = positional[0], positional[1]
+    final = flags.get("final", False)
+    payload = load_map(map_path)
+    validate(payload)
+    comments, commented = fold(payload, load_answers(answers_dir), final)
+    validate(payload)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(map_path)), prefix=".design-map-", suffix=".json")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2, ensure_ascii=False)
+            fh.write("\n")
+        os.replace(tmp, map_path)
+    except OSError:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise Refusal("map-unwritable")
+    for fork, comment in comments:
+        sys.stdout.write(f"comment {fork['id']}: {comment.replace(chr(10), ' / ')}\n")
+    def count(status, by=None):
+        return sum(1 for f in payload["forks"] if f["status"] == status and (by is None or f.get("by") == by))
+    return dict(
+        final="true" if final else "false", open=count("open"), owner=count("decided", "owner"),
+        recommendation=count("decided", "recommendation"), moot=count("moot"),
+        commented=",".join(commented) or "none", map=map_path,
+    )
+
+
+VERBS = {"render": render, "check-page": check, "apply-answers": apply_answers}
 
 
 def main(argv):
@@ -531,6 +661,12 @@ def main(argv):
         positional, flags = parse_args(argv[2:])
         if verb == "check-page" and "out" in flags:
             raise Refusal("unknown-flag-out")
+        if verb != "apply-answers" and "final" in flags:
+            raise Refusal("unknown-flag-final")
+        if verb == "apply-answers":
+            for name in ("expect", "out"):
+                if name in flags:
+                    raise Refusal(f"unknown-flag-{name}")
         attrs = VERBS[verb](positional, flags)
     except Refusal as r:
         return verdict("error", verb=verb or "none", reason=r.reason, **r.attrs)

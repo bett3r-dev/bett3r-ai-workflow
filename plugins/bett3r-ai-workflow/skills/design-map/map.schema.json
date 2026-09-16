@@ -81,6 +81,7 @@
         "status": { "enum": ["open", "decided", "moot"] },
         "by": { "enum": ["owner", "recommendation"] },
         "reason": { "type": "string", "minLength": 1 },
+        "pick": { "$ref": "#/$defs/id" },
         "problem": { "type": "string", "minLength": 1 },
         "options": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/option" } },
         "recommendation": { "type": "string", "minLength": 1 }

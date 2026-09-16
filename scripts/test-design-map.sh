@@ -1,5 +1,6 @@
 #!/bin/sh
-# Oracle for `bin/design-map render` — map.json to the page the owner answers on.
+# Oracle for `bin/design-map` — `render` (map.json to the page the owner answers
+# on) and `apply-answers` (the saved answers back into fork statuses, F3).
 #
 # The page tells the owner that a fork left unanswered is taken on its
 # recommendation, so a fork that never reaches the page is accepted without
@@ -261,6 +262,117 @@ json.dump(m, open(sys.argv[2], "w"))
 PY
 expect_error 'a fork id with a trailing newline' schema-invalid \
   render "$TMP/newline-id.json" --expect 3 --out "$TMP/nl.html"
+
+# ---------------------------------------------------------------------------
+printf 'F3: saved answers become fork statuses; only --final takes the recommendation\n'
+# ---------------------------------------------------------------------------
+# answers-map.json: F1-F3 open, F4 posted as decided(recommendation), F5 moot,
+# F6 decided(recommendation). answers/: F1 picks A, F3 is a comment with no
+# pick, F4 picks A, F5 (moot) carries a stale pick. F2 and F6 are unanswered.
+ANS="$FIX/answers"
+mkdir -p "$TMP/f3"
+
+# forks <map> — one `id:status:by:pick` per fork, in map order, space-joined.
+forks(){
+  python3 -c '
+import json, sys
+m = json.load(open(sys.argv[1]))
+print(" ".join(":".join([f["id"], f["status"], f.get("by", "-"), f.get("pick", "-")]) for f in m["forks"]))' "$1" 2>&1
+}
+
+cp "$FIX/answers-map.json" "$TMP/f3/map.json"
+dm apply-answers "$TMP/f3/map.json" "$ANS"
+check 'apply-answers: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+check 'apply-answers: exit 0' "$rc" 0
+check 'apply-answers: final=false' "$( attr "$LINE" final )" false "$LINE"
+check 'apply-answers: names the map it updated' "$( attr "$LINE" map )" "$TMP/f3/map.json" "$LINE"
+check 'apply-answers: picked -> decided(owner), unanswered and comment-only stay open, moot survives' \
+  "$( forks "$TMP/f3/map.json" )" \
+  'F1:decided:owner:A F2:open:-:- F3:open:-:- F4:decided:owner:A F5:moot:-:- F6:decided:recommendation:-'
+check 'apply-answers: counts open'           "$( attr "$LINE" open )" 2 "$LINE"
+check 'apply-answers: counts decided(owner)' "$( attr "$LINE" owner )" 2 "$LINE"
+check 'apply-answers: counts decided(recommendation)' "$( attr "$LINE" recommendation )" 1 "$LINE"
+check 'apply-answers: counts moot'           "$( attr "$LINE" moot )" 1 "$LINE"
+check 'apply-answers: names the comment-only fork' "$( attr "$LINE" commented )" F3 "$LINE"
+check 'apply-answers: surfaces the comment text' \
+  "$( grep -c '^comment F3: Does B still hold if the store is lost?$' "$OUT" | tr -d ' ' )" 1 "$( cat "$OUT" )"
+check 'apply-answers: moot keeps its reason' \
+  "$( python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["forks"][4].get("reason"))' "$TMP/f3/map.json" 2>&1 )" \
+  'Superseded by F1.'
+
+# The negative gate: without --final, no fork that was not already
+# decided(recommendation) becomes one — F6 is the only one before and after.
+check 'without --final: no fork is converted to decided(recommendation)' \
+  "$( python3 -c '
+import json, sys
+m = json.load(open(sys.argv[1]))
+print(",".join(f["id"] for f in m["forks"] if f.get("by") == "recommendation") or "none")' "$TMP/f3/map.json" 2>&1 )" F6
+
+# A second pass without --final is a fixed point.
+cp "$TMP/f3/map.json" "$TMP/f3/pass1.json"
+dm apply-answers "$TMP/f3/map.json" "$ANS"
+if cmp -s "$TMP/f3/pass1.json" "$TMP/f3/map.json"; then
+  pass 'apply-answers twice: the second pass changes nothing'
+else
+  fail 'apply-answers twice: the second pass changed the map' "$( forks "$TMP/f3/map.json" )"
+fi
+
+dm apply-answers "$TMP/f3/map.json" "$ANS" --final
+check 'apply-answers --final: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+check 'apply-answers --final: final=true' "$( attr "$LINE" final )" true "$LINE"
+check 'apply-answers --final: remaining open -> decided(recommendation), owner picks and moot kept' \
+  "$( forks "$TMP/f3/map.json" )" \
+  'F1:decided:owner:A F2:decided:recommendation:B F3:decided:recommendation:B F4:decided:owner:A F5:moot:-:- F6:decided:recommendation:-'
+check 'apply-answers --final: open=0' "$( attr "$LINE" open )" 0 "$LINE"
+check 'apply-answers --final: moot=1' "$( attr "$LINE" moot )" 1 "$LINE"
+
+# --final straight from the author's map, in one pass, reaches the same statuses.
+cp "$FIX/answers-map.json" "$TMP/f3/once.json"
+dm apply-answers "$TMP/f3/once.json" "$ANS" --final
+check 'apply-answers --final in one pass: same statuses' "$( forks "$TMP/f3/once.json" )" "$( forks "$TMP/f3/map.json" )"
+
+# The folded map is still a valid map.
+dm render "$TMP/f3/map.json" --expect 6 --out "$TMP/f3/page.html"
+check 'the folded map renders' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+
+# An empty answers dir (nothing saved yet) changes nothing.
+mkdir -p "$TMP/f3/empty"
+cp "$FIX/answers-map.json" "$TMP/f3/untouched.json"
+dm apply-answers "$TMP/f3/untouched.json" "$TMP/f3/empty"
+check 'an empty answers dir: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+check 'an empty answers dir: open=3' "$( attr "$LINE" open )" 3 "$LINE"
+check 'an empty answers dir: commented=none' "$( attr "$LINE" commented )" none "$LINE"
+
+# Refusals never lose the author's map (D3): it is byte-identical afterwards.
+# map_intact <description> <path>
+map_intact(){
+  if cmp -s "$FIX/answers-map.json" "$2"; then pass "$1"; else fail "$1" "$( forks "$2" )"; fi
+}
+refuse_answers(){
+  yd=$1 yreason=$2 ydir=$3; shift 3
+  cp "$FIX/answers-map.json" "$TMP/f3/author.json"
+  expect_error "$yd" "$yreason" apply-answers "$TMP/f3/author.json" "$ydir" "$@"
+  map_intact "$yd: the map is untouched" "$TMP/f3/author.json"
+}
+mkbad(){ rm -rf "$TMP/f3/bad"; mkdir -p "$TMP/f3/bad"; cp "$ANS"/*.json "$TMP/f3/bad/"; }
+
+mkbad; printf '{"pick":"Z","comment":"","updatedAt":"x"}\n' > "$TMP/f3/bad/F2.json"
+refuse_answers 'a pick that is not an option key' unknown-pick "$TMP/f3/bad" --final
+check 'a pick that is not an option key: names the fork' "$( attr "$LINE" id )" F2 "$LINE"
+mkbad; printf '{"pick":"A","comment":"","updatedAt":"x"}\n' > "$TMP/f3/bad/F9.json"
+refuse_answers 'an answer for a fork the map does not hold' unknown-fork "$TMP/f3/bad" --final
+check 'an answer for a fork the map does not hold: names it' "$( attr "$LINE" id )" F9 "$LINE"
+mkbad; printf '{"pick":' > "$TMP/f3/bad/F2.json"
+refuse_answers 'an unparseable answer' answer-unparseable "$TMP/f3/bad"
+mkbad; printf 'x\n' > "$TMP/f3/bad/F2"
+refuse_answers 'a file that is not <forkId>.json' answer-unexpected-file "$TMP/f3/bad"
+refuse_answers 'a missing answers dir' answers-dir-missing "$TMP/f3/nope"
+expect_error 'apply-answers with no answers dir' missing-answers apply-answers "$TMP/f3/author.json"
+
+# D5: the page marks a card done only when it carries a pick; a comment-only
+# answer keeps the card open, as the fold does.
+check 'the page: a comment-only answer is not done' \
+  "$( grep -c 'if (answers\[id\] && answers\[id\].pick) return "done";' "$TMP/f3/page.html" | tr -d ' ' )" 1
 
 # ---------------------------------------------------------------------------
 printf 'the verdict line, not the exit code\n'
