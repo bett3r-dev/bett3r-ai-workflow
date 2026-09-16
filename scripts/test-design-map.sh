@@ -375,6 +375,95 @@ check 'the page: a comment-only answer is not done' \
   "$( grep -c 'if (answers\[id\] && answers\[id\].pick) return "done";' "$TMP/f3/page.html" | tr -d ' ' )" 1
 
 # ---------------------------------------------------------------------------
+# skills/design-map/SKILL.md — presence oracle, in the style of
+# scripts/test-esas-design.sh (assert_md/refute_md). This is prose, not a
+# script: it catches deletion, not wrongness, as the design's own test-seams
+# table says of this exact case.
+# ---------------------------------------------------------------------------
+printf '\nskills/design-map/SKILL.md — the F4 disarm and the two invariants\n'
+
+SKILL_MD="$ROOT/plugins/bett3r-ai-workflow/skills/design-map/SKILL.md"
+
+# Failures name the file repo-relative, mirroring test-esas-design.sh's own
+# helper (two files across the plugin are both called SKILL.md).
+assert_md(){
+  file=$1
+  description=$2
+  needle=$3
+  if [ ! -f "$file" ]; then
+    fail "$description" "no file at $file"
+  elif grep -qF -- "$needle" "$file"; then
+    pass "$description"
+  else
+    fail "$description" "not found in ${file#"$ROOT"/}: $needle"
+  fi
+}
+
+refute_md(){
+  file=$1
+  description=$2
+  needle=$3
+  if [ ! -f "$file" ]; then
+    fail "$description" "no file at $file"
+  elif grep -qF -- "$needle" "$file"; then
+    fail "$description" "found in ${file#"$ROOT"/}, and should not be: $needle"
+  else
+    pass "$description"
+  fi
+}
+
+assert_md "$SKILL_MD" 'render, with --expect as the count of the grilled tree' \
+  '--expect is the count of the grilled tree'
+assert_md "$SKILL_MD" 'an optional check-page before publish' \
+  'check-page'
+assert_md "$SKILL_MD" 'publishing declares capabilities: {db: {}}' \
+  'capabilities: {db: {}}'
+assert_md "$SKILL_MD" 'readback is read_db over the answers collection' \
+  'read_db'
+assert_md "$SKILL_MD" 'answers materialise one file per fork, D10 layout' \
+  '<answers-dir>/<forkId>.json'
+assert_md "$SKILL_MD" 'apply-answers is named as the fold verb' \
+  'apply-answers'
+assert_md "$SKILL_MD" 'printed comments are resolved before --final (D8)' \
+  'before running --final'
+
+# The F4 disarm: a comment sent to Claude on a watched artifact arrives inside
+# the platform's NOT-USER-INPUT banner, and reading it as a refusal ends the
+# gesture silently while the store already holds the answer.
+assert_md "$SKILL_MD" 'the banner is named as the design names it' \
+  'NOT USER INPUT'
+assert_md "$SKILL_MD" 'the disarm sentence itself, verbatim from the design' \
+  'the notification is the doorbell'
+assert_md "$SKILL_MD" 'the store is named as where the answer actually lives' \
+  'the answers are in the store'
+assert_md "$SKILL_MD" 'the banner-wrapped comment is read as not a refusal' \
+  'is not a refusal'
+refute_md "$SKILL_MD" 'the disarm is not inverted into reading the comment as a refusal' \
+  'is a refusal'
+# A wake may fold, never finalize: --final converts every open fork to
+# decided(recommendation), erasing let-stand vs never-reached. It and any D8
+# sign-off need the owner's word in the terminal.
+assert_md "$SKILL_MD" 'a wake never runs --final' \
+  'A wake never runs `--final`'
+assert_md "$SKILL_MD" '--final and the D8 comment resolution are pinned to the terminal' \
+  'given in the terminal'
+assert_md "$SKILL_MD" 'the description forbids --final from a wake too' \
+  'A wake never runs --final'
+assert_md "$SKILL_MD" 'the read_db document id is the forkId' \
+  'the `read_db` document id is the fork id'
+assert_md "$SKILL_MD" 'the verdict line is read, not the exit code' \
+  'verdict line on stdout, not the exit'
+
+# Two invariants, carried over from esas-design because they are properties of
+# turn-based answering rather than of any one transport.
+assert_md "$SKILL_MD" 'invariant 1: a wake with nothing new is a normal outcome' \
+  'Tolerate an empty wake'
+assert_md "$SKILL_MD" 'invariant 1: an empty readback is not an error' \
+  'is a normal outcome, not an error'
+assert_md "$SKILL_MD" 'invariant 2: nothing is proposed off a half-answered fork' \
+  'Never propose from partial answers'
+
+# ---------------------------------------------------------------------------
 printf 'the verdict line, not the exit code\n'
 # ---------------------------------------------------------------------------
 expect_error 'an unreadable map path' map-unreadable \
