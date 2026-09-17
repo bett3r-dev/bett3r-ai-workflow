@@ -26,3 +26,10 @@ kind: overruled
 step: build · slice: 2 · decidedBy: verifier
 sources: [code:test-flow-seams.sh]
 rejected: one-word needles ('unconfirmed') — matched twice; deleting the unattended rule stayed green
+
+## D5 — Oracle candidates wording the design left open
+kind: silent-seam
+step: build · slice: 3 · decidedBy: executor
+sources: [design:D5, design:U3, code:plan.md Step 5]
+rejected: prose in Step 6 — the template is the single place the PR body is specified
+Bullet layout `<fork>` / `<option>`: <scenario> — e.g. <example>; human form "Oracle candidates: <confirmed> confirmed, <rejected> rejected". A plan with no `review:` key (predating this unit) falls to "none (no map.json)" — harmless, report-only.
