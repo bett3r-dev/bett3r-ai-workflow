@@ -44,6 +44,17 @@
 # pipe and stderr is not: the refusal would print above the ✓ lines it belongs
 # under, which is how a report stops being read.
 #
+# A fleet lane defers this on purpose (see ESAS-186 D2/A1/A3): if a worktree
+# carries `.work/lane.yaml` with `gateDeferred: true`, a *missing bump* that
+# would otherwise refuse instead prints `SKIP reason=deferred-to-merge-multi`
+# and exits 0 — /merge-multi does the single real bump on the integration
+# branch, where no lane.yaml exists so this gate enforces normally. A bumped
+# plugin still prints its ✓ lines regardless of lane.yaml; only a would-be
+# refusal is affected. `.work/` is gitignored, so CI never sees it and is
+# never deferred. An unreadable/missing `version` manifest is never deferred,
+# even in a gateDeferred lane and even mixed with an otherwise-deferrable
+# unbumped plugin — that failure needs a human, not a later automated bump.
+#
 # Run locally:  sh scripts/check-plugin-version-bump.sh [base-ref]
 # Exit code is non-zero if a touched plugin was not bumped, so CI fails the PR.
 # Oracle: scripts/test-version-gate.sh.
@@ -106,6 +117,12 @@ if [ -z "$touched" ]; then
 fi
 
 status=0
+# Set the moment any manifest is unreadable — separately from `status`, because
+# a lane defers a *missing bump*, not a broken manifest. A manifest with no
+# readable `version` is not something /merge-multi's later bump can fix by
+# itself: the file needs a human to repair it either way, so it must never be
+# swallowed into a SKIP alongside plugins that are merely unbumped.
+unreadable=0
 
 # Newline-only, so a plugin directory with a space in its name is one plugin and
 # not two. This script owns its shell, so IFS is not restored.
@@ -126,6 +143,7 @@ for name in $touched; do
     printf '\033[31m✗\033[0m plugins/%s: no readable `version` in %s\n' "$name" "$manifest"
     printf '    The cache directory is keyed by that string. Without it nothing ships.\n'
     status=1
+    unreadable=1
     continue
   fi
 
@@ -164,6 +182,31 @@ done
 
 if [ "$status" -ne 0 ]; then
   printf '\n'
+
+  # A fleet lane defers a *missing bump* on purpose: several units land unbumped
+  # PRs into an integration branch, and /merge-multi does the single real bump
+  # once, on that branch, where CI runs for real. `.work/lane.yaml` only exists
+  # inside a lane's own worktree — it is gitignored, so it is never present in a
+  # CI checkout — and only `gateDeferred: true` there turns this refusal into a
+  # SKIP; CI itself never sees the file and always enforces the bump. If the
+  # bump is still missing by the time /merge-multi runs on the integration
+  # branch, no lane.yaml exists there either, so this same gate FAILs for real.
+  #
+  # An unreadable manifest is deliberately excluded: `unreadable` is set the
+  # moment any plugin's `version` could not be parsed at all, and that is not a
+  # bump /merge-multi's later pass can supply — it needs a human to repair the
+  # manifest regardless of which branch runs the gate. So a lane never defers
+  # that failure, even mixed with other plugins that are merely unbumped: the
+  # whole refusal stands and prints its usual explanation.
+  lane_file="$root/.work/lane.yaml"
+  if [ "$unreadable" -eq 0 ] && [ -f "$lane_file" ] &&
+     grep -Eq '^gateDeferred:[[:space:]]*true[[:space:]]*(#.*)?$' "$lane_file"; then
+    printf 'SKIP reason=deferred-to-merge-multi\n'
+    printf '.work/lane.yaml declares gateDeferred: true — /merge-multi bumps this on the\n'
+    printf 'integration branch, where no lane.yaml exists and this gate enforces normally.\n'
+    exit 0
+  fi
+
   printf 'A plugin is copied into the version-keyed cache only when its `version` changes.\n'
   printf 'Unbumped, the change lands in the repo and reaches nobody. Bump the plugin(s)\n'
   # `marketplace.json` is named here as convention and explicitly *not* as a pin:
@@ -175,6 +218,7 @@ if [ "$status" -ne 0 ]; then
   printf 'named above and push again. Bumping `.claude-plugin/marketplace.json` alongside\n'
   printf 'is repo convention, not propagation: it pins no plugin version, and bumping it\n'
   printf 'on its own ships nothing. See docs/adr/ADR-001.\n\n'
+
   exit 1
 fi
 
