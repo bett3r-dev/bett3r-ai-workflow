@@ -73,8 +73,7 @@
                 "text": "A is applied"
               }
             ],
-            "rejectedBecause": "A is the larger change.",
-            "actor": "Design owner"
+            "rejectedBecause": "A is the larger change."
           },
           {
             "id": "B",

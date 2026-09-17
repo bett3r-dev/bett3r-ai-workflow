@@ -1,0 +1,22 @@
+ticket: ESAS-9
+review: unattended
+candidateOracles:
+  - fork: ESAS-9-F1
+    option: A
+    scenario: the owner picks A
+    source: owner
+    example: A is applied
+    slice: null
+    status: unconfirmed
+  - fork: ESAS-9-F2
+    option: B
+    scenario: the owner picks B
+    source: recommendation
+    example: B is applied
+    slice: null
+    status: unconfirmed
+slices:
+  - id: 1
+    name: "slice one"
+    oracle: |
+      the launcher prints outcome=ok and exits 0

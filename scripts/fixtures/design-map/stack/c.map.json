@@ -2,18 +2,67 @@
   "structureVersion": 2,
   "shape": "decision",
   "grounded": true,
-  "nodes": [],
+  "mapId": "ESAS-11-map",
+  "nodes": [
+    {
+      "id": "G",
+      "level": "goal",
+      "title": "Designs are reviewed",
+      "parents": []
+    },
+    {
+      "id": "S1",
+      "level": "mapActor",
+      "title": "Design owner",
+      "parents": [
+        "G"
+      ]
+    },
+    {
+      "id": "I1",
+      "level": "impact",
+      "title": "Answers a fork on the page",
+      "parents": [
+        "S1"
+      ]
+    },
+    {
+      "id": "D1",
+      "level": "deliverable",
+      "title": "The stacked page",
+      "parents": [
+        "I1"
+      ]
+    },
+    {
+      "id": "I2",
+      "level": "impact",
+      "title": "Reads the per-ticket record",
+      "parents": [
+        "S1"
+      ]
+    },
+    {
+      "id": "D2",
+      "level": "deliverable",
+      "title": "The decisions record",
+      "parents": [
+        "I2"
+      ]
+    }
+  ],
   "forks": [
     {
-      "id": "ESAS-1-F1",
-      "title": "Fork 1: which option?",
+      "id": "ESAS-9-F1",
+      "title": "Fork ESAS-9-F1: which option?",
       "tickets": [
-        "ESAS-1"
+        "ESAS-9"
       ],
+      "anchor": "D1",
       "card": {
-        "problem": "Problem statement for fork 1.",
+        "problem": "Problem statement for ESAS-9-F1.",
         "useCases": [
-          "An owner answers fork 1."
+          "An owner answers ESAS-9-F1."
         ],
         "options": [
           {
@@ -53,64 +102,16 @@
       }
     },
     {
-      "id": "ESAS-1-F2",
-      "title": "Fork 2: which option?",
+      "id": "ESAS-11-F1",
+      "title": "Fork ESAS-11-F1: which option?",
       "tickets": [
-        "ESAS-1"
+        "ESAS-11"
       ],
+      "anchor": "D2",
       "card": {
-        "problem": "Problem statement for fork 2.",
+        "problem": "Problem statement for ESAS-11-F1.",
         "useCases": [
-          "An owner answers fork 2."
-        ],
-        "options": [
-          {
-            "id": "A",
-            "label": "Option A",
-            "walks": [
-              {
-                "scenario": "the owner picks A",
-                "text": "A is applied"
-              }
-            ],
-            "rejectedBecause": "A is the larger change.",
-            "actor": "Design owner"
-          },
-          {
-            "id": "B",
-            "label": "Option B",
-            "walks": [
-              {
-                "scenario": "the owner picks B",
-                "text": "B is applied"
-              }
-            ],
-            "evidence": [
-              "scripts/design-map.py"
-            ]
-          }
-        ],
-        "recommendation": {
-          "option": "B",
-          "why": "B is the smaller change."
-        },
-        "ifOverturned": "A replaces B; nothing else moves."
-      },
-      "restsOn": [],
-      "status": {
-        "kind": "open"
-      }
-    },
-    {
-      "id": "ESAS-1-F3",
-      "title": "Fork 3: which option?",
-      "tickets": [
-        "ESAS-1"
-      ],
-      "card": {
-        "problem": "Problem statement for fork 3.",
-        "useCases": [
-          "An owner answers fork 3."
+          "An owner answers ESAS-11-F1."
         ],
         "options": [
           {
@@ -146,8 +147,71 @@
       },
       "restsOn": [],
       "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "A"
+      }
+    },
+    {
+      "id": "ESAS-9-F2",
+      "title": "Fork ESAS-9-F2: which option?",
+      "tickets": [
+        "ESAS-9",
+        "ESAS-11"
+      ],
+      "card": {
+        "problem": "Problem statement for ESAS-9-F2.",
+        "useCases": [
+          "An owner answers ESAS-9-F2."
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Option A",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ],
+            "rejectedBecause": "A is the larger change."
+          },
+          {
+            "id": "B",
+            "label": "Option B",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ],
+            "evidence": [
+              "scripts/design-map.py"
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "B is the smaller change."
+        },
+        "ifOverturned": "A replaces B; nothing else moves."
+      },
+      "restsOn": [
+        "ESAS-11-F1"
+      ],
+      "status": {
         "kind": "open"
       }
+    }
+  ],
+  "links": [
+    {
+      "esId": "cmd_esas_stackPage",
+      "deliverableId": "D1"
+    },
+    {
+      "esId": "cmd_esas_decisions",
+      "deliverableId": "D2"
     }
   ]
 }

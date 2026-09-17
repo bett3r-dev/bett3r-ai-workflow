@@ -6,8 +6,71 @@ description: "Renders a design's map.json as a claude.ai artifact the owner answ
 # Rendering and reading back a design's map
 
 `bin/design-map` (`plugins/bett3r-ai-workflow/scripts/design-map.py`) owns the
-verbs; this skill owns when to call them and how to read what comes back. The
-schema is `skills/design-map/map.schema.json`.
+verbs; this skill owns when to call them and how to read what comes back.
+
+## The map: a vocabulary copy and a structure file
+
+A map is `structureVersion: 2`, spelled as esas's `MapFile` so a board reads it
+untranslated. Two files describe it, and they are kept apart on purpose:
+
+- **`map.schema.json` is the vocabulary** — the closed sets (fork status kind,
+  decided source, node level, map shape), a byte-identical copy of what esas
+  emits at `packages/esas-schema/schema/map.schema.json`.
+  **Never hand-edit `map.schema.json`**: a value added here and not in esas is a second source
+  for one closed set, and an edited copy can no longer be told stale. To
+  change a set, change it in esas and copy the emitted file over whole.
+  `scripts/test-design-map.sh` compares the copy with `$ESAS_CHECKOUT` when
+  that is set, and prints `SKIP reason=no-esas-checkout` (not a pass) when it
+  is not.
+- **`map-structure.schema.json` is the structure** — nodes, forks, cards,
+  options, links. It names every closed set by `$ref` into the copy, so no
+  value is restated.
+
+The shape, in brief:
+
+- top level: `structureVersion: 2`, `shape` (required once `grounded: true`),
+  `grounded`, `nodes[]`, `forks[]`, `links[]` (optional), and the plugin-only
+  optional `mapId`, `feedSeq` (integer >= 0) and `target` (`board` or
+  `artifact`);
+- node: `{id, level, title, parents: [nodeId], struck?: {reason}}`;
+- fork: `{id: <TICKET>-F<n>, title, tickets: [KEY, ...], card?, anchor?: nodeId,
+  restsOn: [forkId], status, testable?: false}`;
+- status: `{kind: open}`, `{kind: decided, source, option}` or
+  `{kind: moot, reason}` — `option` names an option id of the fork's card;
+- card: `{problem, useCases[], options[], recommendation: {option, why},
+  ifOverturned}`; option: `{id, label, walks: [{scenario, text}],
+  rejectedBecause?, evidence?[]}`. **A fork with no card is title-only** (a
+  locked, dependent fork): it is drawn by its title and cannot be picked.
+
+Node, fork and option ids and `mapId` match `^[A-Za-z0-9-]+$`; fork ids are unique, node ids are unique, option
+ids are unique per fork, and every `anchor`, `parents`, `restsOn` and link
+`deliverableId` must resolve (`dangling-ref`).
+
+## Validate
+
+```
+design-map validate <map.json>
+```
+
+Read-only: `outcome=ok forks=<n>`, or `outcome=error reason=... [at=...]`. It
+accepts an ungrounded draft, so run it on every draft before a render.
+
+## Write — the only structural authoring path
+
+```
+design-map write <map.json> < draft.json
+```
+
+Every structural change to a map — a new draft, a card added when a
+title-only fork unlocks, a projection — goes through `write`, never a shell
+redirection into `map.json`. It reads the full map on stdin, runs exactly the
+`validate` checks, and replaces the target whole via a temporary file in its
+own directory: `outcome=ok verb=write forks=<n> map=<path>`. It does not merge
+with the file it replaces — carrying answered statuses across a re-`write` is
+the caller's job. On any refusal (`missing-map`, `map-dir-missing`,
+`map-unparseable` for stdin that is not JSON, or any `validate` reason) the
+target is byte-identical, and an absent target is not created. Answers never
+enter through `write`; they enter only through `apply-answers`.
 
 ## Render, before publishing
 
@@ -25,6 +88,15 @@ page. It is mandatory (C1/F2): the two counts it gates catch different drops —
 the file I wrote; the renderer's own page-vs-payload count catches one lost
 while drawing. A mismatch on either is `outcome=error`, names both counts, and
 leaves no page behind.
+
+A map holding forks that is not `grounded: true` is refused with
+`reason=not-grounded` by both `render` and `check-page`, and no page is
+written: an ungrounded draft is never drawn for the owner to answer. Ground it
+first; `validate` still accepts it meanwhile.
+
+Decided forks are drawn in one style per decided source — owner,
+recommendation and code are three distinct styles — and a legend on the page
+names each.
 
 ## check-page, optional, before publish
 
@@ -109,15 +181,132 @@ Read the outcome from the `DESIGN-MAP:v1` verdict line on stdout, not the exit
 code (ADR-004) — a wrapper can swallow the exit status; the line still says
 `outcome=error`.
 
-Without `--final`, a picked fork becomes `decided(owner)`, an unanswered fork
-stays `open`, and a comment with no pick leaves the fork `open` and prints the
-comment for me to resolve. **Before running `--final`, resolve every printed
+Without `--final`, a picked fork becomes `{kind: decided, source: owner,
+option: <pick>}`, an unanswered fork stays `open`, and a comment with no pick leaves the fork `open` and prints the
+comment for me to resolve. A pick also overturns an earlier `code` or
+`recommendation` decision. A pick on a fork with no card is refused
+`reason=fork-title-only`; a `moot` fork is left exactly as it is, even under a
+pick naming no option. An answer whose `map` is not this map's `mapId` (or
+that names a map when the map has none) is skipped unchecked and counted in
+`otherMap=`; an answer with no `map` applies. The page writes `map: <mapId>`
+into every answer when the map has a `mapId`. The verdict counts `open= owner=
+recommendation= code= moot= otherMap=`. **Before running `--final`, resolve every printed
 comment** (D8). `--final` runs only on the owner saying, in the terminal, that
 they are done — never on a wake — and a comment still open at that point is
 resolved by the owner's answer or explicit sign-off that it stands as asked,
 **given in the terminal**, before the remaining `open` forks
-convert to `decided(recommendation)`. A `moot` fork is never deleted by either
-pass.
+convert to `{kind: decided, source: recommendation, option:
+card.recommendation.option}`. `--final` refuses `reason=title-only-open`
+(naming the first such fork) while any fork with no card is still open: write
+its card first. A `moot`
+fork is never deleted by either pass.
 
-See [`map.schema.json`](./map.schema.json) for the payload shape. v0 ships no
-separate reference file — the verb contract above is everything there is.
+## Plan candidates and the unattended-never-promotes contract (ESAS-165)
+
+```
+design-map candidates <map.json>
+design-map check-plan <slices.yaml>
+```
+
+`candidates` validates the map, then reads it (never writing anything) and
+prints zero or more compact JSON lines on stdout, one per walk of a **decided**
+fork's **chosen** option (`status.option`) — never a rejected option's walk,
+since a rejected option is a confidently-wrong oracle:
+
+```
+{"fork":"ESAS-1-F1","option":"A","scenario":"...","source":"owner","example":"..."}
+```
+
+in that fixed key order (fork, option, scenario, source, example). A fork is
+skipped and counted, never printed:
+
+- `skipped-open` — still `open`
+- `skipped-moot` — `moot` (its id is never named in the output)
+- `skipped-nowalk` — decided, but the chosen option carries no walk
+- `skipped-untestable` — the fork carries `testable: false` (a process-rule
+  card the design lane marks unoracled, ESAS-164); when both zero-walk and
+  `testable: false` hold, `skipped-untestable` wins
+
+The verdict: `outcome=ok verb=candidates forks=<n> candidates=<n>
+skipped-open=<n> skipped-moot=<n> skipped-nowalk=<n> skipped-untestable=<n>`.
+`--map` is not a flag `candidates` knows — the map path is positional, refused
+as `unknown-flag-map` otherwise.
+
+`check-plan` reads a `.work/slices.yaml` (PyYAML; a Python without it is
+`reason=yaml-unavailable`, never a silent pass) and enforces that an
+unattended `/plan` never promotes a candidate into a slice's `oracle:` without
+a human:
+
+- `outcome=fail reason=unattended-confirmed` (exit 1) — top-level `review:
+  unattended` and some `candidateOracles[].status` is `confirmed`.
+- `outcome=fail reason=candidate-in-oracle slice=<id>` (exit 1) — a
+  non-confirmed candidate's example appears verbatim in a slice oracle
+  (`slice=unknown` when that slice has no id). A `confirmed` candidate's
+  example copied into an oracle is the attended promotion (ESAS-165 D4) and
+  passes.
+- else `outcome=ok review=<human|unattended|none> candidates=<n>` (exit 0).
+
+`outcome=fail` (exit 1) is distinct from `outcome=error` (exit 2, e.g.
+`plan-unreadable`, `plan-unparseable`, `missing-plan`): a plan `check-plan`
+could read but that fails one of its two assertions is a different event from
+one it could not read at all (ADR-004 — the line is the contract, and a shell
+caller still needs the two exit codes apart).
+
+## Fleet readers: stack, project, decisions (ESAS-166)
+
+```
+design-map render --stack <m1> <m2>... --expect <n1> <n2>... --out <page.html>
+design-map project --ticket <K> <map>... | design-map write <units/K.map.json>
+design-map decisions <map.json> [--closed]
+```
+
+`render --stack` draws several maps on one page. Every map is validated and
+must be grounded, with the same refusals as a single render plus `map=<path>`
+naming the map refused. There is one `--expect` per map, in argument order: a
+different number of values is `reason=expect-count-mismatch`, and one map's
+miss is `reason=count-mismatch map=<path>`. `--out` is required
+(`reason=missing-out`), because no one map's directory is the stack's home. A
+fork id in two maps is `reason=duplicate-fork-id`, since answers are keyed by
+fork id. Any refusal leaves no page, and removes an earlier rendered page at
+`--out`. The page holds one `<section data-map-id>` per map, in a fixed
+order:
+
+1. most `open` forks first;
+2. then the lowest ticket key over all the map's forks' `tickets`, compared
+   by project and then by number as an integer (`ESAS-9` before `ESAS-11`).
+   A map with no forks sorts last;
+3. then argument order.
+
+A re-render is byte-identical, and the page gate counts every fork of every
+map exactly once. Each answer the page saves carries `map: <mapId>` of the
+fork's own map, when that map has a `mapId`. Verdict: `outcome=ok
+verb=render maps=<n> forks=<sum> expected=<sum> page=<path>`. `check-page` does
+not take `--stack`.
+
+`project --ticket K` validates every input (a refusal names `map=`) and prints
+a v2 map on stdout. It holds only the forks whose `tickets` contain K, in input
+order. Its nodes are each kept fork's `anchor` and all of that node's ancestors.
+`restsOn` entries naming a dropped fork are pruned, and a link is kept only
+when its `deliverableId` is a kept node. `mapId` is K. `grounded` and `shape`
+come from the inputs, and inputs that disagree are refused
+(`grounded-mismatch`, `shape-mismatch`). A node id defined differently in two
+inputs is `node-conflict`, and a fork id in two inputs is
+`duplicate-fork-id`. `feedSeq` and `target` are not carried over. The verdict
+`outcome=ok verb=project ticket=K forks=<n> nodes=<n>` is the last stdout
+line, after the JSON. `write` drops a last stdin line that is `project`'s ok
+verdict. If the last line is any other verdict line, `write` refuses
+`reason=upstream-refused` and does not create the target, so a refused
+projection cannot be written as a map.
+
+`decisions` prints per-ticket Markdown: a `## <ticket>` heading per ticket
+(ordered by ticket key), then one line per fork carrying that ticket:
+`- <forkId> <title>: owner — <option> (<label>)`, `applied on recommendation —
+…`, `code — …`, `moot — <reason>`, or `open`. A fork with two tickets is listed
+under both and counted once. Verdict: `outcome=ok verb=decisions open=<n>
+owner=<n> recommendation=<n> code=<n> moot=<n>`. With `--closed`, any open
+fork is `outcome=fail reason=open-forks` (exit 1), and the Markdown is still
+printed before it.
+
+See [`map-structure.schema.json`](./map-structure.schema.json) for the full
+payload shape and [`map.schema.json`](./map.schema.json) for the vocabulary it
+refers to.

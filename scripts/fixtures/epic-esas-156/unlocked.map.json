@@ -1,0 +1,239 @@
+{
+  "structureVersion": 2,
+  "shape": "impact",
+  "grounded": true,
+  "mapId": "ESAS-156-EPIC",
+  "nodes": [
+    {
+      "id": "g1",
+      "level": "goal",
+      "title": "Answer a design's forks visually and fold them into one record",
+      "parents": []
+    },
+    {
+      "id": "a1",
+      "level": "mapActor",
+      "title": "The design's owner",
+      "parents": [
+        "g1"
+      ]
+    },
+    {
+      "id": "i1",
+      "level": "impact",
+      "title": "ESAS-900 area is unblocked",
+      "parents": [
+        "a1"
+      ]
+    },
+    {
+      "id": "i2",
+      "level": "impact",
+      "title": "ESAS-901 area is unblocked",
+      "parents": [
+        "a1"
+      ]
+    },
+    {
+      "id": "d1",
+      "level": "deliverable",
+      "title": "ESAS-900 forks answered",
+      "parents": [
+        "i1"
+      ]
+    },
+    {
+      "id": "d2",
+      "level": "deliverable",
+      "title": "ESAS-901 forks answered",
+      "parents": [
+        "i2"
+      ]
+    }
+  ],
+  "forks": [
+    {
+      "id": "ESAS-900-F1",
+      "title": "Card-less dependent fork \u2014 unlocks once ESAS-900-F2 is chosen",
+      "tickets": [
+        "ESAS-900"
+      ],
+      "anchor": "d1",
+      "restsOn": [
+        "ESAS-900-F2"
+      ],
+      "status": {
+        "kind": "open"
+      },
+      "card": {
+        "problem": "F1 depends on F2s choice and had no card while locked.",
+        "useCases": [
+          "F2 is chosen, so F1 can now be posted with its own card."
+        ],
+        "options": [
+          {
+            "id": "go",
+            "label": "proceed with the dependent change",
+            "walks": [
+              {
+                "scenario": "F2 resolves to option a",
+                "text": "F1 proceeds using the flat-file layout"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "go",
+          "why": "nothing blocks it once F2 is chosen"
+        },
+        "ifOverturned": "F1 would need to be re-posted again"
+      }
+    },
+    {
+      "id": "ESAS-900-F2",
+      "title": "Which store backs the answers?",
+      "tickets": [
+        "ESAS-900"
+      ],
+      "anchor": "d1",
+      "restsOn": [],
+      "card": {
+        "problem": "The answers need a durable home.",
+        "useCases": [
+          "An owner answers a fork and later re-opens the map."
+        ],
+        "options": [
+          {
+            "id": "a",
+            "label": "artifact db store",
+            "walks": [
+              {
+                "scenario": "owner answers on the page",
+                "text": "the pick lands in db.answers/<forkId>"
+              },
+              {
+                "scenario": "owner re-opens the page later",
+                "text": "the prior pick is read back and shown"
+              }
+            ]
+          },
+          {
+            "id": "b",
+            "label": "flat file per fork",
+            "walks": [
+              {
+                "scenario": "owner answers on the page",
+                "text": "the pick is written to answers/<forkId>.json"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "b",
+          "why": "no extra capability declaration needed"
+        },
+        "ifOverturned": "swap the answer reader; the fold logic is unchanged"
+      },
+      "status": {
+        "kind": "open"
+      }
+    },
+    {
+      "id": "ESAS-900-F3",
+      "title": "Does the comment-only path still hold if F2 changes?",
+      "tickets": [
+        "ESAS-900"
+      ],
+      "anchor": "d1",
+      "restsOn": [],
+      "card": {
+        "problem": "A comment without a pick must not silently become a decision.",
+        "useCases": [
+          "An owner leaves a question instead of a pick."
+        ],
+        "options": [
+          {
+            "id": "a",
+            "label": "treat comment-only as decided",
+            "walks": [
+              {
+                "scenario": "owner comments, never picks",
+                "text": "the fork is folded as decided anyway"
+              }
+            ]
+          },
+          {
+            "id": "b",
+            "label": "comment-only stays open until --final",
+            "walks": [
+              {
+                "scenario": "owner comments, never picks",
+                "text": "the fork stays open"
+              },
+              {
+                "scenario": "the terminal answers --final",
+                "text": "the fork becomes decided(recommendation)"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "b",
+          "why": "a comment is not a pick"
+        },
+        "ifOverturned": "comments would need their own status kind"
+      },
+      "status": {
+        "kind": "open"
+      }
+    },
+    {
+      "id": "ESAS-901-F1",
+      "title": "Where does the fold write its verdict?",
+      "tickets": [
+        "ESAS-901"
+      ],
+      "anchor": "d2",
+      "restsOn": [],
+      "card": {
+        "problem": "The fold's outcome needs one place downstream readers trust.",
+        "useCases": [
+          "A reader wants owner vs recommendation vs moot counts."
+        ],
+        "options": [
+          {
+            "id": "a",
+            "label": "one verdict line per apply-answers run",
+            "walks": [
+              {
+                "scenario": "a downstream reader parses the run's stdout",
+                "text": "it reads open/owner/recommendation/moot counts"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "a",
+          "why": "matches the render/apply-answers verdict convention"
+        },
+        "ifOverturned": "downstream would need a separate summary file"
+      },
+      "status": {
+        "kind": "open"
+      }
+    },
+    {
+      "id": "ESAS-901-F2",
+      "title": "Should moot forks carry a card at all?",
+      "tickets": [
+        "ESAS-901"
+      ],
+      "anchor": "d2",
+      "restsOn": [],
+      "status": {
+        "kind": "moot",
+        "reason": "Superseded by ESAS-901-F1."
+      }
+    }
+  ]
+}

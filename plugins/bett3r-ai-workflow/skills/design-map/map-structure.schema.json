@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bett3r-dev/bett3r-ai-workflow/plugins/bett3r-ai-workflow/skills/design-map/map-structure.schema.json",
+  "title": "map.json structure (structureVersion 2)",
+  "$comment": "The structure of a design's map.json: nodes, forks and their cards, spelled as esas MapFile (ESAS-167 D12) plus the plugin-only tickets, mapId, feedSeq and target. Every closed set (fork status kind, decided source, node level, map shape) is a $ref into map.schema.json, the byte-identical copy of the vocabulary esas emits; no value set is restated here. scripts/design-map.py validates against this file with the standard library, resolving map.schema.json from this file's directory; it implements type, const, enum, required, properties, additionalProperties:false, items, minItems, minLength, minimum, pattern, $ref (#/<pointer>, or <file>#/<pointer> for a file in this directory), allOf, oneOf and if/then, and reads $schema, $id, $defs, title, description and $comment as annotations — nothing else; with no oneOf branch matching, it reports the violation of the one branch whose const properties the value carries. What JSON Schema cannot say (unique ids, references that resolve, a decided option naming a card option) is checked by the script after this file.",
+  "type": "object",
+  "required": ["structureVersion", "grounded", "nodes", "forks"],
+  "additionalProperties": false,
+  "properties": {
+    "structureVersion": { "const": 2 },
+    "shape": { "$ref": "map.schema.json#/$defs/mapShape" },
+    "grounded": { "type": "boolean" },
+    "nodes": { "type": "array", "items": { "$ref": "#/$defs/node" } },
+    "forks": { "type": "array", "items": { "$ref": "#/$defs/fork" } },
+    "links": { "type": "array", "items": { "$ref": "#/$defs/link" } },
+    "mapId": { "$ref": "#/$defs/id" },
+    "feedSeq": { "type": "integer", "minimum": 0 },
+    "target": { "enum": ["board", "artifact"] }
+  },
+  "allOf": [
+    { "if": { "properties": { "grounded": { "const": true } } }, "then": { "required": ["shape"] } }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9-]+$" },
+    "forkId": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*-[0-9]+-F[0-9]+$" },
+    "ticket": { "type": "string", "pattern": "^[A-Z][A-Z0-9]*-[0-9]+$" },
+    "text": { "type": "string", "minLength": 1 },
+    "node": {
+      "type": "object",
+      "required": ["id", "level", "title", "parents"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "level": { "$ref": "map.schema.json#/$defs/mapNodeLevel" },
+        "title": { "$ref": "#/$defs/text" },
+        "parents": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+        "struck": {
+          "type": "object",
+          "required": ["reason"],
+          "additionalProperties": false,
+          "properties": { "reason": { "$ref": "#/$defs/text" } }
+        }
+      }
+    },
+    "fork": {
+      "type": "object",
+      "required": ["id", "title", "tickets", "restsOn", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/forkId" },
+        "title": { "$ref": "#/$defs/text" },
+        "tickets": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/ticket" } },
+        "card": { "$ref": "#/$defs/card" },
+        "anchor": { "$ref": "#/$defs/id" },
+        "restsOn": { "type": "array", "items": { "$ref": "#/$defs/forkId" } },
+        "status": { "$ref": "#/$defs/status" },
+        "testable": { "const": false }
+      }
+    },
+    "status": {
+      "$comment": "kind is checked against the vocabulary first, so a kind outside it is rule=enum; the oneOf then fixes which fields each kind carries.",
+      "type": "object",
+      "required": ["kind"],
+      "properties": { "kind": { "$ref": "map.schema.json#/$defs/forkStatusKind" } },
+      "oneOf": [
+        {
+          "required": ["kind"],
+          "additionalProperties": false,
+          "properties": { "kind": { "const": "open" } }
+        },
+        {
+          "required": ["kind", "source", "option"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "decided" },
+            "source": { "$ref": "map.schema.json#/$defs/decidedSource" },
+            "option": { "$ref": "#/$defs/id" }
+          }
+        },
+        {
+          "required": ["kind", "reason"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "moot" },
+            "reason": { "$ref": "#/$defs/text" }
+          }
+        }
+      ]
+    },
+    "card": {
+      "type": "object",
+      "required": ["problem", "useCases", "options", "recommendation", "ifOverturned"],
+      "additionalProperties": false,
+      "properties": {
+        "problem": { "$ref": "#/$defs/text" },
+        "useCases": { "type": "array", "items": { "$ref": "#/$defs/text" } },
+        "options": { "type": "array", "items": { "$ref": "#/$defs/option" } },
+        "recommendation": {
+          "type": "object",
+          "required": ["option", "why"],
+          "additionalProperties": false,
+          "properties": {
+            "option": { "$ref": "#/$defs/id" },
+            "why": { "$ref": "#/$defs/text" }
+          }
+        },
+        "ifOverturned": { "$ref": "#/$defs/text" }
+      }
+    },
+    "option": {
+      "type": "object",
+      "required": ["id", "label", "walks"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "$ref": "#/$defs/text" },
+        "walks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["scenario", "text"],
+            "additionalProperties": false,
+            "properties": {
+              "scenario": { "$ref": "#/$defs/text" },
+              "text": { "$ref": "#/$defs/text" }
+            }
+          }
+        },
+        "rejectedBecause": { "$ref": "#/$defs/text" },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/text" } }
+      }
+    },
+    "link": {
+      "$comment": "esas MapLink (packages/esas-schema/src/map-structure.ts): an ES node id to a map deliverable.",
+      "type": "object",
+      "required": ["esId", "deliverableId"],
+      "additionalProperties": false,
+      "properties": {
+        "esId": { "$ref": "#/$defs/text" },
+        "deliverableId": { "$ref": "#/$defs/id" }
+      }
+    }
+  }
+}
