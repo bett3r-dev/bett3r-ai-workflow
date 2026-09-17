@@ -19,7 +19,11 @@ You are **read-only against the repo** — your only writes are your own
 `<run>/units/<id>.*` files. Never `run.yaml`, never another unit's files, and in
 a repo with `.esas/` never the design layer: `get_flow` and `get_design` are
 reads and grounding against the extracted graph is exactly your job, but **no
-`comment`, `resolve`, `propose`, `modify` or `remove`.** N agents writing one
+`comment`, `resolve`, `propose`, `modify` or `remove`** — and, for the same
+reason, no `map_*` tool except the `get_map` read, no `start_map_session`, and
+no `design-map` subcommand that renders, posts or ingests answers: you are
+unattended, and any of those would act as if the map gate had said yes with
+nobody watching. N agents writing one
 `design.json` is N tickets' designs in a layer scoped to one unit of work,
 serialized in dispatch order with nothing recording which ticket asserted what.
 

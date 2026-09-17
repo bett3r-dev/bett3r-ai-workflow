@@ -2,7 +2,7 @@
 # Oracle for `/design` board-mode and the `esas-design` skill — plus the half of
 # the `grill` skill that decides which forks a board is shown at all, and the
 # half of `/design-multi` that puts its batched interview on the canvas. The
-# `grill` half is deliberately not board-scoped: the decision-tree map `grill`
+# `grill` half is deliberately not board-scoped: the decision tree `grill`
 # opens with applies in every repo, board or no board. It is pinned here because
 # it is the terminal half of a split whose other half lives on the canvas, and
 # half a split is not worth guarding. `/design-multi` is board-scoped like the
@@ -60,6 +60,7 @@ SKILL_MD="$PLUGIN/skills/esas-design/SKILL.md"
 PENDING_MD="$PLUGIN/skills/esas-pending/SKILL.md"
 GRILL_MD="$PLUGIN/skills/grill/SKILL.md"
 DESIGN_MULTI_MD="$PLUGIN/commands/design-multi.md"
+LANE_MD="$PLUGIN/agents/design-lane.md"
 FIXTURES="$ROOT/scripts/fixtures/esas-design"
 STORE_FIXTURE="$ROOT/scripts/fixtures/esas-pending/pending/.esas"
 PREFLIGHT_SH=${PREFLIGHT_SH:-sh}
@@ -736,6 +737,73 @@ assert_md "$COMMAND_MD" 'a design that turns structural late is not locked out b
 assert_md "$COMMAND_MD" 'unsure falls towards silence, stated as a rule' \
   'unsure means silent'
 
+# ── The map gate and BOARD-GATE:v1 ────────────────────────────────────────────
+#
+# Board mode opens with two gates, in this order: the map gate (a design map
+# needs no `.esas/`, so it must be asked before anything that exits on one), and
+# the eventstorming gate above. Their combination is not prose — it is one
+# fenced `sh` block after the `<!-- BOARD-GATE:v1 -->` marker, taking five
+# judged numbers and printing one line. The judgement cannot be tested; the
+# combination can, so it is executed here under dash. A missing block fails.
+
+printf '\ncommands/design.md — the map gate and BOARD-GATE:v1\n'
+
+BOARD_GATE="$TMP/board-gate.sh"
+awk '/^<!-- BOARD-GATE:v1 -->$/{armed=1; next}
+     armed && !on && /^```sh$/{on=1; next}
+     on && /^```$/{exit}
+     on{print}' "$COMMAND_MD" >"$BOARD_GATE"
+if [ ! -s "$BOARD_GATE" ]; then
+  fail 'the BOARD-GATE:v1 block exists after its marker in commands/design.md' \
+    'no fenced sh block after a `<!-- BOARD-GATE:v1 -->` line'
+else
+  pass 'the BOARD-GATE:v1 block exists after its marker in commands/design.md'
+fi
+while IFS='|' read -r args want; do
+  [ -n "$args" ] || continue
+  if [ ! -s "$BOARD_GATE" ]; then
+    fail "BOARD-GATE $args" 'no block to run'
+    continue
+  fi
+  # shellcheck disable=SC2086
+  got=$( cd "$TMP" && /bin/dash "$BOARD_GATE" $args 2>"$TMP/err" )
+  if [ "$got" = "BOARD-GATE:v1 $want" ] && [ ! -s "$TMP/err" ]; then
+    pass "BOARD-GATE $args -> $want"
+  else
+    fail "BOARD-GATE $args -> $want" "got [$got] stderr [$( cat "$TMP/err" )]"
+  fi
+done <<'TABLE'
+4 0 0 0 0|map=yes shape=decision es=silent
+1 0 0 1 1|map=no shape=- es=silent
+2 1 1 0 1|map=yes shape=impact es=offer
+0 0 0 0 1|map=no shape=- es=silent
+0 2 0 0 1|map=no shape=- es=offer
+3 3 0 0 0|map=yes shape=decision es=silent
+TABLE
+
+map_line=$( grep -n '^### The map gate' "$COMMAND_MD" | head -1 | cut -d: -f1 )
+es_line=$( grep -n '^### The eventstorming gate' "$COMMAND_MD" | head -1 | cut -d: -f1 )
+if [ -n "$map_line" ] && [ -n "$es_line" ] && [ "$map_line" -lt "$es_line" ]; then
+  pass 'the map gate comes before the eventstorming gate'
+else
+  fail 'the map gate comes before the eventstorming gate' "map=[$map_line] eventstorming=[$es_line]"
+fi
+
+refute_md "$COMMAND_MD" 'no .esas/ no longer exits board mode before the map gate' \
+  'skip this section entirely'
+assert_md "$COMMAND_MD" 'no .esas/ is a silent no inside the eventstorming gate only' \
+  'No `.esas/` in this repo is a no for this gate, and silent like every no'
+assert_md "$COMMAND_MD" 'a lane (.work/lane.yaml) is a silent no for the map gate' \
+  'If `.work/lane.yaml` exists, the run is unattended: the map gate is a silent no'
+assert_md "$COMMAND_MD" 'say nothing on a no holds per gate' \
+  'On a no, say nothing at all'
+refute_md "$PREFLIGHT_MD" 'the combinator never becomes a preflight key' 'BOARD-GATE'
+assert_md "$PLUGIN/skills/design-map/SKILL.md" 'design-map still refuses an ungrounded map (dependency)' \
+  'not-grounded'
+for word in verbFamilies start_map_session capabilities; do
+  refute_md "$COMMAND_MD" "the gate never names $word" "$word"
+done
+
 # Putting the gate ahead of the preflight falsified a sentence in the restart
 # copy, so the correction is pinned here, beside its cause, rather than up with
 # the other restart pins — the two needles read BOARD-SETUP.md, which is where
@@ -993,7 +1061,7 @@ assert_md "$PENDING_MD" 'and it stays narrow — the pending count is still tele
 printf '\nskills/esas-design — the map and the questions\n'
 
 assert_md "$SKILL_MD" 'the split itself, in the words the design gives it' \
-  'terminal carries the map, the board carries the questions'
+  'terminal carries the tree, the board carries the questions'
 assert_md "$SKILL_MD" 'independent forks batch to the canvas, dependent ones stay serial' \
   'Batch the independent forks to the board; serialize the dependent ones'
 assert_md "$SKILL_MD" 'the duplication question is dissolved, not policed' \
@@ -1003,26 +1071,30 @@ assert_md "$SKILL_MD" 'the duplication question is dissolved, not policed' \
 #
 # `grill` is the third skill this suite reads, and the only one that is not a
 # board artifact: the decision-tree opener applies in every repo, `.esas/` or no
-# `.esas/`. It is pinned *here* because the map is the terminal half of the
+# `.esas/`. It is pinned *here* because the tree is the terminal half of the
 # board's question surface — pinning "the board holds the questions" in one file
-# while leaving "the terminal holds the map" unguarded in another would pin half
+# while leaving "the terminal holds the tree" unguarded in another would pin half
 # a sentence. The suite header carries the same clause, so this is a stated
 # scope rather than a quiet widening.
 #
 # The conditionality needle is the load-bearing one for every repo that will
-# never have a board: the map is unconditional, the canvas is not, and a reader
+# never have a board: the tree is unconditional, the map is not, and a reader
 # with no `.esas/` must come away with today's flow exactly.
 
-printf '\nskills/grill — the decision-tree map (not board-scoped; see note)\n'
+printf '\nskills/grill — the decision tree (not board-scoped; see note)\n'
 
-assert_md "$GRILL_MD" 'the interview opens with the map, before question one' \
+assert_md "$GRILL_MD" 'the interview opens with the tree, before question one' \
   'Open with the decision tree, before the first question'
-assert_md "$GRILL_MD" 'the map is maintained as tracks resolve, not printed once' \
+assert_md "$GRILL_MD" 'the tree is maintained as tracks resolve, not printed once' \
+  'Keep the tree current'
+refute_md "$GRILL_MD" 'the old terminal-list name is gone, not doubled' \
   'Keep the map current'
 assert_md "$GRILL_MD" 'a map line names its fork — it is not the question again' \
   'one line per fork, never the question restated'
-assert_md "$GRILL_MD" 'the board half is conditional; the map half is not' \
-  'The map is unconditional; the canvas is not'
+assert_md "$GRILL_MD" 'the tree is unconditional; the map is not' \
+  'The tree is unconditional; the map is not'
+refute_md "$GRILL_MD" 'and the old sentence, where map meant the terminal list, is gone' \
+  'The map is unconditional'
 
 # Green the moment it is written, and asserted anyway. The map is a numbered
 # list, which is the exact shape that tempts a picker, and the standing
@@ -1030,6 +1102,28 @@ assert_md "$GRILL_MD" 'the board half is conditional; the map half is not' \
 # edit that adds the map and reaches for `AskUserQuestion` to render it.
 assert_md "$GRILL_MD" 'the standing rule survives the map: no picker, ever' \
   'Never use `AskUserQuestion`'
+
+# ── skills/grill — where a map is live (ESAS-164 D4) ─────────────────────────
+#
+# A map is a separate surface from the tree: posted only once grounded, dependent
+# forks as a title with no card, a fork re-posted only when its words change.
+# grill keys off `outcome=ok` alone and never names the target selectors.
+
+printf '\nskills/grill — where a map is live\n'
+
+assert_md "$GRILL_MD" 'the subsection exists beside the board one' '### Where a map is live'
+assert_md "$GRILL_MD" 'a decision tree posts nothing before grounding' \
+  'No fork card is posted before grounding'
+assert_md "$GRILL_MD" 'the impact-map exception: why/who go up first, as a confirm question' \
+  'why/who are posted before grounding as a confirm question'
+assert_md "$GRILL_MD" 'a dependent fork is a title with what it waits on, no card' \
+  'title and what it waits on'
+assert_md "$GRILL_MD" 'a fork returns to the map only on a change of words' \
+  'returns to the map only when its words change'
+assert_md "$GRILL_MD" 'process-rule forks are authored untestable' 'testable:false'
+for word in verbFamilies start_map_session capabilities; do
+  refute_md "$GRILL_MD" "grill never names $word" "$word"
+done
 
 # ── commands/design-multi — Phase B on the canvas ─────────────────────────────
 #
@@ -1187,6 +1281,21 @@ else
       "not found in $HOOKS_JSON"
   fi
 fi
+
+# ── design-lane — the map-posting tools are forbidden, not merely unmentioned ──
+#
+# The lane is unattended (D5): nothing reads its output before it lands, so a
+# lane that could render or post a map would do so with no human watching.
+# S1's map gate already keeps a lane silent at the gate; this pins the second
+# half — the lane agent's own forbidden list names the tools that would let it
+# act as if the gate had said yes anyway.
+
+printf '\nagents/design-lane.md — the map-posting tools are forbidden\n'
+
+assert_md "$LANE_MD" 'the forbidden list names the map_* tool family (get_map excepted)' \
+  'map_*'
+assert_md "$LANE_MD" 'and start_map_session by name' \
+  'start_map_session'
 
 printf '\n'
 if [ "$failed" -gt 0 ]; then
