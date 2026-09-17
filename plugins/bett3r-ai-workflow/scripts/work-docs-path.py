@@ -87,10 +87,16 @@ the top of `<path>/design.md` on every pass,
     branch: <the branch that wrote it>
     ---
 
-and this script reads that block and nothing else — no git history. The
-verdict gains `owner=`:
+and this script reads that block — no git history; only a design-less folder
+falls back to its map.json's mapId (below). The verdict gains `owner=`:
 
-  none      the folder does not exist: nothing to own, a fresh write is safe
+  none      the folder does not exist: nothing to own, a fresh write is safe.
+            Also a folder with NO design.md that holds a map.json whose
+            top-level "mapId" equals this work item's normalised id (the
+            verdict's `id=`): a map provisioned for this item, nothing
+            designed yet. Exact match, no normalisation of the mapId, so it
+            relies on `design-map project --ticket` having been given the
+            normalised id (Jira keys already are)
   self      the header's work_item is this work item AND its branch is exactly
             <branch>. The header value is normalised like --item (`#268` and
             `gh-268` are one issue); a dated id is compared exactly, so a
@@ -100,7 +106,9 @@ verdict gains `owner=`:
             the same dated id and reads as self: the accepted residual, since
             a day is the date's resolution.
   other     a complete header naming another work item or another branch
-  unowned   the folder exists but proves no owner: no design.md, no header on
+  unowned   the folder exists but proves no owner: no design.md (and no
+            map.json naming this item — absent, unparseable, not an object,
+            another or no mapId), no header on
             line 1, a header never closed, an unparseable line, a duplicated
             key, or an empty/missing work_item or branch (a design written
             before headers existed lands here)
@@ -298,12 +306,31 @@ def header_fields(design):
     return work_item, branch
 
 
+def provisioned_map_id(folder):
+    """The top-level string `mapId` of `<folder>/map.json`, or None when the
+    file is absent, unreadable, not UTF-8, not JSON, not an object, or has no
+    string mapId. Never raises: the verdict line must still print."""
+    try:
+        with open(os.path.join(folder, "map.json"), encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, UnicodeDecodeError, ValueError, RecursionError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    map_id = data.get("mapId")
+    return map_id if isinstance(map_id, str) else None
+
+
 def ownership(repo, path, fid, branch):
-    """none | self | other | unowned — from `<path>/design.md`'s header only."""
+    """none | self | other | unowned — from `<path>/design.md`'s header, or,
+    when there is no design.md, from a provisioned map.json's mapId."""
     folder = os.path.join(repo, path)
     if not os.path.isdir(folder):
         return "none"
-    fields = header_fields(os.path.join(folder, "design.md"))
+    design = os.path.join(folder, "design.md")
+    if not os.path.lexists(design):
+        return "none" if provisioned_map_id(folder) == fid else "unowned"
+    fields = header_fields(design)
     if fields is None:
         return "unowned"
     work_item, header_branch = fields

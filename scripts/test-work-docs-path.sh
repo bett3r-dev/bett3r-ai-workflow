@@ -410,6 +410,38 @@ header "$REPO/docs/prs/gh-268" gh-268 feat/268
 expect_owner '(g) --item #268, header spells it gh-268' self --item '#268' --owner-branch feat/268
 header "$REPO/docs/prs/gh-268" '#268' feat/268
 expect_owner '(g) an unquoted #268 is a comment: no work_item, unowned' unowned --item '#268' --owner-branch feat/268
+
+# (h) a provisioned map-only folder (ESAS-166 R1): no design.md, but a map.json
+# whose top-level mapId is this item's normalised id (what `design-map project
+# --ticket` stamps) — nothing designed yet, so the folder is this item's to
+# design: owner=none. Any other design-less folder stays unowned.
+M="$REPO/docs/prs/TV1-77"
+mkdir -p "$M"
+printf '{"mapId":"TV1-77","forks":[]}\n' > "$M/map.json"
+expect_owner '(h) map-only folder, mapId is this item' none --item TV1-77 --owner-branch tv1-77
+check '(h) map-only folder: exists=true' "$( attr "$LINE" exists )" true "$LINE"
+mkdir -p "$REPO/docs/prs/gh-301"; printf '{"mapId":"gh-301"}\n' > "$REPO/docs/prs/gh-301/map.json"
+expect_owner '(h) map-only folder, --item #301 matches the normalised mapId gh-301' none --item '#301' --owner-branch feat/301
+printf '{"mapId":"TV1-78"}\n' > "$M/map.json"
+expect_owner '(h) map-only folder, mapId is another item' unowned --item TV1-77 --owner-branch tv1-77
+printf '{"forks":[]}\n' > "$M/map.json"
+expect_owner '(h) map-only folder, no mapId' unowned --item TV1-77 --owner-branch tv1-77
+printf '{"mapId":' > "$M/map.json"
+expect_owner '(h) map-only folder, unparseable map.json' unowned --item TV1-77 --owner-branch tv1-77
+printf '["TV1-77"]\n' > "$M/map.json"
+expect_owner '(h) map-only folder, map.json not an object' unowned --item TV1-77 --owner-branch tv1-77
+printf '\377\376{}' > "$M/map.json"
+expect_owner '(h) map-only folder, map.json not UTF-8' unowned --item TV1-77 --owner-branch tv1-77
+rm -f "$M/map.json"; mkdir "$M/map.json"
+expect_owner '(h) map-only folder, map.json is a directory' unowned --item TV1-77 --owner-branch tv1-77
+rmdir "$M/map.json"
+printf '{"mapId":"TV1-77"}\n' > "$M/map.json"
+header "$M" TV1-77 other-branch
+expect_owner '(h) design.md present: the header decides, not the map' other --item TV1-77 --owner-branch tv1-77
+header "$M" TV1-77 tv1-77
+expect_owner '(h) design.md present and matching: self' self --item TV1-77 --owner-branch tv1-77
+printf '# no header\n' > "$M/design.md"
+expect_owner '(h) headerless design.md beside a matching map: unowned' unowned --item TV1-77 --owner-branch tv1-77
 header "$REPO/docs/prs/TV1-7" tv1-7 feat/7
 expect_owner '(g) --item, a header work_item that is not a valid key is not self' other --item TV1-7 --owner-branch feat/7
 

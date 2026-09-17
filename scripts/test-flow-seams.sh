@@ -45,6 +45,9 @@ UNIT_LANE_MD="$PLUGIN/agents/unit-lane.md"
 PROVISIONER_MD="$PLUGIN/agents/provisioner.md"
 RUN_REPORT_MD="$PLUGIN/commands/run-report.md"
 VERIFY_BUILD_MD="$PLUGIN/commands/verify-build.md"
+DESIGN_MULTI_MD="$PLUGIN/commands/design-multi.md"
+DESIGN_LANE_MD="$PLUGIN/agents/design-lane.md"
+ADR_006_MD="$ROOT/docs/adr/ADR-006-one-program-writes-map-json.md"
 LANE_STEP_FIXTURES="$ROOT/scripts/fixtures/lane-step"
 MARKER_PY=${MARKER_PY:-python3}
 
@@ -2490,7 +2493,49 @@ present "$VERIFY_BUILD_MD" 'Oracle candidates: <confirmed> confirmed, <rejected>
 in_order '/verify-build ORDER: ### Slices < ### Oracle candidates (D5)' \
   "$( first_line "$VERIFY_BUILD_MD" '### Slices' )" "$( first_line "$VERIFY_BUILD_MD" '### Oracle candidates' )"
 
+# ESAS-166 D10 / E163-1, E162-2 -> R2 — provenance decides map reuse. The
+# provisioner carries the Phase-C projection into the lane or reports it lost;
+# /design reuses a map as-is only on `carried`; /verify-build reports `lost`.
+present "$PROVISIONER_MD" 'mapProvenance: carried' 'provisioner writes mapProvenance: carried when it copies the projection (D10)'
+present "$PROVISIONER_MD" 'mapProvenance: lost' 'provisioner writes mapProvenance: lost when the run dir or projection is absent (D10)'
+present "$PROVISIONER_MD" 'docs/prs/<id>/map.json' 'provisioner names the lane map destination docs/prs/<id>/map.json (D10)'
+present "$DESIGN_MD" 'mapProvenance: carried' '/design Step 4 reuses a map as-is only on mapProvenance: carried (R2)'
+present "$DESIGN_MD" 'never re-authored in the lane' '/design Step 4: a carried map is frozen in the lane; fork changes escalate (R2, D9)'
+present "$VERIFY_BUILD_MD" 'owner answers not carried: run dir absent' 'pin: /verify-build reports mapProvenance lost as owner answers not carried'
+
+# ESAS-166 AC2 — /design-multi answers on subject maps; the lane emits a fragment.
+present "$DESIGN_MULTI_MD" 'parent:' '/design-multi step 0 records parent: <EPIC> in the ticket snapshot header (D2)'
+present "$DESIGN_MULTI_MD" 'design-multi-subjects group' '/design-multi Phase B item 1 groups units with design-multi-subjects group (D2, Fork 1)'
+present "$DESIGN_MULTI_MD" 'subjectsFingerprint' '/design-multi persists subjects[] and subjectsFingerprint in run.yaml (D4)'
+present "$DESIGN_MULTI_MD" 'design-map select' '/design-multi calls design-map select per subject (D7, D11)'
+present "$DESIGN_MULTI_MD" 'design-map render --stack' '/design-multi renders every subject on one page with render --stack (D3)'
+present "$DESIGN_MULTI_MD" 'design-map apply-answers' '/design-multi routes every answer through design-map apply-answers (D5)'
+present "$DESIGN_MULTI_MD" 'decisions --closed' '/design-multi one-answer check is design-map decisions --closed (D5)'
+present "$DESIGN_MULTI_MD" 'outcome=ok verb=decisions open=0' '/design-multi gates the one-answer check on the decisions verdict line, not the exit code (ADR-004)'
+present "$DESIGN_MULTI_MD" 'counted in `otherMap=`' '/design-multi relies on apply-answers otherMap= skipping, not per-subject sorting (D5)'
+present "$DESIGN_LANE_MD" 'design-map validate' 'design-lane validates its fragment before write (D1)'
+present "$DESIGN_LANE_MD" 'design-map write' 'design-lane emits its fork fragment through design-map write (D1)'
+# C3: the lane may name map_* MCP tools as forbidden, but must never instruct a
+# design-map verb beyond validate/write.
+if lane_verbs=$( grep -nE 'design-map (render|apply-answers|project|decisions|count|check-page)' "$DESIGN_LANE_MD" ); then
+  fail 'design-lane names no design-map verb beyond validate/write (D1, C3)' 'forbidden design-map verb in agents/design-lane.md:' "  $lane_verbs"
+else
+  pass 'design-lane names no design-map verb beyond validate/write (D1, C3)'
+fi
+
 printf '\n'
+# ESAS-166: ADR-006's amended section names the subject/stacking/projection/
+# provenance vocabulary this unit adds, so a future edit that drops the section
+# (or renames a term the code actually uses) fails here rather than in review.
+present "$ADR_006_MD" 'Subject' \
+  '[ESAS-166] ADR-006 names Subject in its glossary'
+present "$ADR_006_MD" 'mapProvenance: carried' \
+  '[ESAS-166] ADR-006 names mapProvenance: carried'
+present "$ADR_006_MD" 'design-multi-subjects' \
+  '[ESAS-166] ADR-006 names the design-multi-subjects helper'
+present "$ADR_006_MD" 'so `/design` proceeds' \
+  '[ESAS-166] ADR-006 says a map-only owner=none folder lets /design proceed'
+
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"
   exit 0

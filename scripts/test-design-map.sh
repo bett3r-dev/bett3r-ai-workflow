@@ -1090,6 +1090,75 @@ expect_error 'decisions: no map' missing-map decisions
 expect_error 'decisions: --final is not its flag' unknown-flag-final decisions "$TMP/dec/map.json" --final
 
 # ---------------------------------------------------------------------------
+printf '\nESAS-166: fleet maps — 10 fragments stack into 7 maps, one answer path closes\n'
+# ---------------------------------------------------------------------------
+# Fixtures: scripts/fixtures/design-map/stack-3-2-5/ holds 7 valid subject
+# maps built from 10 ticket fragments — a3.map.json carries 3 tickets'
+# forks (ESAS-201..203, 2 forks each = 6), b2.map.json carries 2 tickets'
+# forks (ESAS-204..205, 2 forks each = 4), and s1..s5.map.json are five
+# singleton-ticket maps (ESAS-206..210, 1 fork each). 6+4+5x1 = 15 forks
+# over 7 maps, matching the slice's "10 fragments -> 7 maps" shape.
+F325="$FIX/stack-3-2-5"
+mkdir -p "$TMP/f325"
+FPAGE="$TMP/f325/page.html"
+
+dm render --stack "$F325/a3.map.json" "$F325/b2.map.json" "$F325/s1.map.json" "$F325/s2.map.json" "$F325/s3.map.json" "$F325/s4.map.json" "$F325/s5.map.json" \
+  --expect 6 4 1 1 1 1 1 --out "$FPAGE"
+check 'fleet: 7 maps, outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+check 'fleet: maps=7' "$( attr "$LINE" maps )" 7 "$LINE"
+check 'fleet: forks=15' "$( attr "$LINE" forks )" 15 "$LINE"
+check 'fleet: expected=15' "$( attr "$LINE" expected )" 15 "$LINE"
+if [ -e "$FPAGE" ]; then pass 'fleet: page exists'; else fail 'fleet: no page written'; fi
+
+# A dropped fork: --expect for a3 undercounts its 6 forks by one.
+cp "$FPAGE" "$TMP/f325/before-wrong-expect.html"
+rm -f "$FPAGE"
+expect_error 'fleet: wrong --expect for one map (a dropped fork)' count-mismatch \
+  render --stack "$F325/a3.map.json" "$F325/b2.map.json" "$F325/s1.map.json" "$F325/s2.map.json" "$F325/s3.map.json" "$F325/s4.map.json" "$F325/s5.map.json" \
+  --expect 5 4 1 1 1 1 1 --out "$FPAGE"
+check 'fleet: the count miss names its map' "$( attr "$LINE" map )" "$F325/a3.map.json" "$LINE"
+page_absent 'fleet: wrong --expect leaves no page' "$FPAGE"
+
+# One map omitted from the stack, but all 7 --expect values kept.
+expect_error 'fleet: a map omitted while keeping 7 --expects' expect-count-mismatch \
+  render --stack "$F325/a3.map.json" "$F325/b2.map.json" "$F325/s1.map.json" "$F325/s2.map.json" "$F325/s3.map.json" "$F325/s4.map.json" \
+  --expect 6 4 1 1 1 1 1 --out "$FPAGE"
+page_absent 'fleet: omitted-map leaves no page' "$FPAGE"
+
+# --- one-answer-path: a 4-fork subject map, one answer path closes it ---
+OAP="$FIX/one-answer-path"
+mkdir -p "$TMP/oap"
+cp "$OAP/map.json" "$TMP/oap/map.json"
+
+dm apply-answers "$TMP/oap/map.json" "$OAP/answers"
+check 'one-answer-path: 3 owner answers applied (2 page rows + 1 terminal row)' "$( attr "$LINE" owner )" 3 "$LINE" "$( cat "$OUT" )"
+check 'one-answer-path: 1 fork still open before --final' "$( attr "$LINE" open )" 1 "$LINE"
+
+dm decisions "$TMP/oap/map.json" --closed
+check 'one-answer-path: decisions --closed before --final: outcome=fail' "$( attr "$LINE" outcome )" fail "$LINE"
+check 'one-answer-path: decisions --closed before --final: exits non-zero' "$rc" 1
+
+dm apply-answers "$TMP/oap/map.json" "$OAP/answers" --final
+check 'one-answer-path: --final applies' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+
+dm decisions "$TMP/oap/map.json"
+check 'one-answer-path: decisions verdict owner=3' "$( attr "$LINE" owner )" 3 "$LINE"
+check 'one-answer-path: decisions verdict recommendation=1' "$( attr "$LINE" recommendation )" 1 "$LINE"
+check 'one-answer-path: decisions verdict open=0' "$( attr "$LINE" open )" 0 "$LINE"
+
+dm decisions "$TMP/oap/map.json" --closed
+check 'one-answer-path: decisions --closed after --final: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE"
+check 'one-answer-path: decisions --closed after --final: exits 0' "$rc" 0
+
+# --- project --ticket K on the 3-ticket subject map ---
+dm project --ticket ESAS-202 "$F325/a3.map.json"
+check 'fleet project: verb=project' "$( attr "$LINE" verb )" project "$LINE" "$( cat "$OUT" )"
+check 'fleet project: forks=2 (only ESAS-202'"'"'s own)' "$( attr "$LINE" forks )" 2 "$LINE"
+sed '$d' "$OUT" > "$TMP/f325/projected.json"
+python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); print(",".join(f["id"] for f in m["forks"]))' "$TMP/f325/projected.json" > "$TMP/f325/projected-ids"
+check 'fleet project: only the forks whose tickets contain ESAS-202' "$( cat "$TMP/f325/projected-ids" )" 'ESAS-202-F1,ESAS-202-F2'
+
+# ---------------------------------------------------------------------------
 # skills/design-map/SKILL.md — presence oracle, in the style of
 # scripts/test-esas-design.sh (assert_md/refute_md). This is prose, not a
 # script: it catches deletion, not wrongness, as the design's own test-seams

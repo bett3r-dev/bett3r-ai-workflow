@@ -157,6 +157,14 @@ jobs:
           sh scripts/test-design-map.sh
           DM_SH=dash dash scripts/test-design-map.sh
           DM_SH=bash bash scripts/test-design-map.sh
+      # The design-multi subject grouping (ESAS-166 D2/D4/Fork 1): units group by
+      # epic link, accepted seam proposals override, and the fingerprint plus
+      # `asked` tell a resume which subjects to re-ask.
+      - name: Test the design-multi subject grouping (epic link + fingerprint)
+        run: |
+          sh scripts/test-design-multi-subjects.sh
+          DMS_SH=dash dash scripts/test-design-multi-subjects.sh
+          DMS_SH=bash bash scripts/test-design-multi-subjects.sh
       # The design map snapshot verdicts (ESAS-162): `design-map count` is the
       # goal-signal line /verify-build puts in the PR body, and `design-map drift`
       # says whether the committed map.json lags the map feed. Both are script
