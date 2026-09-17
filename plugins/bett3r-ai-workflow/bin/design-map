@@ -4,7 +4,8 @@
 # map.json into the self-contained page its owner answers forks on, refusing
 # when the payload's fork count differs from `--expect` or the page drops a
 # fork; `apply-answers` folds the owner's saved answers into the map's fork
-# statuses. Ends in a `DESIGN-MAP:v1` verdict line.
+# statuses; `write`, `candidates`, `check-plan`, `project` and `decisions` are
+# listed in the script's header. Ends in a `DESIGN-MAP:v1` verdict line.
 #
 # Mirrors `work-docs-path`, for the same reason as `lane-step`: `CLAUDE_PLUGIN_ROOT`
 # is substituted for hook invocations only, while every enabled plugin's `bin/`

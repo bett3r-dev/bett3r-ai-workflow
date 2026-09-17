@@ -4,15 +4,19 @@
     DESIGN-MAP:v1 outcome=ok verb=validate forks=<n>
     DESIGN-MAP:v1 outcome=ok verb=write forks=<n> map=<path>
     DESIGN-MAP:v1 outcome=ok verb=render expected=<n> payload=<n> rendered=<n> page=<path>
+    DESIGN-MAP:v1 outcome=ok verb=render maps=<n> forks=<n> expected=<n> page=<path>   (--stack)
     DESIGN-MAP:v1 outcome=ok verb=apply-answers final=<bool> open=<n> owner=<n> recommendation=<n> code=<n> moot=<n> otherMap=<n> commented=<ids|none> map=<path>
     DESIGN-MAP:v1 outcome=ok verb=candidates forks=<n> candidates=<n> skipped-open=<n> skipped-moot=<n> skipped-nowalk=<n> skipped-untestable=<n>
     DESIGN-MAP:v1 outcome=ok verb=check-plan review=<human|unattended|none> candidates=<n>
     DESIGN-MAP:v1 outcome=fail verb=check-plan reason=unattended-confirmed
     DESIGN-MAP:v1 outcome=fail verb=check-plan reason=candidate-in-oracle slice=<id>
+    DESIGN-MAP:v1 outcome=ok verb=project ticket=<K> forks=<n> nodes=<n>
+    DESIGN-MAP:v1 outcome=ok verb=decisions open=<n> owner=<n> recommendation=<n> code=<n> moot=<n>
+    DESIGN-MAP:v1 outcome=fail verb=decisions reason=open-forks open=<n> owner=<n> ...
     DESIGN-MAP:v1 outcome=error verb=<verb> reason=<reason> [key=value ...]
 
 Read the line, never the exit code alone (ADR-004): 0 for ok, 1 for fail
-(check-plan's two assertions below), 2 for error, and no line at all means the
+(check-plan's two assertions and decisions --closed, below), 2 for error, and no line at all means the
 script died before concluding. An error line carries no `page=`: a caller
 that publishes whatever `page=` names must find nothing.
 
@@ -25,6 +29,9 @@ Usage:
   design-map apply-answers <map.json> <answers-dir> [--final]
   design-map candidates <map.json>
   design-map check-plan <slices.yaml>
+  design-map render --stack <m1> <m2>... --expect <n1> <n2>... --out <page.html>
+  design-map project --ticket <K> <map.json>...   (the map, then the verdict, on stdout)
+  design-map decisions <map.json> [--closed]
 
 A map is `structureVersion: 2`. Two committed files describe it:
 
@@ -60,7 +67,8 @@ file in the target's directory, moved over it, in the formatting apply-answers
 writes. It never merges with the file it replaces. Every refusal leaves the
 target byte-identical, and an absent target is not created. Reasons:
 missing-map (no target argument), map-dir-missing (the target's directory does
-not exist), map-unparseable (stdin is not UTF-8 JSON), map-unwritable, and the
+not exist), map-unparseable (stdin is not UTF-8 JSON), upstream-refused (stdin
+ends in a verdict line other than project's ok one, below), map-unwritable, and the
 validate reasons. `render` and `check-page` also refuse reason=not-grounded when
 the map holds at least one fork and `grounded` is not true: an ungrounded
 draft is never drawn for the owner to answer.
@@ -105,7 +113,8 @@ reason=out-is-map. Other reasons:
   malformed-expect, map-unreadable, map-unparseable, schema-unreadable,
   bare-actor (at=<json pointer>), schema-invalid (at=<json pointer> rule=<keyword>),
   the post-schema reasons above, not-grounded, out-path-whitespace,
-  out-dir-missing, out-is-map, missing-page, page-unreadable
+  out-dir-missing, out-is-map, missing-page, page-unreadable,
+  and with --stack: missing-out, expect-count-mismatch, duplicate-fork-id
 
 `apply-answers` folds the owner's saved answers into the map's fork statuses,
 `{kind: open}`, `{kind: decided, source, option}` or `{kind: moot, reason}`,
@@ -199,6 +208,42 @@ cannot be opened as UTF-8), `plan-unparseable` (invalid YAML, or the
 document / its `candidateOracles` / its `slices` is not the shape this reads
 as a mapping/list).
 
+`render --stack` renders several maps onto one page (ESAS-166 D3). Each map is
+validated and must be grounded, as for a single render, and a refusal about
+one map gains map=<path>. `--expect` takes one value per map, in argument
+order: a different count is reason=expect-count-mismatch, and one map's miss is
+count-mismatch map=<path>. `--out` is required (reason=missing-out), and a
+fork id in two maps is reason=duplicate-fork-id, since answers are keyed by
+fork id. The page holds one <section data-map-id> per map, ordered by most
+open forks first, then by the lowest ticket key over the map's forks'
+tickets, compared by project and then by number as an integer (ESAS-9 before
+ESAS-11; a map with no forks sorts last), then by argument order. The page
+gate counts every fork of the stack exactly once, and a refusal removes an
+earlier page at --out, as for a single render. The page's answer writer
+stamps each answer with the mapId of the fork's own map.
+
+`project --ticket K <map>...` (ESAS-166 D10) validates every input (refusals
+name map=), then prints a v2 map on stdout: the forks whose tickets contain K,
+in input order; the nodes their anchors name, with every ancestor reached
+through parents; restsOn pruned to kept forks; the links whose deliverableId
+is a kept node; mapId K; grounded and shape from the inputs
+(grounded-mismatch, shape-mismatch when they disagree). A node id defined
+differently in two inputs is node-conflict; a fork id in two inputs is
+duplicate-fork-id. feedSeq and target are not carried over. Also
+missing-ticket and malformed-ticket. The verdict follows the JSON as the last
+stdout line (ADR-004). So `write` drops a last stdin line that is project's ok
+verdict. When the last line is any other verdict, `write` refuses
+reason=upstream-refused and leaves the target untouched. That way,
+`project ... | write <target>` refuses a failed projection even in a shell
+without pipefail.
+
+`decisions <map>` (ESAS-166 D5) prints per-ticket Markdown. It has a
+`## <ticket>` heading per ticket, ordered by ticket key, and one line per fork
+carrying that ticket: `- <id> <title>: owner — <option> (<label>)`, `applied
+on recommendation — ...`, `code — ...`, `moot — <reason>` or `open`. The
+verdict counts each fork once. With --closed, open > 0 is outcome=fail
+reason=open-forks (exit 1), printed after the Markdown.
+
 Standard library only for every map verb: `jsonschema` is not a dependency
 (`check-plan` is the one exception, since a `slices.yaml` is YAML, not JSON,
 and PyYAML is imported lazily inside it so its absence never breaks any
@@ -253,19 +298,34 @@ def verdict(outcome, **attrs):
     return EXIT_CODES.get(outcome, 2)
 
 
+BOOLEAN_FLAGS = ("final", "stack", "closed")
+VALUE_FLAGS = ("expect", "out", "ticket")
+
+
 def parse_args(args):
+    """With `--stack` anywhere in the arguments, `--expect` takes every value up
+    to the next `--` flag (one per map); otherwise it takes exactly one."""
     positional, flags, i = [], {}, 0
+    stack = "--stack" in args
     while i < len(args):
         a = args[i]
-        if a == "--final":
-            flags["final"] = True
+        if a.startswith("--") and a[2:] in BOOLEAN_FLAGS:
+            flags[a[2:]] = True
             i += 1
         elif a.startswith("--"):
             name = a[2:]
-            if name not in ("expect", "out"):
+            if name not in VALUE_FLAGS:
                 raise Refusal(f"unknown-flag-{name}")
             if i + 1 >= len(args):
                 raise Refusal(f"missing-{name}")
+            if name == "expect" and stack:
+                values = []
+                i += 1
+                while i < len(args) and not args[i].startswith("--"):
+                    values.append(args[i])
+                    i += 1
+                flags[name] = values
+                continue
             flags[name] = args[i + 1]
             i += 2
         else:
@@ -543,9 +603,14 @@ textarea{width:100%;min-height:54px;box-sizing:border-box;margin-top:6px}
 # saveAnswer and the db bootstrap), so an answers store written by either page
 # reads identically.
 SCRIPT = """
-const MAP = JSON.parse(document.getElementById("map-data").textContent);
+const DATA = JSON.parse(document.getElementById("map-data").textContent);
+// A stacked page embeds {stack: [map, ...]}; each fork remembers its own map's id.
+const MAPS = DATA.stack || [DATA];
+// Each fork's own map's id, computed at render time (fork_maps); a fork of a map
+// without mapId is absent, so its answers carry no map.
+const FORK_MAP = JSON.parse(document.getElementById("fork-maps").textContent);
 const FORKS = {};
-MAP.forks.forEach(f => { FORKS[f.id] = f; });
+MAPS.forEach(m => m.forks.forEach(f => { FORKS[f.id] = f; }));
 let db = null;
 let answers = {};
 
@@ -581,7 +646,7 @@ async function saveAnswer(id, patch) {
   if (!db) return;
   const prev = answers[id] || {};
   const doc = { pick: prev.pick || null, comment: prev.comment || "", ...patch, updatedAt: new Date().toISOString() };
-  if (MAP.mapId) doc.map = MAP.mapId;
+  if (FORK_MAP[id]) doc.map = FORK_MAP[id];
   answers[id] = doc; renderCard(id);
   const s = document.querySelector('[data-fork-id="' + id + '"] .saved');
   try { await db.doc("answers/" + id).set(doc); s.textContent = "Saved"; }
@@ -715,18 +780,43 @@ def legend(styles):
     ) + "</div>"
 
 
-def page(payload):
+def cards_of(payload):
+    node_titles = {n["id"]: n["title"] for n in payload["nodes"]}
+    return "".join(fork_card(f, node_titles) for f in payload["forks"])
+
+
+def fork_maps(payloads):
+    """Fork id -> the mapId of the fork's own map, for the page's answer writer
+    (ESAS-166 D5.1: a stacked page never cross-binds answers). Forks of a map
+    without mapId are left out."""
+    return {f["id"]: p["mapId"] for p in payloads if p.get("mapId") for f in p["forks"]}
+
+
+def page(payload, stack=None):
+    """One map's page, or with `stack` (the ordered payloads) one page holding a
+    <section data-map-id> per map, each with its own levels and cards."""
     vocab = vocabulary()
     styles = source_styles(vocab)
     style = STYLE + "".join(
         f".fork.{source}{{border-left-color:{colour}}} .legend .{source}{{border-left-color:{colour}}}\n"
         for source, colour in styles
-    )
-    node_titles = {n["id"]: n["title"] for n in payload["nodes"]}
-    title = payload.get("mapId") or "Design map"
+    ) + ("section.map{display:grid;gap:14px} section.map h2{margin:12px 0 0;font-size:17px}\n" if stack else "")
+    if stack is None:
+        title = payload.get("mapId") or "Design map"
+        body = f"{levels(payload, vocab)}{legend(styles)}<main>{cards_of(payload)}</main>"
+        embedded = payload
+    else:
+        title = "Design maps"
+        sections = "".join(
+            f'<section class="map" data-map-id="{esc(p.get("mapId", ""))}">'
+            f'<h2>{esc(p.get("mapId") or "Design map")}</h2>{levels(p, vocab)}{cards_of(p)}</section>'
+            for p in stack
+        )
+        body = f"{legend(styles)}<main>{sections}</main>"
+        embedded = {"stack": stack}
     # `<` escaped so no string in the payload can close the data script early.
-    data = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
-    cards = "".join(fork_card(f, node_titles) for f in payload["forks"])
+    data = json.dumps(embedded, ensure_ascii=False).replace("<", "\\u003c")
+    fork_map = json.dumps(fork_maps(stack if stack is not None else [payload]), ensure_ascii=False).replace("<", "\\u003c")
     return (
         "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
         f"{GENERATOR}"
@@ -734,8 +824,9 @@ def page(payload):
         f"<header><h1>{esc(title)}</h1>"
         "<div>A fork you leave unanswered is taken on its recommendation.</div>"
         "<div id=\"dbnote\">Connecting to the answer store&hellip;</div></header>"
-        f"{levels(payload, vocab)}{legend(styles)}<main>{cards}</main>"
+        f"{body}"
         f"<script type=\"application/json\" id=\"map-data\">{data}</script>"
+        f"<script type=\"application/json\" id=\"fork-maps\">{fork_map}</script>"
         f"<script>{SCRIPT}</script></body></html>\n"
     )
 
@@ -761,10 +852,11 @@ def drawn_forks(text):
     return parser.ids
 
 
-def check_page(payload, expected, text):
-    """The page gate: every payload fork drawn exactly once, or a refusal."""
+def check_page(payload, expected, text, forks=None):
+    """The page gate: every payload fork drawn exactly once, or a refusal.
+    `forks` (a stack's fork ids across every map) replaces the payload's own."""
     drawn = drawn_forks(text)
-    wanted = [f["id"] for f in payload["forks"]]
+    wanted = [f["id"] for f in payload["forks"]] if forks is None else forks
     if sorted(drawn) != sorted(wanted):
         raise Refusal("page-missing-forks", expected=expected, payload=len(wanted), rendered=len(set(drawn)))
     return len(drawn)
@@ -788,6 +880,39 @@ def counted_payload(map_path, expected):
     return payload, count
 
 
+def naming_map(path, fn, *args):
+    """Run fn; a refusal it raises gains map=<path>, so a caller handed several
+    maps knows which one was refused."""
+    try:
+        return fn(*args)
+    except Refusal as r:
+        r.attrs.setdefault("map", path)
+        raise
+
+
+TICKET = re.compile(r"([A-Z][A-Z0-9]*)-([0-9]+)\Z")
+
+
+def ticket_key(ticket):
+    """A ticket id compared by project, then by number as an integer, so ESAS-9
+    sorts before ESAS-11. The schema's ticket pattern guarantees the match."""
+    project, number = TICKET.match(ticket).groups()
+    return project, int(number)
+
+
+def stack_order(entries):
+    """(index, payload) pairs in page order: most open forks first, then the
+    lowest ticket key over all of a map's forks' tickets (a map with no forks
+    sorts after every map that has one), then argument order."""
+    def key(entry):
+        index, payload = entry
+        opened = sum(1 for f in payload["forks"] if f["status"]["kind"] == "open")
+        tickets = [ticket_key(t) for f in payload["forks"] for t in f["tickets"]]
+        lowest = (0, min(tickets)) if tickets else (1, ("", 0))
+        return (-opened, lowest, index)
+    return sorted(entries, key=key)
+
+
 def same_file(a, b):
     return os.path.realpath(a) == os.path.realpath(b)
 
@@ -805,7 +930,54 @@ def remove_page(out):
         os.remove(out)
 
 
+def render_stack(positional, flags):
+    if not positional:
+        raise Refusal("missing-map")
+    if "out" not in flags:
+        raise Refusal("missing-out")
+    out = flags["out"]
+    try:
+        expects = flags.get("expect")
+        if not expects:
+            raise Refusal("missing-expect")
+        if len(expects) != len(positional):
+            raise Refusal("expect-count-mismatch", maps=len(positional), expects=len(expects))
+        if any(not re.fullmatch(r"[0-9]+", e) for e in expects):
+            raise Refusal("malformed-expect")
+        if re.search(r"\s", out):
+            raise Refusal("out-path-whitespace")
+        seen = set()
+        entries = []
+        for index, (map_path, expected) in enumerate(zip(positional, expects)):
+            if same_file(out, map_path):
+                raise Refusal("out-is-map", map=map_path)
+            payload, _ = naming_map(map_path, counted_payload, map_path, int(expected))
+            for fork in payload["forks"]:
+                if fork["id"] in seen:
+                    raise Refusal("duplicate-fork-id", id=fork["id"], map=map_path)
+                seen.add(fork["id"])
+            entries.append((index, payload))
+        ordered = [payload for _, payload in stack_order(entries)]
+        forks = [f["id"] for p in ordered for f in p["forks"]]
+        expected = sum(int(e) for e in expects)
+        text = page(None, stack=ordered)
+        check_page({"forks": []}, expected, text, forks=forks)
+        directory = os.path.dirname(out) or "."
+        if not os.path.isdir(directory):
+            raise Refusal("out-dir-missing")
+        fd, tmp = tempfile.mkstemp(dir=directory, prefix=".design-map-", suffix=".html")
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        os.replace(tmp, out)
+    except Refusal:
+        remove_page(out)
+        raise
+    return dict(maps=len(ordered), forks=len(forks), expected=expected, page=out)
+
+
 def render(positional, flags):
+    if flags.get("stack"):
+        return render_stack(positional, flags)
     if not positional:
         raise Refusal("missing-map")
     map_path = positional[0]
@@ -1071,6 +1243,9 @@ def check_plan(positional, flags):
     return dict(review=review if review else "none", candidates=len(raw_candidates))
 
 
+PROJECT_OK = TOKEN + " outcome=ok verb=project "
+
+
 def write(positional, flags):
     if not positional:
         raise Refusal("missing-map")
@@ -1078,21 +1253,136 @@ def write(positional, flags):
     if not os.path.isdir(os.path.dirname(os.path.abspath(target))):
         raise Refusal("map-dir-missing")
     try:
-        payload = json.loads(sys.stdin.buffer.read().decode("utf-8"))
+        text = sys.stdin.buffer.read().decode("utf-8")
     except (OSError, ValueError):
+        raise Refusal("map-unparseable")
+    # `project | write`: project's stdout is the map and then its own verdict
+    # line. A last line that is project's ok verdict is dropped; any other
+    # verdict line there means the step upstream did not produce a map.
+    lines = text.rstrip("\n").split("\n")
+    if lines[-1].startswith(PROJECT_OK):
+        text = "\n".join(lines[:-1])
+    elif lines[-1].startswith(TOKEN + " "):
+        raise Refusal("upstream-refused")
+    try:
+        payload = json.loads(text)
+    except ValueError:
         raise Refusal("map-unparseable")
     validate(payload)
     write_map(target, payload)
     return dict(forks=len(payload["forks"]), map=target)
 
 
+# --- project / decisions (ESAS-166 D5, D10) ----------------------------------
+
+def project(positional, flags):
+    if "ticket" not in flags:
+        raise Refusal("missing-ticket")
+    ticket = flags["ticket"]
+    if not re.fullmatch(r"[A-Za-z0-9-]+", ticket):
+        raise Refusal("malformed-ticket")
+    if not positional:
+        raise Refusal("missing-map")
+    inputs = []
+    for map_path in positional:
+        payload = naming_map(map_path, load_map, map_path)
+        naming_map(map_path, validate, payload)
+        inputs.append((map_path, payload))
+    first = inputs[0][1]
+    for map_path, payload in inputs[1:]:
+        if payload["grounded"] != first["grounded"]:
+            raise Refusal("grounded-mismatch", map=map_path)
+        if payload.get("shape") != first.get("shape"):
+            raise Refusal("shape-mismatch", map=map_path)
+    nodes, seen_forks, forks, links = {}, set(), [], []
+    for map_path, payload in inputs:
+        for node in payload["nodes"]:
+            if node["id"] in nodes and nodes[node["id"]] != node:
+                raise Refusal("node-conflict", id=node["id"], map=map_path)
+            nodes.setdefault(node["id"], node)
+        for fork in payload["forks"]:
+            if fork["id"] in seen_forks:
+                raise Refusal("duplicate-fork-id", id=fork["id"], map=map_path)
+            seen_forks.add(fork["id"])
+            if ticket in fork["tickets"]:
+                forks.append(fork)
+        for link in payload.get("links", []):
+            if link not in links:
+                links.append(link)
+    kept_forks = {f["id"] for f in forks}
+    reached = set()
+    pending = [f["anchor"] for f in forks if "anchor" in f]
+    while pending:
+        nid = pending.pop()
+        if nid not in reached:
+            reached.add(nid)
+            pending.extend(nodes[nid]["parents"])
+    out = {"structureVersion": 2}
+    if "shape" in first:
+        out["shape"] = first["shape"]
+    out["grounded"] = first["grounded"]
+    out["mapId"] = ticket
+    out["nodes"] = [n for nid, n in nodes.items() if nid in reached]
+    out["forks"] = [dict(f, restsOn=[r for r in f["restsOn"] if r in kept_forks]) for f in forks]
+    kept_links = [l for l in links if l["deliverableId"] in reached]
+    if kept_links:
+        out["links"] = kept_links
+    validate(out)
+    sys.stdout.write(json.dumps(out, indent=2, ensure_ascii=False) + "\n")
+    return dict(ticket=ticket, forks=len(out["forks"]), nodes=len(out["nodes"]))
+
+
+def one_line(text):
+    return " ".join(text.split())
+
+
+def decision_entry(fork):
+    status = fork["status"]
+    if status["kind"] == "open":
+        return "open"
+    if status["kind"] == "moot":
+        return f"moot — {one_line(status['reason'])}"
+    label = next(o["label"] for o in fork["card"]["options"] if o["id"] == status["option"])
+    word = {"recommendation": "applied on recommendation"}.get(status["source"], status["source"])
+    return f"{word} — {status['option']} ({one_line(label)})"
+
+
+def decisions(positional, flags):
+    if not positional:
+        raise Refusal("missing-map")
+    payload = load_map(positional[0])
+    validate(payload)
+    by_ticket = {}
+    for fork in payload["forks"]:
+        for ticket in fork["tickets"]:
+            by_ticket.setdefault(ticket, []).append(fork)
+    blocks = []
+    for ticket in sorted(by_ticket, key=ticket_key):
+        entries = "".join(
+            f"- {fork['id']} {one_line(fork['title'])}: {decision_entry(fork)}\n" for fork in by_ticket[ticket]
+        )
+        blocks.append(f"## {ticket}\n\n{entries}")
+    sys.stdout.write("\n".join(blocks))
+    def count(kind, source=None):
+        return sum(1 for f in payload["forks"]
+                   if f["status"]["kind"] == kind and (source is None or f["status"].get("source") == source))
+    counts = dict(open=count("open"), owner=count("decided", "owner"),
+                  recommendation=count("decided", "recommendation"), code=count("decided", "code"),
+                  moot=count("moot"))
+    if flags.get("closed") and counts["open"] > 0:
+        raise Refusal("open-forks", outcome="fail", **counts)
+    return counts
+
+
 VERBS = {"validate": validate_map, "write": write, "render": render, "check-page": check,
-         "apply-answers": apply_answers, "candidates": candidates, "check-plan": check_plan}
+         "apply-answers": apply_answers, "candidates": candidates, "check-plan": check_plan,
+         "project": project, "decisions": decisions}
 # The flags each verb takes; any other parsed flag is reason=unknown-flag-<name>.
 # `candidates` and `check-plan` take positional arguments only, so `--map`
 # (the wording ESAS-165's block used) is refused as unknown-flag-map.
-FLAGS = {"validate": (), "write": (), "render": ("expect", "out"), "check-page": ("expect",),
-         "apply-answers": ("final",), "candidates": (), "check-plan": ()}
+FLAGS = {"validate": (), "write": (), "render": ("expect", "out", "stack"), "check-page": ("expect",),
+         "apply-answers": ("final",), "candidates": (), "check-plan": (), "project": ("ticket",),
+         "decisions": ("closed",)}
 
 
 def main(argv):
@@ -1101,8 +1391,8 @@ def main(argv):
         if verb not in VERBS:
             raise Refusal("unknown-verb")
         positional, flags = parse_args(argv[2:])
-        for name in ("out", "final", "expect"):
-            if name in flags and name not in FLAGS[verb]:
+        for name in flags:
+            if name not in FLAGS[verb]:
                 raise Refusal(f"unknown-flag-{name}")
         attrs = VERBS[verb](positional, flags)
     except Refusal as r:

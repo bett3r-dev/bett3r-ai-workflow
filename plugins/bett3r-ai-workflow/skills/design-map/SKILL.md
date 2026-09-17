@@ -252,6 +252,61 @@ could read but that fails one of its two assertions is a different event from
 one it could not read at all (ADR-004 — the line is the contract, and a shell
 caller still needs the two exit codes apart).
 
+## Fleet readers: stack, project, decisions (ESAS-166)
+
+```
+design-map render --stack <m1> <m2>... --expect <n1> <n2>... --out <page.html>
+design-map project --ticket <K> <map>... | design-map write <units/K.map.json>
+design-map decisions <map.json> [--closed]
+```
+
+`render --stack` draws several maps on one page. Every map is validated and
+must be grounded, with the same refusals as a single render plus `map=<path>`
+naming the map refused. There is one `--expect` per map, in argument order: a
+different number of values is `reason=expect-count-mismatch`, and one map's
+miss is `reason=count-mismatch map=<path>`. `--out` is required
+(`reason=missing-out`), because no one map's directory is the stack's home. A
+fork id in two maps is `reason=duplicate-fork-id`, since answers are keyed by
+fork id. Any refusal leaves no page, and removes an earlier rendered page at
+`--out`. The page holds one `<section data-map-id>` per map, in a fixed
+order:
+
+1. most `open` forks first;
+2. then the lowest ticket key over all the map's forks' `tickets`, compared
+   by project and then by number as an integer (`ESAS-9` before `ESAS-11`).
+   A map with no forks sorts last;
+3. then argument order.
+
+A re-render is byte-identical, and the page gate counts every fork of every
+map exactly once. Each answer the page saves carries `map: <mapId>` of the
+fork's own map, when that map has a `mapId`. Verdict: `outcome=ok
+verb=render maps=<n> forks=<sum> expected=<sum> page=<path>`. `check-page` does
+not take `--stack`.
+
+`project --ticket K` validates every input (a refusal names `map=`) and prints
+a v2 map on stdout. It holds only the forks whose `tickets` contain K, in input
+order. Its nodes are each kept fork's `anchor` and all of that node's ancestors.
+`restsOn` entries naming a dropped fork are pruned, and a link is kept only
+when its `deliverableId` is a kept node. `mapId` is K. `grounded` and `shape`
+come from the inputs, and inputs that disagree are refused
+(`grounded-mismatch`, `shape-mismatch`). A node id defined differently in two
+inputs is `node-conflict`, and a fork id in two inputs is
+`duplicate-fork-id`. `feedSeq` and `target` are not carried over. The verdict
+`outcome=ok verb=project ticket=K forks=<n> nodes=<n>` is the last stdout
+line, after the JSON. `write` drops a last stdin line that is `project`'s ok
+verdict. If the last line is any other verdict line, `write` refuses
+`reason=upstream-refused` and does not create the target, so a refused
+projection cannot be written as a map.
+
+`decisions` prints per-ticket Markdown: a `## <ticket>` heading per ticket
+(ordered by ticket key), then one line per fork carrying that ticket:
+`- <forkId> <title>: owner — <option> (<label>)`, `applied on recommendation —
+…`, `code — …`, `moot — <reason>`, or `open`. A fork with two tickets is listed
+under both and counted once. Verdict: `outcome=ok verb=decisions open=<n>
+owner=<n> recommendation=<n> code=<n> moot=<n>`. With `--closed`, any open
+fork is `outcome=fail reason=open-forks` (exit 1), and the Markdown is still
+printed before it.
+
 See [`map-structure.schema.json`](./map-structure.schema.json) for the full
 payload shape and [`map.schema.json`](./map.schema.json) for the vocabulary it
 refers to.

@@ -723,8 +723,8 @@ refuse_d5 'an answer whose map is not a string' answer-malformed "$TMP/d5/withid
 
 # The page's writer stamps the map id when the map carries one.
 dm render "$TMP/d5/withid.json" --expect 6 --out "$TMP/d5/page.html"
-check 'the page: the answer writer adds map: MAP.mapId when set' \
-  "$( grep -c 'if (MAP.mapId) doc.map = MAP.mapId;' "$TMP/d5/page.html" | tr -d ' ' )" 1
+check 'the page: the answer writer adds map: the fork map id when set' \
+  "$( grep -cF 'if (FORK_MAP[id]) doc.map = FORK_MAP[id];' "$TMP/d5/page.html" | tr -d ' ' )" 1
 
 # ---------------------------------------------------------------------------
 printf 'D6: write — a full map on stdin, validated, atomically replaced\n'
@@ -891,6 +891,205 @@ expect_error 'check-plan: a missing plan argument' missing-plan \
   check-plan
 
 # ---------------------------------------------------------------------------
+printf '\nD6: render --stack — several maps, one page (ESAS-166 D3/AC1)\n'
+# ---------------------------------------------------------------------------
+# a: 1 open fork, lowest ticket ESAS-20. b: 2 open, lowest ESAS-7. c: 2 open,
+# lowest ESAS-9 by number — but "ESAS-11" by string, so a string comparison
+# would put c before b. Expected order: b, c, a (arguments given a, b, c).
+STK="$FIX/stack"
+mkdir -p "$TMP/stack"
+SPAGE="$TMP/stack/page.html"
+
+dm render --stack "$STK/a.map.json" "$STK/b.map.json" "$STK/c.map.json" --expect 2 3 3 --out "$SPAGE"
+check 'stack of 3: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+check 'stack of 3: verb=render' "$( attr "$LINE" verb )" render "$LINE"
+check 'stack of 3: maps=3' "$( attr "$LINE" maps )" 3 "$LINE"
+check 'stack of 3: forks=8' "$( attr "$LINE" forks )" 8 "$LINE"
+check 'stack of 3: expected=8' "$( attr "$LINE" expected )" 8 "$LINE"
+check 'stack of 3: page=<--out>' "$( attr "$LINE" page )" "$SPAGE" "$LINE"
+check 'stack of 3: exit 0' "$rc" 0
+# The page read back independently: fork cards in document order, and each
+# section's map id in order.
+pageread(){
+  python3 - "$1" <<'PY'
+import json, re, sys
+from html.parser import HTMLParser
+text = open(sys.argv[1], encoding="utf-8").read()
+class P(HTMLParser):
+    def __init__(self):
+        super().__init__(); self.forks = []; self.maps = []
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == "article" and "data-fork-id" in a: self.forks.append(a["data-fork-id"])
+        if tag == "section" and "data-map-id" in a: self.maps.append(a["data-map-id"])
+p = P(); p.feed(text)
+data = json.loads(re.search(r'<script type="application/json" id="map-data">(.*?)</script>', text, re.S).group(1))
+print(",".join(p.forks)); print(",".join(p.maps))
+print(",".join(m.get("mapId", "") for m in data["stack"]))
+print(len(p.forks) == len(set(p.forks)))
+PY
+}
+pageread "$SPAGE" > "$TMP/stack/read"
+check 'stack of 3: every fork drawn once, sections ordered most open first then lowest ticket (numeric), then argument order' \
+  "$( sed -n 1p "$TMP/stack/read" )" 'ESAS-7-F1,ESAS-7-F2,ESAS-7-F3,ESAS-9-F1,ESAS-11-F1,ESAS-9-F2,ESAS-20-F1,ESAS-20-F2'
+check 'stack of 3: one section per map, in page order' "$( sed -n 2p "$TMP/stack/read" )" 'ESAS-7-map,ESAS-11-map,ESAS-20-map'
+check 'stack of 3: the embedded data keeps each map (and its mapId) for the answer writer' "$( sed -n 3p "$TMP/stack/read" )" 'ESAS-7-map,ESAS-11-map,ESAS-20-map'
+check 'stack of 3: no fork id twice' "$( sed -n 4p "$TMP/stack/read" )" True
+if grep -qF 'FORK_MAP[id]' "$SPAGE"; then pass 'stack of 3: the answer writer stamps the fork'"'"'s own map id'; else fail 'stack of 3: the answer writer does not stamp per-fork map ids'; fi
+# The fork -> mapId table is data computed at render time, so it is pinned
+# without a browser: a fork of the second and third sections names its own map.
+python3 - "$SPAGE" > "$TMP/stack/forkmaps" 2>&1 <<'PY2'
+import json, re, sys
+t = open(sys.argv[1], encoding="utf-8").read()
+m = json.loads(re.search(r'<script type="application/json" id="fork-maps">(.*?)</script>', t, re.S).group(1))
+print(m.get("ESAS-7-F1"), m.get("ESAS-9-F2"), m.get("ESAS-11-F1"), m.get("ESAS-20-F2"))
+PY2
+check 'stack of 3: fork-maps binds each section'"'"'s forks to its own mapId' "$( cat "$TMP/stack/forkmaps" )" 'ESAS-7-map ESAS-11-map ESAS-11-map ESAS-20-map'
+if grep -qF 'getElementById("fork-maps")' "$SPAGE"; then pass 'stack of 3: the answer writer reads FORK_MAP from the fork-maps data'; else fail 'stack of 3: FORK_MAP is not read from the fork-maps data'; fi
+python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); m.pop("mapId"); json.dump(m, open(sys.argv[2], "w"))' "$STK/c.map.json" "$TMP/stack/nomap.map.json"
+dm render --stack "$STK/a.map.json" "$TMP/stack/nomap.map.json" --expect 2 3 --out "$TMP/stack/nomap.html"
+python3 - "$TMP/stack/nomap.html" "$TMP/stack/nomap.map.json" "$STK/a.map.json" > "$TMP/stack/nomapread" 2>&1 <<'PY2'
+import json, re, sys
+t = open(sys.argv[1], encoding="utf-8").read()
+m = json.loads(re.search(r'<script type="application/json" id="fork-maps">(.*?)</script>', t, re.S).group(1))
+nomap = [f["id"] for f in json.load(open(sys.argv[2]))["forks"]]
+a = json.load(open(sys.argv[3]))
+print(any(i in m for i in nomap), all(m.get(f["id"]) == a["mapId"] for f in a["forks"]), len(nomap) > 0)
+PY2
+check 'stack: forks of a map without mapId are absent from fork-maps' "$( cat "$TMP/stack/nomapread" )" 'False True True' "$LINE"
+cp "$SPAGE" "$TMP/stack/first.html"
+dm render --stack "$STK/a.map.json" "$STK/b.map.json" "$STK/c.map.json" --expect 2 3 3 --out "$SPAGE"
+if cmp -s "$TMP/stack/first.html" "$SPAGE"; then pass 'stack of 3: a re-render is byte-identical'; else fail 'stack of 3: a re-render differs'; fi
+dm render --stack "$STK/c.map.json" "$STK/a.map.json" "$STK/b.map.json" --expect 3 2 3 --out "$TMP/stack/perm.html"
+if cmp -s "$TMP/stack/first.html" "$TMP/stack/perm.html"; then pass 'stack of 3: argument order does not move maps whose order is decided'; else fail 'stack of 3: permuted arguments changed the page'; fi
+
+# Argument order breaks a full tie: a copy of a with its ids renumbered.
+python3 - "$STK/a.map.json" "$TMP/stack/a2.map.json" <<'PY'
+import json, sys
+m = json.load(open(sys.argv[1]))
+m["mapId"] = "ESAS-20-other"
+for f in m["forks"]:
+    f["id"] = f["id"].replace("-F", "-F9")
+json.dump(m, open(sys.argv[2], "w"), indent=2)
+PY
+dm render --stack "$TMP/stack/a2.map.json" "$STK/a.map.json" --expect 2 2 --out "$TMP/stack/tie.html"
+pageread "$TMP/stack/tie.html" > "$TMP/stack/tieread"
+check 'stack tie (same open count, same lowest ticket): argument order' "$( sed -n 2p "$TMP/stack/tieread" )" 'ESAS-20-other,ESAS-20-map' "$LINE"
+
+cp "$TMP/stack/first.html" "$SPAGE"
+expect_error 'stack: one wrong --expect' count-mismatch \
+  render --stack "$STK/a.map.json" "$STK/b.map.json" "$STK/c.map.json" --expect 2 4 3 --out "$SPAGE"
+check 'stack: the count miss names its map' "$( attr "$LINE" map )" "$STK/b.map.json" "$LINE"
+page_absent 'stack: one wrong --expect leaves no page (the earlier one removed)' "$SPAGE"
+expect_error 'stack: fewer --expect values than maps' expect-count-mismatch \
+  render --stack "$STK/a.map.json" "$STK/b.map.json" "$STK/c.map.json" --expect 2 3 --out "$SPAGE"
+page_absent 'stack: expect-count-mismatch leaves no page' "$SPAGE"
+expect_error 'stack: --out is required' missing-out \
+  render --stack "$STK/a.map.json" "$STK/b.map.json" --expect 2 3
+expect_error 'stack: a fork id in two maps is refused' duplicate-fork-id \
+  render --stack "$STK/a.map.json" "$STK/a.map.json" --expect 2 2 --out "$SPAGE"
+check 'stack: duplicate-fork-id names the fork' "$( attr "$LINE" id )" ESAS-20-F1 "$LINE"
+page_absent 'stack: duplicate-fork-id leaves no page' "$SPAGE"
+cp "$STK/b.map.json" "$TMP/stack/ungrounded.json"
+python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); m["grounded"]=False; json.dump(m,open(sys.argv[1],"w"))' "$TMP/stack/ungrounded.json"
+expect_error 'stack: an ungrounded map in the stack' not-grounded \
+  render --stack "$STK/a.map.json" "$TMP/stack/ungrounded.json" --expect 2 3 --out "$SPAGE"
+check 'stack: the refusal names the map' "$( attr "$LINE" map )" "$TMP/stack/ungrounded.json" "$LINE"
+
+# ---------------------------------------------------------------------------
+printf '\nD6: project --ticket — one ticket'"'"'s forks, piped into write (ESAS-166 D10/AC5)\n'
+# ---------------------------------------------------------------------------
+mkdir -p "$TMP/proj"
+( cd "$TMP" && "$DM_SH" "$DM" project --ticket ESAS-9 "$STK/c.map.json" "$STK/a.map.json" | "$DM_SH" "$DM" write "$TMP/proj/ESAS-9.map.json" ) > "$OUT" 2>&1
+LINE=$( verdict "$OUT" )
+check 'project | write: write outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+check 'project | write: forks=2' "$( attr "$LINE" forks )" 2 "$LINE"
+dm validate "$TMP/proj/ESAS-9.map.json"
+check 'project | write: the written projection validates' "$( attr "$LINE" outcome )" ok "$LINE"
+python3 - "$TMP/proj/ESAS-9.map.json" > "$TMP/proj/read" <<'PY'
+import json, sys
+m = json.load(open(sys.argv[1]))
+print(",".join(f["id"] for f in m["forks"]))
+print(",".join(n["id"] for n in m["nodes"]))
+print(",".join(r for f in m["forks"] for r in f["restsOn"]) or "none")
+print(",".join(l["deliverableId"] for l in m.get("links", [])))
+print(m.get("mapId"))
+PY
+check 'project: only the forks whose tickets contain K' "$( sed -n 1p "$TMP/proj/read" )" 'ESAS-9-F1,ESAS-9-F2'
+check 'project: the anchored node and all its ancestors, nothing else' "$( sed -n 2p "$TMP/proj/read" )" 'G,S1,I1,D1'
+check 'project: restsOn to a dropped fork is pruned' "$( sed -n 3p "$TMP/proj/read" )" none
+check 'project: links kept only to kept nodes' "$( sed -n 4p "$TMP/proj/read" )" D1
+check 'project: mapId is the ticket' "$( sed -n 5p "$TMP/proj/read" )" ESAS-9
+
+dm project --ticket ESAS-11 "$STK/c.map.json"
+check 'project alone: the verdict is the last line' "$( attr "$LINE" verb )" project "$LINE" "$( cat "$OUT" )"
+check 'project alone: forks=2' "$( attr "$LINE" forks )" 2 "$LINE"
+sed '$d' "$OUT" > "$TMP/proj/body.json"
+python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); print(",".join(r for f in m["forks"] for r in f["restsOn"]))' "$TMP/proj/body.json" > "$TMP/proj/rests" 2>&1
+check 'project: restsOn to a kept fork survives' "$( cat "$TMP/proj/rests" )" ESAS-11-F1
+expect_error 'project: no --ticket' missing-ticket project "$STK/c.map.json"
+expect_error 'project: no map' missing-map project --ticket ESAS-9
+expect_error 'project: an invalid input names its map' schema-invalid project --ticket ESAS-1 "$FIX/v1-map.json"
+check 'project: the refusal names the map' "$( attr "$LINE" map )" "$FIX/v1-map.json" "$LINE"
+# A refused projection piped into write reaches write as a bare error line: the
+# target is not created.
+( cd "$TMP" && "$DM_SH" "$DM" project --ticket ESAS-9 "$FIX/v1-map.json" | "$DM_SH" "$DM" write "$TMP/proj/refused.json" ) > "$OUT" 2>&1
+LINE=$( verdict "$OUT" )
+check 'project refused | write: write refuses' "$( attr "$LINE" reason )" upstream-refused "$LINE" "$( cat "$OUT" )"
+page_absent 'project refused | write: no map written' "$TMP/proj/refused.json"
+# Over an existing target, the refusal leaves it byte-identical.
+printf '{"existing": true}\n' > "$TMP/proj/existing.json"
+cp "$TMP/proj/existing.json" "$TMP/proj/existing.before"
+( cd "$TMP" && "$DM_SH" "$DM" project --ticket ESAS-9 "$FIX/v1-map.json" | "$DM_SH" "$DM" write "$TMP/proj/existing.json" ) > "$OUT" 2>&1
+LINE=$( verdict "$OUT" )
+check 'project refused | write over an existing target: write refuses' "$( attr "$LINE" reason )" upstream-refused "$LINE" "$( cat "$OUT" )"
+if cmp -s "$TMP/proj/existing.before" "$TMP/proj/existing.json"; then pass 'project refused | write over an existing target: target unchanged'; else fail 'project refused | write over an existing target: target changed'; fi
+
+# ---------------------------------------------------------------------------
+printf '\nD6: decisions — the per-ticket record (ESAS-166 D5/AC3)\n'
+# ---------------------------------------------------------------------------
+mkdir -p "$TMP/dec/answers"
+python3 - "$FIX/decision-3-forks.json" "$TMP/dec/map.json" <<'PY'
+import copy, json, sys
+m = json.load(open(sys.argv[1]))
+m["mapId"] = "ESAS-1-map"
+f4 = copy.deepcopy(m["forks"][0]); f4["id"] = "ESAS-1-F4"; f4["title"] = "Fork 4: which option?"
+m["forks"].append(f4)
+for f in m["forks"]:
+    f["status"] = {"kind": "open"}
+json.dump(m, open(sys.argv[2], "w"), indent=2)
+PY
+for id in ESAS-1-F1 ESAS-1-F2 ESAS-1-F3; do
+  printf '{"pick": "A", "comment": "", "updatedAt": "2026-09-17T10:00:00.000Z", "map": "ESAS-1-map"}\n' > "$TMP/dec/answers/$id.json"
+done
+dm apply-answers "$TMP/dec/map.json" "$TMP/dec/answers"
+check 'decisions setup: 3 owner answers applied' "$( attr "$LINE" owner )" 3 "$LINE" "$( cat "$OUT" )"
+dm decisions "$TMP/dec/map.json" --closed
+check 'decisions --closed before --final: outcome=fail' "$( attr "$LINE" outcome )" fail "$LINE" "$( cat "$OUT" )"
+check 'decisions --closed before --final: reason=open-forks' "$( attr "$LINE" reason )" open-forks "$LINE"
+check 'decisions --closed before --final: exits 1' "$rc" 1
+dm apply-answers "$TMP/dec/map.json" "$TMP/dec/answers" --final
+dm decisions "$TMP/dec/map.json"
+check 'decisions: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+check 'decisions: open=0' "$( attr "$LINE" open )" 0 "$LINE"
+check 'decisions: owner=3' "$( attr "$LINE" owner )" 3 "$LINE"
+check 'decisions: recommendation=1' "$( attr "$LINE" recommendation )" 1 "$LINE"
+check 'decisions: code=0' "$( attr "$LINE" code )" 0 "$LINE"
+check 'decisions: moot=0' "$( attr "$LINE" moot )" 0 "$LINE"
+check 'decisions: one heading for the ticket' "$( grep -c '^## ESAS-1$' "$OUT" )" 1 "$( cat "$OUT" )"
+check 'decisions: three "owner" entries' "$( grep -c ': owner — A (Option A)$' "$OUT" )" 3 "$( cat "$OUT" )"
+check 'decisions: one "applied on recommendation" entry' "$( grep -c '^- ESAS-1-F4 .*: applied on recommendation — B (Option B)$' "$OUT" )" 1 "$( cat "$OUT" )"
+dm decisions "$TMP/dec/map.json" --closed
+check 'decisions --closed after --final: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE"
+check 'decisions --closed after --final: exit 0' "$rc" 0
+dm decisions "$FIX/impact-map-11-forks.json"
+check 'decisions: code and moot entries are named' "$( grep -c ': code — A\|: moot — Made moot by ESAS-1-F1.$' "$OUT" )" 2 "$( cat "$OUT" )"
+check 'decisions: an open fork reads open' "$( grep -c '^- ESAS-1-F1 .*: open$' "$OUT" )" 1 "$( cat "$OUT" )"
+check 'decisions: counts over the impact fixture' "$( attr "$LINE" open ),$( attr "$LINE" owner ),$( attr "$LINE" recommendation ),$( attr "$LINE" code ),$( attr "$LINE" moot )" '7,1,1,1,1' "$LINE"
+expect_error 'decisions: no map' missing-map decisions
+expect_error 'decisions: --final is not its flag' unknown-flag-final decisions "$TMP/dec/map.json" --final
+
+# ---------------------------------------------------------------------------
 # skills/design-map/SKILL.md — presence oracle, in the style of
 # scripts/test-esas-design.sh (assert_md/refute_md). This is prose, not a
 # script: it catches deletion, not wrongness, as the design's own test-seams
@@ -1000,6 +1199,10 @@ assert_md "$SKILL_MD" 'write is named the only structural authoring path' 'the o
 assert_md "$SKILL_MD" 'the fork-title-only refusal is named' 'reason=fork-title-only'
 assert_md "$SKILL_MD" 'the title-only-open refusal is named' 'reason=title-only-open'
 assert_md "$SKILL_MD" 'otherMap is named' 'otherMap='
+assert_md "$SKILL_MD" 'render --stack is documented' 'design-map render --stack <m1> <m2>... --expect <n1> <n2>... --out <page.html>'
+assert_md "$SKILL_MD" 'the stack order is documented' 'most `open` forks first'
+assert_md "$SKILL_MD" 'project piped into write is documented' 'design-map project --ticket <K> <map>... | design-map write'
+assert_md "$SKILL_MD" 'decisions --closed is documented' 'design-map decisions <map.json> [--closed]'
 
 # Two invariants, carried over from esas-design because they are properties of
 # turn-based answering rather than of any one transport.
