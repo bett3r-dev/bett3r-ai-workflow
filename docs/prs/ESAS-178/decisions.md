@@ -87,3 +87,19 @@ sources: [design:ESAS-178 block D6 and §7, design:ESAS-165 block D1]
 rejected: `candidates --map <p>` as ESAS-165 wrote it — ESAS-178 D6 respells the verbs positionally; `--map` is refused as unknown-flag-map
 supersedes: —
 Line keys are `fork, option, scenario, source, example`. New error reasons missing-plan / plan-unreadable / plan-unparseable / yaml-unavailable (exit 2); `fail` exits 1; an id-less offending slice prints `slice=unknown`.
+
+## D12 — `project` prints JSON then its verdict; `write` strips a trailing ok `verb=project` line and refuses any other verdict as upstream-refused
+kind: silent-seam
+step: build · slice: 5 · decidedBy: verifier
+sources: [adr:ADR-004 (verdict is stdout's last line), design:ESAS-178 block D6 (write is the only structural path), design:ESAS-166 block D10.1 ("through write")]
+rejected: `project --out` — a second structural writer; JSON on stdout with the verdict on stderr — breaks ADR-004
+supersedes: —
+A crashed projection prints nothing, so empty stdin is map-unparseable; a refused one cannot be written even without pipefail, and an existing target stays byte-identical (tested).
+
+## D13 — Stack and projection choices
+kind: silent-seam
+step: build · slice: 5 · decidedBy: executor
+sources: [design:ESAS-166 block D3, D5.1, D10]
+rejected: default `--out` beside the first map — no single map is the stack's home
+supersedes: —
+`--out` required with `--stack`; order = most open forks, then lowest ticket key (project, then integer), then argument order; duplicate fork ids across a stack refused. The page embeds a Python-built fork→mapId table (`#fork-maps`) so each answer carries its own map's id. `project` sets `mapId` = the ticket, drops `feedSeq`/`target`, refuses grounded/shape disagreement and node-conflict. `decisions --closed` is the one-answer check (ESAS-166's `ingest --close` is `apply-answers --final`). Count misses are `error`, not ESAS-166's `fail` (house rule, as D4).
