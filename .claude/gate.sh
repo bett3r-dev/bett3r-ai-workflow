@@ -146,6 +146,26 @@ sh scripts/test-design-map.sh
 DM_SH=dash dash scripts/test-design-map.sh
 DM_SH=bash bash scripts/test-design-map.sh
 EOF
+step design-multi-subjects full <<'EOF'
+sh scripts/test-design-multi-subjects.sh
+DMS_SH=dash dash scripts/test-design-multi-subjects.sh
+DMS_SH=bash bash scripts/test-design-multi-subjects.sh
+EOF
+step design-snapshot full <<'EOF'
+sh scripts/test-design-snapshot.sh
+DS_SH=dash dash scripts/test-design-snapshot.sh
+DS_SH=bash bash scripts/test-design-snapshot.sh
+EOF
+step map-tree full <<'EOF'
+sh scripts/test-map-tree.sh
+MT_SH=dash dash scripts/test-map-tree.sh
+MT_SH=bash bash scripts/test-map-tree.sh
+EOF
+step plan-candidates full <<'EOF'
+sh scripts/test-plan-candidates.sh
+PC_SH=dash dash scripts/test-plan-candidates.sh
+PC_SH=bash bash scripts/test-plan-candidates.sh
+EOF
 step merge-multi-concerns full <<'EOF'
 sh scripts/test-merge-multi-concerns.sh
 dash scripts/test-merge-multi-concerns.sh
