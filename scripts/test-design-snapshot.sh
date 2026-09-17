@@ -202,6 +202,40 @@ expect_error 'drift, both flags'           conflicting-feed drift "$SEQ10" --fee
 expect_error 'drift, no map argument'      missing-map    drift --no-feed
 expect_error 'count takes no --feed-seq'   unknown-flag-feed-seq count "$COUNT" --feed-seq 1
 
+# ---------------------------------------------------------------------------
+printf 'AC3: one writer — map.json and map.html are written only through design-map\n'
+# ---------------------------------------------------------------------------
+# rogue_writers <dir>… — every line under the dirs (recursively) that writes a
+# map.json or map.html by a shell redirect, tee, cp, mv or install, and does not
+# go through design-map. A redirect's `>` opens a word (after a space, a
+# backtick, `(`, `|`, `&` or `;`), so prose naming the file, an arrow (->) and a
+# `<path>/map.json` placeholder are not writes.
+rogue_writers(){
+  grep -rnE '((^|[[:space:]`(|&;])>>?[[:space:]]*[^[:space:]>]*map\.(json|html)|(^|[^[:alnum:]_-])(tee|cp|mv|install)[[:space:]][^|;]*map\.(json|html))' "$@" 2>/dev/null \
+    | grep -v 'design-map'
+}
+
+PLUGIN="$ROOT/plugins/bett3r-ai-workflow"
+for d in commands agents skills; do
+  check "the single-writer scan covers $d/" "$( [ -d "$PLUGIN/$d" ] && echo yes )" yes
+done
+check 'no command, agent or skill writes map.json/map.html other than via design-map' \
+  "$( rogue_writers "$PLUGIN/commands" "$PLUGIN/agents" "$PLUGIN/skills" )x" x \
+  "$( rogue_writers "$PLUGIN/commands" "$PLUGIN/agents" "$PLUGIN/skills" )"
+
+# Positive control, nested so the recursive traversal is pinned too.
+mkdir -p "$TMP/plant/skills/deep/er"
+printf 'Then save it: `cat draft > docs/prs/X/map.json`.\n' > "$TMP/plant/skills/deep/er/SKILL.md"
+check 'positive control: a planted `> docs/prs/X/map.json`, two dirs deep, is caught' \
+  "$( rogue_writers "$TMP/plant/skills" | grep -c 'docs/prs/X/map.json' )" 1
+printf 'cp draft.json docs/prs/X/map.html\n' > "$TMP/plant/skills/cp.md"
+check 'positive control: a planted cp into map.html is caught' \
+  "$( rogue_writers "$TMP/plant/skills/cp.md" | grep -c 'map.html' )" 1
+# Negative controls: prose naming the file, and a design-map write, are not rogue.
+printf 'The committed map.json sits beside design.md -> map.html.\ngit add -- <path>/design.md <path>/map.json\ndesign-map write docs/prs/X/map.json < draft.json\ndesign-map render docs/prs/X/map.json --expect 3 --out docs/prs/X/map.html\nmv draft.json in.json && design-map write docs/prs/X/map.json < in.json\n' \
+  > "$TMP/plant/ok.md"
+check 'negative control: prose and design-map verbs are not writers' "$( rogue_writers "$TMP/plant/ok.md" )x" x
+
 printf '\n'
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"
