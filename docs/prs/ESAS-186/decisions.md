@@ -47,3 +47,18 @@ sources: [code:commands/verify-build.md, code:commands/merge-multi.md]
 rejected: opus verifier for two paragraphs and a version string — cost without a judgment surface; /verify-build's whole-PR review covers it
 supersedes: —
 Evidence: version script FAIL (0.81.0 = 0.81.0) on a synthetic prose-only commit, PASS 0.81.0 → 0.82.0 after the bump; needles/links/validate green. marketplace.json metadata 0.35.0 → 0.36.0 per the last three releases.
+
+## D7 — The slice-3 verifier waiver let a pinned-prose ripple reach the gate; fixed on the branch
+kind: overruled
+step: verify-build · slice: 3 · decidedBy: orchestrator
+sources: [code:scripts/test-merge-multi-concerns.sh (closed-set pin), gate:merge-multi-concerns FAIL]
+rejected: revert the merge-multi paragraph — D4 requires it
+supersedes: D6
+The first `--full` run failed `merge-multi-concerns` (1 failed, 86 passed): that oracle pins merge-multi.md as a closed set of sentences, and slice 3's paragraph was EXTRA. The two sentences are now pinned deliberately (87 passed under sh/dash/bash). D6's claim that the whole-PR review would cover slice 3 held only because the gate ran; a prose slice in a pinned file is not verifier-free.
+
+## D8 — ADR-001 amended rather than a new ADR
+kind: deviation
+step: verify-build · slice: — · decidedBy: orchestrator
+sources: [adr:ADR-001]
+rejected: new ADR — the deferral is a scoped exception to ADR-001's release contract, not a separate decision
+supersedes: —
