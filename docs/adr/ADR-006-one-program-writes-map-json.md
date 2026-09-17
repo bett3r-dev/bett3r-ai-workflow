@@ -12,7 +12,7 @@ ESAS-162) is added.
 ## Decision
 
 **Every byte of `map.json` goes through exactly one program: `bin/design-map`.** No command, agent
-or skill in this plugin writes the file by any other means — not a heredoc, not a text edit, not an
+or skill in this plugin may write the file by any other means — not a heredoc, not a text edit, not an
 inline `python3 -c`. Two of `design-map`'s verbs are the only doors in:
 
 - **`design-map write <map.json>`** — the only *structural* authoring path. It takes the full map on
@@ -27,14 +27,19 @@ map); `count`, `drift`, `candidates`, `check-plan`, `project`, `decisions` are r
 `scripts/test-design-snapshot.sh` greps `plugins/bett3r-ai-workflow/{commands,agents,skills}` for any
 instruction that writes `map.json` or `map.html` by a path other than through `design-map`, with a
 planted positive control (a temp file containing a bare `> docs/prs/X/map.json` redirect) proving the
-grep actually bites.
+grep actually bites. The grep is a partial guard, not the rule: it sees word-initial redirects, `tee`, `cp`, `mv` and
+`install`, and does not see a redirect with no space, a Write-tool instruction in prose, a python
+`open(..., 'w')`, or a rogue redirect on a line that also names `design-map`.
 
 **A fleet ticket's map is carried from the run dir by the provisioner, not re-authored by the lane.**
 Under `/start-multi`, Phase C writes `<run>/units/<id>.map.json` via `design-map write` before any
 lane worktree exists (ESAS-166). The provisioner copies that file into the lane's
 `docs/prs/<id>/map.json`, uncommitted, before the lane's `/design` runs. Step 4 in a lane with an
 already-provisioned map **uses it as-is** — validates and renders it, never re-authors it — and
-commits it byte-identical alongside `design.md` and `map.html`. The rejected alternative was letting
+commits it byte-identical alongside `design.md` and `map.html`. **Not reachable at the commit that introduces this ADR:** a folder
+holding only a provisioned `map.json` reads `owner=unowned` from `work-docs-path`, and Step 4 stops
+before the map. A map-only-folder owner rule is owed before ESAS-166's provisioner copy lands
+(escalated from ESAS-162 as E162-1; `docs/prs/ESAS-162/decisions.md` D6). The rejected alternative was letting
 each lane regenerate its own map from the design block: that reads `decided(recommendation)` fresh in
 every lane and falsifies the count the goal-signal line reports, because a fork the owner already
 decided would re-render as undecided.
