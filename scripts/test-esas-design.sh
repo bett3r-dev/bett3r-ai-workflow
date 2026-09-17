@@ -736,6 +736,73 @@ assert_md "$COMMAND_MD" 'a design that turns structural late is not locked out b
 assert_md "$COMMAND_MD" 'unsure falls towards silence, stated as a rule' \
   'unsure means silent'
 
+# ── The map gate and BOARD-GATE:v1 ────────────────────────────────────────────
+#
+# Board mode opens with two gates, in this order: the map gate (a design map
+# needs no `.esas/`, so it must be asked before anything that exits on one), and
+# the eventstorming gate above. Their combination is not prose — it is one
+# fenced `sh` block after the `<!-- BOARD-GATE:v1 -->` marker, taking five
+# judged numbers and printing one line. The judgement cannot be tested; the
+# combination can, so it is executed here under dash. A missing block fails.
+
+printf '\ncommands/design.md — the map gate and BOARD-GATE:v1\n'
+
+BOARD_GATE="$TMP/board-gate.sh"
+awk '/^<!-- BOARD-GATE:v1 -->$/{armed=1; next}
+     armed && !on && /^```sh$/{on=1; next}
+     on && /^```$/{exit}
+     on{print}' "$COMMAND_MD" >"$BOARD_GATE"
+if [ ! -s "$BOARD_GATE" ]; then
+  fail 'the BOARD-GATE:v1 block exists after its marker in commands/design.md' \
+    'no fenced sh block after a `<!-- BOARD-GATE:v1 -->` line'
+else
+  pass 'the BOARD-GATE:v1 block exists after its marker in commands/design.md'
+fi
+while IFS='|' read -r args want; do
+  [ -n "$args" ] || continue
+  if [ ! -s "$BOARD_GATE" ]; then
+    fail "BOARD-GATE $args" 'no block to run'
+    continue
+  fi
+  # shellcheck disable=SC2086
+  got=$( cd "$TMP" && /bin/dash "$BOARD_GATE" $args 2>"$TMP/err" )
+  if [ "$got" = "BOARD-GATE:v1 $want" ] && [ ! -s "$TMP/err" ]; then
+    pass "BOARD-GATE $args -> $want"
+  else
+    fail "BOARD-GATE $args -> $want" "got [$got] stderr [$( cat "$TMP/err" )]"
+  fi
+done <<'TABLE'
+4 0 0 0 0|map=yes shape=decision es=silent
+1 0 0 1 1|map=no shape=- es=silent
+2 1 1 0 1|map=yes shape=impact es=offer
+0 0 0 0 1|map=no shape=- es=silent
+0 2 0 0 1|map=no shape=- es=offer
+3 3 0 0 0|map=yes shape=decision es=silent
+TABLE
+
+map_line=$( grep -n '^### The map gate' "$COMMAND_MD" | head -1 | cut -d: -f1 )
+es_line=$( grep -n '^### The eventstorming gate' "$COMMAND_MD" | head -1 | cut -d: -f1 )
+if [ -n "$map_line" ] && [ -n "$es_line" ] && [ "$map_line" -lt "$es_line" ]; then
+  pass 'the map gate comes before the eventstorming gate'
+else
+  fail 'the map gate comes before the eventstorming gate' "map=[$map_line] eventstorming=[$es_line]"
+fi
+
+refute_md "$COMMAND_MD" 'no .esas/ no longer exits board mode before the map gate' \
+  'skip this section entirely'
+assert_md "$COMMAND_MD" 'no .esas/ is a silent no inside the eventstorming gate only' \
+  'No `.esas/` in this repo is a no for this gate, and silent like every no'
+assert_md "$COMMAND_MD" 'a lane (.work/lane.yaml) is a silent no for the map gate' \
+  'If `.work/lane.yaml` exists, the run is unattended: the map gate is a silent no'
+assert_md "$COMMAND_MD" 'say nothing on a no holds per gate' \
+  'On a no, say nothing at all'
+refute_md "$PREFLIGHT_MD" 'the combinator never becomes a preflight key' 'BOARD-GATE'
+assert_md "$PLUGIN/skills/design-map/SKILL.md" 'design-map still refuses an ungrounded map (dependency)' \
+  'not-grounded'
+for word in verbFamilies start_map_session capabilities; do
+  refute_md "$COMMAND_MD" "the gate never names $word" "$word"
+done
+
 # Putting the gate ahead of the preflight falsified a sentence in the restart
 # copy, so the correction is pinned here, beside its cause, rather than up with
 # the other restart pins — the two needles read BOARD-SETUP.md, which is where
