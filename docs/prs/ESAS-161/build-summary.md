@@ -17,6 +17,10 @@ slices:
     verifier: pass
     redBeforeGreen: true
     postDesignDecisions: [D1, D2, D3, D4, D5, D6]
+    usage:
+      executor: { model: "claude-opus-5", effort: "low", tokens: 2104786, activeMs: 863336 }
+      verifier: { model: "claude-opus-5", effort: "low", tokens: 708319, activeMs: 424569 }
+      testRunner: { model: "claude-haiku-4-5-20251001", effort: null, tokens: 163945, activeMs: 58220 }
   - id: 2
     name: "Saved answers become fork statuses"
     origin: plan
@@ -29,6 +33,10 @@ slices:
     verifier: pass
     redBeforeGreen: true
     postDesignDecisions: [D7, D8, D9, D10]
+    usage:
+      executor: { model: "claude-opus-5", effort: "low", tokens: 738380, activeMs: 183986 }
+      verifier: { model: "claude-opus-5", effort: "low", tokens: 100912, activeMs: 49836 }
+      testRunner: { model: "claude-haiku-4-5-20251001", effort: null, tokens: 101417, activeMs: 28158 }
   - id: 3
     name: "The design-map skill v0 and its artifact-comment wake disarm"
     origin: plan
@@ -42,6 +50,10 @@ slices:
     verifier: pass
     redBeforeGreen: true
     postDesignDecisions: [D11, D12, D13, D14]
+    usage:
+      executor: { model: "claude-sonnet-5", effort: "low", tokens: 1920971, activeMs: 380442 }
+      verifier: { model: "claude-opus-5", effort: "low", tokens: 428519, activeMs: 229752 }
+      testRunner: { model: "claude-haiku-4-5-20251001", effort: null, tokens: 176734, activeMs: 57178 }
   - id: 4
     name: "Measure the artifact comment wake"
     origin: plan
@@ -54,6 +66,17 @@ slices:
     verifier: pass
     redBeforeGreen: mutation
     postDesignDecisions: [D15]
+    usage:
+      executor: { model: "claude-opus-5", effort: "low", tokens: 186866, activeMs: 103725 }
+      verifier: { model: "claude-opus-5", effort: "low", tokens: 57798, activeMs: 29583 }
+      testRunner: { model: "claude-haiku-4-5-20251001", effort: null, tokens: 97153, activeMs: 28592 }
+verifyBuild:
+  usage: { model: "claude-opus-5", effort: "low", tokens: 1250955, activeMs: 211680 }
+  gate: { mode: full-fallback, verdict: PASS, skipped: [], inconclusive: [] }
+  coherence: { critical: 0, medium: 1, low: 2, shippedUnresolved: 2 }
+  fixSlicesAdded: 0
+  adrs: []
+  concerns: { hard: 2, soft: 0, unmet: [] }
 ---
 ## What shipped
 
@@ -76,4 +99,4 @@ owner's terminal word worked: read_db with out_dir landed D10's layout directly,
 --final gave open=0 owner=10 recommendation=0 moot=1. The skill now asks for the hand-back in the terminal;
 a comment-mode thread wake is recorded as UNMEASURED (D15). No out-of-default suites are affected.
 Open follow-ups: D9 (moot-fork invalid pick refuses; map mode narrowed to 0600), D14 (no fork dependency
-field in the schema), D15 (measure the comment-mode thread path; amend design F4's risk).
+field in the schema), D15 (measure the comment-mode thread path; design F4's risk amended at /verify-build).
