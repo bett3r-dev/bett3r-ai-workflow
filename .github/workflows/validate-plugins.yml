@@ -167,6 +167,16 @@ jobs:
           sh scripts/test-design-snapshot.sh
           DS_SH=dash dash scripts/test-design-snapshot.sh
           DS_SH=bash bash scripts/test-design-snapshot.sh
+      # Decision text is a generated region of map.json (ESAS-163, ADR-007):
+      # `map-tree check` is what refuses a stale or hand-edited region before a
+      # tracker write, and `write --on-tamper displace` rewrites design.md in an
+      # unattended run. A wrong hash or splice passes silently. MT_SH varies the
+      # launcher's interpreter.
+      - name: Test the map-tree generated region (render + write + check)
+        run: |
+          sh scripts/test-map-tree.sh
+          MT_SH=dash dash scripts/test-map-tree.sh
+          MT_SH=bash bash scripts/test-map-tree.sh
       # /merge-multi rules each unit's own concerns from its head commit before
       # merging it — the hard block design F4/C2 puts here, never trusting the
       # advisory `flow/concerns` GitHub status. A presence-only check on that

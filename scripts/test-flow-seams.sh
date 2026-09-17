@@ -106,6 +106,7 @@ done
 # still be wrong — the exact silent failure the seam was built to end.
 present "$DESIGN_MD" 'mode: design' '[SEAM 4] /design writes mode: design'
 present "$PLAN_MD"   'mode: plan'   '[SEAM 4] /plan writes mode: plan'
+present "$DESIGN_MD" 'the literal line `## Resolved decision tree`' '[ADR-007] /design requires the literal Resolved decision tree heading map-tree inserts after'
 present "$BUILD_MD"  'mode: build'  '[SEAM 4] /build writes mode: build'
 present "$START_MD"  'mode: start'  '[SEAM 4] /start writes mode: start'
 
@@ -1122,6 +1123,12 @@ printf '\nSeam G — the resolved-design marker pair is linted, not remembered\n
 # count-based check pass the real defect.
 MARKER_LINT="$PLUGIN/bin/resolved-marker-lint"
 present "$PLUGIN/commands/design-multi.md" 'resolved-marker-lint' '/design-multi runs the marker-parity lint before a write'
+# ESAS-163 (ADR-007): decision text is a generated map-tree region. The file's
+# author writes it; tracker-writer only checks it.
+present "$PLUGIN/commands/design.md" 'map-tree write --map' '/design Step 4 regenerates the design.md region with map-tree write'
+present "$PLUGIN/commands/verify-build.md" 'map-tree write --map' '/verify-build refresh regenerates the design.md region with map-tree write'
+present "$PLUGIN/commands/design-multi.md" 'map-tree write --dialect jira' '/design-multi fold-back writes the ticket-block region with the jira dialect'
+present "$PLUGIN/agents/tracker-writer.md" 'map-tree check' 'tracker-writer preflight refuses a source whose map-tree region is not fresh'
 printf '%s\n' '<!-- design-multi:resolved:v2 status=ready base=abc run=r1 -->' '' \
   '## Resolved Design (design-multi)' '`design-multi:resolved:v2 status=ready base=abc run=r1`' > "$TMP/marker-good.md"
 printf '%s\n' '<!-- design-multi:resolved:v2 status=ready base=abc run=r1 -->' \

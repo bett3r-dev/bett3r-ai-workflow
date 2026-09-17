@@ -1,0 +1,153 @@
+{
+  "structureVersion": 2,
+  "shape": "decision",
+  "grounded": true,
+  "mapId": "map-tree-fixture",
+  "nodes": [],
+  "forks": [
+    {
+      "id": "ESAS-901-F1",
+      "title": "Where the generator lives",
+      "tickets": [
+        "ESAS-901"
+      ],
+      "card": {
+        "problem": "Which way?",
+        "useCases": [
+          "an owner answers"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "A subcommand of design-map",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ],
+            "rejectedBecause": "five units serialize on that file",
+            "evidence": [
+              "scripts/design-map.py"
+            ]
+          },
+          {
+            "id": "B",
+            "label": "A new map-tree script",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ],
+            "rejectedBecause": "two scripts to keep aligned"
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "keeps design-map.py untouched"
+        },
+        "ifOverturned": "The other option replaces it."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "B"
+      }
+    },
+    {
+      "id": "ESAS-901-F2",
+      "title": "How tamper is detected",
+      "tickets": [
+        "ESAS-901"
+      ],
+      "card": {
+        "problem": "Which way?",
+        "useCases": [
+          "an owner answers"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Hash the body",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ],
+            "rejectedBecause": "misses a moved map"
+          },
+          {
+            "id": "B",
+            "label": "Hash body and projection",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "catches both kinds of drift"
+        },
+        "ifOverturned": "The other option replaces it."
+      },
+      "restsOn": [
+        "ESAS-901-F1"
+      ],
+      "status": {
+        "kind": "decided",
+        "source": "recommendation",
+        "option": "B"
+      }
+    },
+    {
+      "id": "ESAS-902-F1",
+      "title": "Another ticket's fork",
+      "tickets": [
+        "ESAS-902"
+      ],
+      "card": {
+        "problem": "Which way?",
+        "useCases": [
+          "an owner answers"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Alpha",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ]
+          },
+          {
+            "id": "B",
+            "label": "Beta",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "A",
+          "why": "alpha is enough"
+        },
+        "ifOverturned": "The other option replaces it."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "open"
+      }
+    }
+  ]
+}
