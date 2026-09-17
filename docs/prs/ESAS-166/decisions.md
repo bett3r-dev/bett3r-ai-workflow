@@ -39,3 +39,27 @@ sources: [code:agents/provisioner.md "Carry the unit's map"]
 rejected: —
 supersedes: —
 On a reused worktree that already commits docs/prs/<id>/map.json the copy overwrites it uncommitted; lanes are fresh by construction, so not a blocker. Follow-up only.
+
+## D6 — Subjects are computed by a stdlib helper, not a design-map verb
+kind: silent-seam
+step: build · slice: 3 · decidedBy: executor
+sources: [design:ESAS-166 block AC4 ("the build picks one"), code:plugins/bett3r-ai-workflow/scripts/design-multi-subjects.py]
+rejected: `design-map group` — design-map owns map.json; grouping reads ticket snapshots and never touches a map
+supersedes: —
+`design-multi-subjects group <units-dir> [--seams] [--prior]` prints JSON then `DESIGN-MULTI-SUBJECTS:v1`; it never writes run.yaml (the orchestrator is the single writer, D4).
+
+## D7 — Seam proposals override the epic default; fingerprint hashes the inputs; asked counts changed or new subjects
+kind: silent-seam
+step: build · slice: 3 · decidedBy: verifier
+sources: [design:ESAS-166 block D2, D4, Fork 1]
+rejected: hash the resulting subjects — a changed parent that happens to regroup identically would reuse silently
+supersedes: —
+A proposal's units leave their default subject; an emptied default disappears; a partial one keeps its epic id. Fingerprint lines: `unit <id> parent <EPIC|->` sorted, then `seam <id> <units>` sorted. `asked` = current subjects with no identical prior (id, basis, units); vanished priors are not asked. Fix round 1 (oracle-wrong): parent keys were hashed but untested.
+
+## D8 — `parent:` is read only from the snapshot's header block
+kind: silent-seam
+step: build · slice: 3 · decidedBy: verifier
+sources: [code:.work/units/<id>.ticket.md snapshot shape (title, Status:, blank, body)]
+rejected: match anywhere at column 0 — pasted YAML in a description would regroup a ticket
+supersedes: —
+Header block = lines up to the first blank line; first column-0 `parent: <KEY>` wins. /design-multi step 0 writes the line there (slice 5).
