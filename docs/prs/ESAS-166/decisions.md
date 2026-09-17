@@ -63,3 +63,11 @@ sources: [code:.work/units/<id>.ticket.md snapshot shape (title, Status:, blank,
 rejected: match anywhere at column 0 — pasted YAML in a description would regroup a ticket
 supersedes: —
 Header block = lines up to the first blank line; first column-0 `parent: <KEY>` wins. /design-multi step 0 writes the line there (slice 5).
+
+## D9 — AC1/AC3 fixtures use the built verbs; count misses assert outcome=error
+kind: deviation
+step: build · slice: 4 · decidedBy: orchestrator
+sources: [design:ESAS-166 C1, C2, docs/prs/ESAS-178/decisions.md D13]
+rejected: assert the block's `ingest`/`outcome=fail` — names ESAS-178 did not ship; ESAS-178's names govern per the block's own risk note
+supersedes: —
+Fragments are per-ticket fork sets composed into 7 subject maps (10 tickets); no merge verb exists. The one-answer-path terminal row carries no `map` key, an allowed variant (SKILL.md: an answer with no map applies); D5's orchestrator writes rows with the map id. Cross-map rejection is covered by existing rows.
