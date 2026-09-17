@@ -7,7 +7,8 @@
     {
       "id": "g1",
       "level": "goal",
-      "title": "Answer a design's forks visually and fold them into one record"
+      "title": "Answer a design's forks visually and fold them into one record",
+      "parents": []
     },
     {
       "id": "a1",

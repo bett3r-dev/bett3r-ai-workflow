@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """The map verbs over a design's map.json. It says what it did in ONE line.
 
+    DESIGN-MAP:v1 outcome=ok verb=validate forks=<n>
     DESIGN-MAP:v1 outcome=ok verb=render expected=<n> payload=<n> rendered=<n> page=<path>
     DESIGN-MAP:v1 outcome=ok verb=apply-answers final=<bool> open=<n> owner=<n> recommendation=<n> moot=<n> commented=<ids|none> map=<path>
     DESIGN-MAP:v1 outcome=error verb=<verb> reason=<reason> [key=value ...]
@@ -11,13 +12,48 @@ no `page=`: a caller that publishes whatever `page=` names must find nothing.
 
 Usage:
 
+  design-map validate <map.json>
   design-map render <map.json> --expect <n> [--out <page.html>]
   design-map check-page <map.json> <page.html> --expect <n>
   design-map apply-answers <map.json> <answers-dir> [--final]
 
-`render` validates the payload against the committed schema
-(`skills/design-map/map.schema.json`), then writes a self-contained HTML page
-with one card per fork. The owner answers on it; each answer is written to the
+A map is `structureVersion: 2`. Two committed files describe it:
+
+  skills/design-map/map.schema.json           the vocabulary: the closed sets
+      (fork status kind, decided source, node level, map shape), a
+      byte-identical copy of what esas emits
+      (packages/esas-schema/schema/map.schema.json). Never hand-edited.
+  skills/design-map/map-structure.schema.json the structure: nodes, forks,
+      cards, options, links. It names every closed set by a `$ref` into
+      map.schema.json, resolved from its own directory, so the values are
+      read from the copy as data and restated nowhere.
+
+A map in any other shape (a 161 `schemaVersion: 1` map included) is
+reason=schema-invalid. After the schema, the checks JSON Schema cannot express:
+
+  duplicate-node-id (id=)            two nodes share an id
+  duplicate-fork-id (id=)            two forks share an id
+  duplicate-option-id (id= option=)  one fork's card repeats an option id
+  unknown-option (id= at=)           a decided status, or the card's
+                                     recommendation, names no option of that card
+  decided-title-only (id=)           a fork with no card is decided: there is
+                                     no option for the status to name
+  dangling-ref (id= at=)             an anchor or a parent names no node, a
+                                     restsOn entry names no fork, or a link's
+                                     deliverableId names no node
+
+`validate` runs the bare-actor check (below), the schema and these checks,
+and writes nothing; it accepts an ungrounded map. `render` and `check-page` also refuse reason=not-grounded when
+the map holds at least one fork and `grounded` is not true: an ungrounded
+draft is never drawn for the owner to answer.
+
+`render` validates the payload, then writes a self-contained HTML page with one
+card per fork, drawn from its `card` (problem, use cases, options and their
+walks, recommendation, what an overturn costs). A fork with no card is drawn by
+its title alone, with nothing to pick, and still counts as drawn. A decided
+fork carries a class naming its source, one style per value of the
+vocabulary's decided source (owner, recommendation and code are three distinct
+styles), and the page's legend shows each. The owner answers on it; each answer is written to the
 artifact's `db` store as `answers/<forkId>` = `{pick, comment, updatedAt}`, the
 shape of the ESAS-156 prototype's writer (esas `docs/prs/ESAS-156/map.html`,
 `saveAnswer`), so answers saved there parse unchanged. When `claude.use("db")`
@@ -49,26 +85,27 @@ reason=out-is-map. Other reasons:
   unknown-verb, unknown-flag-<name>, missing-map, missing-expect,
   malformed-expect, map-unreadable, map-unparseable, schema-unreadable,
   bare-actor (at=<json pointer>), schema-invalid (at=<json pointer> rule=<keyword>),
-  duplicate-fork-id (id=<id>), out-path-whitespace, out-dir-missing, out-is-map,
-  missing-page, page-unreadable
+  the post-schema reasons above, not-grounded, out-path-whitespace,
+  out-dir-missing, out-is-map, missing-page, page-unreadable
 
 `apply-answers` folds the owner's saved answers into the map's fork statuses,
-which follow esas CONTEXT.md "Fork": open, decided (by the owner, or on
-recommendation), or moot with a reason, and never deleted. The answers dir
+`{kind: open}`, `{kind: decided, source, option}` or `{kind: moot, reason}`,
+and never deletes a fork. The answers dir
 holds one file per saved answer, `<answers-dir>/<forkId>.json`, containing the
 `answers/<forkId>` document as the page wrote it, `{pick, comment, updatedAt}`
 (dot-files are ignored; any other entry is reason=answer-unexpected-file).
 
-  - an answer with a pick     -> decided, by owner, pick=<option key> — also
-                                 when the fork was posted decided(recommendation)
+  - an answer with a pick     -> {kind: decided, source: owner, option: <pick>}
+                                 — also over any earlier decision
   - no answer                 -> status unchanged
   - a comment with no pick    -> status unchanged; the comment is printed as
                                  `comment <forkId>: <text>` before the verdict,
                                  and an open fork's id is listed in commented=
   - a moot fork               -> left exactly as it is, answer or not
-  - --final                   -> every fork still open after the fold becomes
-                                 decided, by recommendation, with pick= the
-                                 option marked recommended when exactly one is
+  - --final                   -> every fork with a card still open after the
+                                 fold becomes {kind: decided, source:
+                                 recommendation, option: card.recommendation.option};
+                                 an open fork with no card stays open
 
 Without --final no fork is ever made decided(recommendation): a fork the owner
 has not reached yet must stay distinguishable from one they let stand.
@@ -79,16 +116,20 @@ it. Every refusal leaves the author's map byte-identical. Reasons:
 
   missing-answers, answers-dir-missing, answer-unexpected-file (name=<entry>),
   answer-unreadable, answer-unparseable, answer-malformed, unknown-fork,
-  unknown-pick (each with id=<forkId>), map-unwritable, and the map reasons above
+  unknown-pick (each with id=<forkId>; a pick on a fork with no card is
+  unknown-pick), map-unwritable, and the map reasons above
 
 A bare `actor` key is refused anywhere in the payload, before the schema runs:
 the map's who-level is `mapActor`, never `actor`, so a map role can never be
 joined to an op's ActorId by accident.
 
 Standard library only: `jsonschema` is not a dependency. The validator below
-implements exactly the keywords the committed schema uses (listed in its
+implements exactly the keywords the structure schema uses (listed in its
 `$comment`), and meeting any other keyword is reason=schema-unreadable rather
-than a keyword silently ignored.
+than a keyword silently ignored. So is a `$ref` that resolves nowhere — a
+missing or unparseable map.schema.json, or a pointer naming no definition —
+since a ref skipped silently would leave its enum unchecked while every valid
+map still passed.
 """
 
 import html
@@ -103,7 +144,9 @@ TOKEN = "DESIGN-MAP:v1"
 # Written into every page `render` emits; a refusal removes only a file carrying it.
 GENERATOR = '<meta name="generator" content="design-map">'
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-SCHEMA_PATH = os.path.join(SCRIPT_DIR, "..", "skills", "design-map", "map.schema.json")
+# The structure schema; the vocabulary copy it $refs sits beside it.
+STRUCTURE_PATH = os.path.join(SCRIPT_DIR, "..", "skills", "design-map", "map-structure.schema.json")
+VOCABULARY_FILE = "map.schema.json"
 
 
 class Refusal(Exception):
@@ -145,9 +188,10 @@ def parse_args(args):
 # --- validation -------------------------------------------------------------
 
 KEYWORDS = {
-    "$schema", "$id", "$comment", "$defs", "title", "type", "const", "enum",
-    "required", "properties", "additionalProperties", "items", "minItems",
-    "minLength", "pattern", "$ref", "allOf", "if", "then",
+    "$schema", "$id", "$comment", "$defs", "title", "description", "type",
+    "const", "enum", "required", "properties", "additionalProperties", "items",
+    "minItems", "minLength", "minimum", "pattern", "$ref", "allOf", "oneOf",
+    "if", "then",
 }
 
 TYPES = {
@@ -190,22 +234,59 @@ def same(a, b):
     return type(a) is type(b) and a == b
 
 
+def read_schema(path):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except (OSError, ValueError):
+        raise Refusal("schema-unreadable")
+    if not isinstance(doc, dict):
+        raise Refusal("schema-unreadable")
+    return doc
+
+
 class Validator:
-    def __init__(self, schema):
-        self.root = schema
+    """JSON Schema over the keywords in KEYWORDS. A `$ref` is `#<pointer>` into
+    the document it appears in, or `<file>#<pointer>` into a schema file in the
+    same directory as that document; both must resolve."""
 
-    def resolve(self, ref):
-        if not ref.startswith("#/$defs/"):
+    def __init__(self, path):
+        self.docs = {}
+        self.root = self.document(path)
+
+    def document(self, path):
+        path = os.path.abspath(path)
+        if path not in self.docs:
+            self.docs[path] = read_schema(path)
+        return path
+
+    def resolve(self, ref, base):
+        """(subschema, path of the document it lives in)."""
+        name, hash_, frag = ref.partition("#")
+        if not hash_ or (frag and not frag.startswith("/")) or os.path.basename(name) != name:
             raise Refusal("schema-unreadable", detail="unsupported-ref")
-        return self.root["$defs"][ref[len("#/$defs/"):]]
+        doc = self.document(os.path.join(os.path.dirname(base), name)) if name else base
+        node = self.docs[doc]
+        for token in frag.split("/")[1:]:
+            token = token.replace("~1", "/").replace("~0", "~")
+            if not isinstance(node, dict) or token not in node:
+                raise Refusal("schema-unreadable", detail="unresolvable-ref")
+            node = node[token]
+        if not isinstance(node, dict):
+            raise Refusal("schema-unreadable", detail="unresolvable-ref")
+        return node, doc
 
-    def errors(self, schema, value, path=()):
+    def check(self, value):
+        return self.errors(self.docs[self.root], value, (), self.root)
+
+    def errors(self, schema, value, path, base):
         """The first violation as (path, keyword), or None."""
         unknown = set(schema) - KEYWORDS
         if unknown:
             raise Refusal("schema-unreadable", detail=f"unsupported-keyword-{sorted(unknown)[0]}")
         if "$ref" in schema:
-            found = self.errors(self.resolve(schema["$ref"]), value, path)
+            target, doc = self.resolve(schema["$ref"], base)
+            found = self.errors(target, value, path, doc)
             if found:
                 return found
         if "type" in schema and not TYPES[schema["type"]](value):
@@ -214,6 +295,9 @@ class Validator:
             return path, "const"
         if "enum" in schema and not any(same(value, e) for e in schema["enum"]):
             return path, "enum"
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            if "minimum" in schema and value < schema["minimum"]:
+                return path, "minimum"
         if isinstance(value, str):
             if len(value) < schema.get("minLength", 0):
                 return path, "minLength"
@@ -224,7 +308,7 @@ class Validator:
                 return path, "minItems"
             if "items" in schema:
                 for i, item in enumerate(value):
-                    found = self.errors(schema["items"], item, path + (i,))
+                    found = self.errors(schema["items"], item, path + (i,), base)
                     if found:
                         return found
         if isinstance(value, dict):
@@ -234,28 +318,43 @@ class Validator:
             props = schema.get("properties", {})
             for key, child in value.items():
                 if key in props:
-                    found = self.errors(props[key], child, path + (key,))
+                    found = self.errors(props[key], child, path + (key,), base)
                     if found:
                         return found
                 elif schema.get("additionalProperties", True) is False:
                     return path + (key,), "additionalProperties"
         for sub in schema.get("allOf", []):
-            found = self.errors(sub, value, path)
+            found = self.errors(sub, value, path, base)
             if found:
                 return found
-        if "if" in schema and self.errors(schema["if"], value, path) is None:
-            found = self.errors(schema.get("then", {}), value, path)
+        if "oneOf" in schema:
+            results = [(sub, self.errors(sub, value, path, base)) for sub in schema["oneOf"]]
+            matched = [sub for sub, found in results if found is None]
+            if len(matched) != 1:
+                # With no branch matching, the one branch whose `const`
+                # properties the value carries is the one it meant: report its
+                # violation rather than the bare oneOf.
+                meant = [found for sub, found in results if found and discriminated(sub, value)]
+                return meant[0] if not matched and len(meant) == 1 else (path, "oneOf")
+        if "if" in schema and self.errors(schema["if"], value, path, base) is None:
+            found = self.errors(schema.get("then", {}), value, path, base)
             if found:
                 return found
         return None
 
 
-def load_schema():
-    try:
-        with open(SCHEMA_PATH, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
+def discriminated(schema, value):
+    consts = {k: c["const"] for k, c in schema.get("properties", {}).items() if isinstance(c, dict) and "const" in c}
+    return bool(consts) and isinstance(value, dict) and all(k in value and same(value[k], c) for k, c in consts.items())
+
+
+def vocabulary():
+    """The vocabulary copy's `$defs`, read as data."""
+    doc = read_schema(os.path.join(os.path.dirname(STRUCTURE_PATH), VOCABULARY_FILE))
+    defs = doc.get("$defs")
+    if not isinstance(defs, dict):
         raise Refusal("schema-unreadable")
+    return defs
 
 
 def load_map(path):
@@ -270,20 +369,62 @@ def load_map(path):
         raise Refusal("map-unparseable")
 
 
+def unique(ids, reason, **attrs):
+    seen = set()
+    for i in ids:
+        if i in seen:
+            raise Refusal(reason, id=i, **attrs)
+        seen.add(i)
+    return seen
+
+
+def check_semantics(payload):
+    """What the structure schema cannot say; runs only on a schema-valid map."""
+    nodes = unique([n["id"] for n in payload["nodes"]], "duplicate-node-id")
+    forks = unique([f["id"] for f in payload["forks"]], "duplicate-fork-id")
+    for i, fork in enumerate(payload["forks"]):
+        fid, status, card = fork["id"], fork["status"], fork.get("card")
+        options = set()
+        if card is not None:
+            for option in card["options"]:
+                if option["id"] in options:
+                    raise Refusal("duplicate-option-id", id=fid, option=option["id"])
+                options.add(option["id"])
+            if card["recommendation"]["option"] not in options:
+                raise Refusal("unknown-option", id=fid, at=pointer(("forks", i, "card", "recommendation", "option")))
+        if "option" in status:
+            if card is None:
+                raise Refusal("decided-title-only", id=fid)
+            if status["option"] not in options:
+                raise Refusal("unknown-option", id=fid, at=pointer(("forks", i, "status", "option")))
+    refs = []
+    for i, node in enumerate(payload["nodes"]):
+        refs += [(p, nodes, ("nodes", i, "parents", j)) for j, p in enumerate(node["parents"])]
+    for i, fork in enumerate(payload["forks"]):
+        if "anchor" in fork:
+            refs.append((fork["anchor"], nodes, ("forks", i, "anchor")))
+        refs += [(r, forks, ("forks", i, "restsOn", j)) for j, r in enumerate(fork["restsOn"])]
+    for i, link in enumerate(payload.get("links", [])):
+        refs.append((link["deliverableId"], nodes, ("links", i, "deliverableId")))
+    for ref, known, at in refs:
+        if ref not in known:
+            raise Refusal("dangling-ref", id=ref, at=pointer(at))
+
+
 def validate(payload):
     at = find_bare_actor(payload)
     if at:
         raise Refusal("bare-actor", at=pointer(at))
-    schema = load_schema()
-    found = Validator(schema).errors(schema, payload)
+    found = Validator(STRUCTURE_PATH).check(payload)
     if found:
         path, rule = found
         raise Refusal("schema-invalid", at=pointer(path), rule=rule)
-    seen = set()
-    for fork in payload["forks"]:
-        if fork["id"] in seen:
-            raise Refusal("duplicate-fork-id", id=fork["id"])
-        seen.add(fork["id"])
+    check_semantics(payload)
+
+
+def require_grounded(payload):
+    if payload["forks"] and payload["grounded"] is not True:
+        raise Refusal("not-grounded")
 
 
 # --- the page ---------------------------------------------------------------
@@ -295,8 +436,11 @@ h1{margin:0 0 4px;font-size:20px} #dbnote{color:#555;font-size:13px}
 .levels{padding:12px 28px;font-size:13px;color:#444} .levels b{color:#1d1d1b}
 main{padding:12px 28px 40px;display:grid;gap:14px;max-width:960px}
 .fork{background:#fff;border:1px solid #ddd;border-left:5px solid #c9c9c9;border-radius:8px;padding:14px 18px}
-.fork.open{border-left-color:#d4553b} .fork.mine{border-left-color:#d49a1f} .fork.done{border-left-color:#2f8f5b}
-.fork.moot{opacity:.6}
+.fork.open{border-left-color:#d4553b} .fork.done{border-left-color:#2f8f5b}
+.fork.moot{opacity:.6} .fork.titleonly h3{color:#666} .locked{font-size:13px;color:#666}
+.legend{padding:8px 28px;font-size:12px;color:#444;display:flex;gap:10px;flex-wrap:wrap}
+.legend span{border-left:5px solid #c9c9c9;padding:0 6px;background:#fff}
+.walks{margin:4px 0 2px 18px;font-size:13px;color:#333} .note{font-size:13px;color:#555;margin:2px 0}
 .eyebrow{font-size:12px;color:#666} h3{margin:2px 0 8px;font-size:16px}
 .opt{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 10px;border:1px solid #e3e3e3;border-radius:6px;margin:6px 0}
 .opt.rec{background:#fbf6e8} .opt.picked{outline:2px solid #2f8f5b}
@@ -318,18 +462,18 @@ let answers = {};
 
 function stateOf(id) {
   const f = FORKS[id];
-  if (f.status === "moot") return "moot";
+  if (f.status.kind === "moot") return "moot";
   if (answers[id] && answers[id].pick) return "done";
-  return f.status === "decided" ? "mine" : "open";
+  return f.status.kind === "decided" ? "decided " + f.status.source : "open";
 }
 function recKey(f) {
-  const o = f.options.find(o => o.recommended);
-  return o ? o.key : null;
+  return f.card ? f.card.recommendation.option : null;
 }
 function renderCard(id) {
   const card = document.querySelector('[data-fork-id="' + id + '"]');
   const a = answers[id] || null;
-  card.className = "fork " + stateOf(id);
+  card.className = "fork " + stateOf(id) + (FORKS[id].card ? "" : " titleonly");
+  if (!FORKS[id].card) return;
   card.querySelectorAll("[data-pick]").forEach(b => {
     const picked = !!(a && a.pick === b.dataset.pick);
     b.closest(".opt").classList.toggle("picked", picked);
@@ -340,7 +484,7 @@ function renderCard(id) {
   card.querySelector(".saved").textContent = a && a.updatedAt
     ? "Saved " + new Date(a.updatedAt).toLocaleString()
     : (db ? "" : "Answers can't be saved in this view. Reply in the terminal.");
-  card.querySelectorAll("button, textarea").forEach(el => { el.disabled = !db || FORKS[id].status === "moot"; });
+  card.querySelectorAll("button, textarea").forEach(el => { el.disabled = !db || FORKS[id].status.kind === "moot"; });
 }
 function renderAll() { Object.keys(FORKS).forEach(renderCard); }
 
@@ -356,7 +500,7 @@ async function saveAnswer(id, patch) {
 
 document.addEventListener("click", e => {
   const card = e.target.closest("[data-fork-id]");
-  if (!card) return;
+  if (!card || !FORKS[card.dataset.forkId].card) return;
   const id = card.dataset.forkId;
   const comment = card.querySelector("textarea").value;
   if (e.target.dataset.pick) { saveAnswer(id, { pick: e.target.dataset.pick, comment }); return; }
@@ -387,26 +531,74 @@ def esc(text):
     return html.escape(text, quote=True)
 
 
-def fork_card(fork, deliverable_of):
-    fid = fork["id"]
-    where = deliverable_of.get(fid)
-    eyebrow = esc(fid) + (f" &middot; {esc(where['id'])} {esc(where['title'])}" if where else "")
+# One border colour per decided source, assigned in the vocabulary's order; the
+# source values themselves are read from map.schema.json, never listed here.
+SOURCE_COLOURS = ["#d49a1f", "#3b6fd4", "#7a4fc9", "#1f9aa3", "#9a6b3b"]
+
+
+def source_styles(vocab):
+    sources = vocab["decidedSource"]["enum"]
+    if len(sources) > len(SOURCE_COLOURS):
+        raise Refusal("schema-unreadable", detail="too-many-decided-sources")
+    return list(zip(sources, SOURCE_COLOURS))
+
+
+def status_class(fork):
     status = fork["status"]
-    if status == "decided":
-        eyebrow += f" &middot; decided ({esc(fork['by'])})"
-    elif status == "moot":
-        eyebrow += f" &middot; moot: {esc(fork['reason'])}"
-    options = "".join(
-        f'<div class="opt{" rec" if o.get("recommended") else ""}"><div><b>{esc(o["key"])}</b> {esc(o["label"])}'
-        f'{"<span class=badge>recommended</span>" if o.get("recommended") else ""}</div>'
-        f'<button class="btn" data-pick="{esc(o["key"])}" disabled>Choose</button></div>'
-        for o in fork["options"]
-    )
+    kind = status["kind"]
+    cls = f"fork {kind} {status['source']}" if kind == "decided" else f"fork {kind}"
+    return cls if "card" in fork else cls + " titleonly"
+
+
+def items(texts, cls=None):
+    if not texts:
+        return ""
+    attr = f' class="{cls}"' if cls else ""
+    return f"<ul{attr}>" + "".join(f"<li>{t}</li>" for t in texts) + "</ul>"
+
+
+def option_block(option, recommended):
+    oid = option["id"]
+    rec = option["id"] == recommended
+    walks = items([f"<i>{esc(w['scenario'])}</i> &mdash; {esc(w['text'])}" for w in option["walks"]], "walks")
+    extra = ""
+    if "rejectedBecause" in option:
+        extra += f'<p class="note">Rejected because {esc(option["rejectedBecause"])}</p>'
+    if option.get("evidence"):
+        extra += f'<p class="note">Evidence: {esc("; ".join(option["evidence"]))}</p>'
     return (
-        f'<article class="fork" data-fork-id="{esc(fid)}">'
+        f'<div class="opt{" rec" if rec else ""}"><div><b>{esc(oid)}</b> {esc(option["label"])}'
+        f'{"<span class=badge>recommended</span>" if rec else ""}{walks}{extra}</div>'
+        f'<button class="btn" data-pick="{esc(oid)}" disabled>Choose</button></div>'
+    )
+
+
+def fork_card(fork, node_titles):
+    fid = fork["id"]
+    eyebrow = esc(fid) + " &middot; " + esc(", ".join(fork["tickets"]))
+    if fork.get("anchor") in node_titles:
+        eyebrow += f" &middot; {esc(node_titles[fork['anchor']])}"
+    status = fork["status"]
+    if "source" in status:
+        eyebrow += f" &middot; decided ({esc(status['source'])}): {esc(status['option'])}"
+    elif "reason" in status:
+        eyebrow += f" &middot; moot: {esc(status['reason'])}"
+    if fork["restsOn"]:
+        eyebrow += " &middot; rests on " + esc(", ".join(fork["restsOn"]))
+    head = (
+        f'<article class="{status_class(fork)}" data-fork-id="{esc(fid)}">'
         f'<div class="eyebrow">{eyebrow}</div><h3>{esc(fork["title"])}</h3>'
-        f'<p>{esc(fork["problem"])}</p>{options}'
-        f'<p><b>Recommendation.</b> {esc(fork["recommendation"])}</p>'
+    )
+    card = fork.get("card")
+    if card is None:
+        return head + '<p class="locked">No card yet: this fork is drawn by its title until it unlocks.</p></article>'
+    recommended = card["recommendation"]["option"]
+    options = "".join(option_block(o, recommended) for o in card["options"])
+    return (
+        f'{head}<p>{esc(card["problem"])}</p>'
+        f'{items([esc(u) for u in card["useCases"]])}{options}'
+        f'<p><b>Recommendation.</b> {esc(recommended)}: {esc(card["recommendation"]["why"])}</p>'
+        f'<p class="note"><b>If overturned.</b> {esc(card["ifOverturned"])}</p>'
         f'<textarea placeholder="Anything the options miss, or a question for me" disabled></textarea>'
         f'<div><button class="btn" data-action="save" disabled>Save comment</button> '
         f'<button class="btn" data-action="agree" disabled>Agree with the recommendation</button>'
@@ -414,34 +606,45 @@ def fork_card(fork, deliverable_of):
     )
 
 
-def levels(payload):
-    if payload["layout"] != "impactMap":
-        return ""
-    def names(key):
-        return ", ".join(esc(n["title"]) for n in payload[key])
-    return (
-        f'<div class="levels"><b>Goal</b> {esc(payload["goal"]["title"])} &middot; '
-        f'<b>Actors</b> {names("mapActors")} &middot; <b>Impacts</b> {names("impacts")} &middot; '
-        f'<b>Deliverables</b> {names("deliverables")}</div>'
-    )
+def levels(payload, vocab):
+    """The nodes, one row per level in the vocabulary's order; struck nodes struck through."""
+    rows = []
+    for level in vocab["mapNodeLevel"]["enum"]:
+        names = [
+            f'<s title="struck: {esc(n["struck"]["reason"])}">{esc(n["title"])}</s>' if "struck" in n else esc(n["title"])
+            for n in payload["nodes"] if n["level"] == level
+        ]
+        if names:
+            rows.append(f"<b>{esc(level)}</b> {', '.join(names)}")
+    return f'<div class="levels">{" &middot; ".join(rows)}</div>' if rows else ""
+
+
+def legend(styles):
+    return '<div class="legend">' + "".join(
+        f'<span class="{esc(source)}">decided: {esc(source)}</span>' for source, _ in styles
+    ) + "</div>"
 
 
 def page(payload):
-    deliverable_of = {}
-    for d in payload.get("deliverables", []):
-        for fid in d.get("forks", []):
-            deliverable_of.setdefault(fid, d)
+    vocab = vocabulary()
+    styles = source_styles(vocab)
+    style = STYLE + "".join(
+        f".fork.{source}{{border-left-color:{colour}}} .legend .{source}{{border-left-color:{colour}}}\n"
+        for source, colour in styles
+    )
+    node_titles = {n["id"]: n["title"] for n in payload["nodes"]}
+    title = payload.get("mapId") or "Design map"
     # `<` escaped so no string in the payload can close the data script early.
     data = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
-    cards = "".join(fork_card(f, deliverable_of) for f in payload["forks"])
+    cards = "".join(fork_card(f, node_titles) for f in payload["forks"])
     return (
         "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"
         f"{GENERATOR}"
-        f"<title>{esc(payload['title'])}</title><style>{STYLE}</style></head><body>"
-        f"<header><h1>{esc(payload['title'])}</h1>"
+        f"<title>{esc(title)}</title><style>{style}</style></head><body>"
+        f"<header><h1>{esc(title)}</h1>"
         "<div>A fork you leave unanswered is taken on its recommendation.</div>"
         "<div id=\"dbnote\">Connecting to the answer store&hellip;</div></header>"
-        f"{levels(payload)}<main>{cards}</main>"
+        f"{levels(payload, vocab)}{legend(styles)}<main>{cards}</main>"
         f"<script type=\"application/json\" id=\"map-data\">{data}</script>"
         f"<script>{SCRIPT}</script></body></html>\n"
     )
@@ -488,6 +691,7 @@ def expectation(flags):
 def counted_payload(map_path, expected):
     payload = load_map(map_path)
     validate(payload)
+    require_grounded(payload)
     count = len(payload["forks"])
     if count != expected:
         raise Refusal("count-mismatch", expected=expected, payload=count)
@@ -596,25 +800,26 @@ def fold(payload, answers, final):
         if fid not in forks:
             raise Refusal("unknown-fork", id=fid)
         pick = answer["pick"]
-        if pick is not None and pick not in [o["key"] for o in forks[fid]["options"]]:
+        options = [o["id"] for o in forks[fid].get("card", {}).get("options", [])]
+        if pick is not None and pick not in options:
             raise Refusal("unknown-pick", id=fid)
     comments = []
     for fork in payload["forks"]:
         answer = answers.get(fork["id"])
-        if fork["status"] == "moot" or answer is None:
+        if fork["status"]["kind"] == "moot" or answer is None:
             continue
         if answer["pick"] is not None:
-            fork["status"], fork["by"], fork["pick"] = "decided", "owner", answer["pick"]
+            fork["status"] = {"kind": "decided", "source": "owner", "option": answer["pick"]}
         if answer["comment"]:
             comments.append((fork, answer["comment"]))
-    commented = [f["id"] for f, _ in comments if f["status"] == "open"]
+    commented = [f["id"] for f, _ in comments if f["status"]["kind"] == "open"]
     if final:
         for fork in payload["forks"]:
-            if fork["status"] == "open":
-                fork["status"], fork["by"] = "decided", "recommendation"
-                recommended = [o["key"] for o in fork["options"] if o.get("recommended")]
-                if len(recommended) == 1:
-                    fork["pick"] = recommended[0]
+            if fork["status"]["kind"] == "open" and "card" in fork:
+                fork["status"] = {
+                    "kind": "decided", "source": "recommendation",
+                    "option": fork["card"]["recommendation"]["option"],
+                }
     return comments, commented
 
 
@@ -641,8 +846,9 @@ def apply_answers(positional, flags):
         raise Refusal("map-unwritable")
     for fork, comment in comments:
         sys.stdout.write(f"comment {fork['id']}: {comment.replace(chr(10), ' / ')}\n")
-    def count(status, by=None):
-        return sum(1 for f in payload["forks"] if f["status"] == status and (by is None or f.get("by") == by))
+    def count(kind, source=None):
+        return sum(1 for f in payload["forks"]
+                   if f["status"]["kind"] == kind and (source is None or f["status"].get("source") == source))
     return dict(
         final="true" if final else "false", open=count("open"), owner=count("decided", "owner"),
         recommendation=count("decided", "recommendation"), moot=count("moot"),
@@ -650,7 +856,17 @@ def apply_answers(positional, flags):
     )
 
 
-VERBS = {"render": render, "check-page": check, "apply-answers": apply_answers}
+def validate_map(positional, flags):
+    if not positional:
+        raise Refusal("missing-map")
+    payload = load_map(positional[0])
+    validate(payload)
+    return dict(forks=len(payload["forks"]))
+
+
+VERBS = {"validate": validate_map, "render": render, "check-page": check, "apply-answers": apply_answers}
+# The flags each verb takes; any other parsed flag is reason=unknown-flag-<name>.
+FLAGS = {"validate": (), "render": ("expect", "out"), "check-page": ("expect",), "apply-answers": ("final",)}
 
 
 def main(argv):
@@ -659,14 +875,9 @@ def main(argv):
         if verb not in VERBS:
             raise Refusal("unknown-verb")
         positional, flags = parse_args(argv[2:])
-        if verb == "check-page" and "out" in flags:
-            raise Refusal("unknown-flag-out")
-        if verb != "apply-answers" and "final" in flags:
-            raise Refusal("unknown-flag-final")
-        if verb == "apply-answers":
-            for name in ("expect", "out"):
-                if name in flags:
-                    raise Refusal(f"unknown-flag-{name}")
+        for name in ("out", "final", "expect"):
+            if name in flags and name not in FLAGS[verb]:
+                raise Refusal(f"unknown-flag-{name}")
         attrs = VERBS[verb](positional, flags)
     except Refusal as r:
         return verdict("error", verb=verb or "none", reason=r.reason, **r.attrs)

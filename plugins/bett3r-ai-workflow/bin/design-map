@@ -1,5 +1,6 @@
 #!/bin/sh
-# Launcher for scripts/design-map.py — the map verbs: `render` turns a design's
+# Launcher for scripts/design-map.py — the map verbs: `validate` checks a v2
+# map.json against the structure schema and the esas vocabulary copy; `render` turns a design's
 # map.json into the self-contained page its owner answers forks on, refusing
 # when the payload's fork count differs from `--expect` or the page drops a
 # fork; `apply-answers` folds the owner's saved answers into the map's fork

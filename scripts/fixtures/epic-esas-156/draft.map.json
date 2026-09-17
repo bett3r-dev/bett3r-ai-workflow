@@ -4,7 +4,7 @@
   "grounded": true,
   "mapId": "ESAS-156-EPIC",
   "nodes": [
-    { "id": "g1", "level": "goal", "title": "Answer a design's forks visually and fold them into one record" },
+    { "id": "g1", "level": "goal", "title": "Answer a design's forks visually and fold them into one record", "parents": [] },
     { "id": "a1", "level": "mapActor", "title": "The design's owner", "parents": ["g1"] },
     { "id": "i1", "level": "impact", "title": "ESAS-900 area is unblocked", "parents": ["a1"] },
     { "id": "i2", "level": "impact", "title": "ESAS-901 area is unblocked", "parents": ["a1"] },

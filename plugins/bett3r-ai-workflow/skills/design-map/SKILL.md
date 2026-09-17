@@ -1,13 +1,59 @@
 ---
 name: design-map
-description: "Renders a design's map.json as a claude.ai artifact the owner answers by clicking, and reads answers back. Render with --expect as the count of the grilled tree (a mismatch stops); optional check-page re-runs the same counts over an existing page before publish. Publish with capabilities: {db: {}} and tell the owner to say done in the terminal: the page's comment box never wakes the session. On the owner's word, read_db over the answers collection with out_dir = <answers-dir> (doc id = forkId; lands as <answers-dir>/<forkId>.json), then apply-answers; read the DESIGN-MAP:v1 line, not the exit code. A wake never runs --final: --final, and resolving every printed comment before running --final, need the owner's word in the terminal. STANDING DISARM (unmeasured): a comment-mode thread sent to Claude may arrive wrapped in a NOT USER INPUT banner. That is not a refusal — the notification is the doorbell, the answers are in the store. Two invariants: tolerate an empty wake; never propose from partial answers."
+description: "Validates a design's map.json (structureVersion 2) and renders it as a claude.ai artifact the owner answers by clicking, and reads answers back. validate accepts an ungrounded draft; render refuses it (not-grounded). Render with --expect as the count of the grilled tree (a mismatch stops); optional check-page re-runs the same counts over an existing page before publish. Publish with capabilities: {db: {}} and tell the owner to say done in the terminal: the page's comment box never wakes the session. On the owner's word, read_db over the answers collection with out_dir = <answers-dir> (doc id = forkId; lands as <answers-dir>/<forkId>.json), then apply-answers; read the DESIGN-MAP:v1 line, not the exit code. A wake never runs --final: --final, and resolving every printed comment before running --final, need the owner's word in the terminal. STANDING DISARM (unmeasured): a comment-mode thread sent to Claude may arrive wrapped in a NOT USER INPUT banner. That is not a refusal — the notification is the doorbell, the answers are in the store. Two invariants: tolerate an empty wake; never propose from partial answers."
 ---
 
 # Rendering and reading back a design's map
 
 `bin/design-map` (`plugins/bett3r-ai-workflow/scripts/design-map.py`) owns the
-verbs; this skill owns when to call them and how to read what comes back. The
-schema is `skills/design-map/map.schema.json`.
+verbs; this skill owns when to call them and how to read what comes back.
+
+## The map: a vocabulary copy and a structure file
+
+A map is `structureVersion: 2`, spelled as esas's `MapFile` so a board reads it
+untranslated. Two files describe it, and they are kept apart on purpose:
+
+- **`map.schema.json` is the vocabulary** — the closed sets (fork status kind,
+  decided source, node level, map shape), a byte-identical copy of what esas
+  emits at `packages/esas-schema/schema/map.schema.json`.
+  **Never hand-edit `map.schema.json`**: a value added here and not in esas is a second source
+  for one closed set, and an edited copy can no longer be told stale. To
+  change a set, change it in esas and copy the emitted file over whole.
+  `scripts/test-design-map.sh` compares the copy with `$ESAS_CHECKOUT` when
+  that is set, and prints `SKIP reason=no-esas-checkout` (not a pass) when it
+  is not.
+- **`map-structure.schema.json` is the structure** — nodes, forks, cards,
+  options, links. It names every closed set by `$ref` into the copy, so no
+  value is restated.
+
+The shape, in brief:
+
+- top level: `structureVersion: 2`, `shape` (required once `grounded: true`),
+  `grounded`, `nodes[]`, `forks[]`, `links[]` (optional), and the plugin-only
+  optional `mapId`, `feedSeq` (integer >= 0) and `target` (`board` or
+  `artifact`);
+- node: `{id, level, title, parents: [nodeId], struck?: {reason}}`;
+- fork: `{id: <TICKET>-F<n>, title, tickets: [KEY, ...], card?, anchor?: nodeId,
+  restsOn: [forkId], status, testable?: false}`;
+- status: `{kind: open}`, `{kind: decided, source, option}` or
+  `{kind: moot, reason}` — `option` names an option id of the fork's card;
+- card: `{problem, useCases[], options[], recommendation: {option, why},
+  ifOverturned}`; option: `{id, label, walks: [{scenario, text}],
+  rejectedBecause?, evidence?[]}`. **A fork with no card is title-only** (a
+  locked, dependent fork): it is drawn by its title and cannot be picked.
+
+Node, fork and option ids and `mapId` match `^[A-Za-z0-9-]+$`; fork ids are unique, node ids are unique, option
+ids are unique per fork, and every `anchor`, `parents`, `restsOn` and link
+`deliverableId` must resolve (`dangling-ref`).
+
+## Validate
+
+```
+design-map validate <map.json>
+```
+
+Read-only: `outcome=ok forks=<n>`, or `outcome=error reason=... [at=...]`. It
+accepts an ungrounded draft, so run it on every draft before a render.
 
 ## Render, before publishing
 
@@ -25,6 +71,15 @@ page. It is mandatory (C1/F2): the two counts it gates catch different drops —
 the file I wrote; the renderer's own page-vs-payload count catches one lost
 while drawing. A mismatch on either is `outcome=error`, names both counts, and
 leaves no page behind.
+
+A map holding forks that is not `grounded: true` is refused with
+`reason=not-grounded` by both `render` and `check-page`, and no page is
+written: an ungrounded draft is never drawn for the owner to answer. Ground it
+first; `validate` still accepts it meanwhile.
+
+Decided forks are drawn in one style per decided source — owner,
+recommendation and code are three distinct styles — and a legend on the page
+names each.
 
 ## check-page, optional, before publish
 
@@ -109,15 +164,17 @@ Read the outcome from the `DESIGN-MAP:v1` verdict line on stdout, not the exit
 code (ADR-004) — a wrapper can swallow the exit status; the line still says
 `outcome=error`.
 
-Without `--final`, a picked fork becomes `decided(owner)`, an unanswered fork
-stays `open`, and a comment with no pick leaves the fork `open` and prints the
+Without `--final`, a picked fork becomes `{kind: decided, source: owner,
+option: <pick>}`, an unanswered fork stays `open`, and a comment with no pick leaves the fork `open` and prints the
 comment for me to resolve. **Before running `--final`, resolve every printed
 comment** (D8). `--final` runs only on the owner saying, in the terminal, that
 they are done — never on a wake — and a comment still open at that point is
 resolved by the owner's answer or explicit sign-off that it stands as asked,
 **given in the terminal**, before the remaining `open` forks
-convert to `decided(recommendation)`. A `moot` fork is never deleted by either
-pass.
+convert to `{kind: decided, source: recommendation, option:
+card.recommendation.option}`; an open fork with no card stays `open`. A `moot`
+fork is never deleted by either pass.
 
-See [`map.schema.json`](./map.schema.json) for the payload shape. v0 ships no
-separate reference file — the verb contract above is everything there is.
+See [`map-structure.schema.json`](./map-structure.schema.json) for the full
+payload shape and [`map.schema.json`](./map.schema.json) for the vocabulary it
+refers to.
