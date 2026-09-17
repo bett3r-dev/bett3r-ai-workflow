@@ -1338,6 +1338,104 @@ grep -v 'boardKinds' "$SEL/board-other.json" | sed 's/"anchored": false,/"anchor
 expect_select 'precedence row 7 over 8 (other repo + no boardKinds)' prec-other-nokinds probe artifact board-other-repo done
 sel_case prec-nokinds-linked status-map-ok.json tools-full.txt board-nokinds.json start-linked.json
 expect_select 'precedence row 8 over 9-11 (no boardKinds + linked worktree)' prec-nokinds-linked start artifact board-no-map done
+
+# ---------------------------------------------------------------------------
+printf '\nESAS-174: post — the board store readback matches map.json (D7, D5)\n'
+# ---------------------------------------------------------------------------
+# The readback is the `get_map` tool body `{ok:true, map, mapSeq}` (esas-mcp
+# handlers.ts GetMapToolResult = esas-store map-write.ts MapReadResult). Its map
+# is esas's MapFile: structureVersion 1, `links` required, and forks folded by
+# replay.ts postedMapEntry, which carries no `tickets`. `post` compares forks
+# only, so the readback's map is never checked against the plugin's v2 schema.
+# post-map-4.json holds one fork of each status: decided(owner, A),
+# decided(recommendation, B), moot(reason), open.
+PM="$SEL/post-map-4.json"
+
+# expect_post <description> <readback> <outcome> <exit> <forks> [reason]
+expect_post(){
+  xd=$1 xrb=$2 xo=$3 xrc=$4 xf=$5 xr=${6:-}
+  dm post --expect 4 --map "$PM" --readback "$SEL/$xrb"
+  check "$xd: outcome"   "$( attr "$LINE" outcome )" "$xo" "$( cat "$OUT" )"
+  check "$xd: verb=post" "$( attr "$LINE" verb )" post "$LINE"
+  check "$xd: target=board" "$( attr "$LINE" target )" board "$LINE"
+  check "$xd: forks"     "$( attr "$LINE" forks )" "$xf" "$LINE"
+  check "$xd: expected=4" "$( attr "$LINE" expected )" 4 "$LINE"
+  check "$xd: mapSeq"    "$( attr "$LINE" mapSeq )" 12 "$LINE"
+  check "$xd: exit"      "$rc" "$xrc"
+  if [ -n "$xr" ]; then
+    check "$xd: reason" "$( attr "$LINE" reason )" "$xr" "$LINE"
+  else
+    check "$xd: no reason" "$( attr "$LINE" reason || true )x" x "$LINE"
+  fi
+}
+
+# AC1 — parity.
+expect_post 'S-parity getmap-4' getmap-4.json ok 0 4
+check 'S-parity getmap-4: statuses, sorted kind:source' "$( attr "$LINE" statuses )" \
+  'decided:owner,decided:recommendation,moot:-,open:-' "$LINE"
+expect_post 'S-parity getmap-3 (a fork missing)' getmap-3.json fail 1 3 count-mismatch
+expect_post 'S-parity getmap-4-flipped (recommendation->owner)' getmap-4-flipped.json fail 1 4 status-mismatch
+check 'S-parity flipped: statuses reports the readback' "$( attr "$LINE" statuses )" \
+  'decided:owner,decided:owner,moot:-,open:-' "$LINE"
+# The parity tuple is (kind, source, reason, option): a mismatch in the two
+# fields `statuses=` does not print is still a fail.
+expect_post 'S-parity option differs (A->B)' getmap-4-option.json fail 1 4 status-mismatch
+expect_post 'S-parity moot reason differs' getmap-4-reason.json fail 1 4 status-mismatch
+# Only kind differs (open -> a reason-less moot, a shape esas never emits): kind
+# is compared as a field, not only through the fields each kind carries.
+expect_post 'S-parity kind alone differs' getmap-4-kind.json fail 1 4 status-mismatch
+
+# Errors: unreadable inputs and a bad --expect are exit 2, never a fail.
+mkdir -p "$TMP/post"
+expect_error 'post: missing --readback' missing-readback post --expect 4 --map "$PM"
+expect_error 'post: missing --map' missing-map post --expect 4 --readback "$SEL/getmap-4.json"
+expect_error 'post: missing --expect' missing-expect post --map "$PM" --readback "$SEL/getmap-4.json"
+expect_error 'post: --expect not a count' bad-expect post --expect four --map "$PM" --readback "$SEL/getmap-4.json"
+expect_error 'post: --expect negative' bad-expect post --expect -1 --map "$PM" --readback "$SEL/getmap-4.json"
+expect_error 'post: absent readback' readback-unreadable post --expect 4 --map "$PM" --readback "$TMP/post/none.json"
+printf 'not json {' > "$TMP/post/garbage.json"
+expect_error 'post: unparseable readback' readback-unreadable post --expect 4 --map "$PM" --readback "$TMP/post/garbage.json"
+printf '{"ok":false,"error":{"code":"ESAS_DIR_MISSING","message":"x"}}\n' > "$TMP/post/failed.json"
+expect_error 'post: a failed get_map body' readback-failed post --expect 4 --map "$PM" --readback "$TMP/post/failed.json"
+printf '{"ok":true,"map":{"forks":[{"id":"X-1-F1"}]},"mapSeq":3}\n' > "$TMP/post/nostatus.json"
+expect_error 'post: a fork without a status object' readback-invalid post --expect 4 --map "$PM" --readback "$TMP/post/nostatus.json"
+printf '{"ok":true,"map":{"forks":[]},"mapSeq":"3"}\n' > "$TMP/post/badseq.json"
+expect_error 'post: a non-integer mapSeq' readback-invalid post --expect 4 --map "$PM" --readback "$TMP/post/badseq.json"
+expect_error 'post: absent map.json' map-unreadable post --expect 4 --map "$TMP/post/none.json" --readback "$SEL/getmap-4.json"
+expect_error 'post: invalid map.json' schema-invalid post --expect 4 --map "$SEL/getmap-4.json" --readback "$SEL/getmap-4.json"
+
+# AC8 (D5 readback) — the board died mid-sitting: the decided statuses come
+# back from get_map and are written through `design-map write`, the only
+# map.json writer (ADR-006). The raw get_map map cannot be written: esas holds
+# it at structureVersion 1 and its forks carry no `tickets`.
+cp "$SEL/post-map-4-open.json" "$TMP/post/map.json"
+python3 -c 'import json,sys; b=json.load(open(sys.argv[1])); m=b["map"]; m["feedSeq"]=b["mapSeq"]; json.dump(m,sys.stdout)' \
+  "$SEL/getmap-4.json" > "$TMP/post/raw.json"
+( cd "$TMP" && "$DM_SH" "$DM" write "$TMP/post/map.json" < "$TMP/post/raw.json" ) > "$OUT" 2>&1
+rc=$?
+LINE=$( verdict "$OUT" )
+check 'S-readback: the raw get_map map is refused by write' "$( attr "$LINE" reason )" schema-invalid "$LINE"
+check 'S-readback: the refused write left map.json as it was' "$( cmp -s "$SEL/post-map-4-open.json" "$TMP/post/map.json" && echo same )" same
+# The pipeline: overlay each readback fork's status onto map.json by fork id,
+# record mapSeq as feedSeq, and pipe the result into write.
+python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); b=json.load(open(sys.argv[2])); s={f["id"]:f["status"] for f in b["map"]["forks"]}; [f.__setitem__("status",s[f["id"]]) for f in m["forks"] if f["id"] in s]; m["feedSeq"]=b["mapSeq"]; json.dump(m,sys.stdout)' \
+  "$TMP/post/map.json" "$SEL/getmap-4.json" > "$TMP/post/merged.json"
+( cd "$TMP" && "$DM_SH" "$DM" write "$TMP/post/map.json" < "$TMP/post/merged.json" ) > "$OUT" 2>&1
+rc=$?
+LINE=$( verdict "$OUT" )
+check 'S-readback: write outcome=ok' "$( attr "$LINE" outcome )" ok "$( cat "$OUT" )"
+check 'S-readback: write exit 0' "$rc" 0
+dm validate "$TMP/post/map.json"
+check 'S-readback: the written map validates' "$( attr "$LINE" outcome )" ok "$LINE"
+check 'S-readback: decided(recommendation) survives' \
+  "$( python3 -c 'import json,sys; print([f["status"].get("source") for f in json.load(open(sys.argv[1]))["forks"]].count("recommendation"))' "$TMP/post/map.json" )" 1
+check 'S-readback: decided(owner) survives' \
+  "$( python3 -c 'import json,sys; print([f["status"].get("source") for f in json.load(open(sys.argv[1]))["forks"]].count("owner"))' "$TMP/post/map.json" )" 1
+check 'S-readback: feedSeq equals mapSeq' \
+  "$( python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["feedSeq"])' "$TMP/post/map.json" )" \
+  "$( python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["mapSeq"])' "$SEL/getmap-4.json" )"
+dm post --expect 4 --map "$TMP/post/map.json" --readback "$SEL/getmap-4.json"
+check 'S-readback: the written map is at parity with the readback' "$( attr "$LINE" outcome )" ok "$LINE"
 sel_case prec-tools-linked status-map-ok.json tools-no-post.txt board-map.json start-linked.json
 expect_select 'precedence row 4 over 9-11 (tools missing + linked worktree)' prec-tools-linked start artifact tools-missing done
 

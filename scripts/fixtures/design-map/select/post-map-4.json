@@ -1,0 +1,205 @@
+{
+  "structureVersion": 2,
+  "shape": "decision",
+  "grounded": true,
+  "nodes": [],
+  "forks": [
+    {
+      "id": "ESAS-174-F1",
+      "title": "Fork 1: which option?",
+      "tickets": [
+        "ESAS-174"
+      ],
+      "card": {
+        "problem": "Problem statement for fork 1.",
+        "useCases": [
+          "An owner answers fork 1."
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Option A",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ],
+            "rejectedBecause": "A is the larger change."
+          },
+          {
+            "id": "B",
+            "label": "Option B",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ],
+            "evidence": [
+              "scripts/design-map.py"
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "B is the smaller change."
+        },
+        "ifOverturned": "A replaces B; nothing else moves."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "A"
+      }
+    },
+    {
+      "id": "ESAS-174-F2",
+      "title": "Fork 2: which option?",
+      "tickets": [
+        "ESAS-174"
+      ],
+      "card": {
+        "problem": "Problem statement for fork 1.",
+        "useCases": [
+          "An owner answers fork 1."
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Option A",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ],
+            "rejectedBecause": "A is the larger change."
+          },
+          {
+            "id": "B",
+            "label": "Option B",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ],
+            "evidence": [
+              "scripts/design-map.py"
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "B is the smaller change."
+        },
+        "ifOverturned": "A replaces B; nothing else moves."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "recommendation",
+        "option": "B"
+      }
+    },
+    {
+      "id": "ESAS-174-F3",
+      "title": "Fork 3: which option?",
+      "tickets": [
+        "ESAS-174"
+      ],
+      "card": {
+        "problem": "Problem statement for fork 1.",
+        "useCases": [
+          "An owner answers fork 1."
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Option A",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ],
+            "rejectedBecause": "A is the larger change."
+          },
+          {
+            "id": "B",
+            "label": "Option B",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ],
+            "evidence": [
+              "scripts/design-map.py"
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "B is the smaller change."
+        },
+        "ifOverturned": "A replaces B; nothing else moves."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "moot",
+        "reason": "ESAS-174-F1 made it moot"
+      }
+    },
+    {
+      "id": "ESAS-174-F4",
+      "title": "Fork 4: which option?",
+      "tickets": [
+        "ESAS-174"
+      ],
+      "card": {
+        "problem": "Problem statement for fork 1.",
+        "useCases": [
+          "An owner answers fork 1."
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Option A",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ],
+            "rejectedBecause": "A is the larger change."
+          },
+          {
+            "id": "B",
+            "label": "Option B",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ],
+            "evidence": [
+              "scripts/design-map.py"
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "B is the smaller change."
+        },
+        "ifOverturned": "A replaces B; nothing else moves."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "open"
+      }
+    }
+  ]
+}

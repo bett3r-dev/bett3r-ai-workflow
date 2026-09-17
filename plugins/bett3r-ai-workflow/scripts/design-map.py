@@ -326,7 +326,7 @@ def verdict(outcome, **attrs):
 
 
 BOOLEAN_FLAGS = ("final", "stack", "closed", "line", "no-feed")
-VALUE_FLAGS = ("expect", "out", "ticket", "lane", "feed-seq", "phase", "captures", "map")
+VALUE_FLAGS = ("expect", "out", "ticket", "lane", "feed-seq", "phase", "captures", "map", "readback")
 
 
 def parse_args(args):
@@ -1568,17 +1568,71 @@ def select(positional, flags):
     return dict(target="board", reason="ok", probe="done")
 
 
+# --- post (ESAS-174 D7, design.md P3) ----------------------------------------
+
+STATUS_FIELDS = ("kind", "source", "reason", "option")
+
+
+def status_tuple(status):
+    """The parity tuple of one fork status; an absent field is None."""
+    return tuple(status.get(field) for field in STATUS_FIELDS)
+
+
+def readback_forks(path):
+    """The forks and mapSeq of a `get_map` tool body `{ok:true, map, mapSeq}`.
+    Its map is esas's MapFile (structureVersion 1, no fork `tickets`), so only
+    `forks[].status` is read; the plugin's v2 schema is never applied to it."""
+    body = read_json_object(path)
+    if body is None:
+        raise Refusal("readback-unreadable")
+    if body.get("ok") is not True:
+        raise Refusal("readback-failed", code=error_code(body) or "-")
+    payload, seq = body.get("map"), body.get("mapSeq")
+    forks = payload.get("forks") if isinstance(payload, dict) else None
+    if (not isinstance(forks, list) or not TYPES["integer"](seq)
+            or not all(isinstance(f, dict) and isinstance(f.get("status"), dict) for f in forks)):
+        raise Refusal("readback-invalid")
+    return forks, seq
+
+
+def post(positional, flags):
+    """Pure over two files: the board's store readback against map.json. Fails
+    on a fork count other than --expect, or on a different multiset of
+    (kind, source, reason, option); `statuses=` prints kind:source only."""
+    if "expect" not in flags:
+        raise Refusal("missing-expect")
+    if not re.fullmatch(r"[0-9]+", flags["expect"]):
+        raise Refusal("bad-expect")
+    expected = int(flags["expect"])
+    if "map" not in flags:
+        raise Refusal("missing-map")
+    if "readback" not in flags:
+        raise Refusal("missing-readback")
+    payload = load_map(flags["map"])
+    validate(payload)
+    forks, seq = readback_forks(flags["readback"])
+    tuples = sorted((status_tuple(f["status"]) for f in forks), key=repr)
+    local = sorted((status_tuple(f["status"]) for f in payload["forks"]), key=repr)
+    attrs = dict(target="board", forks=len(forks), expected=expected, mapSeq=seq,
+                 statuses=",".join(sorted(f"{t[0]}:{t[1] or '-'}".replace(" ", "_") for t in tuples)))
+    if len(forks) != expected:
+        return dict(outcome="fail", reason="count-mismatch", **attrs)
+    if tuples != local:
+        return dict(outcome="fail", reason="status-mismatch", **attrs)
+    return attrs
+
+
 VERBS = {"validate": validate_map, "write": write, "render": render, "check-page": check,
          "apply-answers": apply_answers, "candidates": candidates, "check-plan": check_plan,
          "project": project, "decisions": decisions, "count": count, "drift": drift,
-         "select": select}
+         "select": select, "post": post}
 # The flags each verb takes; any other parsed flag is reason=unknown-flag-<name>.
 # `candidates` and `check-plan` take positional arguments only, so `--map`
 # (the wording ESAS-165's block used) is refused as unknown-flag-map.
 FLAGS = {"validate": (), "write": (), "render": ("expect", "out", "stack"), "check-page": ("expect",),
          "apply-answers": ("final",), "candidates": (), "check-plan": (), "project": ("ticket",),
          "decisions": ("closed",), "count": ("lane", "line"), "drift": ("feed-seq", "no-feed"),
-         "select": ("phase", "captures", "map", "lane")}
+         "select": ("phase", "captures", "map", "lane"), "post": ("expect", "map", "readback")}
 
 
 def main(argv):
