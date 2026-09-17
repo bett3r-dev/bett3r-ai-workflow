@@ -71,3 +71,19 @@ sources: [design:block D5, code:fold (plugins/bett3r-ai-workflow/scripts/design-
 rejected: apply it — its origin cannot be confirmed against a map that names none
 supersedes: —
 Also: `write` adds reason `map-dir-missing` (checked before stdin), and reuses `map-unparseable` for empty or non-JSON stdin.
+
+## D10 — check-plan's candidate-in-oracle ignores confirmed candidates
+kind: silent-seam
+step: build · slice: 4 · decidedBy: verifier
+sources: [design:ESAS-165 block D4 ("that copy is the promotion") and AC2, code:check_plan (plugins/bett3r-ai-workflow/scripts/design-map.py)]
+rejected: fail on any candidate example in an oracle — fails every attended plan written exactly as D4 says
+supersedes: —
+An unattended plan still fails: its candidates are all unconfirmed, and a confirmed one is refused first as unattended-confirmed.
+
+## D11 — candidates: positional map, fixed key order, testable:false wins over zero-walk
+kind: silent-seam
+step: build · slice: 4 · decidedBy: executor
+sources: [design:ESAS-178 block D6 and §7, design:ESAS-165 block D1]
+rejected: `candidates --map <p>` as ESAS-165 wrote it — ESAS-178 D6 respells the verbs positionally; `--map` is refused as unknown-flag-map
+supersedes: —
+Line keys are `fork, option, scenario, source, example`. New error reasons missing-plan / plan-unreadable / plan-unparseable / yaml-unavailable (exit 2); `fail` exits 1; an id-less offending slice prints `slice=unknown`.
