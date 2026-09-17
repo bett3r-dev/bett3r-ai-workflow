@@ -78,7 +78,7 @@ dm(){
 
 # verdict <file> — the last non-empty line, and only if it is a verdict line.
 verdict(){
-  awk 'NF{l=$0} END{print l}' "$1" | grep -E '^DESIGN-MAP:v1 outcome=[a-z]+( [A-Za-z]+=[^ ]*)*$'
+  awk 'NF{l=$0} END{print l}' "$1" | grep -E '^DESIGN-MAP:v1 outcome=[a-z]+( [A-Za-z_-]+=[^ ]*)*$'
 }
 
 # attr <verdict-line> <key> — one attribute's value from a verdict line.
@@ -791,6 +791,104 @@ check 'write takes no --map flag' "$( attr "$LINE" reason )" unknown-flag-map "$
 # answer keeps the card open, as the fold does.
 check 'the page: a comment-only answer is not done' \
   "$( grep -c 'if (answers\[id\] && answers\[id\].pick) return "done";' "$TMP/f3/page.html" | tr -d ' ' )" 1
+
+# ---------------------------------------------------------------------------
+printf 'D7: candidates — one JSON line per walk of a decided fork'"'"'s chosen option\n'
+# ---------------------------------------------------------------------------
+CAND="$FIX/candidates.map.json"
+
+dm candidates "$CAND"
+check 'candidates: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+check 'candidates: verb=candidates' "$( attr "$LINE" verb )" candidates "$LINE"
+check 'candidates: forks=8' "$( attr "$LINE" forks )" 8 "$LINE"
+check 'candidates: candidates=4' "$( attr "$LINE" candidates )" 4 "$LINE"
+check 'candidates: skipped-open=1' "$( attr "$LINE" skipped-open )" 1 "$LINE"
+check 'candidates: skipped-moot=1' "$( attr "$LINE" skipped-moot )" 1 "$LINE"
+check 'candidates: skipped-nowalk=1' "$( attr "$LINE" skipped-nowalk )" 1 "$LINE"
+check 'candidates: skipped-untestable=2 (zero-walk + testable:false counts as untestable)' "$( attr "$LINE" skipped-untestable )" 2 "$LINE"
+check 'candidates: exit 0' "$rc" 0
+
+# The candidate lines themselves: everything but the last (verdict) line.
+CANDLINES="$TMP/candlines"
+sed '$d' "$OUT" > "$CANDLINES"
+check 'candidates: 4 candidate lines printed' "$( wc -l < "$CANDLINES" | tr -d ' ' )" 4
+
+if grep -q '"fork":"ESAS-1-F1"' "$CANDLINES"; then
+  fail 'candidates: no line names the moot fork'
+else
+  pass 'candidates: no line names the moot fork'
+fi
+if grep -q '"fork":"ESAS-1-F2"' "$CANDLINES"; then
+  fail 'candidates: no line names the still-open fork'
+else
+  pass 'candidates: no line names the still-open fork'
+fi
+check 'candidates: the code-decided fork carries source "code"' \
+  "$( grep -c '"fork":"ESAS-1-F5".*"source":"code"' "$CANDLINES" | tr -d ' ' )" 1
+check 'candidates: two candidates for the two-walk owner fork' \
+  "$( grep -c '"fork":"ESAS-1-F3"' "$CANDLINES" | tr -d ' ' )" 2
+if grep -q 'must never appear' "$CANDLINES"; then
+  fail 'candidates: no candidate comes from a rejected option'
+else
+  pass 'candidates: no candidate comes from a rejected option'
+fi
+check 'candidates: fixed key order fork,option,scenario,source,example' \
+  "$( head -n1 "$CANDLINES" | python3 -c 'import json,sys; print(",".join(json.loads(sys.stdin.read()).keys()))' )" \
+  fork,option,scenario,source,example
+
+expect_error 'candidates: --map is refused as an unknown flag' unknown-flag-map \
+  candidates --map "$CAND"
+expect_error 'candidates: a missing map argument' missing-map \
+  candidates
+expect_error 'candidates over a v1 map' schema-invalid \
+  candidates "$FIX/v1-map.json"
+
+# ---------------------------------------------------------------------------
+printf '\nD7: check-plan — the ESAS-165 unattended-never-promotes contract\n'
+# ---------------------------------------------------------------------------
+CPFIX="$ROOT/scripts/fixtures/design-map/check-plan"
+
+# fail (exit 1), never error (exit 2) — ADR-004's two codes are distinct, so
+# these two assertions cannot use expect_error, which pins outcome=error/exit 2.
+dm check-plan "$CPFIX/unattended-confirmed.yaml"
+check 'check-plan: review:unattended with a confirmed candidate: outcome=fail' \
+  "$( attr "$LINE" outcome )" fail "$LINE" "$( cat "$OUT" )"
+check 'check-plan: unattended-confirmed reason' "$( attr "$LINE" reason )" unattended-confirmed "$LINE"
+check 'check-plan: unattended-confirmed exits 1, not 2' "$rc" 1
+
+dm check-plan "$CPFIX/candidate-in-oracle.yaml"
+check 'check-plan: a slice oracle contains a candidate example verbatim: outcome=fail' \
+  "$( attr "$LINE" outcome )" fail "$LINE" "$( cat "$OUT" )"
+check 'check-plan: candidate-in-oracle reason' "$( attr "$LINE" reason )" candidate-in-oracle "$LINE"
+check 'check-plan: candidate-in-oracle names the slice' "$( attr "$LINE" slice )" 1 "$LINE"
+check 'check-plan: candidate-in-oracle exits 1, not 2' "$rc" 1
+
+dm check-plan "$CPFIX/attended-confirmed-copy.yaml"
+check 'check-plan: attended plan copying a confirmed example into an oracle is outcome=ok' \
+  "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+check 'check-plan: attended-confirmed-copy review' "$( attr "$LINE" review )" human "$LINE"
+check 'check-plan: attended-confirmed-copy exits 0' "$rc" 0
+
+printf 'review: human\ncandidateOracles:\n  - example: X is applied\n    status: unconfirmed\nslices:\n  - oracle: asserts X is applied\n' > "$TMP/w/noid.yaml"
+dm check-plan "$TMP/w/noid.yaml"
+check 'check-plan: candidate-in-oracle on an id-less slice names slice=unknown' "$( attr "$LINE" slice )" unknown "$LINE"
+
+dm check-plan "$CPFIX/conforming.yaml"
+check 'check-plan: the conforming fixture is outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+check 'check-plan: review is read through' "$( attr "$LINE" review )" unattended "$LINE"
+check 'check-plan: candidates counts candidateOracles' "$( attr "$LINE" candidates )" 2 "$LINE"
+check 'check-plan: conforming exits 0' "$rc" 0
+
+dmin /dev/null check-plan "$TMP/no-such-plan.yaml"
+check 'check-plan: an unreadable plan path' "$( attr "$LINE" reason )" plan-unreadable "$LINE"
+printf ': not yaml : [' > "$TMP/w/bad.yaml"
+dm check-plan "$TMP/w/bad.yaml"
+check 'check-plan: unparseable YAML' "$( attr "$LINE" reason )" plan-unparseable "$LINE"
+printf 'just a scalar\n' > "$TMP/w/scalar.yaml"
+dm check-plan "$TMP/w/scalar.yaml"
+check 'check-plan: a YAML document that is not a mapping' "$( attr "$LINE" reason )" plan-unparseable "$LINE"
+expect_error 'check-plan: a missing plan argument' missing-plan \
+  check-plan
 
 # ---------------------------------------------------------------------------
 # skills/design-map/SKILL.md — presence oracle, in the style of

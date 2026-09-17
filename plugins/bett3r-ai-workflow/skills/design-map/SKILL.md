@@ -201,6 +201,57 @@ card.recommendation.option}`. `--final` refuses `reason=title-only-open`
 its card first. A `moot`
 fork is never deleted by either pass.
 
+## Plan candidates and the unattended-never-promotes contract (ESAS-165)
+
+```
+design-map candidates <map.json>
+design-map check-plan <slices.yaml>
+```
+
+`candidates` validates the map, then reads it (never writing anything) and
+prints zero or more compact JSON lines on stdout, one per walk of a **decided**
+fork's **chosen** option (`status.option`) — never a rejected option's walk,
+since a rejected option is a confidently-wrong oracle:
+
+```
+{"fork":"ESAS-1-F1","option":"A","scenario":"...","source":"owner","example":"..."}
+```
+
+in that fixed key order (fork, option, scenario, source, example). A fork is
+skipped and counted, never printed:
+
+- `skipped-open` — still `open`
+- `skipped-moot` — `moot` (its id is never named in the output)
+- `skipped-nowalk` — decided, but the chosen option carries no walk
+- `skipped-untestable` — the fork carries `testable: false` (a process-rule
+  card the design lane marks unoracled, ESAS-164); when both zero-walk and
+  `testable: false` hold, `skipped-untestable` wins
+
+The verdict: `outcome=ok verb=candidates forks=<n> candidates=<n>
+skipped-open=<n> skipped-moot=<n> skipped-nowalk=<n> skipped-untestable=<n>`.
+`--map` is not a flag `candidates` knows — the map path is positional, refused
+as `unknown-flag-map` otherwise.
+
+`check-plan` reads a `.work/slices.yaml` (PyYAML; a Python without it is
+`reason=yaml-unavailable`, never a silent pass) and enforces that an
+unattended `/plan` never promotes a candidate into a slice's `oracle:` without
+a human:
+
+- `outcome=fail reason=unattended-confirmed` (exit 1) — top-level `review:
+  unattended` and some `candidateOracles[].status` is `confirmed`.
+- `outcome=fail reason=candidate-in-oracle slice=<id>` (exit 1) — a
+  non-confirmed candidate's example appears verbatim in a slice oracle
+  (`slice=unknown` when that slice has no id). A `confirmed` candidate's
+  example copied into an oracle is the attended promotion (ESAS-165 D4) and
+  passes.
+- else `outcome=ok review=<human|unattended|none> candidates=<n>` (exit 0).
+
+`outcome=fail` (exit 1) is distinct from `outcome=error` (exit 2, e.g.
+`plan-unreadable`, `plan-unparseable`, `missing-plan`): a plan `check-plan`
+could read but that fails one of its two assertions is a different event from
+one it could not read at all (ADR-004 — the line is the contract, and a shell
+caller still needs the two exit codes apart).
+
 See [`map-structure.schema.json`](./map-structure.schema.json) for the full
 payload shape and [`map.schema.json`](./map.schema.json) for the vocabulary it
 refers to.

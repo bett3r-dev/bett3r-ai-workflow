@@ -5,11 +5,16 @@
     DESIGN-MAP:v1 outcome=ok verb=write forks=<n> map=<path>
     DESIGN-MAP:v1 outcome=ok verb=render expected=<n> payload=<n> rendered=<n> page=<path>
     DESIGN-MAP:v1 outcome=ok verb=apply-answers final=<bool> open=<n> owner=<n> recommendation=<n> code=<n> moot=<n> otherMap=<n> commented=<ids|none> map=<path>
+    DESIGN-MAP:v1 outcome=ok verb=candidates forks=<n> candidates=<n> skipped-open=<n> skipped-moot=<n> skipped-nowalk=<n> skipped-untestable=<n>
+    DESIGN-MAP:v1 outcome=ok verb=check-plan review=<human|unattended|none> candidates=<n>
+    DESIGN-MAP:v1 outcome=fail verb=check-plan reason=unattended-confirmed
+    DESIGN-MAP:v1 outcome=fail verb=check-plan reason=candidate-in-oracle slice=<id>
     DESIGN-MAP:v1 outcome=error verb=<verb> reason=<reason> [key=value ...]
 
-Read the line, never the exit code alone (ADR-004): 0 for ok, 2 for error, and
-no line at all means the script died before concluding. An error line carries
-no `page=`: a caller that publishes whatever `page=` names must find nothing.
+Read the line, never the exit code alone (ADR-004): 0 for ok, 1 for fail
+(check-plan's two assertions below), 2 for error, and no line at all means the
+script died before concluding. An error line carries no `page=`: a caller
+that publishes whatever `page=` names must find nothing.
 
 Usage:
 
@@ -18,6 +23,8 @@ Usage:
   design-map render <map.json> --expect <n> [--out <page.html>]
   design-map check-page <map.json> <page.html> --expect <n>
   design-map apply-answers <map.json> <answers-dir> [--final]
+  design-map candidates <map.json>
+  design-map check-plan <slices.yaml>
 
 A map is `structureVersion: 2`. Two committed files describe it:
 
@@ -142,7 +149,60 @@ A bare `actor` key is refused anywhere in the payload, before the schema runs:
 the map's who-level is `mapActor`, never `actor`, so a map role can never be
 joined to an op's ActorId by accident.
 
-Standard library only: `jsonschema` is not a dependency. The validator below
+`candidates` validates the map (the same refusals as `validate`), then reads
+it, never writing anything. For each fork it prints zero or more compact JSON
+lines, one per walk of the fork's status.option — never a rejected option's
+walk, since a rejected option is a confidently-wrong oracle:
+
+  {"fork": <id>, "option": <id>, "scenario": <text>, "source": <decided source>, "example": <walk text>}
+
+in that fixed key order (documented here rather than sorted, so a reader can
+diff two runs by eye). A fork is skipped and counted, never printed, when:
+
+  skipped-open        status.kind is "open" (the owner has not reached it)
+  skipped-moot         status.kind is "moot" (never named in the output)
+  skipped-nowalk        decided, but the chosen option carries no walk
+  skipped-untestable    the fork carries `testable: false` (a process-rule
+                        card the design lane marks unoracled, ESAS-164)
+
+A fork that is both decided with a zero-walk option AND `testable: false` is
+counted only under skipped-untestable: untestable is checked first, so it
+wins the tie (ESAS-165 D1/AC3 leaves the precedence to this build). A
+card-less decided fork cannot reach `candidates` at all: `validate` already
+refuses it as `decided-title-only`.
+
+`check-plan` reads a `slices.yaml` (PyYAML, not committed elsewhere in this
+script; `reason=yaml-unavailable` if the interpreter has no PyYAML installed,
+never a silent pass) and makes two ADR-004 assertions about it, each an
+`outcome=fail` (exit 1, distinct from `outcome=error`'s exit 2 — a plan that
+parses but fails an assertion is not the same event as one this script could
+not read):
+
+  reason=unattended-confirmed   top-level `review: unattended` and any
+                                 `candidateOracles[].status` is "confirmed"
+                                 (ESAS-165 AC2: unattended /plan never
+                                 confirms a candidate, so a confirmed one
+                                 there means the file was hand-edited)
+  reason=candidate-in-oracle    a non-confirmed candidate's example appears
+                                 verbatim (as a substring) in a slice's
+                                 `oracle:` string. A confirmed candidate's
+                                 example there is the attended promotion
+                                 (ESAS-165 D4) and passes. Empty examples
+                                 never match; the offending slice's id is
+                                 named as slice=, or slice=unknown when that
+                                 slice carries no id)
+
+else `outcome=ok review=<the top-level review, or "none"> candidates=<the
+length of candidateOracles, 0 if the key is absent>`. Other reasons, all
+`outcome=error`: `missing-plan` (no argument), `plan-unreadable` (the file
+cannot be opened as UTF-8), `plan-unparseable` (invalid YAML, or the
+document / its `candidateOracles` / its `slices` is not the shape this reads
+as a mapping/list).
+
+Standard library only for every map verb: `jsonschema` is not a dependency
+(`check-plan` is the one exception, since a `slices.yaml` is YAML, not JSON,
+and PyYAML is imported lazily inside it so its absence never breaks any
+other verb — see `reason=yaml-unavailable` above). The validator below
 implements exactly the keywords the structure schema uses (listed in its
 `$comment`), and meeting any other keyword is reason=schema-unreadable rather
 than a keyword silently ignored. So is a `$ref` that resolves nowhere — a
@@ -169,10 +229,20 @@ VOCABULARY_FILE = "map.schema.json"
 
 
 class Refusal(Exception):
-    def __init__(self, reason, **attrs):
+    """outcome defaults to "error" (exit 2): a verb call itself did not
+    conclude. check-plan also raises this with outcome="fail" (exit 1) for
+    the two ADR-004 assertions it makes about an otherwise-parseable plan
+    (ADR-004: the line is the contract, not the bare exit code, but the two
+    outcomes still need two different codes for a shell caller)."""
+
+    def __init__(self, reason, outcome="error", **attrs):
         super().__init__(reason)
         self.reason = reason
+        self.outcome = outcome
         self.attrs = attrs
+
+
+EXIT_CODES = {"ok": 0, "fail": 1}
 
 
 def verdict(outcome, **attrs):
@@ -180,7 +250,7 @@ def verdict(outcome, **attrs):
     parts += [f"{key}={val}" for key, val in attrs.items()]
     sys.stdout.write(" ".join(parts) + "\n")
     sys.stdout.flush()
-    return 0 if outcome == "ok" else 2
+    return EXIT_CODES.get(outcome, 2)
 
 
 def parse_args(args):
@@ -905,6 +975,102 @@ def validate_map(positional, flags):
     return dict(forks=len(payload["forks"]))
 
 
+# --- candidates / check-plan (ESAS-165 D1-D3, AC2, AC3) ----------------------
+
+def fork_candidates(fork):
+    """The candidate lines a decided fork offers, and which counter (if any)
+    it is skipped under. testable:false wins over zero-walk when both hold
+    (documented precedence; ESAS-165 leaves the tie loose)."""
+    status = fork["status"]
+    if status["kind"] == "open":
+        return [], "open"
+    if status["kind"] == "moot":
+        return [], "moot"
+    # decided: validate() already refused a card-less decided fork
+    # (decided-title-only), so fork["card"] is always present here.
+    if fork.get("testable") is False:
+        return [], "untestable"
+    option = next(o for o in fork["card"]["options"] if o["id"] == status["option"])
+    if not option["walks"]:
+        return [], "nowalk"
+    lines = [
+        {"fork": fork["id"], "option": status["option"], "scenario": walk["scenario"],
+         "source": status["source"], "example": walk["text"]}
+        for walk in option["walks"]
+    ]
+    return lines, None
+
+
+def candidates(positional, flags):
+    if not positional:
+        raise Refusal("missing-map")
+    payload = load_map(positional[0])
+    validate(payload)
+    skipped = {"open": 0, "moot": 0, "nowalk": 0, "untestable": 0}
+    total = 0
+    for fork in payload["forks"]:
+        lines, skip = fork_candidates(fork)
+        if skip:
+            skipped[skip] += 1
+            continue
+        for line in lines:
+            # Fixed key order (documented in the module header), not sorted:
+            # fork, option, scenario, source, example.
+            sys.stdout.write(json.dumps(line, ensure_ascii=False, sort_keys=False,
+                                         separators=(",", ":")) + "\n")
+            total += 1
+    return dict(forks=len(payload["forks"]), candidates=total,
+                **{f"skipped-{k}": v for k, v in skipped.items()})
+
+
+def check_plan(positional, flags):
+    if not positional:
+        raise Refusal("missing-plan")
+    try:
+        import yaml
+    except ImportError:
+        raise Refusal("yaml-unavailable")
+    path = positional[0]
+    try:
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+    except (OSError, UnicodeDecodeError):
+        raise Refusal("plan-unreadable")
+    try:
+        doc = yaml.safe_load(text)
+    except yaml.YAMLError:
+        raise Refusal("plan-unparseable")
+    if not isinstance(doc, dict):
+        raise Refusal("plan-unparseable")
+    review = doc.get("review")
+    raw_candidates = doc.get("candidateOracles") or []
+    if not isinstance(raw_candidates, list):
+        raise Refusal("plan-unparseable")
+    if review == "unattended" and any(
+            isinstance(c, dict) and c.get("status") == "confirmed" for c in raw_candidates):
+        raise Refusal("unattended-confirmed", outcome="fail")
+    # A confirmed candidate's example in an oracle is the attended promotion
+    # itself (ESAS-165 D4: "that copy is the promotion"), so only
+    # non-confirmed candidates are checked. Unattended confirmed ones were
+    # already refused above.
+    examples = [c["example"] for c in raw_candidates
+                if isinstance(c, dict) and c.get("status") != "confirmed"
+                and isinstance(c.get("example"), str) and c["example"]]
+    raw_slices = doc.get("slices") or []
+    if not isinstance(raw_slices, list):
+        raise Refusal("plan-unparseable")
+    for sl in raw_slices:
+        oracle = sl.get("oracle") if isinstance(sl, dict) else None
+        if not isinstance(oracle, str):
+            continue
+        for example in examples:
+            if example in oracle:
+                slice_id = sl.get("id")
+                raise Refusal("candidate-in-oracle", outcome="fail",
+                              slice="unknown" if slice_id is None else slice_id)
+    return dict(review=review if review else "none", candidates=len(raw_candidates))
+
+
 def write(positional, flags):
     if not positional:
         raise Refusal("missing-map")
@@ -921,9 +1087,12 @@ def write(positional, flags):
 
 
 VERBS = {"validate": validate_map, "write": write, "render": render, "check-page": check,
-         "apply-answers": apply_answers}
+         "apply-answers": apply_answers, "candidates": candidates, "check-plan": check_plan}
 # The flags each verb takes; any other parsed flag is reason=unknown-flag-<name>.
-FLAGS = {"validate": (), "write": (), "render": ("expect", "out"), "check-page": ("expect",), "apply-answers": ("final",)}
+# `candidates` and `check-plan` take positional arguments only, so `--map`
+# (the wording ESAS-165's block used) is refused as unknown-flag-map.
+FLAGS = {"validate": (), "write": (), "render": ("expect", "out"), "check-page": ("expect",),
+         "apply-answers": ("final",), "candidates": (), "check-plan": ()}
 
 
 def main(argv):
@@ -937,7 +1106,7 @@ def main(argv):
                 raise Refusal(f"unknown-flag-{name}")
         attrs = VERBS[verb](positional, flags)
     except Refusal as r:
-        return verdict("error", verb=verb or "none", reason=r.reason, **r.attrs)
+        return verdict(r.outcome, verb=verb or "none", reason=r.reason, **r.attrs)
     return verdict("ok", verb=verb, **attrs)
 
 
