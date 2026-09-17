@@ -62,3 +62,18 @@ sources: [code:render (design-map.py) removes the page on refusal, design:block 
 rejected: write design.md first — then a refusal must remove it too
 supersedes: —
 Also: a `design-map write` refusal writes and commits nothing, and ends blocked-on with its reason. The AC3 single-writer grep's blind spots are recorded in design.md Risks.
+
+## D9 — The drift refresh runs the owner check before `design-map write`, not after render
+kind: deviation
+step: verify-build · slice: — · decidedBy: lane
+sources: [design:block D2 and D5, code:commands/verify-build.md Step 5a2]
+rejected: D5's literal order (get_map → write → render → owner check) — overwrites map.json in a folder another work item owns before discovering it
+supersedes: —
+D2 says none of the three files is written on `other|unowned|error`; D5's listed order contradicts it. D2 wins. A refused render on refresh flags and commits nothing.
+
+## D10 — ADR-006 states that the single-writer grep is partial and that the D+ carry path is unreachable today
+kind: shipped-finding
+step: verify-build · slice: — · decidedBy: lane
+sources: [code:scripts/test-design-snapshot.sh AC3 grep, design:decisions D6]
+rejected: leave the ADR asserting full coverage and a working carry — an ADR outlives the PR
+supersedes: —
