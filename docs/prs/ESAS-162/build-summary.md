@@ -15,6 +15,7 @@ slices:
     verifier: pass
     redBeforeGreen: true
     postDesignDecisions: [D1, D2, D3]
+    usage: null
   - id: 2
     name: "/design Step 4 commits the map snapshot — render before staging, three files in one commit, owner rule over all three"
     origin: plan
@@ -27,6 +28,7 @@ slices:
     verifier: pass
     redBeforeGreen: true
     postDesignDecisions: [D6, D7, D8]
+    usage: null
   - id: 3
     name: "/verify-build carries the goal-signal line and the inert drift step; ADR-006 records one writer"
     origin: plan
@@ -39,6 +41,14 @@ slices:
     verifier: pass
     redBeforeGreen: true
     postDesignDecisions: [D4, D5]
+    usage: null
+verifyBuild:
+  usage: null
+  gate: { mode: "--full (local mirror of validate-plugins.yml; lane has gateDeferred: true but the mirror has no --fast)", verdict: "FAIL (version-bump only, deliberate)", skipped: [], inconclusive: [] }
+  coherence: { critical: 0, medium: 2, low: 1, shippedUnresolved: ["E162-1 map-only folder unowned", "E162-2 self re-run reuses map.json"] }
+  fixSlicesAdded: 0
+  adrs: [ADR-006]
+  concerns: { hard: 0, soft: 0, unmet: [] }
 ---
 ## What shipped
 
@@ -52,3 +62,5 @@ Two design gaps are escalated, and neither blocks this lane:
 - **E162-2:** an `owner=self` re-run reuses its own earlier `map.json`.
 
 On the integrated lane branch, `test-design-snapshot` (97), `test-work-docs-path` (443), `test-flow-seams` (395) and `check-needles` all pass. `plugin.json` is not bumped, on the orchestrator's instruction.
+
+Usage not measured: no-transcripts (run-metrics finds a /start-multi lane only via --fleet from the orchestrator).
