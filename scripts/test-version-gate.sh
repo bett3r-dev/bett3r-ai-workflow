@@ -32,6 +32,14 @@
 # manifest left to read, and a gate that treats "cannot read the version" as
 # "not bumped" would make removing a plugin impossible.
 #
+# A ninth block covers the fleet-lane deferral (ESAS-186 D2/A1/A3): a
+# `.work/lane.yaml` with `gateDeferred: true` turns a would-be refusal into
+# `SKIP reason=deferred-to-merge-multi` with exit 0; without the file, with
+# `gateDeferred: false`, or with the key absent, the refusal stands; a bumped
+# branch is unaffected by lane.yaml either way — no SKIP line, exit 0; and an
+# unreadable manifest is never deferred, even under gateDeferred: true, because
+# that failure needs a human, not the later automated bump /merge-multi does.
+#
 # And an eighth, which is about the plumbing rather than the shape of the change:
 # git C-quotes any path carrying a non-ASCII byte, so `plugins/alpha/skills/café.md`
 # leaves `git diff --name-only` as `"plugins/alpha/skills/caf\303\251.md"` — a
@@ -130,8 +138,19 @@ new_repo(){
   mkdir -p "$repo/.github/workflows" "$repo/scripts"
   printf 'name: validate-plugins\n' >"$repo/.github/workflows/validate-plugins.yml"
   printf '#!/bin/sh\ntrue\n' >"$repo/scripts/some-tool.sh"
+  # `.work/` is gitignored in every real checkout — a lane's `.work/lane.yaml`
+  # never reaches git history, only the worktree's disk. Fixtures that write it
+  # must therefore ignore it too, or the fixture stops matching reality.
+  printf '.work/\n' >"$repo/.gitignore"
   commit_all "$repo" 'base state'
   git -C "$repo" checkout -q -b feature
+}
+
+# write_lane <repo> <contents> — an untracked `.work/lane.yaml`, as a real
+# fleet lane's worktree carries it: never committed, present only on disk.
+write_lane(){
+  mkdir -p "$1/.work"
+  printf '%s\n' "$2" >"$1/.work/lane.yaml"
 }
 
 # The base is passed by name, as CI passes `origin/<base_ref>`. `master` here is
@@ -277,6 +296,104 @@ commit_all "$repo" 'add a skill whose filename is not ASCII'
 assert_gate "$repo" refuse \
   'a plugin file whose name is not ASCII still counts as a touch — git C-quotes it' \
   'plugins/alpha' '1.0.0'
+
+# ── The fleet-lane deferral ───────────────────────────────────────────────────
+#
+# D2/A1/A3: a missing bump in a `gateDeferred: true` lane is a SKIP, not a
+# refusal — /merge-multi does the one real bump later, on a branch where no
+# lane.yaml exists so the same gate enforces normally there.
+
+printf '\nthe fleet-lane deferral\n'
+
+# a. gateDeferred: true, no bump — SKIP, exit 0.
+new_repo lane-deferred
+printf 'A changed body.\n' >>"$repo/plugins/alpha/skills/demo/SKILL.md"
+commit_all "$repo" 'change a skill, forget the bump'
+write_lane "$repo" 'gateDeferred: true'
+assert_gate "$repo" allow \
+  'a missing bump with gateDeferred: true is a SKIP, not a refusal' \
+  'plugins/alpha' 'SKIP reason=deferred-to-merge-multi'
+
+# b. Same change, no lane.yaml at all — refused as normal (e.g. CI, or
+#    /merge-multi's integration branch, where .work/ never exists).
+new_repo lane-absent
+printf 'A changed body.\n' >>"$repo/plugins/alpha/skills/demo/SKILL.md"
+commit_all "$repo" 'change a skill, forget the bump'
+assert_gate "$repo" refuse \
+  'the same missing bump with no lane.yaml at all is refused, not skipped' \
+  'plugins/alpha'
+
+# c. gateDeferred: false — not a deferral, refusal stands.
+new_repo lane-false
+printf 'A changed body.\n' >>"$repo/plugins/alpha/skills/demo/SKILL.md"
+commit_all "$repo" 'change a skill, forget the bump'
+write_lane "$repo" 'gateDeferred: false'
+assert_gate "$repo" refuse \
+  'gateDeferred: false is not a deferral — refusal stands' \
+  'plugins/alpha'
+
+# c'. lane.yaml present but the key is absent entirely — same as false.
+new_repo lane-key-absent
+printf 'A changed body.\n' >>"$repo/plugins/alpha/skills/demo/SKILL.md"
+commit_all "$repo" 'change a skill, forget the bump'
+write_lane "$repo" 'someOtherKey: true'
+assert_gate "$repo" refuse \
+  'a lane.yaml with no gateDeferred key at all is not a deferral — refusal stands' \
+  'plugins/alpha'
+
+# d. Bumped branches are unaffected by lane.yaml either way — no SKIP line.
+new_repo lane-bumped-with-file
+printf 'A changed body.\n' >>"$repo/plugins/alpha/skills/demo/SKILL.md"
+set_version "$repo" alpha 1.1.0
+commit_all "$repo" 'change a skill, bump the plugin'
+write_lane "$repo" 'gateDeferred: true'
+run_gate "$repo"
+gate_out=$( cat "$TMP/out" "$TMP/err" )
+case $gate_out in
+  *'SKIP'*)
+    fail 'a bumped branch prints no SKIP line even with gateDeferred: true in lane.yaml' \
+      'report:' "$gate_out" ;;
+  *)
+    if [ "$status" -eq 0 ]; then
+      pass 'a bumped branch prints no SKIP line even with gateDeferred: true in lane.yaml'
+    else
+      fail 'a bumped branch prints no SKIP line even with gateDeferred: true in lane.yaml' \
+        "expected exit 0, got $status" 'report:' "$gate_out"
+    fi
+    ;;
+esac
+
+# e. gateDeferred: true, but the failure is an unreadable manifest, not a
+#    missing bump — never deferred. /merge-multi's later bump can't repair a
+#    manifest a human hasn't fixed, on any branch, so this refuses regardless
+#    of lane.yaml.
+new_repo lane-unreadable-manifest
+printf '{ not json\n' >"$repo/plugins/alpha/.claude-plugin/plugin.json"
+commit_all "$repo" 'corrupt the manifest'
+write_lane "$repo" 'gateDeferred: true'
+run_gate "$repo"
+gate_out=$( cat "$TMP/out" "$TMP/err" )
+if [ "$status" -eq 0 ]; then
+  fail 'an unreadable manifest is never deferred, even with gateDeferred: true' \
+    'expected non-zero exit, got 0' 'report:' "$gate_out"
+else
+  case $gate_out in
+    *'SKIP'*)
+      fail 'an unreadable manifest is never deferred, even with gateDeferred: true' \
+        'the report contains a SKIP line — the unreadable failure was swallowed' \
+        'report:' "$gate_out" ;;
+    *)
+      pass 'an unreadable manifest is never deferred, even with gateDeferred: true' ;;
+  esac
+fi
+
+new_repo lane-bumped-no-file
+printf 'A changed body.\n' >>"$repo/plugins/alpha/skills/demo/SKILL.md"
+set_version "$repo" alpha 1.1.0
+commit_all "$repo" 'change a skill, bump the plugin'
+assert_gate "$repo" allow \
+  'a bumped branch with no lane.yaml at all is unchanged: allow, no SKIP line' \
+  'plugins/alpha: 1.0.0 → 1.1.0'
 
 # ── The base ref is never guessed ─────────────────────────────────────────────
 #

@@ -26,6 +26,8 @@ The bump itself shipped as `b151774` (#124), `0.12.0 → 0.13.0`, and was verifi
 
 **The gate makes a weaker claim than it appears to.** It catches the *omission, at PR time*. It does not observe the cache, does not verify propagation, and cannot tell you that any user received anything. "We now detect release drift" would be the false version of this sentence; the true one is that we now refuse the one mistake that caused it.
 
+**Amended by ESAS-186 — one bump per fleet, on the integration branch.** In a `/start-multi` fleet, N unit PRs merge into `int/<run-id>`, not the default branch, so a per-unit bump is a version no user can receive and a guaranteed `plugin.json` conflict between siblings. The contract is unchanged at the point of release: `/merge-multi` bumps each touched plugin once on integration, and the gate must PASS there. Only inside a lane's own worktree — `.work/lane.yaml` carrying `gateDeferred: true`, a gitignored file CI never sees — does `check-plugin-version-bump.sh` report a *missing* bump as `SKIP reason=deferred-to-merge-multi` instead of refusing; an unreadable manifest is never deferred. Rejected: bumping in every unit (conflicts, meaningless on int), recording the red step as a known baseline (the masking that removed this gate from two PRs), and teaching `/verify-build` to ignore version FAILs in general (hides a real omission on a normal PR).
+
 ## Considered options
 
 - **A release toolchain — release-please, changesets.** Correct machinery for the general case and disproportionate to this one: two plugins, one monorepo, a single operator. The ceremony exceeds the problem.

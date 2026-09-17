@@ -236,6 +236,12 @@ jobs:
         run: |
           sh scripts/test-skill-shadows.sh
           SHADOW_PY=python3 sh scripts/test-skill-shadows.sh
+      # `.claude/gate.sh` is the local copy of this workflow (CI is not always
+      # available to run it), and a copy fails by absence: a step added here and
+      # not there leaves the local gate green over a check it never ran. This
+      # asserts every `run:` line above and below appears verbatim in the gate.
+      - name: Test the host gate covers every workflow step (drift)
+        run: sh scripts/test-gate-drift.sh
 
   # These two are a SEPARATE JOB on purpose, not tidiness. Steps inside a job
   # run sequentially and fail-fast, so the first red step ends the job and every
