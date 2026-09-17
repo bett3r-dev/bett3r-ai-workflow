@@ -2490,6 +2490,16 @@ present "$VERIFY_BUILD_MD" 'Oracle candidates: <confirmed> confirmed, <rejected>
 in_order '/verify-build ORDER: ### Slices < ### Oracle candidates (D5)' \
   "$( first_line "$VERIFY_BUILD_MD" '### Slices' )" "$( first_line "$VERIFY_BUILD_MD" '### Oracle candidates' )"
 
+# ESAS-166 D10 / E163-1, E162-2 -> R2 — provenance decides map reuse. The
+# provisioner carries the Phase-C projection into the lane or reports it lost;
+# /design reuses a map as-is only on `carried`; /verify-build reports `lost`.
+present "$PROVISIONER_MD" 'mapProvenance: carried' 'provisioner writes mapProvenance: carried when it copies the projection (D10)'
+present "$PROVISIONER_MD" 'mapProvenance: lost' 'provisioner writes mapProvenance: lost when the run dir or projection is absent (D10)'
+present "$PROVISIONER_MD" 'docs/prs/<id>/map.json' 'provisioner names the lane map destination docs/prs/<id>/map.json (D10)'
+present "$DESIGN_MD" 'mapProvenance: carried' '/design Step 4 reuses a map as-is only on mapProvenance: carried (R2)'
+present "$DESIGN_MD" 'never re-authored in the lane' '/design Step 4: a carried map is frozen in the lane; fork changes escalate (R2, D9)'
+present "$VERIFY_BUILD_MD" 'owner answers not carried: run dir absent' 'pin: /verify-build reports mapProvenance lost as owner answers not carried'
+
 printf '\n'
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"
