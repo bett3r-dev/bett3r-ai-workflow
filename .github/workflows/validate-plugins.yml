@@ -157,6 +157,16 @@ jobs:
           sh scripts/test-design-map.sh
           DM_SH=dash dash scripts/test-design-map.sh
           DM_SH=bash bash scripts/test-design-map.sh
+      # The design map snapshot verdicts (ESAS-162): `design-map count` is the
+      # goal-signal line /verify-build puts in the PR body, and `design-map drift`
+      # says whether the committed map.json lags the map feed. Both are script
+      # verdicts an agent quotes, so a wrong count or exit code would be carried
+      # into the PR as fact. DS_SH varies the launcher's interpreter.
+      - name: Test the design map snapshot verdicts (count + drift)
+        run: |
+          sh scripts/test-design-snapshot.sh
+          DS_SH=dash dash scripts/test-design-snapshot.sh
+          DS_SH=bash bash scripts/test-design-snapshot.sh
       # /merge-multi rules each unit's own concerns from its head commit before
       # merging it — the hard block design F4/C2 puts here, never trusting the
       # advisory `flow/concerns` GitHub status. A presence-only check on that
