@@ -71,3 +71,35 @@ sources: [design:ESAS-166 C1, C2, docs/prs/ESAS-178/decisions.md D13]
 rejected: assert the block's `ingest`/`outcome=fail` — names ESAS-178 did not ship; ESAS-178's names govern per the block's own risk note
 supersedes: —
 Fragments are per-ticket fork sets composed into 7 subject maps (10 tickets); no merge verb exists. The one-answer-path terminal row carries no `map` key, an allowed variant (SKILL.md: an answer with no map applies); D5's orchestrator writes rows with the map id. Cross-map rejection is covered by existing rows.
+
+## D10 — `design-map select` is named with an artifact fallback until ESAS-174 ships it
+kind: false-premise
+step: build · slice: 5 · decidedBy: orchestrator
+sources: [code:VERBS (plugins/bett3r-ai-workflow/scripts/design-map.py) has no select, design:ESAS-166 block D11, E19]
+rejected: omit select — AC2 requires the token and D11 owns the call shape
+supersedes: —
+`ticketRefs` is written only when select returns target=board, which cannot happen at this base.
+
+## D11 — The orchestrator composes a subject map in memory from unit fragments and pipes it to `write`
+kind: silent-seam
+step: build · slice: 5 · decidedBy: verifier
+sources: [code:project multi-input rules (design-map.py), skill:design-map SKILL.md (write does not merge; render --stack refuses ungrounded), adr:ADR-006]
+rejected: a merge verb — out of scope (ESAS-178 owns verbs); per-subject answers dirs — one shared <run>/answers/ is safe via otherMap=
+supersedes: —
+Forks concatenated in unit order (duplicate id stops), nodes deduped by id (conflict escalates), mapId <S>, grounded/shape must agree, validate then write. The lane fragment is a full structureVersion 2 map with cards (never title-only; --final refuses title-only-open). Fix round 1 (design-silent).
+
+## D12 — The one-answer check reads `decisions --closed`'s verdict line, not its exit code
+kind: deviation
+step: build · slice: 5 · decidedBy: verifier
+sources: [adr:ADR-004, design:ESAS-166 block D5 ("exits 0")]
+rejected: the block's "the one-answer check exits 0" — ADR-004
+supersedes: —
+`outcome=ok verb=decisions open=0` proceeds; `outcome=fail reason=open-forks` stops fold-back.
+
+## D13 — Lane fragments are `shape: decision`
+kind: shipped-finding
+step: build · slice: 5 · decidedBy: verifier
+sources: [code:commands/design.md (an epic parent suggests the impact shape), schema:mapShape impact|decision]
+rejected: per-subject shape — unspecified by the block; the agree-rule would need a choice before lanes run
+supersedes: —
+An epic subject drawn as a decision tree bends /design's shape guidance without breaking anything. Follow-up.
