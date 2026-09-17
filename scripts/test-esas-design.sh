@@ -60,6 +60,7 @@ SKILL_MD="$PLUGIN/skills/esas-design/SKILL.md"
 PENDING_MD="$PLUGIN/skills/esas-pending/SKILL.md"
 GRILL_MD="$PLUGIN/skills/grill/SKILL.md"
 DESIGN_MULTI_MD="$PLUGIN/commands/design-multi.md"
+LANE_MD="$PLUGIN/agents/design-lane.md"
 FIXTURES="$ROOT/scripts/fixtures/esas-design"
 STORE_FIXTURE="$ROOT/scripts/fixtures/esas-pending/pending/.esas"
 PREFLIGHT_SH=${PREFLIGHT_SH:-sh}
@@ -1280,6 +1281,21 @@ else
       "not found in $HOOKS_JSON"
   fi
 fi
+
+# ── design-lane — the map-posting tools are forbidden, not merely unmentioned ──
+#
+# The lane is unattended (D5): nothing reads its output before it lands, so a
+# lane that could render or post a map would do so with no human watching.
+# S1's map gate already keeps a lane silent at the gate; this pins the second
+# half — the lane agent's own forbidden list names the tools that would let it
+# act as if the gate had said yes anyway.
+
+printf '\nagents/design-lane.md — the map-posting tools are forbidden\n'
+
+assert_md "$LANE_MD" 'the forbidden list names the map_* tool family (get_map excepted)' \
+  'map_*'
+assert_md "$LANE_MD" 'and start_map_session by name' \
+  'start_map_session'
 
 printf '\n'
 if [ "$failed" -gt 0 ]; then
