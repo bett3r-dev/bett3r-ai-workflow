@@ -50,7 +50,7 @@ may be the answer to it.
 
 ## The map and the questions
 
-**The terminal carries the map, the board carries the questions.** The terminal
+**The terminal carries the tree, the board carries the questions.** The terminal
 *names* each fork in one line of `grill`'s decision tree; the board *holds* the
 fork — options, recommendation, thread — as a `comment` anchored to the element
 it concerns. **Neither surface is a copy of the other**, so there is nothing to

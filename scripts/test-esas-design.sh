@@ -1060,7 +1060,7 @@ assert_md "$PENDING_MD" 'and it stays narrow — the pending count is still tele
 printf '\nskills/esas-design — the map and the questions\n'
 
 assert_md "$SKILL_MD" 'the split itself, in the words the design gives it' \
-  'terminal carries the map, the board carries the questions'
+  'terminal carries the tree, the board carries the questions'
 assert_md "$SKILL_MD" 'independent forks batch to the canvas, dependent ones stay serial' \
   'Batch the independent forks to the board; serialize the dependent ones'
 assert_md "$SKILL_MD" 'the duplication question is dissolved, not policed' \
@@ -1084,12 +1084,16 @@ printf '\nskills/grill — the decision-tree map (not board-scoped; see note)\n'
 
 assert_md "$GRILL_MD" 'the interview opens with the map, before question one' \
   'Open with the decision tree, before the first question'
-assert_md "$GRILL_MD" 'the map is maintained as tracks resolve, not printed once' \
+assert_md "$GRILL_MD" 'the tree is maintained as tracks resolve, not printed once' \
+  'Keep the tree current'
+refute_md "$GRILL_MD" 'the old terminal-list name is gone, not doubled' \
   'Keep the map current'
 assert_md "$GRILL_MD" 'a map line names its fork — it is not the question again' \
   'one line per fork, never the question restated'
-assert_md "$GRILL_MD" 'the board half is conditional; the map half is not' \
-  'The map is unconditional; the canvas is not'
+assert_md "$GRILL_MD" 'the tree is unconditional; the map is not' \
+  'The tree is unconditional; the map is not'
+refute_md "$GRILL_MD" 'and the old sentence, where map meant the terminal list, is gone' \
+  'The map is unconditional'
 
 # Green the moment it is written, and asserted anyway. The map is a numbered
 # list, which is the exact shape that tempts a picker, and the standing
@@ -1097,6 +1101,28 @@ assert_md "$GRILL_MD" 'the board half is conditional; the map half is not' \
 # edit that adds the map and reaches for `AskUserQuestion` to render it.
 assert_md "$GRILL_MD" 'the standing rule survives the map: no picker, ever' \
   'Never use `AskUserQuestion`'
+
+# ── skills/grill — where a map is live (ESAS-164 D4) ─────────────────────────
+#
+# A map is a separate surface from the tree: posted only once grounded, dependent
+# forks as a title with no card, a fork re-posted only when its words change.
+# grill keys off `outcome=ok` alone and never names the target selectors.
+
+printf '\nskills/grill — where a map is live\n'
+
+assert_md "$GRILL_MD" 'the subsection exists beside the board one' '### Where a map is live'
+assert_md "$GRILL_MD" 'a decision tree posts nothing before grounding' \
+  'No fork card is posted before grounding'
+assert_md "$GRILL_MD" 'the impact-map exception: why/who go up first, as a confirm question' \
+  'why/who are posted before grounding as a confirm question'
+assert_md "$GRILL_MD" 'a dependent fork is a title with what it waits on, no card' \
+  'title and what it waits on'
+assert_md "$GRILL_MD" 'a fork returns to the map only on a change of words' \
+  'returns to the map only when its words change'
+assert_md "$GRILL_MD" 'process-rule forks are authored untestable' 'testable:false'
+for word in verbFamilies start_map_session capabilities; do
+  refute_md "$GRILL_MD" "grill never names $word" "$word"
+done
 
 # ── commands/design-multi — Phase B on the canvas ─────────────────────────────
 #

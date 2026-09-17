@@ -21,23 +21,36 @@ Then: your recommendation, and why.
 
 If a question can be answered by exploring the codebase, explore the codebase instead.
 
-## The map — open with the decision tree
+## The decision tree — open with it
 
 **Open with the decision tree, before the first question.** A numbered list, **one line per fork, never the question restated** — the fork's name and what it turns on, nothing more. Then ask fork 1.
 
-Without the map the user answers blind. They cannot see how many forks are coming, which of them hang off the answer you are asking for right now, or whether the thing they are actually worried about is on your list at all — so they cannot say "start at 4", or "3 is already decided, here is why", or "you have missed the only one that matters". A relentless interview with no map reads as an interrogation rather than a walk down a tree, and the user's only remaining lever is to stop it.
+Without the tree the user answers blind. They cannot see how many forks are coming, which of them hang off the answer you are asking for right now, or whether the thing they are actually worried about is on your list at all — so they cannot say "start at 4", or "3 is already decided, here is why", or "you have missed the only one that matters". A relentless interview with no tree reads as an interrogation rather than a walk down a tree, and the user's only remaining lever is to stop it.
 
-**Keep the map current.** Re-print it whenever the *shape* changes: a resolved fork collapses to its answer in a few words, and anything that answer opened joins the list as a new numbered line. A map printed once at the top and never again is worse than none — by fork 5 it describes a tree that no longer exists, and the user is reconciling it against the conversation instead of reading it. Re-print on a change of shape, not after every message.
+**Keep the tree current.** Re-print it whenever the *shape* changes: a resolved fork collapses to its answer in a few words, and anything that answer opened joins the list as a new numbered line. A tree printed once at the top and never again is worse than none — by fork 5 it describes a tree that no longer exists, and the user is reconciling it against the conversation instead of reading it. Re-print on a change of shape, not after every message.
 
-The map is printed, like every other list in this flow: it is not an `AskUserQuestion` picker, and being a numbered list is not a reason to reach for one.
+The tree is printed, like every other list in this flow: it is not an `AskUserQuestion` picker, and being a numbered list is not a reason to reach for one.
 
-**The map is not the interview.** One line *names* a fork; the question itself — the options, the data-flow timeline where the choice is about how data moves, your recommendation — still arrives one at a time. A map whose lines have grown into the questions is the interview printed twice, which is the exact failure the one-line rule exists to prevent.
+**The tree is not the interview.** One line *names* a fork; the question itself — the options, the data-flow timeline where the choice is about how data moves, your recommendation — still arrives one at a time. A tree whose lines have grown into the questions is the interview printed twice, which is the exact failure the one-line rule exists to prevent.
 
 ### Where a board is live
 
-Where the repo has a `.esas/` and `/design` has put board mode on, the map gains a second surface — and it is a split, not a copy: **the terminal carries the map, the board carries the questions.** The **independent** forks, the ones already fully worded because they turn on nothing you have yet to hear, are batched onto the canvas anchored to what they concern; the **dependent** ones stay serialized here, one at a time, because a fork whose wording depends on the previous answer cannot be posted up front. The `esas-design` skill owns how that is written and read; this skill only says which forks are eligible.
+Where the repo has a `.esas/` and `/design` has put board mode on, the tree gains a second surface — and it is a split, not a copy: **the terminal carries the tree, the board carries the questions.** The **independent** forks, the ones already fully worded because they turn on nothing you have yet to hear, are batched onto the canvas anchored to what they concern; the **dependent** ones stay serialized here, one at a time, because a fork whose wording depends on the previous answer cannot be posted up front. The `esas-design` skill owns how that is written and read; this skill only says which forks are eligible.
 
-**The map is unconditional; the canvas is not.** In a repo with no `.esas/` nothing in this subsection applies and nothing above it changes: the map is printed in the terminal, every fork is asked here, and the interview runs exactly as it did before board mode existed.
+**The tree is unconditional; the map is not.** In a repo with no `.esas/` nothing in this subsection applies and nothing above it changes: the tree is printed in the terminal, every fork is asked here, and the interview runs exactly as it did before board mode existed.
+
+### Where a map is live
+
+A map is a separate surface from the board: `/design`'s map gate offers it, and it is live when `design-map` reports `DESIGN-MAP:v1 … outcome=ok` — nothing else here decides it. Where it is live, the forks are posted to it in this order:
+
+1. **Before grounding.** On an **impact** map, the why/who are posted before grounding as a confirm question — the one thing that goes up early, because the rest of the map hangs off them. On a **decision** map nothing goes up: **No fork card is posted before grounding.** The grounding marker is set through `design-map`, and only after `/design` Step 1 has actually grounded the design; an ungrounded draft is never drawn for the owner.
+2. **After grounding, the whole tree is posted.** An independent fork gets its full card. A dependent fork gets only its title and what it waits on — no card, because its wording turns on an answer not yet given. When the answer arrives and it unlocks, its card is written by upsert: on an artifact map, `design-map write` and then re-render; on a board map, a `map-post` upsert.
+3. **A fork made unnecessary is struck, never deleted** — marked `moot` with the reason, so the owner can see why it vanished from the work.
+4. **A fork returns to the map only when its words change.** A resolved answer, a moot strike or a new title-only line is a change; re-posting a fork whose wording is unchanged is noise the owner has to diff.
+5. **With a live map the terminal keeps one line per fork and no full cards.** The card lives on the map; printing it here too is the interview twice.
+6. **A card whose fork is a process rule with no observable behaviour is authored `testable:false`**, so nothing downstream tries to derive a test from it. The same authoring rule applies to cards written by a design lane.
+
+This is not the eventstorming board's dependent-fork rule. There, dependent forks are never posted (the `esas-design` skill owns that); on a map they are posted as titles. The two rules stay separate.
 
 ## Presenting a fork so it can be answered
 
