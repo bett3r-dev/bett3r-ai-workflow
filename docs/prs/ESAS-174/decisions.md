@@ -47,3 +47,11 @@ sources: [code:mapChoose author 'human' (esas@de920db packages/sticky-notes-boar
 rejected: committed static captures — drift silently from esas; owner via MCP map_choose — impossible by design (ESAS-168: ai never writes owner); built entry — esas packages export src/*.ts, unresolvable by plain node
 supersedes: —
 With ESAS_ORACLE_CAPTURES unset, `scripts/oracles/capture-esas-156.mjs` drives the real esas MCP server in-memory in a fresh git-init repo (tools, status, start_map_session, map_ground/map_post/map_choose/map_strike, get_map). Owner decisions call the store's mapChoose with author 'human', the exact call the board route makes (skipping only its HTTP body validation). board.json is synthesized (BOARD_KINDS imported, lastSeq=mapSeq, gitSha unknown) and disclosed. Stage 7 now checks prereq-failed before captures, requires probe=board-candidate, and passes `--map $S3FINAL --readback getmap.json` to post; statuses= comes from the store readback, so the multiset comparison is not self-referential. E1 (structureVersion 1 vs 2) did not fire: esas accepted the plugin's forks.
+
+## D7 — BOARD-SETUP's graphless branch: start_map_session launches nothing; the owner launches `--non-anchor`
+kind: false-premise
+step: build · slice: S4 · decidedBy: verifier
+sources: [code:startMapSession mkdir only (esas@de920db packages/esas-store/src/start-map-session.ts:104), code:launcher --non-anchor (esas@de920db packages/esas-session-server/src/launcher.ts:261-262,303), design:block §2 In "start_map_session, launch with esas-session-server --non-anchor"]
+rejected: read block §2 as start_map_session launching the board — false at de920db and would contradict D3 (never launch)
+supersedes: —
+The block's §2 sentence compresses two steps; the doc states them separately. First draft of S4 (sonnet) carried this and five other prose errors caught by the verifier (fix round cause: mis-routed).
