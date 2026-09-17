@@ -16,7 +16,7 @@ A design's **map snapshot** (`docs/prs/<id>/map.json`, the answered decision map
 
 | Fork | Decision | Verified |
 |---|---|---|
-| F1 map carriage in fleets | D+: provisioned `docs/prs/<id>/map.json` used as-is; `mapProvenance: lost` reported | holds — provisioner half is ESAS-166 |
+| F1 map carriage in fleets | D+: provisioned `docs/prs/<id>/map.json` used as-is; `mapProvenance: lost` reported | decision kept, **path unreachable today**: a map.json-only folder reads `owner=unowned` (D2 stops) — escalated E162-1, owner rule needed before ESAS-166 lands |
 | F2 drift without a feed | ship inert: `drift --no-feed` → `skip reason=no-map-feed` | holds — no esas feed in plugin |
 | D1 one writer | every map.json byte via `design-map write`/`apply-answers`; map.html via `render --out` | holds — `write` exists (`VERBS`, `design-map.py:1377`) |
 | D2 ownership | three files written only on `owner=none|self` | holds — `work-docs-path` owner verdict unchanged |
@@ -63,7 +63,7 @@ flowchart LR
 
 - The instruction text in `commands/design.md` Step 4 and `commands/verify-build.md` is prose an agent follows; only presence is tested. AC1 simulates Step 4 in shell, so the simulation and the prose can diverge — the tracer bullet is the count verb + Step 4 simulation together.
 - Drift is inert until ESAS-167/169 (REACHABILITY-ONLY); no live `drifted` in this PR.
-- Single-writer grep can false-positive on prose that *mentions* map.json; the grep targets write-shaped instructions (`> …map.json`, `tee …map.json`, `Write …map.json`).
+- Single-writer grep (AC3) catches word-initial shell redirects, `tee`, `cp`, `mv`, `install` into map.json/map.html, and skips any line naming `design-map`. It does NOT see `x>map.json` with no space, Write-tool prose instructions, python `open(...,'w')`, or a rogue redirect on a line that also names `design-map`. Amended at build (slice 2 verifier).
 
 ## Unspecified seams (decided here, autonomously)
 
