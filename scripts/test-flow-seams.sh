@@ -2469,6 +2469,20 @@ fi
 present "$PLUGIN/skills/vertical-slicing/SKILL.md" 'review:' 'vertical-slicing SKILL.md schema names review:'
 present "$PLUGIN/skills/vertical-slicing/SKILL.md" 'candidateOracles:' 'vertical-slicing SKILL.md schema names candidateOracles:'
 
+
+# ESAS-165 D5/U3 — /verify-build PR body reports Oracle candidates. The
+# positive control proves the file and extractor work, so an absent heading
+# cannot pass vacuously.
+present "$VERIFY_BUILD_MD" '### Slices' 'positive control: verify-build.md PR template carries ### Slices'
+present "$VERIFY_BUILD_MD" '### Oracle candidates' '/verify-build PR template carries ### Oracle candidates (D5)'
+present "$VERIFY_BUILD_MD" 'Breakdown not human-reviewed (unattended /plan).' '/verify-build prints the not-human-reviewed line on review: unattended (U3)'
+present "$VERIFY_BUILD_MD" 'Oracle candidates: none (owner answers not carried: run dir absent)' '/verify-build D5 form: mapProvenance lost'
+present "$VERIFY_BUILD_MD" 'Oracle candidates: none (no map.json)' '/verify-build D5 form: no candidateOracles key'
+present "$VERIFY_BUILD_MD" 'one bullet per unconfirmed candidate — `<fork>` / `<option>`: <scenario> — e.g. <example>' '/verify-build D5 form: unattended lists unconfirmed candidates'
+present "$VERIFY_BUILD_MD" 'Oracle candidates: <confirmed> confirmed, <rejected> rejected' '/verify-build D5 form: human-reviewed counts'
+in_order '/verify-build ORDER: ### Slices < ### Oracle candidates (D5)' \
+  "$( first_line "$VERIFY_BUILD_MD" '### Slices' )" "$( first_line "$VERIFY_BUILD_MD" '### Oracle candidates' )"
+
 printf '\n'
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"

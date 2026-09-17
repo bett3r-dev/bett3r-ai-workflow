@@ -229,6 +229,15 @@ The PR body is **a short summary plus links to the committed record**. `<path>` 
 - slice 2 — <name> (<commit>)
 - ...
 
+### Oracle candidates
+<report-only, read from .work/slices.yaml and .work/lane.yaml; it never refuses or delays opening the PR.
+whenever slices.yaml carries `review: unattended`, first: Breakdown not human-reviewed (unattended /plan).
+then the first form that applies:
+lane.yaml carries `mapProvenance: lost` → Oracle candidates: none (owner answers not carried: run dir absent)
+slices.yaml has no `candidateOracles` key → Oracle candidates: none (no map.json)
+`review: unattended` → one bullet per unconfirmed candidate — `<fork>` / `<option>`: <scenario> — e.g. <example>
+`review: human` → Oracle candidates: <confirmed> confirmed, <rejected> rejected>
+
 ### Unmet hard concerns
 <only when Step 5a's outcome is fail or error; omit the section on pass.
 fail: one bullet per bar: hard entry ruled partial, unmet or cannot-determine (or still at verdict: —) — `C<n>` — <its label> — the bar as raised: <quote:> — evidence: <evidence:>
