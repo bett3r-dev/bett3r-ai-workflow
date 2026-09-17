@@ -103,3 +103,11 @@ sources: [code:commands/design.md (an epic parent suggests the impact shape), sc
 rejected: per-subject shape — unspecified by the block; the agree-rule would need a choice before lanes run
 supersedes: —
 An epic subject drawn as a decision tree bends /design's shape guidance without breaking anything. Follow-up.
+
+## D14 — ADR-006 amended in place; its pre-ESAS-166 "unreachable / unowned" paragraph kept as history with a pointer
+kind: silent-seam
+step: build · slice: 6 · decidedBy: verifier
+sources: [adr:ADR-006, code:work-docs-path.py ownership, code:commands/design.md Step 4]
+rejected: new ADR number (ADR-010 was on offer) — P9 says 162 and 166 share ADR-006; erase the old paragraph — loses why E162-1 existed
+supersedes: —
+Fix round 1 (oracle-wrong): the first draft stated owner=none as "a stop", which presence rows could not catch; a row now pins "so `/design` proceeds". No glossary file exists in this repo, so Subject and Stacked maps are defined in the ADR.
