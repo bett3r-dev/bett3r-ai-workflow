@@ -635,6 +635,158 @@ refuse_answers 'a file that is not <forkId>.json' answer-unexpected-file "$TMP/f
 refuse_answers 'a missing answers dir' answers-dir-missing "$TMP/f3/nope"
 expect_error 'apply-answers with no answers dir' missing-answers apply-answers "$TMP/f3/author.json"
 
+# ---------------------------------------------------------------------------
+printf 'D5: apply-answers over v2 — overturns, title-only forks, moot, the map id\n'
+# ---------------------------------------------------------------------------
+mkdir -p "$TMP/d5"
+# amap <name> <python statements over m> — a mutated copy of answers-map.json
+# at $TMP/d5/<name>.json; the statements come from this file only.
+amap(){
+  python3 - "$FIX/answers-map.json" "$TMP/d5/$1.json" "$2" <<'PY'
+import json, sys
+m = json.load(open(sys.argv[1]))
+exec(sys.argv[3])
+with open(sys.argv[2], "w") as fh:
+    json.dump(m, fh, indent=2)
+PY
+}
+# adir <name> [<forkId> <json>]… — a fresh answers dir holding exactly these answers.
+adir(){
+  zdir="$TMP/d5/$1"; shift
+  rm -rf "$zdir"; mkdir -p "$zdir"
+  while [ $# -ge 2 ]; do printf '%s\n' "$2" > "$zdir/$1.json"; shift 2; done
+}
+# refuse_d5 <description> <reason> <map> <answers-dir> [flags…] — refused, map byte-identical.
+refuse_d5(){
+  wd=$1 wreason=$2 wmap=$3 wdir=$4; shift 4
+  cp "$wmap" "$TMP/d5/before.json"
+  expect_error "$wd" "$wreason" apply-answers "$wmap" "$wdir" "$@"
+  if cmp -s "$TMP/d5/before.json" "$wmap"; then pass "$wd: the map is byte-identical"; else fail "$wd: the map changed" "$( forks "$wmap" )"; fi
+}
+
+# F2 loses its card: a title-only (locked) fork.
+amap titleonly 'del m["forks"][1]["card"]'
+adir pick-titleonly ESAS-1-F2 '{"pick":"A","comment":"","updatedAt":"x"}'
+refuse_d5 'a pick on a card-less fork' fork-title-only "$TMP/d5/titleonly.json" "$TMP/d5/pick-titleonly"
+check 'a pick on a card-less fork: names it' "$( attr "$LINE" id )" ESAS-1-F2 "$LINE"
+
+adir none
+refuse_d5 '--final while a card-less fork is open' title-only-open "$TMP/d5/titleonly.json" "$TMP/d5/none" --final
+check '--final while a card-less fork is open: names it' "$( attr "$LINE" id )" ESAS-1-F2 "$LINE"
+
+# Without --final a card-less open fork is fine, and a comment on it is surfaced.
+adir comment-titleonly ESAS-1-F2 '{"pick":null,"comment":"when does this unlock?","updatedAt":"x"}'
+dm apply-answers "$TMP/d5/titleonly.json" "$TMP/d5/comment-titleonly"
+check 'a comment on a card-less fork without --final: ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+
+# An overturn of a code decision: F6 posted as decided(code).
+amap code 'm["forks"][5]["status"] = {"kind": "decided", "source": "code", "option": "B"}'
+cp "$TMP/d5/code.json" "$TMP/d5/code-kept.json"
+dm apply-answers "$TMP/d5/code-kept.json" "$TMP/d5/none"
+check 'apply-answers: counts decided(code)' "$( attr "$LINE" code )" 1 "$LINE" "$( cat "$OUT" )"
+check 'apply-answers: otherMap=0 when no answer names another map' "$( attr "$LINE" otherMap )" 0 "$LINE"
+adir overturn ESAS-1-F6 '{"pick":"A","comment":"","updatedAt":"x"}'
+dm apply-answers "$TMP/d5/code.json" "$TMP/d5/overturn"
+check 'a pick over decided(code): outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+check 'a pick over decided(code) -> decided(owner) on the pick' \
+  "$( forks "$TMP/d5/code.json" | tr ' ' '\n' | grep '^ESAS-1-F6:' )" 'ESAS-1-F6:decided:owner:A'
+check 'a pick over decided(code): code=0' "$( attr "$LINE" code )" 0 "$LINE"
+
+# A moot fork with a pick naming no option is left exactly as it is, no refusal.
+cp "$FIX/answers-map.json" "$TMP/d5/moot.json"
+adir moot-bad ESAS-1-F5 '{"pick":"Z","comment":"","updatedAt":"x"}'
+dm apply-answers "$TMP/d5/moot.json" "$TMP/d5/moot-bad" --final
+check 'an invalid pick on a moot fork: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+check 'an invalid pick on a moot fork: the fork keeps its moot status' \
+  "$( python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["forks"][4]["status"])' "$TMP/d5/moot.json" 2>&1 )" \
+  "{'kind': 'moot', 'reason': 'Superseded by ESAS-1-F1.'}"
+
+# Answers carry the map id: another map's answer is skipped and counted, never
+# applied and never checked (its fork and pick may name nothing here).
+amap withid 'm["mapId"] = "ESAS-1"'
+adir other ESAS-1-F1 '{"pick":"A","comment":"","updatedAt":"x","map":"other"}' \
+  ESAS-1-F9 '{"pick":"Z","comment":"","updatedAt":"x","map":"other"}' \
+  ESAS-1-F2 '{"pick":"A","comment":"","updatedAt":"x","map":"ESAS-1"}' \
+  ESAS-1-F3 '{"pick":"A","comment":"","updatedAt":"x"}'
+dm apply-answers "$TMP/d5/withid.json" "$TMP/d5/other"
+check "answers for map 'other': outcome=ok" "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+check "answers for map 'other': otherMap=2" "$( attr "$LINE" otherMap )" 2 "$LINE"
+check "an answer for map 'other' is not applied; the map's own and an unmarked one are" \
+  "$( forks "$TMP/d5/withid.json" | cut -d' ' -f1-3 )" 'ESAS-1-F1:open:-:- ESAS-1-F2:decided:owner:A ESAS-1-F3:decided:owner:A'
+# A map with no mapId: any answer that names a map names another one.
+cp "$FIX/answers-map.json" "$TMP/d5/noid.json"
+adir named ESAS-1-F1 '{"pick":"A","comment":"","updatedAt":"x","map":"ESAS-1"}'
+dm apply-answers "$TMP/d5/noid.json" "$TMP/d5/named"
+check 'a map with no mapId: an answer naming a map is otherMap, not applied' "$( attr "$LINE" otherMap ):$( attr "$LINE" owner )" 1:0 "$LINE" "$( cat "$OUT" )"
+adir badmap ESAS-1-F1 '{"pick":"A","comment":"","updatedAt":"x","map":7}'
+refuse_d5 'an answer whose map is not a string' answer-malformed "$TMP/d5/withid.json" "$TMP/d5/badmap"
+
+# The page's writer stamps the map id when the map carries one.
+dm render "$TMP/d5/withid.json" --expect 6 --out "$TMP/d5/page.html"
+check 'the page: the answer writer adds map: MAP.mapId when set' \
+  "$( grep -c 'if (MAP.mapId) doc.map = MAP.mapId;' "$TMP/d5/page.html" | tr -d ' ' )" 1
+
+# ---------------------------------------------------------------------------
+printf 'D6: write — a full map on stdin, validated, atomically replaced\n'
+# ---------------------------------------------------------------------------
+mkdir -p "$TMP/w"
+# dmin <stdin-file> <args…> — dm with stdin read from a file.
+dmin(){
+  zin=$1; shift
+  ( cd "$TMP" && "$DM_SH" "$DM" "$@" < "$zin" ) > "$OUT" 2>&1
+  rc=$?
+  LINE=$( verdict "$OUT" )
+}
+# canonical <in> <out> — the formatting apply-answers writes, computed independently.
+canonical(){
+  python3 -c '
+import json, sys
+with open(sys.argv[2], "w", encoding="utf-8") as fh:
+    json.dump(json.load(open(sys.argv[1], encoding="utf-8")), fh, indent=2, ensure_ascii=False)
+    fh.write("\n")' "$1" "$2"
+}
+
+dmin "$FIX/decision-3-forks.json" write "$TMP/w/new.json"
+check 'write a valid map: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+check 'write: verb=write' "$( attr "$LINE" verb )" write "$LINE"
+check 'write: forks=3' "$( attr "$LINE" forks )" 3 "$LINE"
+check 'write: map=<target>' "$( attr "$LINE" map )" "$TMP/w/new.json" "$LINE"
+check 'write: exit 0' "$rc" 0
+canonical "$FIX/decision-3-forks.json" "$TMP/w/canonical.json"
+if cmp -s "$TMP/w/canonical.json" "$TMP/w/new.json"; then pass 'write: the file equals the canonical output'; else fail 'write: the file is not canonical'; fi
+cp "$TMP/w/new.json" "$TMP/w/refold.json"
+dm apply-answers "$TMP/w/refold.json" "$TMP/d5/none"
+if cmp -s "$TMP/w/new.json" "$TMP/w/refold.json"; then pass 'write and apply-answers share one formatting'; else fail 'write and apply-answers format differently'; fi
+check 'write leaves no temp file behind' "$( find "$TMP/w" -name '.design-map-*' | wc -l | tr -d ' ' )" 0
+
+# refuse_write <description> <reason> <stdin-file> — an existing target stays
+# byte-identical, and an absent one is not created.
+refuse_write(){
+  vd=$1 vreason=$2 vin=$3
+  cp "$FIX/answers-map.json" "$TMP/w/target.json"
+  dmin "$vin" write "$TMP/w/target.json"
+  check "$vd: outcome=error" "$( attr "$LINE" outcome )" error "$LINE" "$( cat "$OUT" )"
+  check "$vd: reason" "$( attr "$LINE" reason )" "$vreason" "$LINE"
+  check "$vd: exit 2" "$rc" 2
+  if cmp -s "$FIX/answers-map.json" "$TMP/w/target.json"; then pass "$vd: the target is byte-identical"; else fail "$vd: the target changed"; fi
+  dmin "$vin" write "$TMP/w/absent.json"
+  check "$vd (no target yet): reason" "$( attr "$LINE" reason )" "$vreason" "$LINE"
+  if [ -e "$TMP/w/absent.json" ]; then fail "$vd: a target was created"; else pass "$vd: no target is created"; fi
+}
+refuse_write 'write a schema-invalid map' schema-invalid "$FIX/v1-map.json"
+refuse_write 'write a map with a bare actor' bare-actor "$FIX/bare-actor.json"
+amap dangling 'm["forks"][0]["restsOn"] = ["ESAS-1-F99"]'
+refuse_write 'write a semantically invalid map' dangling-ref "$TMP/d5/dangling.json"
+printf '{"structureVersion":' > "$TMP/w/trunc.json"
+refuse_write 'write unparseable stdin' map-unparseable "$TMP/w/trunc.json"
+dmin "$FIX/decision-3-forks.json" write
+check 'write with no target: reason=missing-map' "$( attr "$LINE" reason )" missing-map "$LINE"
+dmin "$FIX/decision-3-forks.json" write "$TMP/w/no-such-dir/m.json"
+check 'write into a missing directory: outcome=error reason=map-dir-missing' \
+  "$( attr "$LINE" outcome ):$( attr "$LINE" reason )" error:map-dir-missing "$LINE"
+dmin "$FIX/decision-3-forks.json" write --map "$TMP/w/flag.json"
+check 'write takes no --map flag' "$( attr "$LINE" reason )" unknown-flag-map "$LINE"
+
 # D5: the page marks a card done only when it carries a pick; a comment-only
 # answer keeps the card open, as the fold does.
 check 'the page: a comment-only answer is not done' \
@@ -745,6 +897,11 @@ assert_md "$SKILL_MD" 'the validate verb is documented' 'design-map validate <ma
 assert_md "$SKILL_MD" 'the not-grounded refusal is named' 'reason=not-grounded'
 assert_md "$SKILL_MD" 'the v2 status shape is documented' '{kind: decided, source, option}'
 refute_md "$SKILL_MD" 'the v1 layout field is gone' 'impactMap'
+assert_md "$SKILL_MD" 'the write verb is documented, map on stdin' 'design-map write <map.json> < draft.json'
+assert_md "$SKILL_MD" 'write is named the only structural authoring path' 'the only structural authoring path'
+assert_md "$SKILL_MD" 'the fork-title-only refusal is named' 'reason=fork-title-only'
+assert_md "$SKILL_MD" 'the title-only-open refusal is named' 'reason=title-only-open'
+assert_md "$SKILL_MD" 'otherMap is named' 'otherMap='
 
 # Two invariants, carried over from esas-design because they are properties of
 # turn-based answering rather than of any one transport.

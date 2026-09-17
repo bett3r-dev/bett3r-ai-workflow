@@ -55,6 +55,23 @@ design-map validate <map.json>
 Read-only: `outcome=ok forks=<n>`, or `outcome=error reason=... [at=...]`. It
 accepts an ungrounded draft, so run it on every draft before a render.
 
+## Write — the only structural authoring path
+
+```
+design-map write <map.json> < draft.json
+```
+
+Every structural change to a map — a new draft, a card added when a
+title-only fork unlocks, a projection — goes through `write`, never a shell
+redirection into `map.json`. It reads the full map on stdin, runs exactly the
+`validate` checks, and replaces the target whole via a temporary file in its
+own directory: `outcome=ok verb=write forks=<n> map=<path>`. It does not merge
+with the file it replaces — carrying answered statuses across a re-`write` is
+the caller's job. On any refusal (`missing-map`, `map-dir-missing`,
+`map-unparseable` for stdin that is not JSON, or any `validate` reason) the
+target is byte-identical, and an absent target is not created. Answers never
+enter through `write`; they enter only through `apply-answers`.
+
 ## Render, before publishing
 
 Once the grilled decision tree is settled and written into `map.json`, render
@@ -166,13 +183,22 @@ code (ADR-004) — a wrapper can swallow the exit status; the line still says
 
 Without `--final`, a picked fork becomes `{kind: decided, source: owner,
 option: <pick>}`, an unanswered fork stays `open`, and a comment with no pick leaves the fork `open` and prints the
-comment for me to resolve. **Before running `--final`, resolve every printed
+comment for me to resolve. A pick also overturns an earlier `code` or
+`recommendation` decision. A pick on a fork with no card is refused
+`reason=fork-title-only`; a `moot` fork is left exactly as it is, even under a
+pick naming no option. An answer whose `map` is not this map's `mapId` (or
+that names a map when the map has none) is skipped unchecked and counted in
+`otherMap=`; an answer with no `map` applies. The page writes `map: <mapId>`
+into every answer when the map has a `mapId`. The verdict counts `open= owner=
+recommendation= code= moot= otherMap=`. **Before running `--final`, resolve every printed
 comment** (D8). `--final` runs only on the owner saying, in the terminal, that
 they are done — never on a wake — and a comment still open at that point is
 resolved by the owner's answer or explicit sign-off that it stands as asked,
 **given in the terminal**, before the remaining `open` forks
 convert to `{kind: decided, source: recommendation, option:
-card.recommendation.option}`; an open fork with no card stays `open`. A `moot`
+card.recommendation.option}`. `--final` refuses `reason=title-only-open`
+(naming the first such fork) while any fork with no card is still open: write
+its card first. A `moot`
 fork is never deleted by either pass.
 
 See [`map-structure.schema.json`](./map-structure.schema.json) for the full

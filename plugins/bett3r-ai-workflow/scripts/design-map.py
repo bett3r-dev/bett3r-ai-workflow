@@ -2,8 +2,9 @@
 """The map verbs over a design's map.json. It says what it did in ONE line.
 
     DESIGN-MAP:v1 outcome=ok verb=validate forks=<n>
+    DESIGN-MAP:v1 outcome=ok verb=write forks=<n> map=<path>
     DESIGN-MAP:v1 outcome=ok verb=render expected=<n> payload=<n> rendered=<n> page=<path>
-    DESIGN-MAP:v1 outcome=ok verb=apply-answers final=<bool> open=<n> owner=<n> recommendation=<n> moot=<n> commented=<ids|none> map=<path>
+    DESIGN-MAP:v1 outcome=ok verb=apply-answers final=<bool> open=<n> owner=<n> recommendation=<n> code=<n> moot=<n> otherMap=<n> commented=<ids|none> map=<path>
     DESIGN-MAP:v1 outcome=error verb=<verb> reason=<reason> [key=value ...]
 
 Read the line, never the exit code alone (ADR-004): 0 for ok, 2 for error, and
@@ -13,6 +14,7 @@ no `page=`: a caller that publishes whatever `page=` names must find nothing.
 Usage:
 
   design-map validate <map.json>
+  design-map write <map.json>          (the map on stdin)
   design-map render <map.json> --expect <n> [--out <page.html>]
   design-map check-page <map.json> <page.html> --expect <n>
   design-map apply-answers <map.json> <answers-dir> [--final]
@@ -43,7 +45,16 @@ reason=schema-invalid. After the schema, the checks JSON Schema cannot express:
                                      deliverableId names no node
 
 `validate` runs the bare-actor check (below), the schema and these checks,
-and writes nothing; it accepts an ungrounded map. `render` and `check-page` also refuse reason=not-grounded when
+and writes nothing; it accepts an ungrounded map.
+
+`write` is the only structural authoring path. It reads a full map on stdin,
+runs the same checks as `validate`, and replaces the target whole: a temporary
+file in the target's directory, moved over it, in the formatting apply-answers
+writes. It never merges with the file it replaces. Every refusal leaves the
+target byte-identical, and an absent target is not created. Reasons:
+missing-map (no target argument), map-dir-missing (the target's directory does
+not exist), map-unparseable (stdin is not UTF-8 JSON), map-unwritable, and the
+validate reasons. `render` and `check-page` also refuse reason=not-grounded when
 the map holds at least one fork and `grounded` is not true: an ungrounded
 draft is never drawn for the owner to answer.
 
@@ -56,7 +67,8 @@ vocabulary's decided source (owner, recommendation and code are three distinct
 styles), and the page's legend shows each. The owner answers on it; each answer is written to the
 artifact's `db` store as `answers/<forkId>` = `{pick, comment, updatedAt}`, the
 shape of the ESAS-156 prototype's writer (esas `docs/prs/ESAS-156/map.html`,
-`saveAnswer`), so answers saved there parse unchanged. When `claude.use("db")`
+`saveAnswer`), so answers saved there parse unchanged; when the map carries a
+`mapId` the page also writes `map: <mapId>` into each answer. When `claude.use("db")`
 resolves null the page is read-only and says to reply in the terminal.
 `--out` defaults to `<map dir>/<map stem>.page.html`.
 
@@ -92,20 +104,26 @@ reason=out-is-map. Other reasons:
 `{kind: open}`, `{kind: decided, source, option}` or `{kind: moot, reason}`,
 and never deletes a fork. The answers dir
 holds one file per saved answer, `<answers-dir>/<forkId>.json`, containing the
-`answers/<forkId>` document as the page wrote it, `{pick, comment, updatedAt}`
-(dot-files are ignored; any other entry is reason=answer-unexpected-file).
+`answers/<forkId>` document as the page wrote it, `{pick, comment, updatedAt,
+map?}` (dot-files are ignored; any other entry is reason=answer-unexpected-file).
 
+  - an answer whose `map` is   -> skipped before any check (fork and pick are
+    not the map's mapId          not looked at) and counted in otherMap=; on a
+                                 map with no mapId, every answer naming a map is
+                                 skipped. An answer with no `map` applies.
   - an answer with a pick     -> {kind: decided, source: owner, option: <pick>}
-                                 — also over any earlier decision
+                                 — also over any earlier decision, code included
   - no answer                 -> status unchanged
   - a comment with no pick    -> status unchanged; the comment is printed as
                                  `comment <forkId>: <text>` before the verdict,
                                  and an open fork's id is listed in commented=
-  - a moot fork               -> left exactly as it is, answer or not
+  - a moot fork               -> left exactly as it is, answer or not, even a
+                                 pick naming no option (no refusal)
   - --final                   -> every fork with a card still open after the
                                  fold becomes {kind: decided, source:
                                  recommendation, option: card.recommendation.option};
-                                 an open fork with no card stays open
+                                 refused reason=title-only-open (id= the first)
+                                 while any fork with no card is still open
 
 Without --final no fork is ever made decided(recommendation): a fork the owner
 has not reached yet must stay distinguishable from one they let stand.
@@ -115,9 +133,10 @@ against the schema, written to a temporary file beside the map and moved over
 it. Every refusal leaves the author's map byte-identical. Reasons:
 
   missing-answers, answers-dir-missing, answer-unexpected-file (name=<entry>),
-  answer-unreadable, answer-unparseable, answer-malformed, unknown-fork,
-  unknown-pick (each with id=<forkId>; a pick on a fork with no card is
-  unknown-pick), map-unwritable, and the map reasons above
+  answer-unreadable, answer-unparseable, answer-malformed (also a `map` that
+  is not a string), unknown-fork, unknown-pick, fork-title-only (a pick on a
+  fork with no card), title-only-open (each with id=<forkId>), map-unwritable,
+  and the map reasons above
 
 A bare `actor` key is refused anywhere in the payload, before the schema runs:
 the map's who-level is `mapActor`, never `actor`, so a map role can never be
@@ -492,6 +511,7 @@ async function saveAnswer(id, patch) {
   if (!db) return;
   const prev = answers[id] || {};
   const doc = { pick: prev.pick || null, comment: prev.comment || "", ...patch, updatedAt: new Date().toISOString() };
+  if (MAP.mapId) doc.map = MAP.mapId;
   answers[id] = doc; renderCard(id);
   const s = document.querySelector('[data-fork-id="' + id + '"] .saved');
   try { await db.doc("answers/" + id).set(doc); s.textContent = "Saved"; }
@@ -786,22 +806,34 @@ def load_answers(directory):
             raise Refusal("answer-unparseable", id=fid)
         pick = doc.get("pick") if isinstance(doc, dict) else None
         comment = doc.get("comment") if isinstance(doc, dict) else None
+        owner_map = doc.get("map") if isinstance(doc, dict) else None
         if not isinstance(doc, dict) or not isinstance(pick, (str, type(None))) \
-                or not isinstance(comment, (str, type(None))):
+                or not isinstance(comment, (str, type(None))) \
+                or ("map" in doc and not isinstance(owner_map, str)):
             raise Refusal("answer-malformed", id=fid)
-        answers[fid] = {"pick": pick or None, "comment": (comment or "").strip()}
+        answers[fid] = {"pick": pick or None, "comment": (comment or "").strip(), "map": owner_map}
     return answers
 
 
 def fold(payload, answers, final):
-    """Apply answers (and --final) to the forks in place; returns the comments."""
+    """Apply answers (and --final) to the forks in place.
+
+    Returns (comments, commented, other_map). An answer naming a map other than
+    this map's mapId is skipped before any check and only counted.
+    """
     forks = {f["id"]: f for f in payload["forks"]}
+    map_id = payload.get("mapId")
+    other_map = sum(1 for a in answers.values() if a["map"] is not None and a["map"] != map_id)
+    answers = {fid: a for fid, a in answers.items() if a["map"] is None or a["map"] == map_id}
     for fid, answer in answers.items():
         if fid not in forks:
             raise Refusal("unknown-fork", id=fid)
-        pick = answer["pick"]
-        options = [o["id"] for o in forks[fid].get("card", {}).get("options", [])]
-        if pick is not None and pick not in options:
+        fork, pick = forks[fid], answer["pick"]
+        if fork["status"]["kind"] == "moot" or pick is None:
+            continue
+        if "card" not in fork:
+            raise Refusal("fork-title-only", id=fid)
+        if pick not in [o["id"] for o in fork["card"]["options"]]:
             raise Refusal("unknown-pick", id=fid)
     comments = []
     for fork in payload["forks"]:
@@ -815,12 +847,30 @@ def fold(payload, answers, final):
     commented = [f["id"] for f, _ in comments if f["status"]["kind"] == "open"]
     if final:
         for fork in payload["forks"]:
-            if fork["status"]["kind"] == "open" and "card" in fork:
+            if fork["status"]["kind"] == "open" and "card" not in fork:
+                raise Refusal("title-only-open", id=fork["id"])
+        for fork in payload["forks"]:
+            if fork["status"]["kind"] == "open":
                 fork["status"] = {
                     "kind": "decided", "source": "recommendation",
                     "option": fork["card"]["recommendation"]["option"],
                 }
-    return comments, commented
+    return comments, commented, other_map
+
+
+def write_map(path, payload):
+    """Replace `path` whole with the payload in the one canonical formatting:
+    a temporary file beside it, moved over it, so a reader never sees half a map."""
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(path)), prefix=".design-map-", suffix=".json")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2, ensure_ascii=False)
+            fh.write("\n")
+        os.replace(tmp, path)
+    except OSError:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise Refusal("map-unwritable")
 
 
 def apply_answers(positional, flags):
@@ -832,18 +882,9 @@ def apply_answers(positional, flags):
     final = flags.get("final", False)
     payload = load_map(map_path)
     validate(payload)
-    comments, commented = fold(payload, load_answers(answers_dir), final)
+    comments, commented, other_map = fold(payload, load_answers(answers_dir), final)
     validate(payload)
-    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(map_path)), prefix=".design-map-", suffix=".json")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump(payload, fh, indent=2, ensure_ascii=False)
-            fh.write("\n")
-        os.replace(tmp, map_path)
-    except OSError:
-        if os.path.exists(tmp):
-            os.remove(tmp)
-        raise Refusal("map-unwritable")
+    write_map(map_path, payload)
     for fork, comment in comments:
         sys.stdout.write(f"comment {fork['id']}: {comment.replace(chr(10), ' / ')}\n")
     def count(kind, source=None):
@@ -851,8 +892,8 @@ def apply_answers(positional, flags):
                    if f["status"]["kind"] == kind and (source is None or f["status"].get("source") == source))
     return dict(
         final="true" if final else "false", open=count("open"), owner=count("decided", "owner"),
-        recommendation=count("decided", "recommendation"), moot=count("moot"),
-        commented=",".join(commented) or "none", map=map_path,
+        recommendation=count("decided", "recommendation"), code=count("decided", "code"),
+        moot=count("moot"), otherMap=other_map, commented=",".join(commented) or "none", map=map_path,
     )
 
 
@@ -864,9 +905,25 @@ def validate_map(positional, flags):
     return dict(forks=len(payload["forks"]))
 
 
-VERBS = {"validate": validate_map, "render": render, "check-page": check, "apply-answers": apply_answers}
+def write(positional, flags):
+    if not positional:
+        raise Refusal("missing-map")
+    target = positional[0]
+    if not os.path.isdir(os.path.dirname(os.path.abspath(target))):
+        raise Refusal("map-dir-missing")
+    try:
+        payload = json.loads(sys.stdin.buffer.read().decode("utf-8"))
+    except (OSError, ValueError):
+        raise Refusal("map-unparseable")
+    validate(payload)
+    write_map(target, payload)
+    return dict(forks=len(payload["forks"]), map=target)
+
+
+VERBS = {"validate": validate_map, "write": write, "render": render, "check-page": check,
+         "apply-answers": apply_answers}
 # The flags each verb takes; any other parsed flag is reason=unknown-flag-<name>.
-FLAGS = {"validate": (), "render": ("expect", "out"), "check-page": ("expect",), "apply-answers": ("final",)}
+FLAGS = {"validate": (), "write": (), "render": ("expect", "out"), "check-page": ("expect",), "apply-answers": ("final",)}
 
 
 def main(argv):
