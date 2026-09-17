@@ -23,3 +23,18 @@ sources: [design:E4 ("judged values")]
 rejected: argument validation — not in the design; a bad arg is a loud `[` stderr error, not a wrong verdict
 supersedes: —
 Verifier ACCEPT; exhaustive 72-combination check matched the rule.
+
+## D4 — esas-design's "## The map and the questions" heading keeps "map"
+kind: shipped-finding
+step: build · slice: S2 · decidedBy: verifier
+sources: [design:E5 (names :53 only), code:skills/esas-design/SKILL.md:51]
+rejected: renaming the heading in this slice — outside E5's stated scope
+supersedes: —
+It still uses "map" in the terminal-list sense; a one-line follow-up for the owner.
+
+## D5 — grill names `map-post`, which does not exist in the plugin yet
+kind: shipped-finding
+step: build · slice: S2 · decidedBy: verifier
+sources: [design:D4.3, ESAS-167 obligation (upsert by id)]
+rejected: omitting the board path — the block states it verbatim
+supersedes: —
