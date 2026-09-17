@@ -47,6 +47,7 @@ RUN_REPORT_MD="$PLUGIN/commands/run-report.md"
 VERIFY_BUILD_MD="$PLUGIN/commands/verify-build.md"
 DESIGN_MULTI_MD="$PLUGIN/commands/design-multi.md"
 DESIGN_LANE_MD="$PLUGIN/agents/design-lane.md"
+ADR_006_MD="$ROOT/docs/adr/ADR-006-one-program-writes-map-json.md"
 LANE_STEP_FIXTURES="$ROOT/scripts/fixtures/lane-step"
 MARKER_PY=${MARKER_PY:-python3}
 
@@ -2523,6 +2524,18 @@ else
 fi
 
 printf '\n'
+# ESAS-166: ADR-006's amended section names the subject/stacking/projection/
+# provenance vocabulary this unit adds, so a future edit that drops the section
+# (or renames a term the code actually uses) fails here rather than in review.
+present "$ADR_006_MD" 'Subject' \
+  '[ESAS-166] ADR-006 names Subject in its glossary'
+present "$ADR_006_MD" 'mapProvenance: carried' \
+  '[ESAS-166] ADR-006 names mapProvenance: carried'
+present "$ADR_006_MD" 'design-multi-subjects' \
+  '[ESAS-166] ADR-006 names the design-multi-subjects helper'
+present "$ADR_006_MD" 'so `/design` proceeds' \
+  '[ESAS-166] ADR-006 says a map-only owner=none folder lets /design proceed'
+
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"
   exit 0
