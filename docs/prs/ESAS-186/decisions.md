@@ -23,3 +23,19 @@ sources: [human]
 rejected: —
 supersedes: —
 Unattended run; scope was checked by the orchestrator with git status and by the verifier's scope guard, since every slice touches 2–4 files.
+
+## D4 — The drift test fails closed on a `run:` form it cannot parse
+kind: silent-seam
+step: build · slice: 2 · decidedBy: verifier
+sources: [code:unparsed (scripts/test-gate-drift.sh), design:D1]
+rejected: accept the textual extractor as-is — a new `run: |-` or `run: >` step would be silently unchecked, the exact failure the test exists to stop
+supersedes: —
+Pinned by a specimen case and a mutation (guard disabled → red).
+
+## D5 — INCONCLUSIVE steps do not fail the host gate
+kind: silent-seam
+step: build · slice: 2 · decidedBy: verifier
+sources: [code:.claude/gate.sh, plugins/bett3r-ai-workflow/skills/full-gate/SKILL.md]
+rejected: fail on a missing `dash` — would make the gate unrunnable where dash is absent; the contract reserves non-zero for FAIL and requires INCONCLUSIVE be named
+supersedes: —
+Also: the CI-only PyYAML installer line is not run locally and is excluded from the drift test by name; `${{ github.base_ref || 'master' }}` maps to `${GATE_BASE}` (default origin/master).
