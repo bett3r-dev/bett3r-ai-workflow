@@ -454,6 +454,23 @@ assert_md "$SKILL_MD" 'the read_db document id is the forkId' \
 assert_md "$SKILL_MD" 'the verdict line is read, not the exit code' \
   'verdict line on stdout, not the exit'
 
+# Slice 4, measured 2026-09-17: the page's own comment box writes
+# answers/<forkId>.comment to the db and never notified the session; the
+# owner's word in the terminal is the observed trigger. The comment-mode
+# thread wake stays unmeasured, and the skill must say so.
+assert_md "$SKILL_MD" "the page's comment box is stated never to wake the session" \
+  "The page's comment box never wakes the session."
+assert_md "$SKILL_MD" 'the description carries the same never-wakes claim' \
+  "the page's comment box never wakes the session"
+refute_md "$SKILL_MD" 'a page comment is no longer offered as a readback trigger' \
+  'or a comment on the page'
+assert_md "$SKILL_MD" 'publishing tells the owner to hand back in the terminal' \
+  "tell me in the terminal when you're done"
+assert_md "$SKILL_MD" 'the comment-mode thread wake is marked unmeasured' \
+  'This is not measured'
+assert_md "$SKILL_MD" 'out_dir readback lands directly in the D10 layout' \
+  'lands **directly**'
+
 # Two invariants, carried over from esas-design because they are properties of
 # turn-based answering rather than of any one transport.
 assert_md "$SKILL_MD" 'invariant 1: a wake with nothing new is a normal outcome' \
