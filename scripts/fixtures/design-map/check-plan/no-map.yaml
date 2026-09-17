@@ -1,0 +1,7 @@
+ticket: ESAS-9
+slices:
+  - id: 1
+    name: "slice one"
+    oracle: |
+      the launcher prints outcome=ok and exits 0
+review: unattended

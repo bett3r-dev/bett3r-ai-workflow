@@ -23,6 +23,8 @@ Never accept these facts at the invocation instead. A step that learns a fact fr
 
 Resolve the design's folder with `work-docs-path`, passing the work item exactly as `/design` Step 4 does, and read `<path>/design.md` from its verdict line's `path=` (if absent: "No design found. Run `/design` first."). An `outcome=error` line stops the step with its `reason=`; there is no second location to try. Read the relevant `CONTEXT.md` so slice names use the **ubiquitous language**, and respect existing ADRs in the area you're touching.
 
+**Check for a resolved map.** If `<path>/map.json` exists, run `design-map candidates <path>/map.json` (positional — `--map` is refused) and read its `DESIGN-MAP:v1` line, never its prose, to get the candidate list for Step 4. If `<path>/map.json` is absent, there are no candidates and the verb is not called at all.
+
 ## Step 2 — Look for prefactoring
 
 "Make the change easy, then make the easy change." Identify any reshaping of existing code that would make the feature drop in cleanly. If found, it becomes the **earliest slice(s)** — done before the feature slices.
@@ -43,7 +45,7 @@ Cut the design into tracer-bullet vertical slices, each a thin but COMPLETE path
 
 ## Step 4 — Review the breakdown with the user
 
-Present the proposed slices as a numbered list. For each: **title**, **blocked-by**, and the **behavior** it delivers. Ask:
+Present the proposed slices as a numbered list. For each: **title**, **blocked-by**, the **behavior** it delivers, and its **oracle** — followed by that slice's own candidates (if a map.json existed), listed under it; then any candidates not yet attached to a slice, listed last. For each candidate ask the user to **confirm, reject, or re-attach each candidate**: only a confirm copies that candidate's example verbatim into the slice's `oracle` (the promotion); a reject or re-attach never copies. Ask:
 
 - Does the granularity feel right (too coarse / too fine)?
 - Are the dependencies correct?
@@ -52,11 +54,15 @@ Present the proposed slices as a numbered list. For each: **title**, **blocked-b
 
 **Iterate until the user approves.** Do not write `slices.yaml` or publish until approved.
 
-**Unattended branch.** Inside a `/start-multi` fleet run there is **no user to approve, by construction** — this step reads as a hard gate with no exit, so an agent must decide on its own whether the instruction applies to it, and a literal one stalls here. When invoked by an unattended agent (or the ticket carries a `design-multi:resolved:vN` block, whose slicing the human already reviewed): **skip the review pass, write `slices.yaml`, and record in the file that the breakdown was not human-reviewed**, so `/verify-build` and the PR body can say so. `/design` already has this shape for its own interview; this is its counterpart.
+**Unattended branch.** Inside a `/start-multi` fleet run there is **no user to approve, by construction** — this step reads as a hard gate with no exit, so an agent must decide on its own whether the instruction applies to it, and a literal one stalls here. When invoked by an unattended agent (or the ticket carries a `design-multi:resolved:vN` block — a resolved block reviews the design, not its slicing): **skip the review pass, write `slices.yaml`, write `review: unattended`, and mark every candidate `status: unconfirmed` without ever copying one into an `oracle`** — record in the file that the breakdown was not human-reviewed, so `/verify-build` and the PR body can say so. `/design` already has this shape for its own interview; this is its counterpart.
 
 ## Step 5 — Write `.work/slices.yaml`
 
 Write the approved slices (the `vertical-slicing` skill's schema): `id`, `name`, `passes: false`, `depends_on`, `behavior`, `oracle` (the test that proves it), `gates` (the project invariants the verifier must confirm), `designs` (the design node ids it delivers, when the unit has a design layer). Record the ADR path and branch. Lead each slice with behavior; `touches` (files) is an optional hint only. Add `surface` (Step 3) to every slice, and **before writing, check each one against the cap**: a slice over it without `surface.atomic:` is refused — split it, then write.
+
+**After `slices:`, always write a top-level `review: human|unattended`.** When Step 1 found a `<path>/map.json`, also write a top-level `candidateOracles:` — a list of `{fork, option, scenario, source, example, slice, status}`, one entry per candidate, `slice` set when attached and `status` one of `confirmed`, `rejected`, `unconfirmed`. Omit `candidateOracles:` entirely when there was no map.json. Both keys go **after** `slices:`, since `worktree-pool`'s `parse_slices` stops at the first indent-0 line following it.
+
+**Then run `design-map check-plan .work/slices.yaml`** in both the attended and the unattended branch. On `outcome=fail`, act on its `reason=` and re-run: `reason=candidate-in-oracle` → remove the copied candidate example from that `slice=`'s `oracle`; `reason=unattended-confirmed` → reset that candidate's status back to `status: unconfirmed`. Never proceed on a failing plan. `/build`, the executor and the verifier all ignore `candidateOracles:` — nothing in the build or its gates blocks on the mark.
 
 **Record which design elements each slice delivers.** If the unit has a design layer
 (`.esas/design.json` — an ESAS board session), add a `designs:` list to each slice naming the

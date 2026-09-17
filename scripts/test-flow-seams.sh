@@ -2448,6 +2448,48 @@ for refuted in 'Nothing else is kept' 'committed scratch docs'; do
   fi
 done
 
+# ---------------------------------------------------------------------------
+# ESAS-165 — /plan offers candidate oracles from a resolved map, never
+# promotes them unattended, and /verify-build reports them (D6/D7/U4).
+# ---------------------------------------------------------------------------
+
+present "$PLAN_MD" 'If `<path>/map.json` exists, run' '/plan Step 1 checks for <path>/map.json before offering candidates'
+present "$PLAN_MD" 'design-map candidates' '/plan Step 1 runs design-map candidates positionally over map.json'
+present "$PLAN_MD" 'confirm, reject, or re-attach each candidate' '/plan Step 4 asks to confirm, reject, or re-attach each candidate'
+present "$PLAN_MD" 'design-map check-plan' '/plan runs design-map check-plan against .work/slices.yaml'
+present "$PLAN_MD" 'review: unattended' '/plan writes review: unattended in the unattended branch'
+present "$PLAN_MD" '`reason=candidate-in-oracle` →' '/plan Step 5 handles check-plan reason=candidate-in-oracle'
+present "$PLAN_MD" '`reason=unattended-confirmed` →' '/plan Step 5 handles check-plan reason=unattended-confirmed'
+present "$PLAN_MD" 'and its **oracle** — followed by that slice' '/plan Step 4 shows each slice oracle with its candidates under it (D7)'
+present "$PLAN_MD" 'mark every candidate `status: unconfirmed`' '/plan writes every unattended candidate as unconfirmed'
+present "$PLAN_MD" 'also write a top-level `candidateOracles:`' '/plan Step 5 writes a top-level candidateOracles: block'
+
+# The old wording ("whose slicing the human already reviewed") described a
+# resolved block as reviewing the SLICING; U4 corrects this — a block reviews
+# the design, not the breakdown /plan itself produces.
+if grep -qF -e 'whose slicing the human already reviewed' "$( norm "$PLAN_MD" )"; then
+  fail '/plan no longer says a resolved block reviewed the slicing (U4)' "still present in ${PLAN_MD#"$ROOT"/}"
+else
+  pass '/plan no longer says a resolved block reviewed the slicing (U4)'
+fi
+
+present "$PLUGIN/skills/vertical-slicing/SKILL.md" 'review:' 'vertical-slicing SKILL.md schema names review:'
+present "$PLUGIN/skills/vertical-slicing/SKILL.md" 'candidateOracles:' 'vertical-slicing SKILL.md schema names candidateOracles:'
+
+
+# ESAS-165 D5/U3 — /verify-build PR body reports Oracle candidates. The
+# positive control proves the file and extractor work, so an absent heading
+# cannot pass vacuously.
+present "$VERIFY_BUILD_MD" '### Slices' 'positive control: verify-build.md PR template carries ### Slices'
+present "$VERIFY_BUILD_MD" '### Oracle candidates' '/verify-build PR template carries ### Oracle candidates (D5)'
+present "$VERIFY_BUILD_MD" 'Breakdown not human-reviewed (unattended /plan).' '/verify-build prints the not-human-reviewed line on review: unattended (U3)'
+present "$VERIFY_BUILD_MD" 'Oracle candidates: none (owner answers not carried: run dir absent)' '/verify-build D5 form: mapProvenance lost'
+present "$VERIFY_BUILD_MD" 'Oracle candidates: none (no map.json)' '/verify-build D5 form: no candidateOracles key'
+present "$VERIFY_BUILD_MD" 'one bullet per unconfirmed candidate — `<fork>` / `<option>`: <scenario> — e.g. <example>' '/verify-build D5 form: unattended lists unconfirmed candidates'
+present "$VERIFY_BUILD_MD" 'Oracle candidates: <confirmed> confirmed, <rejected> rejected' '/verify-build D5 form: human-reviewed counts'
+in_order '/verify-build ORDER: ### Slices < ### Oracle candidates (D5)' \
+  "$( first_line "$VERIFY_BUILD_MD" '### Slices' )" "$( first_line "$VERIFY_BUILD_MD" '### Oracle candidates' )"
+
 printf '\n'
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"

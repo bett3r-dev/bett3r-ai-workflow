@@ -81,6 +81,9 @@ slices:
     name: "..."
     passes: false
     depends_on: []                 # independent of slice 1 → can run in parallel
+review: human                      # human | unattended — set by /plan Step 5, always
+candidateOracles:                  # OPTIONAL. Only when a <path>/map.json existed at Step 1;
+                                    #   [{fork, option, scenario, source, example, slice, status}]
 ```
 
 `passes` flags + git commits **are** the build progress. There is no separate progress doc. `touches: [paths]` may be added as a hint, but lead with `behavior`. `model:` routes the slice's executor — set it only where the implementation is genuinely mechanical, and never on the tracer bullet, which is by construction the slice whose seam nobody has proven yet. `designs:` names the design-layer node ids the slice delivers, so `/build` can scaffold this slice's artifacts and not the whole design's; leave it out when the unit has no design layer, and never guess an id — a wrong one scaffolds the wrong artifact, while an absent one just means "nothing designed here".

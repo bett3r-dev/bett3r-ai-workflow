@@ -177,6 +177,15 @@ jobs:
           sh scripts/test-map-tree.sh
           MT_SH=dash dash scripts/test-map-tree.sh
           MT_SH=bash bash scripts/test-map-tree.sh
+      # The candidate-oracle shape of slices.yaml (ESAS-165): which map walks
+      # /plan may offer, check-plan's refusals of an unattended plan, and that
+      # the trailing review:/candidateOracles: block leaves the pool width alone.
+      # PC_SH varies the launchers' interpreter.
+      - name: Test the plan candidate oracles (candidates + check-plan + pool width)
+        run: |
+          sh scripts/test-plan-candidates.sh
+          PC_SH=dash dash scripts/test-plan-candidates.sh
+          PC_SH=bash bash scripts/test-plan-candidates.sh
       # /merge-multi rules each unit's own concerns from its head commit before
       # merging it — the hard block design F4/C2 puts here, never trusting the
       # advisory `flow/concerns` GitHub status. A presence-only check on that
