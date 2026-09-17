@@ -2,7 +2,7 @@
 # Oracle for `/design` board-mode and the `esas-design` skill — plus the half of
 # the `grill` skill that decides which forks a board is shown at all, and the
 # half of `/design-multi` that puts its batched interview on the canvas. The
-# `grill` half is deliberately not board-scoped: the decision-tree map `grill`
+# `grill` half is deliberately not board-scoped: the decision tree `grill`
 # opens with applies in every repo, board or no board. It is pinned here because
 # it is the terminal half of a split whose other half lives on the canvas, and
 # half a split is not worth guarding. `/design-multi` is board-scoped like the
@@ -1071,19 +1071,19 @@ assert_md "$SKILL_MD" 'the duplication question is dissolved, not policed' \
 #
 # `grill` is the third skill this suite reads, and the only one that is not a
 # board artifact: the decision-tree opener applies in every repo, `.esas/` or no
-# `.esas/`. It is pinned *here* because the map is the terminal half of the
+# `.esas/`. It is pinned *here* because the tree is the terminal half of the
 # board's question surface — pinning "the board holds the questions" in one file
-# while leaving "the terminal holds the map" unguarded in another would pin half
+# while leaving "the terminal holds the tree" unguarded in another would pin half
 # a sentence. The suite header carries the same clause, so this is a stated
 # scope rather than a quiet widening.
 #
 # The conditionality needle is the load-bearing one for every repo that will
-# never have a board: the map is unconditional, the canvas is not, and a reader
+# never have a board: the tree is unconditional, the map is not, and a reader
 # with no `.esas/` must come away with today's flow exactly.
 
-printf '\nskills/grill — the decision-tree map (not board-scoped; see note)\n'
+printf '\nskills/grill — the decision tree (not board-scoped; see note)\n'
 
-assert_md "$GRILL_MD" 'the interview opens with the map, before question one' \
+assert_md "$GRILL_MD" 'the interview opens with the tree, before question one' \
   'Open with the decision tree, before the first question'
 assert_md "$GRILL_MD" 'the tree is maintained as tracks resolve, not printed once' \
   'Keep the tree current'
