@@ -38,3 +38,27 @@ step: build · slice: 3 · decidedBy: executor
 sources: [code:commands/verify-build.md step headings, code:scripts/test-flow-seams.sh first_line lookups]
 rejected: renumber Step 5b..9 — cascades through every citation and seam lookup
 supersedes: —
+
+## D6 — The D+ provisioned-map path is unreachable today: a map.json-only folder reads owner=unowned
+kind: false-premise
+step: build · slice: 2 · decidedBy: verifier
+sources: [code:work-docs-path --owner-branch (plugins/bett3r-ai-workflow/bin/work-docs-path), design:block F1 D+ and D2]
+rejected: change work-docs-path in this unit — out of the block's scope; a silent owner rule is a design decision
+supersedes: —
+D2 stops on `unowned`, and the provisioner (ESAS-166) leaves only `map.json`. Step 4 says the case is unreachable until a map-only-folder owner rule exists. Escalated as E162-1 (recommendation: the provisioner writes the ownership header, or work-docs-path reads a no-design.md folder holding a map.json as `none`).
+
+## D7 — An owner=self re-run uses its own previously committed map.json as-is
+kind: shipped-finding
+step: build · slice: 2 · decidedBy: verifier
+sources: [design:block F1 "uses an existing map.json as-is"]
+rejected: rewrite on every self re-run — contradicts "use as-is" for the provisioned case, which Step 4 cannot distinguish
+supersedes: —
+A re-run whose tree changed but kept its fork count commits the stale map; a changed count stops on count-mismatch. Escalated as E162-2 for ESAS-163 (next to touch Step 4).
+
+## D8 — design.md is written only after render passes; a refused render on a self re-run leaves the prior map.html deleted, uncommitted, for the human
+kind: silent-seam
+step: build · slice: 2 · decidedBy: executor
+sources: [code:render (design-map.py) removes the page on refusal, design:block D3]
+rejected: write design.md first — then a refusal must remove it too
+supersedes: —
+Also: a `design-map write` refusal writes and commits nothing, and ends blocked-on with its reason. The AC3 single-writer grep's blind spots are recorded in design.md Risks.
