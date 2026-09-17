@@ -39,3 +39,11 @@ sources: [code:.claude/gate.sh, plugins/bett3r-ai-workflow/skills/full-gate/SKIL
 rejected: fail on a missing `dash` — would make the gate unrunnable where dash is absent; the contract reserves non-zero for FAIL and requires INCONCLUSIVE be named
 supersedes: —
 Also: the CI-only PyYAML installer line is not run locally and is excluded from the drift test by name; `${{ github.base_ref || 'master' }}` maps to `${GATE_BASE}` (default origin/master).
+
+## D6 — Slice 3 (prose + manifest) verified by the orchestrator, not a verifier agent
+kind: waiver
+step: build · slice: 3 · decidedBy: orchestrator
+sources: [code:commands/verify-build.md, code:commands/merge-multi.md]
+rejected: opus verifier for two paragraphs and a version string — cost without a judgment surface; /verify-build's whole-PR review covers it
+supersedes: —
+Evidence: version script FAIL (0.81.0 = 0.81.0) on a synthetic prose-only commit, PASS 0.81.0 → 0.82.0 after the bump; needles/links/validate green. marketplace.json metadata 0.35.0 → 0.36.0 per the last three releases.
