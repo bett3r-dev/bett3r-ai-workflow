@@ -3,11 +3,9 @@
 # visual map by choose or comment, the answers land as decided(owner) in one
 # record, and the map is regenerable from map.json".
 #
-# Committed RED on purpose (P10/C6): most verbs this drives (validate, write,
-# v2 apply-answers, candidates, map-tree, select, post) either do not exist
-# yet on `bin/design-map` (unknown-verb) or the shipped launcher still speaks
-# v1 over a v2-shaped fixture (schema/shape mismatch). That is the expected
-# state until slices 2-7 land the vocabulary, the writer and the readers.
+# Committed RED by ESAS-178 (P10/C6) while the verbs it drives were unbuilt;
+# ESAS-174 S3 corrected stages 4 and 7 to the shipped map-tree and select/post
+# contracts and made stage 7 capture from a real esas checkout.
 #
 # Every stage prints exactly one line:
 #   ORACLE:v1 stage=<n> outcome=ok|fail|error [reason=<reason>]
@@ -16,7 +14,8 @@
 # propagated verbatim, and `reason=unknown-verb` is never turned into a skip.
 # `outcome=fail` means every verb call concluded ok but an assertion this
 # oracle makes about the result did not hold. `reason=no-verdict` covers a
-# run that printed no DESIGN-MAP:v1 line at all (crashed before concluding).
+# run that printed no verdict line at all (DESIGN-MAP:v1, or MAP-TREE:v1 for
+# stage 4's map-tree calls) — it crashed before concluding.
 #
 # Exit 0 only when all 7 stages are ok. ESAS_CHECKOUT unset/empty prints
 # `ORACLE:v1 stage=0 outcome=error reason=no-esas-checkout` and exits 2
@@ -41,10 +40,12 @@ trap 'rm -rf "$TMP"' EXIT INT TERM
 
 overall=0
 
-# verdict_line <file> — the last DESIGN-MAP:v* verdict line in the file, if
-# any (mirrors scripts/test-design-map.sh's own `verdict`).
+# verdict_line <file> [token] — the last non-blank line of the file when it
+# is a `<token>:v*` verdict line (token defaults to DESIGN-MAP; stage 4 also
+# reads MAP-TREE), else nothing (mirrors scripts/test-design-map.sh's own
+# `verdict`).
 verdict_line(){
-  awk 'NF{l=$0} END{print l}' "$1" | grep -E '^DESIGN-MAP:v[0-9]+ outcome=[a-z]+( [A-Za-z_-]+=[^ ]*)*$'
+  awk 'NF{l=$0} END{print l}' "$1" | grep -E "^${2:-DESIGN-MAP}:v[0-9]+ outcome=[a-z]+( [A-Za-z_-]+=[^ ]*)*\$"
 }
 
 # attr <verdict-line> <key>
@@ -223,38 +224,58 @@ fi
 # Stage 4 — in a tmp git repo, write + render + `map-tree write` land as one
 # 3-file commit; an overturn makes `map-tree check` stale, and after
 # `map-tree write` regenerates, the tree file's bytes OUTSIDE the map-tree
-# region are equal to the committed ones. The region marker format is owned
-# by ESAS-163 and unknown here: this oracle assumes lines containing
-# `map-tree:begin` / `map-tree:end`, and reports `reason=region-markers-absent`
-# (never a silent pass) when no committed tree file carries them.
+# region are equal to the committed ones.
+#
+# The calls are /design Step 4's recipe (commands/design.md), which is the
+# shipped contract: neither `design-map write` nor `map-tree write` commits,
+# the flow commits the three paths with one pathspec. The tree file is a
+# design.md carrying the literal `## Resolved decision tree` line the region
+# is inserted after, for ticket ESAS-900 (3 of the fixture's 5 forks).
+# `map-tree` speaks its own verdict token, `MAP-TREE:v1` (write -> written,
+# check -> fresh|stale), and its region is delimited by the comment pair
+# `<!-- map-tree:v1 ... -->` / `<!-- /map-tree:v1 -->` (map-tree.py
+# START_COMMENT/END_COMMENT). A committed tree file with no such opening
+# marker is `reason=region-markers-absent`, never a silent pass.
 # ---------------------------------------------------------------------------
 GIT_DIR="$TMP/s4-repo"
 mkdir -p "$GIT_DIR"
 ( cd "$GIT_DIR" && git init -q && git config user.email oracle@example.com && git config user.name oracle )
 S4MAP="$GIT_DIR/map.json"
+S4TREE="$GIT_DIR/design.md"
+printf '# ESAS-900 design\n\nHand-written prose above the region.\n\n## Resolved decision tree\n\n## After the region\n\nHand-written prose below the region.\n' > "$S4TREE"
+MAPTREE="$ROOT/plugins/bett3r-ai-workflow/bin/map-tree"
+
+# mt <args…> — run the real `bin/map-tree` launcher from inside the tmp repo.
+# Sets $LINE to its MAP-TREE:v1 verdict line and MTOUT to its outcome.
+mt(){
+  ( cd "$GIT_DIR" && "$MAPTREE" "$@" ) > "$DMOUT" 2>&1
+  LINE=$( verdict_line "$DMOUT" MAP-TREE )
+  MTOUT=$( attr "$LINE" outcome )
+  MTREASON=$( attr "$LINE" reason )
+  [ -n "$LINE" ] || MTREASON=no-verdict
+  [ -n "$MTREASON" ] || MTREASON="$MTOUT"
+}
+
 ( cd "$TMP" && "$DM" write "$S4MAP" < "$FIX/final.map.json" ) > "$DMOUT" 2>&1
 LINE=$( verdict_line "$DMOUT" )
 dm_result
 if [ "$RESKIND" != ok ]; then
   stage 4 error "$RESREASON"
-elif ! command -v map-tree >/dev/null 2>&1 && [ ! -x "$ROOT/plugins/bett3r-ai-workflow/bin/map-tree" ]; then
+elif [ ! -x "$MAPTREE" ]; then
   stage 4 error unknown-verb
 else
-  MAPTREE="map-tree"
-  command -v map-tree >/dev/null 2>&1 || MAPTREE="$ROOT/plugins/bett3r-ai-workflow/bin/map-tree"
-  S4PAGE="$GIT_DIR/map.page.html"
+  S4PAGE="$GIT_DIR/map.html"
   dm render "$S4MAP" --expect 5 --out "$S4PAGE"
   dm_result
   if [ "$RESKIND" != ok ]; then
     stage 4 error "$RESREASON"
   else
-    ( cd "$GIT_DIR" && "$MAPTREE" write ) > "$DMOUT" 2>&1
-    LINE=$( verdict_line "$DMOUT" )
-    dm_result
-    if [ "$RESKIND" != ok ]; then
-      stage 4 error "$RESREASON"
+    mt write --map "$S4MAP" --ticket ESAS-900 --insert-after '## Resolved decision tree' --on-tamper displace "$S4TREE"
+    if [ "$MTOUT" != written ]; then
+      stage 4 error "$MTREASON"
     else
-      files=$( cd "$GIT_DIR" && git show --name-only --format= -1 | grep -c . || true )
+      ( cd "$GIT_DIR" && git add -- design.md map.json map.html && git commit -q -m 'docs(ESAS-900): design' -- design.md map.json map.html ) > "$DMOUT" 2>&1
+      files=$( cd "$GIT_DIR" && git show --name-only --format= -1 2>/dev/null | grep -c . || true )
       if [ "${files:-0}" != 3 ]; then
         stage 4 fail commit-not-three-files
       else
@@ -277,45 +298,49 @@ PY
         if [ "$RESKIND" != ok ]; then
           stage 4 error "$RESREASON"
         else
-          ( cd "$GIT_DIR" && "$MAPTREE" check ) > "$DMOUT" 2>&1
-          LINE=$( verdict_line "$DMOUT" )
-          dm_result
-          if [ "$RESKIND" = ok ]; then
+          mt check --map "$S4MAP" --ticket ESAS-900 "$S4TREE"
+          if [ "$MTOUT" = fresh ]; then
             stage 4 fail overturn-not-detected-stale
-          elif [ "$RESREASON" = stale ]; then
+          elif [ "$MTOUT" = stale ]; then
             # Tree files = the commit's files other than map.json and the page.
-            TREEFILES=$( cd "$GIT_DIR" && git show --name-only --format= -1 | grep -v -x -e map.json -e map.page.html )
-            # Snapshot the committed bytes BEFORE the re-write: map-tree write
-            # commits, so reading HEAD afterwards would compare a file with itself.
+            TREEFILES=$( cd "$GIT_DIR" && git show --name-only --format= -1 | grep -v -x -e map.json -e map.html )
+            # Snapshot the committed bytes BEFORE the re-write, so the
+            # comparison is against what the first pass committed.
             s4n=0
             for tf in $TREEFILES; do
               s4n=$((s4n + 1))
               ( cd "$GIT_DIR" && git show "HEAD:$tf" ) > "$TMP/s4.before.$s4n" 2>/dev/null
             done
-            ( cd "$GIT_DIR" && "$MAPTREE" write ) > "$DMOUT" 2>&1
-            LINE=$( verdict_line "$DMOUT" )
-            dm_result
-            if [ "$RESKIND" != ok ]; then
-              stage 4 error "$RESREASON"
+            mt write --map "$S4MAP" --ticket ESAS-900 --insert-after '## Resolved decision tree' --on-tamper displace "$S4TREE"
+            if [ "$MTOUT" != written ]; then
+              stage 4 error "$MTREASON"
             else
               region_seen=0 region_diff=0 s4n=0
               for tf in $TREEFILES; do
                 s4n=$((s4n + 1))
-                grep -q 'map-tree:begin' "$TMP/s4.before.$s4n" && region_seen=1
-                awk '/map-tree:begin/{skip=1} !skip{print} /map-tree:end/{skip=0}' "$TMP/s4.before.$s4n" > "$TMP/s4.before.out"
-                awk '/map-tree:begin/{skip=1} !skip{print} /map-tree:end/{skip=0}' "$GIT_DIR/$tf" > "$TMP/s4.after.out" 2>/dev/null
+                grep -q '^<!-- map-tree:v1 ' "$TMP/s4.before.$s4n" && region_seen=1
+                awk '/^<!-- map-tree:v1 /{skip=1} !skip{print} /^<!-- \/map-tree:v1 -->$/{skip=0}' "$TMP/s4.before.$s4n" > "$TMP/s4.before.out"
+                awk '/^<!-- map-tree:v1 /{skip=1} !skip{print} /^<!-- \/map-tree:v1 -->$/{skip=0}' "$GIT_DIR/$tf" > "$TMP/s4.after.out" 2>/dev/null
                 cmp -s "$TMP/s4.before.out" "$TMP/s4.after.out" || region_diff=1
               done
               if [ "$region_seen" = 0 ]; then
                 stage 4 error region-markers-absent
               elif [ "$region_diff" = 1 ]; then
                 stage 4 fail out-of-region-bytes-changed
+              elif cmp -s "$TMP/s4.before.1" "$S4TREE"; then
+                # The region itself must have been regenerated by the overturn.
+                stage 4 fail region-not-regenerated
               else
-                stage 4 ok
+                mt check --map "$S4MAP" --ticket ESAS-900 "$S4TREE"
+                if [ "$MTOUT" = fresh ]; then
+                  stage 4 ok
+                else
+                  stage 4 fail not-fresh-after-rewrite
+                fi
               fi
             fi
           else
-            stage 4 error "$RESREASON"
+            stage 4 error "$MTREASON"
           fi
         fi
       fi
@@ -374,23 +399,42 @@ fi
 
 # ---------------------------------------------------------------------------
 # Stage 7 — select --phase probe / --phase start over the captures, then
-# post --expect 5 ok, and the status multiset equals stage 3's runtime output
-# map ($S3FINAL). Captures are read from the directory named by
-# $ESAS_ORACLE_CAPTURES; unset or not a directory -> `reason=no-captures`
-# (stage 6 persists none). Stage 3 not ok -> `reason=prereq-failed`.
+# `post --expect 5 --map $S3FINAL --readback <captures>/getmap.json` ok, and
+# the posted status multiset equals stage 3's runtime output map ($S3FINAL).
+#
+# Captures are read from $ESAS_ORACLE_CAPTURES when it is set; set but not a
+# directory -> `reason=no-captures`. When it is unset, real captures are made
+# from $ESAS_CHECKOUT by scripts/oracles/capture-esas-156.mjs: esas's MCP
+# server in a fresh `git init` repo with no `.esas/`, replaying $S3FINAL's
+# nodes, forks and statuses, then `get_map` (board.json is its one
+# synthesized file). A driver failure is `reason=capture-failed`, never a
+# pass. Stage 3 not ok -> `reason=prereq-failed`.
 # ---------------------------------------------------------------------------
-if [ -z "${ESAS_ORACLE_CAPTURES:-}" ] || [ ! -d "$ESAS_ORACLE_CAPTURES" ]; then
-  RESKIND=error; RESREASON=no-captures
-elif [ "$S3_OK" != 1 ]; then
+if [ "$S3_OK" != 1 ]; then
   RESKIND=error; RESREASON=prereq-failed
+elif [ -n "${ESAS_ORACLE_CAPTURES:-}" ]; then
+  CAP="$ESAS_ORACLE_CAPTURES"
+  if [ -d "$CAP" ]; then RESKIND=ok; else RESKIND=error; RESREASON=no-captures; fi
+elif ! command -v node >/dev/null 2>&1; then
+  RESKIND=error; RESREASON=capture-failed
 else
-  dm select --phase probe --captures "$ESAS_ORACLE_CAPTURES"
+  CAP="$TMP/s7.captures"
+  if node "$ROOT/scripts/oracles/capture-esas-156.mjs" "$ESAS_CHECKOUT" "$S3FINAL" "$CAP" "$TMP/s7-repo" > "$TMP/s7.capture.out" 2>&1; then
+    RESKIND=ok
+  else
+    RESKIND=error; RESREASON=capture-failed
+  fi
+fi
+if [ "$RESKIND" = ok ]; then
+  dm select --phase probe --captures "$CAP"
   dm_result
 fi
 if [ "$RESKIND" != ok ]; then
   stage 7 error "$RESREASON"
+elif [ "$( attr "$LINE" target )" != board-candidate ]; then
+  stage 7 fail probe-not-board-candidate
 else
-  dm select --phase start --captures "$ESAS_ORACLE_CAPTURES"
+  dm select --phase start --captures "$CAP"
   dm_result
   if [ "$RESKIND" != ok ]; then
     stage 7 error "$RESREASON"
@@ -398,7 +442,7 @@ else
     if [ "$( attr "$LINE" target )" != board ]; then
       stage 7 fail target-not-board
     else
-      dm post --expect 5
+      dm post --expect 5 --map "$S3FINAL" --readback "$CAP/getmap.json"
       dm_result
       if [ "$RESKIND" != ok ]; then
         stage 7 error "$RESREASON"

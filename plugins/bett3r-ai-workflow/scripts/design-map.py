@@ -18,6 +18,7 @@
     DESIGN-MAP:v1 outcome=current verb=drift mapSeq=<n> feedSeq=<n>
     DESIGN-MAP:v1 outcome=drifted verb=drift mapSeq=<n|none> feedSeq=<n>
     DESIGN-MAP:v1 outcome=skip verb=drift mapSeq=<n|none> feedSeq=none reason=no-map-feed
+    DESIGN-MAP:v1 outcome=ok verb=select target=<board|artifact|board-candidate> reason=<r> probe=<skipped|done>
     DESIGN-MAP:v1 outcome=error verb=<verb> reason=<reason> [key=value ...]
 
 Read the line, never the exit code alone (ADR-004): 0 for ok, 1 for fail
@@ -40,6 +41,7 @@ Usage:
   design-map decisions <map.json> [--closed]
   design-map count <map.json> [--lane <lane.yaml>] [--line]
   design-map drift <map.json> (--feed-seq <n> | --no-feed)
+  design-map select --phase probe|start --captures <dir> [--map <map.json>] [--lane <lane.yaml>]
 
 A map is `structureVersion: 2`. Two committed files describe it:
 
@@ -324,7 +326,7 @@ def verdict(outcome, **attrs):
 
 
 BOOLEAN_FLAGS = ("final", "stack", "closed", "line", "no-feed")
-VALUE_FLAGS = ("expect", "out", "ticket", "lane", "feed-seq")
+VALUE_FLAGS = ("expect", "out", "ticket", "lane", "feed-seq", "phase", "captures", "map", "readback")
 
 
 def parse_args(args):
@@ -1457,15 +1459,180 @@ def drift(positional, flags):
     return dict(outcome="current" if mine == feed else "drifted", **seqs)
 
 
+# --- select: the map target (ESAS-174 D1/D2, ADR-009) -----------------------
+
+MAP_TOOLS = ("map_post", "get_map", "start_map_session")
+
+
+def read_text(path):
+    """The file's text, or None when it is absent or unreadable."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return fh.read()
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def read_json_object(path):
+    """The file's top-level JSON object, or None for absent, empty, unparseable or non-object."""
+    text = read_text(path)
+    try:
+        value = json.loads(text) if text is not None and text.strip() else None
+    except ValueError:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def error_code(body):
+    """esas spells a tool failure `{ok:false, error:{code}}` (esas-mcp tool-result.ts);
+    a top-level `code` is read too."""
+    error = body.get("error")
+    if isinstance(error, dict) and isinstance(error.get("code"), str):
+        return error["code"]
+    return body.get("code")
+
+
+def has_tool(tools, name):
+    """A bare name (listTools) or a session-prefixed one (`mcp__<server>__<name>`)."""
+    return any(t == name or t.endswith("__" + name) for t in tools)
+
+
+def cwd_paths(captures):
+    """The logical and physical cwd the board's repoPath is compared with:
+    pwd.txt's two lines when captured, else this process's $PWD and realpath."""
+    text = read_text(os.path.join(captures, "pwd.txt"))
+    if text is not None:
+        lines = [line for line in text.splitlines() if line]
+        if lines:
+            return set(lines[:2])
+    return {os.environ.get("PWD") or os.getcwd(), os.path.realpath(os.getcwd())}
+
+
+def probe_rows(captures):
+    """Rows 2-8 of the first-match table, over captured files only. The reason
+    of the first row that matches, or None when every row passes."""
+    tools_text = read_text(os.path.join(captures, "tools.txt"))
+    tools = [] if tools_text is None else [t.strip() for t in tools_text.splitlines() if t.strip()]
+    if not has_tool(tools, "status"):
+        return "no-mcp"
+    status = read_json_object(os.path.join(captures, "status.json"))
+    caps = status.get("capabilities") if status is not None else None
+    families = caps.get("verbFamilies") if isinstance(caps, dict) else None
+    if not isinstance(families, list) or "map" not in families:
+        return "mcp-no-map"
+    if not all(has_tool(tools, name) for name in MAP_TOOLS):
+        return "tools-missing"
+    if status.get("ok") is not True and error_code(status) != "ESAS_DIR_MISSING":
+        return "mcp-error"
+    board = read_json_object(os.path.join(captures, "board.json"))
+    if board is None:
+        return "board-off"
+    if board.get("repoPath") not in cwd_paths(captures):
+        return "board-other-repo"
+    kinds = board.get("boardKinds")
+    if not isinstance(kinds, list) or "map" not in kinds:
+        return "board-no-map"
+    return None
+
+
+def select(positional, flags):
+    """Pure over files: no network, no subprocess. `probe` applies rows 0-8;
+    `start` applies rows 0-8 again, then 9-11 over start.json (design.md P2)."""
+    phase = flags.get("phase")
+    if phase is None:
+        raise Refusal("missing-phase")
+    if phase not in ("probe", "start"):
+        raise Refusal("bad-phase")
+    if "captures" not in flags:
+        raise Refusal("missing-captures")
+    captures = flags["captures"]
+    if "map" in flags:
+        payload = load_map(flags["map"])
+        validate(payload)
+        if payload.get("target") == "artifact":
+            return dict(target="artifact", reason="pinned", probe="skipped")
+    if os.path.exists(flags.get("lane", os.path.join(".work", "lane.yaml"))):
+        return dict(target="artifact", reason="fleet-lane", probe="skipped")
+    start_path = os.path.join(captures, "start.json")
+    if phase == "start" and not os.path.exists(start_path):
+        raise Refusal("missing-start")
+    reason = probe_rows(captures)
+    if reason is not None:
+        return dict(target="artifact", reason=reason, probe="done")
+    if phase == "probe":
+        return dict(target="board-candidate", reason="ok", probe="done")
+    start = read_json_object(start_path)
+    if start is None or start.get("ok") is not True:
+        linked = start is not None and error_code(start) == "LINKED_WORKTREE"
+        return dict(target="artifact", reason="linked-worktree" if linked else "start-failed", probe="done")
+    return dict(target="board", reason="ok", probe="done")
+
+
+# --- post (ESAS-174 D7, design.md P3) ----------------------------------------
+
+STATUS_FIELDS = ("kind", "source", "reason", "option")
+
+
+def status_tuple(status):
+    """The parity tuple of one fork status; an absent field is None."""
+    return tuple(status.get(field) for field in STATUS_FIELDS)
+
+
+def readback_forks(path):
+    """The forks and mapSeq of a `get_map` tool body `{ok:true, map, mapSeq}`.
+    Its map is esas's MapFile (structureVersion 1, no fork `tickets`), so only
+    `forks[].status` is read; the plugin's v2 schema is never applied to it."""
+    body = read_json_object(path)
+    if body is None:
+        raise Refusal("readback-unreadable")
+    if body.get("ok") is not True:
+        raise Refusal("readback-failed", code=error_code(body) or "-")
+    payload, seq = body.get("map"), body.get("mapSeq")
+    forks = payload.get("forks") if isinstance(payload, dict) else None
+    if (not isinstance(forks, list) or not TYPES["integer"](seq)
+            or not all(isinstance(f, dict) and isinstance(f.get("status"), dict) for f in forks)):
+        raise Refusal("readback-invalid")
+    return forks, seq
+
+
+def post(positional, flags):
+    """Pure over two files: the board's store readback against map.json. Fails
+    on a fork count other than --expect, or on a different multiset of
+    (kind, source, reason, option); `statuses=` prints kind:source only."""
+    if "expect" not in flags:
+        raise Refusal("missing-expect")
+    if not re.fullmatch(r"[0-9]+", flags["expect"]):
+        raise Refusal("bad-expect")
+    expected = int(flags["expect"])
+    if "map" not in flags:
+        raise Refusal("missing-map")
+    if "readback" not in flags:
+        raise Refusal("missing-readback")
+    payload = load_map(flags["map"])
+    validate(payload)
+    forks, seq = readback_forks(flags["readback"])
+    tuples = sorted((status_tuple(f["status"]) for f in forks), key=repr)
+    local = sorted((status_tuple(f["status"]) for f in payload["forks"]), key=repr)
+    attrs = dict(target="board", forks=len(forks), expected=expected, mapSeq=seq,
+                 statuses=",".join(sorted(f"{t[0]}:{t[1] or '-'}".replace(" ", "_") for t in tuples)))
+    if len(forks) != expected:
+        return dict(outcome="fail", reason="count-mismatch", **attrs)
+    if tuples != local:
+        return dict(outcome="fail", reason="status-mismatch", **attrs)
+    return attrs
+
+
 VERBS = {"validate": validate_map, "write": write, "render": render, "check-page": check,
          "apply-answers": apply_answers, "candidates": candidates, "check-plan": check_plan,
-         "project": project, "decisions": decisions, "count": count, "drift": drift}
+         "project": project, "decisions": decisions, "count": count, "drift": drift,
+         "select": select, "post": post}
 # The flags each verb takes; any other parsed flag is reason=unknown-flag-<name>.
 # `candidates` and `check-plan` take positional arguments only, so `--map`
 # (the wording ESAS-165's block used) is refused as unknown-flag-map.
 FLAGS = {"validate": (), "write": (), "render": ("expect", "out", "stack"), "check-page": ("expect",),
          "apply-answers": ("final",), "candidates": (), "check-plan": (), "project": ("ticket",),
-         "decisions": ("closed",), "count": ("lane", "line"), "drift": ("feed-seq", "no-feed")}
+         "decisions": ("closed",), "count": ("lane", "line"), "drift": ("feed-seq", "no-feed"),
+         "select": ("phase", "captures", "map", "lane"), "post": ("expect", "map", "readback")}
 
 
 def main(argv):

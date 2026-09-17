@@ -1,0 +1,11 @@
+{
+  "ok": false,
+  "error": {
+    "code": "ESAS_DIR_MISSING",
+    "message": "no .esas directory at /work/design-repo/.esas — run the extractor in this checkout, or `start_map_session` for a map-only session",
+    "details": {
+      "esasDir": "/work/design-repo/.esas",
+      "detail": "ENOENT: no such file or directory, stat '/work/design-repo/.esas'"
+    }
+  }
+}

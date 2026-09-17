@@ -1,0 +1,8 @@
+{
+  "ok": false,
+  "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "esas-mcp failed to handle the call: EACCES: permission denied, open '/work/design-repo/.esas/ops.jsonl'"
+  },
+  "capabilities": { "schemaVersion": 1, "verbFamilies": ["design", "map"] }
+}

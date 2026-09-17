@@ -336,6 +336,101 @@ reason=no-map-feed`; a map with no `feedSeq` plus a live `--feed-seq` is
 writes the file — `count` and `drift` are reporters, per ADR-006's one-writer
 rule.
 
+## Choosing the target: board or artifact (ESAS-174, ADR-009)
+
+```
+design-map select --phase probe --captures <dir> [--map <map.json>] [--lane <lane.yaml>]
+design-map select --phase start --captures <dir> [--map <map.json>] [--lane <lane.yaml>]
+```
+
+`select` is pure over files: no network call, no subprocess, no MCP tool of its own. Everything it
+reads comes from a **captures directory** the agent assembles from what the session already showed
+it, one file per input, always these names:
+
+- `tools.txt` — the tool names from the session's own tool list, one per line (a bare name or a
+  `mcp__<server>__<name>` one; either form counts). Absent or missing `status` reads as no MCP in the
+  session at all.
+- `status.json` — the body the `status` tool returned (success or `{ok:false,error:{code}}`), whole.
+- `board.json` — the body of `curl -s --max-time 2 http://127.0.0.1:${ESAS_BOARD_PORT:-3727}/api/esas/status`.
+  Only an empty or non-JSON body reads as the board being off (`board-off`); a JSON body with no
+  `repoPath`, or with another repo's, reads as `board-other-repo`. That timeout is a ceiling, not a
+  retry budget (D4: `select` never polls and never retries).
+- `start.json` — only after a `board-candidate` probe leads the agent to call `start_map_session`;
+  its body goes here for `--phase start` to read. Required for that phase: its absence is
+  `outcome=error reason=missing-start`, exit 2.
+- `pwd.txt` (optional) — the logical and physical cwd, one per line, for row 7's comparison against
+  the board's `repoPath`. Absent means `select` falls back to the process's own `$PWD` and
+  `realpath`.
+
+**`probe` first, and only a `board-candidate` calls anything.** `select --phase probe` evaluates
+rows 0-8 of the decision tree and returns `target=board-candidate reason=ok` or `target=artifact
+reason=<row>` — never `board`. Only on `board-candidate` does the agent call `start_map_session`
+itself (the one side effect in the whole path, because it is the call that creates `.esas/`,
+ADR-009), capture its body as `start.json`, and then call `select --phase start`, which re-evaluates
+rows 0-8 fresh (a stale probe is never promoted to `board`) and applies rows 9-11 over `start.json`.
+Read the `DESIGN-MAP:v1 outcome=ok verb=select target=… reason=… probe=…` line, not an exit code —
+`probe=skipped` marks a row-0 pin or a row-1 fleet lane, `probe=done` marks a table walk that ran.
+
+**The silence contract.** Nothing in an artifact-target design's rows, prose or verdict lines names a
+board, a port, or `.esas/` — the whole point of the table is that a repo that will never see a board
+never learns the vocabulary exists. Two named exceptions. Row 7: the verdict's reason is only the token
+`board-other-repo`; the agent's own message to the owner names the repo, read from `board.json`'s
+`repoPath`, because that is the one fact the owner needs to know what is running where. And row 6
+(`board-off`), in an attended sitting only,
+prints the launch line **once, as information, never as a question** — it does not ask the owner
+whether to start a board, it states that one could be. The launch line, when a repo has no graph at
+all (`ESAS_DIR_MISSING`), names `esas-session-server --non-anchor` (BOARD-SETUP.md); with a graph, it
+names the ordinary launch this skill already documents elsewhere.
+
+**D3 — never launch anything (this skill, or `select`, does not spawn a process).** The choice of
+target never triggers a launch by itself; a board only exists because something else already started
+one, or because the owner acts on the one-time launch line above.
+
+**D4 — never hang.** No row of the table retries, polls, or waits past the `--max-time 2` on the one
+network call (`board.json`'s curl) it is built from. A slow or wedged board reads exactly like no
+board: `board.json` is empty, row 6 fires, the design proceeds on the artifact.
+
+**D5 — the board dies mid-sitting.** This is not a `select` row; it is what the agent does at a sync
+point when `board.json`'s curl comes back empty on a design that is already `target=board`. Call
+`get_map` once (no retry). If it answers, merge its readback statuses onto the local `map.json` by
+fork id — a fork the readback does not mention keeps its local status untouched, and a fork only in
+the readback (never locally known) is ignored — set the merged map's `feedSeq` to the readback's
+`mapSeq`, and pipe the result into `design-map write <map.json>` on stdin (there is no dedicated merge
+verb; `write`'s existing whole-file replace already expresses it). Tell the owner once, using the same
+launch-line wording as row 6. If the board is **still** down at the next sync point, stop trying it at
+all and render the artifact from `map.json` as it now stands. A failed MCP tool call anywhere in this
+recipe (not just `get_map`) means no more MCP tool calls for the rest of the session.
+
+**D9 — pinning the target.** The first `select` call whose phase is `start` (or whose probe already
+resolves definitively) is followed by a `design-map write` that carries the resolved `target` in
+`map.json`. From then on every `select` call short-circuits at row 0: `payload.target == "artifact"`
+returns `artifact reason=pinned probe=skipped` with no table walk at all. The pin is only read when
+`select` is passed `--map <map.json>`; without it there is no row 0 to match. A `board` pin is **not**
+final the same way — it re-probes at the next sync point, and a probe failure there is D5's territory,
+not a table row.
+
+**D7 — proving board parity by reading the store back, never by comparing pixels.** After any upsert
+to the board (a `map_post` or a `map_choose`), call `get_map` and check it with
+`design-map post --expect <n> --map <map.json> --readback <getmap.json>`. It fails on a fork count
+other than `--expect`, or on a different multiset of `(kind, source, reason, option)` across the two
+sides; its verdict line adds `statuses=<sorted kind:source,...>` for the epic oracle to read.
+
+**Board flow order.** `map_ground` replays before any fork's `map_post` — a fork can only be posted
+onto ground the board already has. `map_choose`'s `seenSeq` is always the map's own `mapSeq`; it never
+passes `source` (that is `map_post`'s field, for an owner decision arriving out of band — `map_choose`
+is the interactive click path and the board derives its own source).
+
+**Grill and the render/post verbs.** A grill (ESAS-164) treats `verb=render` or `verb=post` with
+`outcome=ok` as evidence the design is live on its target — either is sufficient, neither implies the
+other ran.
+
+**D10 — no session label, no `ticketRefs`.** Neither is any part of this table or its captures;
+ESAS-166 owns whatever eventually carries them.
+
+**E19 — `/design-multi` calls `select` once per subject, never stacked.** Before ESAS-171b lands, a
+multi-subject design does not accumulate multiple subjects onto one board session — each subject gets
+its own `select` walk over its own captures.
+
 ## Glossary
 
 - **Map snapshot** — the committed `docs/prs/<id>/map.json`: whatever
