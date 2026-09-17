@@ -15,9 +15,22 @@ The thing to design (a ticket id, a feature description, or "the active work").
 
 ## Board mode
 
-If this repo has no `.esas/`, skip this section entirely and **say nothing about boards.**
+Two gates, in this order: the **map gate**, then the **eventstorming gate**. They answer different questions and each says yes or no on its own — **on a no, say nothing at all** holds per gate, so a no from one never becomes a mention in the other.
 
-If it does: board mode is on only when a board is both **possible** (`.esas/` with a `graph.json`, `esas-mcp` registered) and **warranted** (the design's forks name graph artifacts — commands, events, policies, read models, aggregates). Run the preflight in `../skills/esas-design/PREFLIGHT.md` for capability, and read `../skills/esas-design/BOARD-SETUP.md` for the seeding rules and what changes below; `esas-design` owns the standing rules once the tools are live.
+### The map gate
+
+A design map is posted with the `design-map` skill and needs no `.esas/`, which is why this gate comes first.
+
+- If `.work/lane.yaml` exists, the run is unattended: the map gate is a silent no.
+- Otherwise it is a yes when the drafted tree has at least one open owner fork — a decision only the owner can make.
+- Shape: **impact** for an epic parent, **decision** for a lone ticket. Judge it from the tree in front of you, not from the label on the ticket.
+- A map is live when `design-map` reports `DESIGN-MAP:v1 … outcome=ok`, whatever the target it wrote to.
+
+### The eventstorming gate
+
+No `.esas/` in this repo is a no for this gate, and silent like every no.
+
+Otherwise the eventstorming board is on only when a board is both **possible** (`.esas/` with a `graph.json`, `esas-mcp` registered) and **warranted** (the design's forks name graph artifacts — commands, events, policies, read models, aggregates). Run the preflight in `../skills/esas-design/PREFLIGHT.md` for capability, and read `../skills/esas-design/BOARD-SETUP.md` for the seeding rules and what changes below; `esas-design` owns the standing rules once the tools are live.
 
 **Relevance runs before the preflight, never after it.** The order is the mechanism, not a preference: the preflight prints verdicts and the table under it turns them into things you say out loud — *run the extractor*, *here is the launch line*, *another repo holds the port*. Run it first and the silent path has already spoken by the time the gate answers no. Which is also why relevance is **not** a preflight key and must never become one: a shell block cannot read a decision tree.
 
@@ -28,6 +41,22 @@ Three constraints on the gate itself:
 - **Re-ask at every new artifact-touching fork.** The gate is answered at the moment of least knowledge, so a design that opens on config and turns structural at fork 4 arms then. A late board loses nothing — it is a projection and catches up when it opens.
 
 Classify by the tree in front of you, not the label on the ticket. "Frontend" is not outside the model by definition (`ui` is a node type in the extractor's own graph).
+
+### Combining the gates
+
+Judge the five inputs, then run the block with them — it reads no files and prints one line, and that line is the verdict for both gates: `open_owner_forks` and `artifact_forks` are counts of forks in the drafted tree, `epic_parent`, `lane` (`.work/lane.yaml` exists) and `esas_capable` (`.esas/` with a `graph.json`, `esas-mcp` registered) are `1` or `0`. `map=yes` sends you to `design-map`; `es=offer` sends you to the preflight above; anything else is silence.
+
+<!-- BOARD-GATE:v1 -->
+```sh
+# usage: sh board-gate.sh open_owner_forks artifact_forks epic_parent lane esas_capable
+map=no; shape=-; es=silent
+if [ "$4" -eq 0 ] && [ "$1" -ge 1 ]; then
+  map=yes
+  if [ "$3" -eq 1 ]; then shape=impact; else shape=decision; fi
+fi
+if [ "$5" -eq 1 ] && [ "$2" -ge 1 ]; then es=offer; fi
+printf 'BOARD-GATE:v1 map=%s shape=%s es=%s\n' "$map" "$shape" "$es"
+```
 
 ---
 
@@ -97,11 +126,13 @@ Grep for `design-multi:resolved:vN` (emitted as an HTML comment *and* a visible 
 - **Verify the mitigation, not just the risk.** A block's own Risks section is a ready-made checklist; the known case had the risk fire *through* its mitigation, which was itself the false claim.
 - You may **keep a decision while declining to assert a falsehood it rests on** — record the correction in the PR body. Ship-blocking a human for "your reason is wrong but your decision stands" is the wrong trade.
 
+**Read precedence (ADR-007).** When a committed or provisioned `map.json` exists for this work item, it governs, and the v2 block's decision text is its projection. Run `map-tree check --map <path>/map.json --ticket <work_item> --dialect jira <block file>` where the block carries a `map-tree:v1` region (a block without one is legacy; skip the check): a `stale` or `tampered` verdict is noted as a correction, not re-grilled — Step 4 regenerates the text from the map.
+
 Then **enumerate what the block does not decide.** Drift-checking is a check against what the block *says*, so its silence is invisible — and the better-evidenced the block, the more confidently an executor generalises into the gaps. For each decision naming a rule (a merge, an ordering, a degrade direction, a precedence), ask which other component performs the same class of operation and whether the block speaks to it. Emit the unanswered ones as **unspecified seams** and pass them down as explicit non-guidance.
 
 ## Step 3 — Grill, then critique
 
-Run the interview (`grill` + `domain-modeling`): every branch of the decision tree, one question at a time, each with your recommended answer, dependencies resolved before moving on. Under board mode the independent forks batch to the canvas and the dependent ones stay serial.
+Run the interview (`grill` + `domain-modeling`): every branch of the decision tree, one question at a time, each with your recommended answer, dependencies resolved before moving on. Under board mode the independent forks batch to the canvas and the dependent ones stay serial. Where a map is live (`map=yes`, and `design-map` reported `outcome=ok`), the forks are posted to the map as `grill` describes.
 
 **Every fork is presented picture → scenarios → per-option walk** — `grill`'s *Presenting a fork* owns the shape and this is where it is mandatory. Two option labels are not a question: the user cannot tell from them whether you are discussing the same thing they are. Where every scenario walks identically across the options there is no fork — resolve it and record it as an autonomous decision.
 
@@ -124,19 +155,23 @@ branch: TV1-2400-delete-items
 
 So call the script once more as the writer, with the branch: `work-docs-path --item <work_item> --owner-branch "$(git branch --show-current)"`. It reads that header — **never git history**, which cannot say who wrote a folder: a stacked child branch, a feature that merged an unmerged parent, and a branch cut past a stale `origin` all hold another work item's design in their own commits — and its verdict line carries `owner=`. Readers never pass the flag, and it does not change `path=`. Act on it and nothing else:
 
-- `owner=none` — the folder does not exist. Write it fresh, header first.
+- `owner=none` — the folder does not exist, or holds only a provisioned `map.json` whose `mapId` is this work item. Write `design.md` fresh, header first; a provisioned map is used as-is (item 1).
 - `owner=self` — the header names this work item **and** this branch. Overwrite `design.md` in place.
-- `owner=other` or `owner=unowned` — another work item's or another branch's design, or a folder whose design proves no owner (no `design.md`, no header, a malformed or partial one; a design from before headers existed lands here). **Write nothing** and end `blocked-on`. Say which, and what the human does: run `/start` for a new work item, or, having confirmed the folder is this work's, edit the header's `branch:`/`work_item:` by hand, commit that, and re-run.
+- `owner=other` or `owner=unowned` — another work item's or another branch's design, or a folder whose design proves no owner (no `design.md` and no map naming this item, no header, a malformed or partial one; a design from before headers existed lands here). **Write nothing** and end `blocked-on`. Say which, and what the human does: run `/start` for a new work item, or, having confirmed the folder is this work's, edit the header's `branch:`/`work_item:` by hand, commit that, and re-run.
 - `outcome=error reason=malformed-owner-branch` — a detached HEAD has no branch to own anything. **Write nothing** and end `blocked-on`, and say so.
 - `outcome=error reason=<any other>` — the config, the work item or the flags are unusable, and the reason names which. **Write nothing** and end `blocked-on`.
 - `no verdict line` — the script died before concluding, or its last line carries no `owner=`. **Write nothing** and end `blocked-on`.
 
 **The same rule holds for a `--item` folder**: a ticket id is unique, but one ticket can have two live branches — a stacked follow-up, a fleet lane beside an interactive retry — and each one's committed design is that branch's record, so a ticket folder written from another branch stops too. Re-designing a ticket on a new branch is legitimate, and costs one hand edit of `branch:` that doubles as the record of the takeover. A renamed branch is likewise a false stop; that is the accepted, safe direction. **The one accepted false overwrite** is its mirror: a no-id branch name deleted and recreated for unrelated work **on the same day** gets the same dated `work_item` from `/start`, so the header matches and the verdict is `owner=self`. The date `/start` fixed is the only thing that tells the two apart, and a day is its resolution; on any later day the new work item gets its own folder.
 
-Write `<path>/design.md` — the header, then Markdown + Mermaid, reviewable in one pass — and **commit it on every pass**, a re-run included: `git add <path>/design.md && git commit -m "docs(<id>): design" -- <path>/design.md`, the pathspec keeping anything else staged out of the commit (an unchanged re-run has nothing to commit, and that is fine). Overwriting your own folder is how a re-run amends the design; the diff between passes is the amendment record, and the extra commit is accepted noise. This is the **one** copy: nothing mirrors it into `.work/`. Its durable cross-work-item conclusions still also belong in the glossary/ADR updates. Sections:
+Every stop above writes none of `design.md`, `map.json`, `map.html`. On `owner=none|self`, the map comes first, in this order — every byte of both map files goes through `design-map`, never a redirect or an edit:
+
+1. **The map.** An existing `<path>/map.json` is used as-is **only** when `.work/lane.yaml` carries `mapProvenance: carried`: a fleet lane's map, provisioned from the run with the owner answers inside. With `carried` the map is the fleet's record of the owner's answers and is never re-authored in the lane — not on the first pass and not on a lane re-run; a design change that would alter its forks is an escalation to the orchestrator (a `/design-multi` re-run, block D9), not a local rewrite. Without `carried` — the single flow, or a lane whose brief says `mapProvenance: lost` — every pass re-authors the map: `mkdir -p <path>` and `design-map write <path>/map.json` with the drafted tree on stdin; if `write` refuses, nothing is written or committed — end `blocked-on reason=<its reason>`. A folder holding only a provisioned `map.json` whose `mapId` is this work item (and no `design.md`) reads `owner=none` from `work-docs-path`, so this step proceeds; a design-less folder whose map names another item, or no item, reads `owner=unowned` and stops above.
+2. **Render before staging:** `design-map render <path>/map.json --expect <n> --out <path>/map.html`, `<n>` being the fork count of the tree you drafted — never derived from the file, or the count gate compares the map with itself. On any verdict but `outcome=ok` (`count-mismatch`, `not-grounded`, a schema reason), remove the `map.json` this pass wrote — never a provisioned one — write no `design.md`, and end `blocked-on reason=<r>`. On an `owner=self` re-run a refused render also deletes the previously committed `map.html`, leaving an uncommitted deletion of a tracked file: leave it for the human, never commit the deletion, and name it in the `blocked-on` report.
+3. **On ok**, write `<path>/design.md` — the header, then Markdown + Mermaid, reviewable in one pass — then generate its decision text, and **commit it on every pass**, a re-run included, with its map in the same commit: `git add -- <path>/design.md <path>/map.json <path>/map.html && git commit -m "docs(<id>): design" -- <path>/design.md <path>/map.json <path>/map.html`, the pathspec keeping anything else staged out of the commit (an unchanged re-run has nothing to commit, and that is fine). Overwriting your own folder is how a re-run amends the design; the diff between passes is the amendment record, and the extra commit is accepted noise. This is the **one** copy: nothing mirrors it into `.work/`. Its durable cross-work-item conclusions still also belong in the glossary/ADR updates. **Generating the decision text** (ADR-007), after writing `design.md` and before the commit: `map-tree write --map <path>/map.json --ticket <work_item> --insert-after "## Resolved decision tree" --on-tamper displace <path>/design.md` — `--insert-after` places the `map-tree:v1` region under that exact heading line on a first pass and is ignored once a region exists. Read its `MAP-TREE:v1` line, never the exit code alone: `outcome=written` proceeds (the file is rewritten only if its bytes changed); `outcome=displaced` means a hand edit inside the region was moved verbatim under a `### Displaced from generated section (<date>)` heading and the region regenerated — proceed, commit it, and name it in the Step 6 report; `outcome=error` ends `blocked-on reason=<its reason>` with nothing committed. Never hand-edit the bytes between the region's markers: the map is the source, the region its projection. Sections:
 
 - **Problem & intent**, in the ubiquitous language.
-- **The resolved decision tree** — each pivotal fork, the chosen answer, the why, the rejected options.
+- **The resolved decision tree**, under the literal line `## Resolved decision tree` (nothing else on the line: `map-tree` inserts the generated region after that exact line, so a re-run on an older folder rewrites the heading as part of the pass) — each pivotal fork, the chosen answer, the why, the rejected options.
 - **Seams / flow** — a Mermaid diagram of the key flow and any new boundary crossed.
 - **Test seams** — where this gets verified. Prefer existing seams, the highest seam possible, the fewest (ideal: one), each with a prior-art test to mirror. These become the slices' oracles — confirm them with the user.
 - **Risks / the gate-less seam** — the riskiest part nothing automatically catches. This becomes the tracer bullet.

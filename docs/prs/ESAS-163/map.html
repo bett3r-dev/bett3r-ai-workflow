@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="generator" content="design-map"><title>Design map</title><style>
+body{font:15px/1.5 system-ui,sans-serif;margin:0;background:#f6f5f2;color:#1d1d1b}
+header{padding:20px 28px;border-bottom:1px solid #ddd;background:#fff}
+h1{margin:0 0 4px;font-size:20px} #dbnote{color:#555;font-size:13px}
+.levels{padding:12px 28px;font-size:13px;color:#444} .levels b{color:#1d1d1b}
+main{padding:12px 28px 40px;display:grid;gap:14px;max-width:960px}
+.fork{background:#fff;border:1px solid #ddd;border-left:5px solid #c9c9c9;border-radius:8px;padding:14px 18px}
+.fork.open{border-left-color:#d4553b} .fork.done{border-left-color:#2f8f5b}
+.fork.moot{opacity:.6} .fork.titleonly h3{color:#666} .locked{font-size:13px;color:#666}
+.legend{padding:8px 28px;font-size:12px;color:#444;display:flex;gap:10px;flex-wrap:wrap}
+.legend span{border-left:5px solid #c9c9c9;padding:0 6px;background:#fff}
+.walks{margin:4px 0 2px 18px;font-size:13px;color:#333} .note{font-size:13px;color:#555;margin:2px 0}
+.eyebrow{font-size:12px;color:#666} h3{margin:2px 0 8px;font-size:16px}
+.opt{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 10px;border:1px solid #e3e3e3;border-radius:6px;margin:6px 0}
+.opt.rec{background:#fbf6e8} .opt.picked{outline:2px solid #2f8f5b}
+.badge{font-size:11px;background:#d49a1f;color:#fff;border-radius:4px;padding:1px 5px;margin-left:6px}
+textarea{width:100%;min-height:54px;box-sizing:border-box;margin-top:6px}
+.btn{font:inherit;font-size:13px;padding:4px 10px;border-radius:5px;border:1px solid #bbb;background:#fff;cursor:pointer}
+.btn:disabled{cursor:not-allowed;opacity:.5} .saved{font-size:12px;color:#555;margin-left:8px}
+.fork.owner{border-left-color:#d49a1f} .legend .owner{border-left-color:#d49a1f}
+.fork.recommendation{border-left-color:#3b6fd4} .legend .recommendation{border-left-color:#3b6fd4}
+.fork.code{border-left-color:#7a4fc9} .legend .code{border-left-color:#7a4fc9}
+</style></head><body><header><h1>Design map</h1><div>A fork you leave unanswered is taken on its recommendation.</div><div id="dbnote">Connecting to the answer store&hellip;</div></header><div class="legend"><span class="owner">decided: owner</span><span class="recommendation">decided: recommendation</span><span class="code">decided: code</span></div><main><article class="fork decided owner" data-fork-id="ESAS-163-F1"><div class="eyebrow">ESAS-163-F1 &middot; ESAS-163 &middot; decided (owner): C</div><h3>Code-settled forks</h3><p>How a fork settled by reading code is recorded</p><ul><li>a lane regenerates the decision text</li></ul><div class="opt"><div><b>A</b> decided(recommendation)<ul class="walks"><li><i>unattended lane</i> &mdash; reads as owner-did-not-object</li></ul><p class="note">Rejected because dilutes ESAS-162&#x27;s owner signal</p><p class="note">Evidence: docs/prs/ESAS-162/design.md</p></div><button class="btn" data-pick="A" disabled>Choose</button></div><div class="opt"><div><b>B</b> keep out of map.json<ul class="walks"><li><i>unattended lane</i> &mdash; two decision sections</li></ul><p class="note">Rejected because most would be unprotected by any hash</p></div><button class="btn" data-pick="B" disabled>Choose</button></div><div class="opt rec"><div><b>C</b> status.source: code<span class=badge>recommended</span><ul class="walks"><li><i>unattended lane</i> &mdash; renders decided(code) with rejected options</li></ul></div><button class="btn" data-pick="C" disabled>Choose</button></div><p><b>Recommendation.</b> C: keeps provenance honest</p><p class="note"><b>If overturned.</b> the renderer and its tests change accordingly</p><textarea placeholder="Anything the options miss, or a question for me" disabled></textarea><div><button class="btn" data-action="save" disabled>Save comment</button> <button class="btn" data-action="agree" disabled>Agree with the recommendation</button><span class="saved"></span></div></article><article class="fork decided owner" data-fork-id="ESAS-163-F2"><div class="eyebrow">ESAS-163-F2 &middot; ESAS-163 &middot; decided (owner): B</div><h3>Tamper in an unattended run</h3><p>A hand edit inside a generated region</p><ul><li>a lane regenerates the decision text</li></ul><div class="opt"><div><b>A</b> stop the lane (md) / stop the item (jira)<ul class="walks"><li><i>unattended lane</i> &mdash; lane halts</li></ul><p class="note">Rejected because halts an unattended fleet for a git-recoverable case (md)</p></div><button class="btn" data-pick="A" disabled>Choose</button></div><div class="opt rec"><div><b>B</b> displace verbatim (md) and regenerate<span class=badge>recommended</span><ul class="walks"><li><i>unattended lane</i> &mdash; edit kept under a Displaced heading</li></ul><p class="note">Rejected because no lane owns the Jira write (jira)</p></div><button class="btn" data-pick="B" disabled>Choose</button></div><p><b>Recommendation.</b> B: md=B, jira=A</p><p class="note"><b>If overturned.</b> the renderer and its tests change accordingly</p><textarea placeholder="Anything the options miss, or a question for me" disabled></textarea><div><button class="btn" data-action="save" disabled>Save comment</button> <button class="btn" data-action="agree" disabled>Agree with the recommendation</button><span class="saved"></span></div></article><article class="fork decided owner" data-fork-id="ESAS-163-F3"><div class="eyebrow">ESAS-163-F3 &middot; ESAS-163 &middot; decided (owner): D</div><h3>Durable home of a design-multi map</h3><p>Where the map lives after the run</p><ul><li>a lane regenerates the decision text</li></ul><div class="opt"><div><b>A</b> run dir only<ul class="walks"><li><i>unattended lane</i> &mdash; lost with run dir</li></ul><p class="note">Rejected because silent loss</p></div><button class="btn" data-pick="A" disabled>Choose</button></div><div class="opt"><div><b>B</b> docs branch + PR<ul class="walks"><li><i>unattended lane</i> &mdash; human merge first</li></ul><p class="note">Rejected because needs a human before start-multi</p></div><button class="btn" data-pick="B" disabled>Choose</button></div><div class="opt rec"><div><b>D</b> run dir -&gt; provisioner -&gt; lane commits docs/prs/&lt;id&gt;/map.json<span class=badge>recommended</span><ul class="walks"><li><i>unattended lane</i> &mdash; committed map is the verifier</li></ul></div><button class="btn" data-pick="D" disabled>Choose</button></div><p><b>Recommendation.</b> D: owned by ESAS-162/166</p><p class="note"><b>If overturned.</b> the renderer and its tests change accordingly</p><textarea placeholder="Anything the options miss, or a question for me" disabled></textarea><div><button class="btn" data-action="save" disabled>Save comment</button> <button class="btn" data-action="agree" disabled>Agree with the recommendation</button><span class="saved"></span></div></article></main><script type="application/json" id="map-data">{"structureVersion": 2, "shape": "decision", "grounded": true, "nodes": [], "forks": [{"id": "ESAS-163-F1", "title": "Code-settled forks", "tickets": ["ESAS-163"], "card": {"problem": "How a fork settled by reading code is recorded", "useCases": ["a lane regenerates the decision text"], "options": [{"id": "A", "label": "decided(recommendation)", "walks": [{"scenario": "unattended lane", "text": "reads as owner-did-not-object"}], "rejectedBecause": "dilutes ESAS-162's owner signal", "evidence": ["docs/prs/ESAS-162/design.md"]}, {"id": "B", "label": "keep out of map.json", "walks": [{"scenario": "unattended lane", "text": "two decision sections"}], "rejectedBecause": "most would be unprotected by any hash"}, {"id": "C", "label": "status.source: code", "walks": [{"scenario": "unattended lane", "text": "renders decided(code) with rejected options"}]}], "recommendation": {"option": "C", "why": "keeps provenance honest"}, "ifOverturned": "the renderer and its tests change accordingly"}, "restsOn": [], "status": {"kind": "decided", "source": "owner", "option": "C"}}, {"id": "ESAS-163-F2", "title": "Tamper in an unattended run", "tickets": ["ESAS-163"], "card": {"problem": "A hand edit inside a generated region", "useCases": ["a lane regenerates the decision text"], "options": [{"id": "A", "label": "stop the lane (md) / stop the item (jira)", "walks": [{"scenario": "unattended lane", "text": "lane halts"}], "rejectedBecause": "halts an unattended fleet for a git-recoverable case (md)"}, {"id": "B", "label": "displace verbatim (md) and regenerate", "walks": [{"scenario": "unattended lane", "text": "edit kept under a Displaced heading"}], "rejectedBecause": "no lane owns the Jira write (jira)"}], "recommendation": {"option": "B", "why": "md=B, jira=A"}, "ifOverturned": "the renderer and its tests change accordingly"}, "restsOn": [], "status": {"kind": "decided", "source": "owner", "option": "B"}}, {"id": "ESAS-163-F3", "title": "Durable home of a design-multi map", "tickets": ["ESAS-163"], "card": {"problem": "Where the map lives after the run", "useCases": ["a lane regenerates the decision text"], "options": [{"id": "A", "label": "run dir only", "walks": [{"scenario": "unattended lane", "text": "lost with run dir"}], "rejectedBecause": "silent loss"}, {"id": "B", "label": "docs branch + PR", "walks": [{"scenario": "unattended lane", "text": "human merge first"}], "rejectedBecause": "needs a human before start-multi"}, {"id": "D", "label": "run dir -> provisioner -> lane commits docs/prs/\u003cid>/map.json", "walks": [{"scenario": "unattended lane", "text": "committed map is the verifier"}]}], "recommendation": {"option": "D", "why": "owned by ESAS-162/166"}, "ifOverturned": "the renderer and its tests change accordingly"}, "restsOn": [], "status": {"kind": "decided", "source": "owner", "option": "D"}}]}</script><script type="application/json" id="fork-maps">{}</script><script>
+const DATA = JSON.parse(document.getElementById("map-data").textContent);
+// A stacked page embeds {stack: [map, ...]}; each fork remembers its own map's id.
+const MAPS = DATA.stack || [DATA];
+// Each fork's own map's id, computed at render time (fork_maps); a fork of a map
+// without mapId is absent, so its answers carry no map.
+const FORK_MAP = JSON.parse(document.getElementById("fork-maps").textContent);
+const FORKS = {};
+MAPS.forEach(m => m.forks.forEach(f => { FORKS[f.id] = f; }));
+let db = null;
+let answers = {};
+
+function stateOf(id) {
+  const f = FORKS[id];
+  if (f.status.kind === "moot") return "moot";
+  if (answers[id] && answers[id].pick) return "done";
+  return f.status.kind === "decided" ? "decided " + f.status.source : "open";
+}
+function recKey(f) {
+  return f.card ? f.card.recommendation.option : null;
+}
+function renderCard(id) {
+  const card = document.querySelector('[data-fork-id="' + id + '"]');
+  const a = answers[id] || null;
+  card.className = "fork " + stateOf(id) + (FORKS[id].card ? "" : " titleonly");
+  if (!FORKS[id].card) return;
+  card.querySelectorAll("[data-pick]").forEach(b => {
+    const picked = !!(a && a.pick === b.dataset.pick);
+    b.closest(".opt").classList.toggle("picked", picked);
+    b.textContent = picked ? "Chosen" : "Choose";
+  });
+  const ta = card.querySelector("textarea");
+  if (a && document.activeElement !== ta) ta.value = a.comment || "";
+  card.querySelector(".saved").textContent = a && a.updatedAt
+    ? "Saved " + new Date(a.updatedAt).toLocaleString()
+    : (db ? "" : "Answers can't be saved in this view. Reply in the terminal.");
+  card.querySelectorAll("button, textarea").forEach(el => { el.disabled = !db || FORKS[id].status.kind === "moot"; });
+}
+function renderAll() { Object.keys(FORKS).forEach(renderCard); }
+
+async function saveAnswer(id, patch) {
+  if (!db) return;
+  const prev = answers[id] || {};
+  const doc = { pick: prev.pick || null, comment: prev.comment || "", ...patch, updatedAt: new Date().toISOString() };
+  if (FORK_MAP[id]) doc.map = FORK_MAP[id];
+  answers[id] = doc; renderCard(id);
+  const s = document.querySelector('[data-fork-id="' + id + '"] .saved');
+  try { await db.doc("answers/" + id).set(doc); s.textContent = "Saved"; }
+  catch (e) { s.textContent = "Not saved: " + (e && e.message || "store refused the write"); }
+}
+
+document.addEventListener("click", e => {
+  const card = e.target.closest("[data-fork-id]");
+  if (!card || !FORKS[card.dataset.forkId].card) return;
+  const id = card.dataset.forkId;
+  const comment = card.querySelector("textarea").value;
+  if (e.target.dataset.pick) { saveAnswer(id, { pick: e.target.dataset.pick, comment }); return; }
+  if (e.target.dataset.action === "save") { saveAnswer(id, { comment }); return; }
+  if (e.target.dataset.action === "agree") { saveAnswer(id, { pick: recKey(FORKS[id]), comment }); return; }
+});
+
+renderAll();
+(async () => {
+  try { db = window.claude && window.claude.use ? await window.claude.use("db") : null; } catch (_) { db = null; }
+  const note = document.getElementById("dbnote");
+  if (!db) {
+    note.textContent = "Answers can't be saved in this view. Reply in the terminal.";
+    renderAll();
+    return;
+  }
+  note.textContent = "Answers save as you click. Claude reads them back.";
+  const col = db.collection("answers");
+  const apply = snap => { const next = {}; (snap.docs || []).forEach(d => { next[d.id] = d.data(); }); answers = next; renderAll(); };
+  if (typeof col.onSnapshot === "function") col.onSnapshot(apply, () => { note.textContent = "Lost the answer store; reload to reconnect."; });
+  else col.get().then(apply);
+  renderAll();
+})();
+</script></body></html>

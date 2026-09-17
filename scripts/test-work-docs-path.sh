@@ -410,6 +410,38 @@ header "$REPO/docs/prs/gh-268" gh-268 feat/268
 expect_owner '(g) --item #268, header spells it gh-268' self --item '#268' --owner-branch feat/268
 header "$REPO/docs/prs/gh-268" '#268' feat/268
 expect_owner '(g) an unquoted #268 is a comment: no work_item, unowned' unowned --item '#268' --owner-branch feat/268
+
+# (h) a provisioned map-only folder (ESAS-166 R1): no design.md, but a map.json
+# whose top-level mapId is this item's normalised id (what `design-map project
+# --ticket` stamps) — nothing designed yet, so the folder is this item's to
+# design: owner=none. Any other design-less folder stays unowned.
+M="$REPO/docs/prs/TV1-77"
+mkdir -p "$M"
+printf '{"mapId":"TV1-77","forks":[]}\n' > "$M/map.json"
+expect_owner '(h) map-only folder, mapId is this item' none --item TV1-77 --owner-branch tv1-77
+check '(h) map-only folder: exists=true' "$( attr "$LINE" exists )" true "$LINE"
+mkdir -p "$REPO/docs/prs/gh-301"; printf '{"mapId":"gh-301"}\n' > "$REPO/docs/prs/gh-301/map.json"
+expect_owner '(h) map-only folder, --item #301 matches the normalised mapId gh-301' none --item '#301' --owner-branch feat/301
+printf '{"mapId":"TV1-78"}\n' > "$M/map.json"
+expect_owner '(h) map-only folder, mapId is another item' unowned --item TV1-77 --owner-branch tv1-77
+printf '{"forks":[]}\n' > "$M/map.json"
+expect_owner '(h) map-only folder, no mapId' unowned --item TV1-77 --owner-branch tv1-77
+printf '{"mapId":' > "$M/map.json"
+expect_owner '(h) map-only folder, unparseable map.json' unowned --item TV1-77 --owner-branch tv1-77
+printf '["TV1-77"]\n' > "$M/map.json"
+expect_owner '(h) map-only folder, map.json not an object' unowned --item TV1-77 --owner-branch tv1-77
+printf '\377\376{}' > "$M/map.json"
+expect_owner '(h) map-only folder, map.json not UTF-8' unowned --item TV1-77 --owner-branch tv1-77
+rm -f "$M/map.json"; mkdir "$M/map.json"
+expect_owner '(h) map-only folder, map.json is a directory' unowned --item TV1-77 --owner-branch tv1-77
+rmdir "$M/map.json"
+printf '{"mapId":"TV1-77"}\n' > "$M/map.json"
+header "$M" TV1-77 other-branch
+expect_owner '(h) design.md present: the header decides, not the map' other --item TV1-77 --owner-branch tv1-77
+header "$M" TV1-77 tv1-77
+expect_owner '(h) design.md present and matching: self' self --item TV1-77 --owner-branch tv1-77
+printf '# no header\n' > "$M/design.md"
+expect_owner '(h) headerless design.md beside a matching map: unowned' unowned --item TV1-77 --owner-branch tv1-77
 header "$REPO/docs/prs/TV1-7" tv1-7 feat/7
 expect_owner '(g) --item, a header work_item that is not a valid key is not self' other --item TV1-7 --owner-branch feat/7
 
@@ -557,6 +589,103 @@ git -C "$REPO" checkout -qb fix/flaky
 third=$( start_item 2026-03-04 fix/flaky )
 wdp "$REPO" --item "$third" --owner-branch fix/flaky
 check 'ACCEPTED RESIDUAL — same branch name recreated on the SAME day: owner=self' "$( attr "$LINE" owner )" self "$LINE"
+
+# ---------------------------------------------------------------------------
+printf '\n/design Step 4 commits the map snapshot beside the design (ESAS-162)\n'
+# ---------------------------------------------------------------------------
+# map_pass <work_item> <branch> <draft map> <expect> — Step 4 in the order the
+# command states it: owner check; on none/self a map.json already in the folder
+# is used as-is (the provisioned case), else `design-map write` from the draft
+# on stdin; `render --expect <n> --out map.html`; on a non-ok render, remove the
+# map.json this pass wrote (never a provisioned one) and write nothing else; on
+# ok, write design.md and make ONE commit naming the three paths. The real
+# launcher runs. Sets $LINE (owner verdict) and $DMLINE (last design-map verdict).
+DM="$ROOT/plugins/bett3r-ai-workflow/bin/design-map"
+DMFIX="$ROOT/scripts/fixtures/design-map"
+dmverdict(){ awk 'NF{l=$0} END{print l}' "$1" | grep -E '^DESIGN-MAP:v1 outcome=[a-z]+( [A-Za-z]+=[^ ]*)*$'; }
+map_pass(){
+  DMLINE=
+  wdp "$REPO" --item "$1" --owner-branch "$2"
+  case $( attr "$LINE" owner ) in
+    none|self) ;;
+    *) return ;;
+  esac
+  xdir="$REPO/$( attr "$LINE" path )"
+  mkdir -p "$xdir"
+  xwrote=
+  if [ ! -f "$xdir/map.json" ]; then
+    ( cd "$REPO" && "$WDP_SH" "$DM" write "$xdir/map.json" ) < "$3" > "$TMP/dm" 2>&1
+    DMLINE=$( dmverdict "$TMP/dm" )
+    [ "$( attr "$DMLINE" outcome )" = ok ] || return
+    xwrote=yes
+  fi
+  ( cd "$REPO" && "$WDP_SH" "$DM" render "$xdir/map.json" --expect "$4" --out "$xdir/map.html" ) > "$TMP/dm" 2>&1
+  DMLINE=$( dmverdict "$TMP/dm" )
+  if [ "$( attr "$DMLINE" outcome )" != ok ]; then
+    [ -n "$xwrote" ] && rm -f "$xdir/map.json"
+    return
+  fi
+  header "$xdir" "$1" "$2"
+  xp=$( attr "$LINE" path )
+  git -C "$REPO" add -- "$xp/design.md" "$xp/map.json" "$xp/map.html"
+  git -C "$REPO" -c user.name=t -c user.email=t@t commit -qm "docs($1): design" -- "$xp/design.md" "$xp/map.json" "$xp/map.html"
+}
+exists3(){ for f in design.md map.json map.html; do [ -e "$1/$f" ] && printf '%s ' "$f"; done; printf 'end\n'; }
+
+# The command text states the flow this simulation executes: a Step 4 that
+# never names the map verbs or the three-path commit is the defect.
+awk '/^## Step 4/{f=1} /^## Step 5/{f=0} f' "$ROOT/plugins/bett3r-ai-workflow/commands/design.md" > "$TMP/step4"
+for needle in 'design-map write <path>/map.json' 'design-map render <path>/map.json --expect <n> --out <path>/map.html' \
+              '-- <path>/design.md <path>/map.json <path>/map.html' 'never derived from the file'; do
+  check "/design Step 4 states: $needle" "$( grep -cF -- "$needle" "$TMP/step4" | sed 's/^[1-9][0-9]*$/present/' )" present
+done
+
+new_repo mapsnap
+git -C "$REPO" checkout -qb master
+printf 'x\n' > "$REPO/README"; commit_all "$REPO" base
+git -C "$REPO" checkout -qb ESAS-1-a
+map_pass ESAS-1 ESAS-1-a "$DMFIX/count-2-1-1-1-0.map.json" 5
+check 'map snapshot, owner=none: the pass wrote fresh' "$( attr "$LINE" owner )" none "$LINE"
+check 'map snapshot, owner=none: render ok' "$( attr "$DMLINE" outcome )" ok "$DMLINE"
+check 'map snapshot, owner=none: HEAD commits exactly design.md, map.json, map.html' \
+  "$( git -C "$REPO" show --name-only --format= HEAD | sort | tr '\n' ' ' )" \
+  'docs/prs/ESAS-1/design.md docs/prs/ESAS-1/map.html docs/prs/ESAS-1/map.json '
+check 'map snapshot, owner=none: the tree is clean after the commit' "$( git -C "$REPO" status --porcelain )x" x
+
+git -C "$REPO" checkout -qb ESAS-1-b
+before=$( git -C "$REPO" rev-parse HEAD )
+map_pass ESAS-1 ESAS-1-b "$DMFIX/count-2-1-1-1-0.map.json" 5
+check 'map snapshot, owner=other: stops' "$( attr "$LINE" owner )" other "$LINE"
+check 'map snapshot, owner=other: none of the three changes' "$( git -C "$REPO" status --porcelain )x" x
+check 'map snapshot, owner=other: no commit' "$( git -C "$REPO" rev-parse HEAD )" "$before"
+
+git -C "$REPO" checkout -qb ESAS-2-a
+sed 's/"grounded": true/"grounded": false/' "$DMFIX/count-2-1-1-1-0.map.json" > "$TMP/ungrounded.json"
+before=$( git -C "$REPO" rev-parse HEAD )
+map_pass ESAS-2 ESAS-2-a "$TMP/ungrounded.json" 5
+check 'map snapshot, ungrounded draft: render refuses reason=not-grounded' "$( attr "$DMLINE" reason )" not-grounded "$DMLINE"
+check 'map snapshot, ungrounded draft: no file written' "$( exists3 "$REPO/docs/prs/ESAS-2" )" end
+check 'map snapshot, ungrounded draft: no commit' "$( git -C "$REPO" rev-parse HEAD )" "$before"
+
+# A folder holding only map.json reads owner=unowned (no design.md proves an
+# owner), so the pre-placed map is planted beside this branch's own committed
+# design: owner=self, the map uncommitted as a provisioner leaves it.
+git -C "$REPO" checkout -qb ESAS-3-a
+header "$REPO/docs/prs/ESAS-3" ESAS-3 ESAS-3-a; commit_all "$REPO" 'docs(ESAS-3): header'
+cp "$DMFIX/count-2-1-1-1-0.map.json" "$REPO/docs/prs/ESAS-3/map.json"
+map_pass ESAS-3 ESAS-3-a "$DMFIX/decision-3-forks.json" 5
+check 'map snapshot, provisioned map.json: committed byte-identical' \
+  "$( git -C "$REPO" show HEAD:docs/prs/ESAS-3/map.json | cmp -s - "$DMFIX/count-2-1-1-1-0.map.json" && echo same )" same "$DMLINE"
+
+git -C "$REPO" checkout -qb ESAS-4-a
+header "$REPO/docs/prs/ESAS-4" ESAS-4 ESAS-4-a; commit_all "$REPO" 'docs(ESAS-4): header'
+cp "$DMFIX/count-2-1-1-1-0.map.json" "$REPO/docs/prs/ESAS-4/map.json"
+map_pass ESAS-4 ESAS-4-a "$DMFIX/count-2-1-1-1-0.map.json" 4
+check 'map snapshot, provisioned map.json + count mismatch: refused' "$( attr "$DMLINE" reason )" count-mismatch "$DMLINE"
+check 'map snapshot, provisioned map.json + count mismatch: no page, no commit, the tree only holds the provisioned map' \
+  "$( exists3 "$REPO/docs/prs/ESAS-4" )|$( git -C "$REPO" status --porcelain )" 'design.md map.json end|?? docs/prs/ESAS-4/map.json'
+check 'map snapshot, provisioned map.json + count mismatch: kept byte-identical' \
+  "$( cmp -s "$REPO/docs/prs/ESAS-4/map.json" "$DMFIX/count-2-1-1-1-0.map.json" && echo same )" same
 
 # ---------------------------------------------------------------------------
 printf '\nthe verdict line is the contract (ADR-004)\n'

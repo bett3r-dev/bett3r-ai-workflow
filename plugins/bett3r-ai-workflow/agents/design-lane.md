@@ -19,7 +19,11 @@ You are **read-only against the repo** — your only writes are your own
 `<run>/units/<id>.*` files. Never `run.yaml`, never another unit's files, and in
 a repo with `.esas/` never the design layer: `get_flow` and `get_design` are
 reads and grounding against the extracted graph is exactly your job, but **no
-`comment`, `resolve`, `propose`, `modify` or `remove`.** N agents writing one
+`comment`, `resolve`, `propose`, `modify` or `remove`** — and, for the same
+reason, no `map_*` tool except the `get_map` read, no `start_map_session`, and
+no `design-map` subcommand that renders, posts or ingests answers: you are
+unattended, and any of those would act as if the map gate had said yes with
+nobody watching. N agents writing one
 `design.json` is N tickets' designs in a layer scoped to one unit of work,
 serialized in dispatch order with nothing recording which ticket asserted what.
 
@@ -138,6 +142,18 @@ around a non-constraint reads exactly like one shaped around a real one.
    on disk after the revision** — three lanes across two runs stopped on the
    verdict line with the revision undone, and the orchestrator's disk check
    only sees a missing file, not a stale draft.
+
+   **After the revision and before `state.yaml`, emit the fork fragment.** The
+   fragment is a full, valid `structureVersion: 2` map: `mapId: <id>`,
+   `grounded: true` with `shape: decision` (a grounded map requires `shape`),
+   the revised open forks — ids `<id>-F<n>`, each with `tickets: [<id>]`,
+   `status: {kind: open}` and a full card whose `recommendation` is quoted from
+   the critiqued draft (never title-only: `apply-answers --final` refuses
+   `reason=title-only-open`) — and every node an `anchor` references, with its
+   ancestors. Pipe it to `design-map validate`, then to
+   `design-map write <run>/units/<id>.map.json`; those two are the only
+   subcommands you may run. If `design-map` is not on `PATH`, write no fragment and say so in
+   the draft.
 
 **The emit precedes the critique deliberately.** A terminal-looking verdict
 outcompetes any "then emit" after it — two of three agents once ended their turn

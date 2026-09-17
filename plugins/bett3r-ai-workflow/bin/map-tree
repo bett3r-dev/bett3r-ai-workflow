@@ -1,0 +1,10 @@
+#!/bin/sh
+# Launcher for scripts/map-tree.py — renders a ticket's projection of map.json
+# into a generated `map-tree:v1` region (`render`), writes it into a file
+# (`write`) and reports whether a file's region is fresh, stale or tampered
+# (`check`). Ends in a `MAP-TREE:v1` verdict line.
+#
+# Mirrors `design-map`, for the same reason as `lane-step`: `CLAUDE_PLUGIN_ROOT`
+# is substituted for hook invocations only, while every enabled plugin's `bin/`
+# is on `PATH`, keyed by the version the session loaded.
+exec python3 "$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)/scripts/map-tree.py" "$@"

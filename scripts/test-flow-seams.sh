@@ -45,6 +45,9 @@ UNIT_LANE_MD="$PLUGIN/agents/unit-lane.md"
 PROVISIONER_MD="$PLUGIN/agents/provisioner.md"
 RUN_REPORT_MD="$PLUGIN/commands/run-report.md"
 VERIFY_BUILD_MD="$PLUGIN/commands/verify-build.md"
+DESIGN_MULTI_MD="$PLUGIN/commands/design-multi.md"
+DESIGN_LANE_MD="$PLUGIN/agents/design-lane.md"
+ADR_006_MD="$ROOT/docs/adr/ADR-006-one-program-writes-map-json.md"
 LANE_STEP_FIXTURES="$ROOT/scripts/fixtures/lane-step"
 MARKER_PY=${MARKER_PY:-python3}
 
@@ -106,6 +109,7 @@ done
 # still be wrong — the exact silent failure the seam was built to end.
 present "$DESIGN_MD" 'mode: design' '[SEAM 4] /design writes mode: design'
 present "$PLAN_MD"   'mode: plan'   '[SEAM 4] /plan writes mode: plan'
+present "$DESIGN_MD" 'the literal line `## Resolved decision tree`' '[ADR-007] /design requires the literal Resolved decision tree heading map-tree inserts after'
 present "$BUILD_MD"  'mode: build'  '[SEAM 4] /build writes mode: build'
 present "$START_MD"  'mode: start'  '[SEAM 4] /start writes mode: start'
 
@@ -1122,6 +1126,12 @@ printf '\nSeam G — the resolved-design marker pair is linted, not remembered\n
 # count-based check pass the real defect.
 MARKER_LINT="$PLUGIN/bin/resolved-marker-lint"
 present "$PLUGIN/commands/design-multi.md" 'resolved-marker-lint' '/design-multi runs the marker-parity lint before a write'
+# ESAS-163 (ADR-007): decision text is a generated map-tree region. The file's
+# author writes it; tracker-writer only checks it.
+present "$PLUGIN/commands/design.md" 'map-tree write --map' '/design Step 4 regenerates the design.md region with map-tree write'
+present "$PLUGIN/commands/verify-build.md" 'map-tree write --map' '/verify-build refresh regenerates the design.md region with map-tree write'
+present "$PLUGIN/commands/design-multi.md" 'map-tree write --dialect jira' '/design-multi fold-back writes the ticket-block region with the jira dialect'
+present "$PLUGIN/agents/tracker-writer.md" 'map-tree check' 'tracker-writer preflight refuses a source whose map-tree region is not fresh'
 printf '%s\n' '<!-- design-multi:resolved:v2 status=ready base=abc run=r1 -->' '' \
   '## Resolved Design (design-multi)' '`design-multi:resolved:v2 status=ready base=abc run=r1`' > "$TMP/marker-good.md"
 printf '%s\n' '<!-- design-multi:resolved:v2 status=ready base=abc run=r1 -->' \
@@ -2412,6 +2422,14 @@ present "$VERIFY_BUILD_MD" 'post Step 6b'\''s status again, unchanged, on the ne
 present "$VERIFY_BUILD_MD" 'Among verdicts, only Step 2'\''s `FAIL` holds this step back' \
   '/verify-build Step 6: among verdicts, only the gate FAIL holds the PR back'
 present "$VERIFY_BUILD_MD" 'no concerns recorded' '/verify-build: an empty concerns.md is "no concerns recorded"'
+
+# ESAS-162 — the goal-signal line under ### Record, and the (inert) map-drift
+# step before Step 5b. Presence rows only: the executable half is
+# scripts/test-design-snapshot.sh's count/drift matrix (AC2/AC4); this is AC5.
+present "$VERIFY_BUILD_MD" 'design-map count' '/verify-build: ### Record carries the design-map count line'
+present "$VERIFY_BUILD_MD" 'design-map drift' '/verify-build: a map-drift step calls design-map drift'
+present "$VERIFY_BUILD_MD" 'no-map-feed' '/verify-build: the drift step names the no-map-feed skip reason'
+
 for refuted in 'one commit per slice' 'follow-up slice' '`verifyBuild.concerns` is `null` until' 'no concerns raised' 'none raised'; do
   if grep -qF -e "$refuted" "$( norm "$VERIFY_BUILD_MD" )"; then
     fail "/verify-build no longer says: $refuted" "found in ${VERIFY_BUILD_MD#"$ROOT"/}"
@@ -2433,7 +2451,91 @@ for refuted in 'Nothing else is kept' 'committed scratch docs'; do
   fi
 done
 
+# ---------------------------------------------------------------------------
+# ESAS-165 — /plan offers candidate oracles from a resolved map, never
+# promotes them unattended, and /verify-build reports them (D6/D7/U4).
+# ---------------------------------------------------------------------------
+
+present "$PLAN_MD" 'If `<path>/map.json` exists, run' '/plan Step 1 checks for <path>/map.json before offering candidates'
+present "$PLAN_MD" 'design-map candidates' '/plan Step 1 runs design-map candidates positionally over map.json'
+present "$PLAN_MD" 'confirm, reject, or re-attach each candidate' '/plan Step 4 asks to confirm, reject, or re-attach each candidate'
+present "$PLAN_MD" 'design-map check-plan' '/plan runs design-map check-plan against .work/slices.yaml'
+present "$PLAN_MD" 'review: unattended' '/plan writes review: unattended in the unattended branch'
+present "$PLAN_MD" '`reason=candidate-in-oracle` →' '/plan Step 5 handles check-plan reason=candidate-in-oracle'
+present "$PLAN_MD" '`reason=unattended-confirmed` →' '/plan Step 5 handles check-plan reason=unattended-confirmed'
+present "$PLAN_MD" 'and its **oracle** — followed by that slice' '/plan Step 4 shows each slice oracle with its candidates under it (D7)'
+present "$PLAN_MD" 'mark every candidate `status: unconfirmed`' '/plan writes every unattended candidate as unconfirmed'
+present "$PLAN_MD" 'also write a top-level `candidateOracles:`' '/plan Step 5 writes a top-level candidateOracles: block'
+
+# The old wording ("whose slicing the human already reviewed") described a
+# resolved block as reviewing the SLICING; U4 corrects this — a block reviews
+# the design, not the breakdown /plan itself produces.
+if grep -qF -e 'whose slicing the human already reviewed' "$( norm "$PLAN_MD" )"; then
+  fail '/plan no longer says a resolved block reviewed the slicing (U4)' "still present in ${PLAN_MD#"$ROOT"/}"
+else
+  pass '/plan no longer says a resolved block reviewed the slicing (U4)'
+fi
+
+present "$PLUGIN/skills/vertical-slicing/SKILL.md" 'review:' 'vertical-slicing SKILL.md schema names review:'
+present "$PLUGIN/skills/vertical-slicing/SKILL.md" 'candidateOracles:' 'vertical-slicing SKILL.md schema names candidateOracles:'
+
+
+# ESAS-165 D5/U3 — /verify-build PR body reports Oracle candidates. The
+# positive control proves the file and extractor work, so an absent heading
+# cannot pass vacuously.
+present "$VERIFY_BUILD_MD" '### Slices' 'positive control: verify-build.md PR template carries ### Slices'
+present "$VERIFY_BUILD_MD" '### Oracle candidates' '/verify-build PR template carries ### Oracle candidates (D5)'
+present "$VERIFY_BUILD_MD" 'Breakdown not human-reviewed (unattended /plan).' '/verify-build prints the not-human-reviewed line on review: unattended (U3)'
+present "$VERIFY_BUILD_MD" 'Oracle candidates: none (owner answers not carried: run dir absent)' '/verify-build D5 form: mapProvenance lost'
+present "$VERIFY_BUILD_MD" 'Oracle candidates: none (no map.json)' '/verify-build D5 form: no candidateOracles key'
+present "$VERIFY_BUILD_MD" 'one bullet per unconfirmed candidate — `<fork>` / `<option>`: <scenario> — e.g. <example>' '/verify-build D5 form: unattended lists unconfirmed candidates'
+present "$VERIFY_BUILD_MD" 'Oracle candidates: <confirmed> confirmed, <rejected> rejected' '/verify-build D5 form: human-reviewed counts'
+in_order '/verify-build ORDER: ### Slices < ### Oracle candidates (D5)' \
+  "$( first_line "$VERIFY_BUILD_MD" '### Slices' )" "$( first_line "$VERIFY_BUILD_MD" '### Oracle candidates' )"
+
+# ESAS-166 D10 / E163-1, E162-2 -> R2 — provenance decides map reuse. The
+# provisioner carries the Phase-C projection into the lane or reports it lost;
+# /design reuses a map as-is only on `carried`; /verify-build reports `lost`.
+present "$PROVISIONER_MD" 'mapProvenance: carried' 'provisioner writes mapProvenance: carried when it copies the projection (D10)'
+present "$PROVISIONER_MD" 'mapProvenance: lost' 'provisioner writes mapProvenance: lost when the run dir or projection is absent (D10)'
+present "$PROVISIONER_MD" 'docs/prs/<id>/map.json' 'provisioner names the lane map destination docs/prs/<id>/map.json (D10)'
+present "$DESIGN_MD" 'mapProvenance: carried' '/design Step 4 reuses a map as-is only on mapProvenance: carried (R2)'
+present "$DESIGN_MD" 'never re-authored in the lane' '/design Step 4: a carried map is frozen in the lane; fork changes escalate (R2, D9)'
+present "$VERIFY_BUILD_MD" 'owner answers not carried: run dir absent' 'pin: /verify-build reports mapProvenance lost as owner answers not carried'
+
+# ESAS-166 AC2 — /design-multi answers on subject maps; the lane emits a fragment.
+present "$DESIGN_MULTI_MD" 'parent:' '/design-multi step 0 records parent: <EPIC> in the ticket snapshot header (D2)'
+present "$DESIGN_MULTI_MD" 'design-multi-subjects group' '/design-multi Phase B item 1 groups units with design-multi-subjects group (D2, Fork 1)'
+present "$DESIGN_MULTI_MD" 'subjectsFingerprint' '/design-multi persists subjects[] and subjectsFingerprint in run.yaml (D4)'
+present "$DESIGN_MULTI_MD" 'design-map select' '/design-multi calls design-map select per subject (D7, D11)'
+present "$DESIGN_MULTI_MD" 'design-map render --stack' '/design-multi renders every subject on one page with render --stack (D3)'
+present "$DESIGN_MULTI_MD" 'design-map apply-answers' '/design-multi routes every answer through design-map apply-answers (D5)'
+present "$DESIGN_MULTI_MD" 'decisions --closed' '/design-multi one-answer check is design-map decisions --closed (D5)'
+present "$DESIGN_MULTI_MD" 'outcome=ok verb=decisions open=0' '/design-multi gates the one-answer check on the decisions verdict line, not the exit code (ADR-004)'
+present "$DESIGN_MULTI_MD" 'counted in `otherMap=`' '/design-multi relies on apply-answers otherMap= skipping, not per-subject sorting (D5)'
+present "$DESIGN_LANE_MD" 'design-map validate' 'design-lane validates its fragment before write (D1)'
+present "$DESIGN_LANE_MD" 'design-map write' 'design-lane emits its fork fragment through design-map write (D1)'
+# C3: the lane may name map_* MCP tools as forbidden, but must never instruct a
+# design-map verb beyond validate/write.
+if lane_verbs=$( grep -nE 'design-map (render|apply-answers|project|decisions|count|check-page)' "$DESIGN_LANE_MD" ); then
+  fail 'design-lane names no design-map verb beyond validate/write (D1, C3)' 'forbidden design-map verb in agents/design-lane.md:' "  $lane_verbs"
+else
+  pass 'design-lane names no design-map verb beyond validate/write (D1, C3)'
+fi
+
 printf '\n'
+# ESAS-166: ADR-006's amended section names the subject/stacking/projection/
+# provenance vocabulary this unit adds, so a future edit that drops the section
+# (or renames a term the code actually uses) fails here rather than in review.
+present "$ADR_006_MD" 'Subject' \
+  '[ESAS-166] ADR-006 names Subject in its glossary'
+present "$ADR_006_MD" 'mapProvenance: carried' \
+  '[ESAS-166] ADR-006 names mapProvenance: carried'
+present "$ADR_006_MD" 'design-multi-subjects' \
+  '[ESAS-166] ADR-006 names the design-multi-subjects helper'
+present "$ADR_006_MD" 'so `/design` proceeds' \
+  '[ESAS-166] ADR-006 says a map-only owner=none folder lets /design proceed'
+
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"
   exit 0

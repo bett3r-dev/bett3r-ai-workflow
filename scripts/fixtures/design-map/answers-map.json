@@ -1,118 +1,301 @@
 {
-  "schemaVersion": 1,
-  "layout": "decisionTree",
-  "title": "Fixture answers fold",
+  "structureVersion": 2,
+  "shape": "decision",
+  "grounded": true,
+  "nodes": [],
   "forks": [
     {
-      "id": "F1",
+      "id": "ESAS-1-F1",
       "title": "Fork 1: which option?",
-      "status": "open",
-      "problem": "Problem statement for fork 1.",
-      "options": [
-        {
-          "key": "A",
-          "label": "Option A"
-        },
-        {
-          "key": "B",
-          "label": "Option B",
-          "recommended": true
-        }
+      "tickets": [
+        "ESAS-1"
       ],
-      "recommendation": "B, because it is the smaller change."
+      "card": {
+        "problem": "Problem statement for fork 1.",
+        "useCases": [
+          "An owner answers fork 1."
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Option A",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ],
+            "rejectedBecause": "A is the larger change."
+          },
+          {
+            "id": "B",
+            "label": "Option B",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ],
+            "evidence": [
+              "scripts/design-map.py"
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "B is the smaller change."
+        },
+        "ifOverturned": "A replaces B; nothing else moves."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "open"
+      }
     },
     {
-      "id": "F2",
+      "id": "ESAS-1-F2",
       "title": "Fork 2: which option?",
-      "status": "open",
-      "problem": "Problem statement for fork 2.",
-      "options": [
-        {
-          "key": "A",
-          "label": "Option A"
-        },
-        {
-          "key": "B",
-          "label": "Option B",
-          "recommended": true
-        }
+      "tickets": [
+        "ESAS-1"
       ],
-      "recommendation": "B, because it is the smaller change."
+      "card": {
+        "problem": "Problem statement for fork 2.",
+        "useCases": [
+          "An owner answers fork 2."
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Option A",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ],
+            "rejectedBecause": "A is the larger change."
+          },
+          {
+            "id": "B",
+            "label": "Option B",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ],
+            "evidence": [
+              "scripts/design-map.py"
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "B is the smaller change."
+        },
+        "ifOverturned": "A replaces B; nothing else moves."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "open"
+      }
     },
     {
-      "id": "F3",
+      "id": "ESAS-1-F3",
       "title": "Fork 3: which option?",
-      "status": "open",
-      "problem": "Problem statement for fork 3.",
-      "options": [
-        {
-          "key": "A",
-          "label": "Option A"
-        },
-        {
-          "key": "B",
-          "label": "Option B",
-          "recommended": true
-        }
+      "tickets": [
+        "ESAS-1"
       ],
-      "recommendation": "B, because it is the smaller change."
+      "card": {
+        "problem": "Problem statement for fork 3.",
+        "useCases": [
+          "An owner answers fork 3."
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Option A",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ],
+            "rejectedBecause": "A is the larger change."
+          },
+          {
+            "id": "B",
+            "label": "Option B",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ],
+            "evidence": [
+              "scripts/design-map.py"
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "B is the smaller change."
+        },
+        "ifOverturned": "A replaces B; nothing else moves."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "open"
+      }
     },
     {
-      "id": "F4",
+      "id": "ESAS-1-F4",
       "title": "Fork 4: which option?",
-      "status": "decided",
-      "by": "recommendation",
-      "problem": "Problem statement for fork 4.",
-      "options": [
-        {
-          "key": "A",
-          "label": "Option A"
-        },
-        {
-          "key": "B",
-          "label": "Option B",
-          "recommended": true
-        }
+      "tickets": [
+        "ESAS-1"
       ],
-      "recommendation": "B, because it is the smaller change."
+      "card": {
+        "problem": "Problem statement for fork 4.",
+        "useCases": [
+          "An owner answers fork 4."
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Option A",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ],
+            "rejectedBecause": "A is the larger change."
+          },
+          {
+            "id": "B",
+            "label": "Option B",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ],
+            "evidence": [
+              "scripts/design-map.py"
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "B is the smaller change."
+        },
+        "ifOverturned": "A replaces B; nothing else moves."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "recommendation",
+        "option": "B"
+      }
     },
     {
-      "id": "F5",
+      "id": "ESAS-1-F5",
       "title": "Fork 5: which option?",
-      "status": "moot",
-      "reason": "Superseded by F1.",
-      "problem": "Problem statement for fork 5.",
-      "options": [
-        {
-          "key": "A",
-          "label": "Option A"
-        },
-        {
-          "key": "B",
-          "label": "Option B",
-          "recommended": true
-        }
+      "tickets": [
+        "ESAS-1"
       ],
-      "recommendation": "B, because it is the smaller change."
+      "card": {
+        "problem": "Problem statement for fork 5.",
+        "useCases": [
+          "An owner answers fork 5."
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Option A",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ],
+            "rejectedBecause": "A is the larger change."
+          },
+          {
+            "id": "B",
+            "label": "Option B",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ],
+            "evidence": [
+              "scripts/design-map.py"
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "B is the smaller change."
+        },
+        "ifOverturned": "A replaces B; nothing else moves."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "moot",
+        "reason": "Superseded by ESAS-1-F1."
+      }
     },
     {
-      "id": "F6",
+      "id": "ESAS-1-F6",
       "title": "Fork 6: which option?",
-      "status": "decided",
-      "by": "recommendation",
-      "problem": "Problem statement for fork 6.",
-      "options": [
-        {
-          "key": "A",
-          "label": "Option A"
-        },
-        {
-          "key": "B",
-          "label": "Option B",
-          "recommended": true
-        }
+      "tickets": [
+        "ESAS-1"
       ],
-      "recommendation": "B, because it is the smaller change."
+      "card": {
+        "problem": "Problem statement for fork 6.",
+        "useCases": [
+          "An owner answers fork 6."
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Option A",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ],
+            "rejectedBecause": "A is the larger change."
+          },
+          {
+            "id": "B",
+            "label": "Option B",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ],
+            "evidence": [
+              "scripts/design-map.py"
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "B is the smaller change."
+        },
+        "ifOverturned": "A replaces B; nothing else moves."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "recommendation",
+        "option": "B"
+      }
     }
   ]
 }

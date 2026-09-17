@@ -1,0 +1,7 @@
+{
+  "ok": false,
+  "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "esas-mcp failed to handle the call: EACCES: permission denied, mkdir '/work/design-repo/.esas'"
+  }
+}

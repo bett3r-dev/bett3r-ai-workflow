@@ -1,0 +1,15 @@
+ticket: ESAS-9
+review: human
+candidateOracles:
+  - fork: ESAS-9-F1
+    option: A
+    scenario: the owner picks A
+    source: owner
+    example: A is applied
+    slice: 1
+    status: confirmed
+slices:
+  - id: 1
+    name: "slice one"
+    oracle: |
+      the fixture asserts A is applied after the change

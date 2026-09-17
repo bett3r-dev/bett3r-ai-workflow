@@ -1,0 +1,175 @@
+{
+  "structureVersion": 2,
+  "shape": "decision",
+  "grounded": true,
+  "nodes": [],
+  "forks": [
+    {
+      "id": "ESAS-163-F1",
+      "title": "Code-settled forks",
+      "tickets": [
+        "ESAS-163"
+      ],
+      "card": {
+        "problem": "How a fork settled by reading code is recorded",
+        "useCases": [
+          "a lane regenerates the decision text"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "decided(recommendation)",
+            "walks": [
+              {
+                "scenario": "unattended lane",
+                "text": "reads as owner-did-not-object"
+              }
+            ],
+            "rejectedBecause": "dilutes ESAS-162's owner signal",
+            "evidence": [
+              "docs/prs/ESAS-162/design.md"
+            ]
+          },
+          {
+            "id": "B",
+            "label": "keep out of map.json",
+            "walks": [
+              {
+                "scenario": "unattended lane",
+                "text": "two decision sections"
+              }
+            ],
+            "rejectedBecause": "most would be unprotected by any hash"
+          },
+          {
+            "id": "C",
+            "label": "status.source: code",
+            "walks": [
+              {
+                "scenario": "unattended lane",
+                "text": "renders decided(code) with rejected options"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "C",
+          "why": "keeps provenance honest"
+        },
+        "ifOverturned": "the renderer and its tests change accordingly"
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "C"
+      }
+    },
+    {
+      "id": "ESAS-163-F2",
+      "title": "Tamper in an unattended run",
+      "tickets": [
+        "ESAS-163"
+      ],
+      "card": {
+        "problem": "A hand edit inside a generated region",
+        "useCases": [
+          "a lane regenerates the decision text"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "stop the lane (md) / stop the item (jira)",
+            "walks": [
+              {
+                "scenario": "unattended lane",
+                "text": "lane halts"
+              }
+            ],
+            "rejectedBecause": "halts an unattended fleet for a git-recoverable case (md)"
+          },
+          {
+            "id": "B",
+            "label": "displace verbatim (md) and regenerate",
+            "walks": [
+              {
+                "scenario": "unattended lane",
+                "text": "edit kept under a Displaced heading"
+              }
+            ],
+            "rejectedBecause": "no lane owns the Jira write (jira)"
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "md=B, jira=A"
+        },
+        "ifOverturned": "the renderer and its tests change accordingly"
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "B"
+      }
+    },
+    {
+      "id": "ESAS-163-F3",
+      "title": "Durable home of a design-multi map",
+      "tickets": [
+        "ESAS-163"
+      ],
+      "card": {
+        "problem": "Where the map lives after the run",
+        "useCases": [
+          "a lane regenerates the decision text"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "run dir only",
+            "walks": [
+              {
+                "scenario": "unattended lane",
+                "text": "lost with run dir"
+              }
+            ],
+            "rejectedBecause": "silent loss"
+          },
+          {
+            "id": "B",
+            "label": "docs branch + PR",
+            "walks": [
+              {
+                "scenario": "unattended lane",
+                "text": "human merge first"
+              }
+            ],
+            "rejectedBecause": "needs a human before start-multi"
+          },
+          {
+            "id": "D",
+            "label": "run dir -> provisioner -> lane commits docs/prs/<id>/map.json",
+            "walks": [
+              {
+                "scenario": "unattended lane",
+                "text": "committed map is the verifier"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "D",
+          "why": "owned by ESAS-162/166"
+        },
+        "ifOverturned": "the renderer and its tests change accordingly"
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "D"
+      }
+    }
+  ]
+}

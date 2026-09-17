@@ -1,94 +1,43 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/bett3r-dev/bett3r-ai-workflow/plugins/bett3r-ai-workflow/skills/design-map/map.schema.json",
-  "title": "map.json",
-  "$comment": "A design's reasoning as forks, laid out as an impact map (goal -> mapActor -> impact -> deliverable) or as a decision tree. The who-level is spelled mapActor: a bare \"actor\" key is refused anywhere in a payload, so a map role can never be joined to an op's ActorId. scripts/design-map.py validates against this file with the standard library; it implements type, const, enum, required, properties, additionalProperties:false, items, minItems, minLength, pattern, $ref (#/$defs/...), allOf and if/then — nothing else.",
-  "type": "object",
-  "required": ["schemaVersion", "layout", "title", "forks"],
-  "additionalProperties": false,
-  "properties": {
-    "schemaVersion": { "const": 1 },
-    "layout": { "enum": ["impactMap", "decisionTree"] },
-    "title": { "type": "string", "minLength": 1 },
-    "goal": { "$ref": "#/$defs/node" },
-    "mapActors": { "type": "array", "items": { "$ref": "#/$defs/node" } },
-    "impacts": { "type": "array", "items": { "$ref": "#/$defs/impact" } },
-    "deliverables": { "type": "array", "items": { "$ref": "#/$defs/deliverable" } },
-    "forks": { "type": "array", "items": { "$ref": "#/$defs/fork" } }
-  },
-  "allOf": [
-    {
-      "if": { "properties": { "layout": { "const": "impactMap" } } },
-      "then": {
-        "required": ["goal", "mapActors", "impacts", "deliverables"],
-        "properties": {
-          "mapActors": { "minItems": 1 },
-          "impacts": { "minItems": 1 },
-          "deliverables": { "minItems": 1 }
-        }
-      }
-    }
-  ],
+  "title": "ESAS map vocabulary",
+  "description": "The closed sets an ESAS impact map is written in. Emitted from @bett3r-dev/esas-schema; do not hand-edit, and do not extend a set in a consumer.",
+  "schemaVersion": 2,
   "$defs": {
-    "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$" },
-    "node": {
-      "type": "object",
-      "required": ["id", "title"],
-      "additionalProperties": false,
-      "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "title": { "type": "string", "minLength": 1 }
-      }
+    "forkStatusKind": {
+      "type": "string",
+      "description": "Where a fork stands.",
+      "enum": [
+        "open",
+        "decided",
+        "moot"
+      ]
     },
-    "impact": {
-      "type": "object",
-      "required": ["id", "title", "mapActor"],
-      "additionalProperties": false,
-      "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "title": { "type": "string", "minLength": 1 },
-        "mapActor": { "$ref": "#/$defs/id" }
-      }
+    "decidedSource": {
+      "type": "string",
+      "description": "Who settled a decided fork.",
+      "enum": [
+        "owner",
+        "recommendation",
+        "code"
+      ]
     },
-    "deliverable": {
-      "type": "object",
-      "required": ["id", "title", "impact"],
-      "additionalProperties": false,
-      "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "title": { "type": "string", "minLength": 1 },
-        "impact": { "$ref": "#/$defs/id" },
-        "forks": { "type": "array", "items": { "$ref": "#/$defs/id" } }
-      }
+    "mapNodeLevel": {
+      "type": "string",
+      "description": "A node's level in the impact map; the who-level is spelled mapActor.",
+      "enum": [
+        "goal",
+        "mapActor",
+        "impact",
+        "deliverable"
+      ]
     },
-    "option": {
-      "type": "object",
-      "required": ["key", "label"],
-      "additionalProperties": false,
-      "properties": {
-        "key": { "$ref": "#/$defs/id" },
-        "label": { "type": "string", "minLength": 1 },
-        "recommended": { "type": "boolean" }
-      }
-    },
-    "fork": {
-      "type": "object",
-      "required": ["id", "title", "status", "problem", "options", "recommendation"],
-      "additionalProperties": false,
-      "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "title": { "type": "string", "minLength": 1 },
-        "status": { "enum": ["open", "decided", "moot"] },
-        "by": { "enum": ["owner", "recommendation"] },
-        "reason": { "type": "string", "minLength": 1 },
-        "pick": { "$ref": "#/$defs/id" },
-        "problem": { "type": "string", "minLength": 1 },
-        "options": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/option" } },
-        "recommendation": { "type": "string", "minLength": 1 }
-      },
-      "allOf": [
-        { "if": { "properties": { "status": { "const": "decided" } } }, "then": { "required": ["by"] } },
-        { "if": { "properties": { "status": { "const": "moot" } } }, "then": { "required": ["reason"] } }
+    "mapShape": {
+      "type": "string",
+      "description": "How a map is drawn: impact columns or a decision tree.",
+      "enum": [
+        "impact",
+        "decision"
       ]
     }
   }

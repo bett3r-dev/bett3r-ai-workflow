@@ -1,0 +1,11 @@
+#!/bin/sh
+# Launcher for scripts/design-multi-subjects.py — `group` turns a design-multi
+# run's `units/<id>.ticket.md` snapshots into subjects (by epic link, with
+# accepted seam proposals overriding) and prints the subjects JSON, then a
+# `DESIGN-MULTI-SUBJECTS:v1` verdict line carrying the subjectsFingerprint and
+# how many subjects differ from a prior grouping.
+#
+# Mirrors `design-map`, for the same reason as `lane-step`: `CLAUDE_PLUGIN_ROOT`
+# is substituted for hook invocations only, while every enabled plugin's `bin/`
+# is on `PATH`, keyed by the version the session loaded.
+exec python3 "$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)/scripts/design-multi-subjects.py" "$@"

@@ -120,6 +120,15 @@ The sha is the point of the manifest: it is what lets a later reader re-check
 that this snapshot still describes the tree it is being used against, rather
 than trusting that it did at cut time.
 
+### Carry the unit's map
+
+A fleet unit's owner answers live in the run, not the tree: `/design-multi` wrote each unit's Phase-C projection through `design-map write` to `<runDir>/units/<id>.map.json`. Carry it into the lane, or say it is lost:
+
+- **`<runDir>/units/<id>.map.json` exists** → copy it byte for byte to `<worktree>/docs/prs/<id>/map.json` (creating the folder), and leave it **uncommitted** — the lane's first `/design` commit makes it durable. Record `mapProvenance: carried` in the brief below.
+- **The run dir or that file is absent** → copy nothing, and record `mapProvenance: lost`. The lane's `/verify-build` then reports `owner answers not carried: run dir absent` on its PR, never `0 of M answered` — an absent projection is not an owner who answered nothing.
+
+This is a byte copy of a map `design-map` already wrote — never author, merge or edit its content (ADR-006: `design-map` is the only writer of map content). `/design` Step 4 reuses a `map.json` as-is only when the brief says `mapProvenance: carried`, so the field is what keeps a provisioned map from being re-authored and a stale one from being reused.
+
 ## 6 — Write the lane brief
 
 Write `.work/lane.yaml` into the worktree. This is the lane's **whole brief** —
@@ -141,6 +150,7 @@ runDir: <absolute path of .work/multi/<run-id> in the orchestrator's checkout>
 unitId: <unit-id>
 integrationBranch: int/<run-id>
 gateDeferred: true
+mapProvenance: <carried|lost>   # carried: the run's projection was copied to docs/prs/<id>/map.json; lost: the run dir or projection was absent
 ```
 
 `runDir` is what lets `run-metrics` find this unit at all: a lane's transcript is a subagent of the orchestrator's session, stamped with the orchestrator's branch, and the run's `agents.yaml` is the only map from unit to agent id. Lane checkouts are usually sibling clones, not git worktrees, so the path cannot be derived — stamp it.
@@ -194,6 +204,8 @@ Two things that do not change: a **wrong shared baseline is worse than none** (l
 **Local config staged:** [which decrypted files you copied, or "none needed"]
 
 **Lane brief:** [`.work/lane.yaml` written, with the runId it names — or "not a fleet unit"]
+
+**Unit map:** [`mapProvenance: carried` — copied from `<runDir>/units/<id>.map.json` to `docs/prs/<id>/map.json` — or `mapProvenance: lost`, with which was absent: the run dir or the projection file — or "not a fleet unit"]
 
 **Design snapshot:** [written, with the sourceSha it records — or **not written**, with which reason: the main checkout has no design layer, or its sha/cleanliness did not match the run's base. If not written, say plainly that this lane's designed artifacts will be hand-written, so the difference is visible in the run's report rather than discovered in the diff.]
 
