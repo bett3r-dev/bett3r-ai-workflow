@@ -23,3 +23,11 @@ sources: [code:select (plugins/bett3r-ai-workflow/scripts/design-map.py)]
 rejected: —
 supersedes: —
 Row 6 (no board) and row 7 (board repoPath) cannot both fail on one input; every other adjacent pair is pinned by a two-row precedence case. The no-pwd.txt fallback tests do not separately bite on the logical ($PWD) vs physical (realpath) element — both mutations stayed green; production code is correct, left as follow-up.
+
+## D4 — D5 readback merges statuses onto the local map, then `write`; no helper verb
+kind: silent-seam
+step: build · slice: S2 · decidedBy: executor
+sources: [code:postedMapEntry (esas@de920db packages/esas-store/src/replay.ts:703-722), code:MapFile (esas@de920db packages/esas-schema/src/map-structure.ts:19,120-129), design:block §1 D5]
+rejected: pipe get_map's map straight into `write` — refused schema-invalid (esas map is structureVersion 1, forks carry no `tickets`); a new merge verb — `write` already expresses it
+supersedes: —
+Readback statuses are copied onto the local map.json by fork id, feedSeq=mapSeq, and the result goes through `design-map write` on stdin. Local-only forks keep their status; readback-only forks are ignored. SKILL.md (S4) documents the recipe. `post` reports `statuses=` of the readback; count is checked before the multiset.
