@@ -145,6 +145,18 @@ jobs:
           sh scripts/test-work-docs-path.sh
           WDP_SH=dash dash scripts/test-work-docs-path.sh
           WDP_SH=bash bash scripts/test-work-docs-path.sh
+      # `/design` renders its map through `bin/design-map render`, and the page
+      # tells the owner an unanswered fork is taken on its recommendation — so a
+      # fork dropped before the page is agreed to unseen (concern C1), and a bare
+      # `actor` key would let a map role join an op's ActorId (C2). Both are
+      # refusals whose failure is a green-looking page. A new script under
+      # plugins/ is collected by no step above. DM_SH varies the launcher's
+      # interpreter with the suite's.
+      - name: Test the design-map render (fork counts + schema)
+        run: |
+          sh scripts/test-design-map.sh
+          DM_SH=dash dash scripts/test-design-map.sh
+          DM_SH=bash bash scripts/test-design-map.sh
       # /merge-multi rules each unit's own concerns from its head commit before
       # merging it — the hard block design F4/C2 puts here, never trusting the
       # advisory `flow/concerns` GitHub status. A presence-only check on that

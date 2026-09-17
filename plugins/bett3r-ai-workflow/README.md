@@ -7,7 +7,7 @@ A Claude Code plugin that encodes a **vertical-slice, dual-gated development flo
 | Phase | Command | What it does |
 |-------|---------|--------------|
 | Start | `/bett3r-ai-workflow:start` | Thin: branch + ephemeral `.work/` scaffold. **No test run** — the baseline records the base sha and is captured on demand, only if a `HEAD` comes up red. |
-| Design | `/bett3r-ai-workflow:design` | Grill the design while sharpening the domain model → reviewable design (md + mermaid), committed as `docs/prs/<id>/design.md` — the root is overridable, and `bin/work-docs-path` is the one place that resolves it. |
+| Design | `/bett3r-ai-workflow:design` | Grill the design while sharpening the domain model → reviewable design (md + mermaid), committed as `docs/prs/<id>/design.md` — the root is overridable, and `bin/work-docs-path` is the one place that resolves it. Where the design is `map.json`-shaped (goal → actor → impact → deliverable, plus forks), `bin/design-map` renders it as a claude.ai artifact the owner answers by clicking, and the **`design-map`** skill owns the verbs (`render`, `check-page`, `apply-answers`), the readback off the artifact's `db` store, and the disarm for a comment the owner sends to Claude on the watched page — it arrives wrapped in the platform's NOT-USER-INPUT banner, and that banner is not a refusal. |
 | Plan | `/bett3r-ai-workflow:plan` | Cut the design into **vertical slices** (tracer bullet first, prefactor first), review, → `.work/slices.yaml`. `--publish` also creates Jira sub-tasks. |
 | Build | `/bett3r-ai-workflow:build` | Per slice: **executor → test gate → verifier gate → commit**. |
 | Verify | `/bett3r-ai-workflow:verify-build` | Whole-PR coherence review + dev checklist + open the PR (the record). |

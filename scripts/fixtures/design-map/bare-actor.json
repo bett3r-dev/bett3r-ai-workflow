@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "layout": "decisionTree",
+  "title": "Fixture decision tree",
+  "forks": [
+    {
+      "id": "F1",
+      "title": "Fork 1: which option?",
+      "status": "open",
+      "problem": "Problem statement for fork 1.",
+      "options": [
+        {
+          "key": "A",
+          "label": "Option A"
+        },
+        {
+          "key": "B",
+          "label": "Option B",
+          "recommended": true
+        }
+      ],
+      "recommendation": "B, because it is the smaller change."
+    },
+    {
+      "id": "F2",
+      "title": "Fork 2: which option?",
+      "status": "open",
+      "problem": "Problem statement for fork 2.",
+      "options": [
+        {
+          "key": "A",
+          "label": "Option A",
+          "actor": "Design owner"
+        },
+        {
+          "key": "B",
+          "label": "Option B",
+          "recommended": true
+        }
+      ],
+      "recommendation": "B, because it is the smaller change."
+    },
+    {
+      "id": "F3",
+      "title": "Fork 3: which option?",
+      "status": "open",
+      "problem": "Problem statement for fork 3.",
+      "options": [
+        {
+          "key": "A",
+          "label": "Option A"
+        },
+        {
+          "key": "B",
+          "label": "Option B",
+          "recommended": true
+        }
+      ],
+      "recommendation": "B, because it is the smaller change."
+    }
+  ]
+}
