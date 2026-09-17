@@ -11,6 +11,36 @@ The resolved-design block (`design-multi:resolved:v2 … deps=ESAS-178,ESAS-162`
 Decision prose in `design.md` and ticket blocks is hand-copied from `map.json`, so a hand edit or an overturned fork diverges silently. `map-tree` renders a per-ticket projection of `map.json` into a **generated region** carrying `src=` (projection hash → stale) and `out=` (body hash → tampered), writes it deterministically, and callers (`/design` Step 4, `/verify-build` refresh, `/design-multi` fold-back, tracker-writer preflight) use it.
 
 ## Resolved decision tree
+
+<!-- map-tree:v1 ticket=ESAS-163 gen=1 src=sha256:94abf1f057a55cc13236b45c334eab3f4f6d7afce6c45c2e618098b401ebea9c out=sha256:0e2f73f47ee118edfe473605a29851677d10d69b40cd8d1bf3730226eb276037 -->
+`map-tree:v1 ticket=ESAS-163 gen=1 src=sha256:94abf1f057a55cc13236b45c334eab3f4f6d7afce6c45c2e618098b401ebea9c out=sha256:0e2f73f47ee118edfe473605a29851677d10d69b40cd8d1bf3730226eb276037`
+### ESAS-163-F1 — Code-settled forks: status.source: code
+
+decided(owner)
+
+Why: keeps provenance honest
+
+- Rejected — decided(recommendation): dilutes ESAS-162's owner signal (docs/prs/ESAS-162/design.md)
+- Rejected — keep out of map.json: most would be unprotected by any hash
+
+### ESAS-163-F2 — Tamper in an unattended run: displace verbatim (md) and regenerate
+
+decided(owner)
+
+Why: md=B, jira=A
+
+- Rejected — stop the lane (md) / stop the item (jira): halts an unattended fleet for a git-recoverable case (md)
+
+### ESAS-163-F3 — Durable home of a design-multi map: run dir -> provisioner -> lane commits docs/prs/<id>/map.json
+
+decided(owner)
+
+Why: owned by ESAS-162/166
+
+- Rejected — run dir only: silent loss
+- Rejected — docs branch + PR: needs a human before start-multi
+`/map-tree:v1`
+<!-- /map-tree:v1 -->
 F1 = C (`status.source: code`), F2 = displace for md / refuse for jira, F3 = D+ — all decided(owner) 2026-09-16; see `map.json` (committed beside this doc) and the block for rejected options.
 
 ## Verification at base (d395913)
