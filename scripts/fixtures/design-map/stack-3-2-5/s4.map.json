@@ -1,0 +1,57 @@
+{
+  "structureVersion": 2,
+  "shape": "decision",
+  "grounded": true,
+  "mapId": "ESAS-209-map",
+  "nodes": [],
+  "forks": [
+    {
+      "id": "ESAS-209-F1",
+      "title": "Fork ESAS-209-F1: which option?",
+      "tickets": [
+        "ESAS-209"
+      ],
+      "card": {
+        "problem": "Problem statement for ESAS-209-F1.",
+        "useCases": [
+          "An owner answers ESAS-209-F1."
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Option A",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ],
+            "rejectedBecause": "A is the larger change."
+          },
+          {
+            "id": "B",
+            "label": "Option B",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ],
+            "evidence": [
+              "scripts/design-map.py"
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "B is the smaller change."
+        },
+        "ifOverturned": "A replaces B; nothing else moves."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "open"
+      }
+    }
+  ]
+}
