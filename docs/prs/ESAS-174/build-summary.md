@@ -14,6 +14,7 @@ slices:
     fixRounds: [{cause: oracle-wrong, executor: fresh}]
     verifier: pass
     redBeforeGreen: true
+    usage: null
     postDesignDecisions: [D2, D3]
   - id: S2
     name: "post parity and D5 readback: the board's store readback matches map.json"
@@ -26,6 +27,7 @@ slices:
     fixRounds: []
     verifier: pass
     redBeforeGreen: true
+    usage: null
     postDesignDecisions: [D4]
   - id: S3
     name: "epic oracle goes green: real esas captures for stage 7, stage 4 reads the shipped map-tree markers"
@@ -38,6 +40,7 @@ slices:
     fixRounds: []
     verifier: pass
     redBeforeGreen: true
+    usage: null
     postDesignDecisions: [D5, D6]
   - id: S4
     name: "the design-map skill tells an agent how to select, stay silent, survive board death and pin the target; ADR-009"
@@ -50,10 +53,20 @@ slices:
     fixRounds: [{cause: mis-routed, executor: fresh}]
     verifier: pass
     redBeforeGreen: mutation
+    usage: null
     postDesignDecisions: [D7]
+verifyBuild:
+  usage: null
+  gate: { mode: fast, verdict: FAIL, skipped: [], inconclusive: [], failed: [version-bump], note: "version-bump fails by orchestrator directive (no plugin.json bump per unit; D1)" }
+  coherence: { critical: 0, medium: 0, low: 2, shippedUnresolved: 2 }
+  fixSlicesAdded: 0
+  adrs: [ADR-009]
+  concerns: { hard: 0, soft: 0, unmet: [] }
 ---
 ## What shipped
 
 4/4 slices landed. `design-map select` (first-match table over a captures dir, probes before start) and `design-map post` (store-readback parity, `statuses=`) are in design-map.py with 931-check suite green (1 SKIP no-esas-checkout, pre-existing). The epic oracle `ESAS_CHECKOUT=<esas int156 oracle twin @de920db> sh scripts/oracles/epic-esas-156.sh` exits 0 with all 7 stages ok on the landed tree (sh and dash), after correcting stage 4 to map-tree's shipped contract and generating real esas captures for stage 7. E1 (structureVersion 1 vs 2) did not fire. plugin.json deliberately not bumped (D1).
 
 Fix rounds: 2 (oracle-wrong 1, mis-routed 1), both fresh dispatches. Follow-ups: the no-pwd.txt fallback tests do not bite on logical vs physical separately (D3); S3's `commit-not-three-files` can no longer fire (D5).
+
+Usage not measured: no-transcripts (the lane runs under the orchestrator session; run-metrics --fleet from the orchestrator can attribute it).
