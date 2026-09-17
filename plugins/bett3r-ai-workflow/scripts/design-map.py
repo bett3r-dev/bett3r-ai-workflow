@@ -13,10 +13,16 @@
     DESIGN-MAP:v1 outcome=ok verb=project ticket=<K> forks=<n> nodes=<n>
     DESIGN-MAP:v1 outcome=ok verb=decisions open=<n> owner=<n> recommendation=<n> code=<n> moot=<n>
     DESIGN-MAP:v1 outcome=fail verb=decisions reason=open-forks open=<n> owner=<n> ...
+    DESIGN-MAP:v1 outcome=ok verb=count forks=<n> owner=<n> code=<n> recommendation=<n> open=<n> moot=<n>
+    DESIGN-MAP:v1 outcome=ok verb=count map=none                          (--line, no map file)
+    DESIGN-MAP:v1 outcome=current verb=drift mapSeq=<n> feedSeq=<n>
+    DESIGN-MAP:v1 outcome=drifted verb=drift mapSeq=<n|none> feedSeq=<n>
+    DESIGN-MAP:v1 outcome=skip verb=drift mapSeq=<n|none> feedSeq=none reason=no-map-feed
     DESIGN-MAP:v1 outcome=error verb=<verb> reason=<reason> [key=value ...]
 
 Read the line, never the exit code alone (ADR-004): 0 for ok, 1 for fail
-(check-plan's two assertions and decisions --closed, below), 2 for error, and no line at all means the
+(check-plan's two assertions and decisions --closed, below), 2 for error
+(drift: 0 for current and skip, 1 for drifted), and no line at all means the
 script died before concluding. An error line carries no `page=`: a caller
 that publishes whatever `page=` names must find nothing.
 
@@ -32,6 +38,8 @@ Usage:
   design-map render --stack <m1> <m2>... --expect <n1> <n2>... --out <page.html>
   design-map project --ticket <K> <map.json>...   (the map, then the verdict, on stdout)
   design-map decisions <map.json> [--closed]
+  design-map count <map.json> [--lane <lane.yaml>] [--line]
+  design-map drift <map.json> (--feed-seq <n> | --no-feed)
 
 A map is `structureVersion: 2`. Two committed files describe it:
 
@@ -244,6 +252,23 @@ on recommendation — ...`, `code — ...`, `moot — <reason>` or `open`. The
 verdict counts each fork once. With --closed, open > 0 is outcome=fail
 reason=open-forks (exit 1), printed after the Markdown.
 
+`count <map>` (ESAS-162 D4) counts the forks by status as `decisions` does,
+and validates the map first. With --line it prints, before the verdict, the
+one line a PR body carries: `N of M forks answered by the owner (C by code, R
+on recommendation, O open, K moot)`; a missing map file prints `map: none`
+(verdict map=none, still ok). With --lane, a brief holding a line-anchored
+`mapProvenance: lost` prints `map: owner answers not carried: run dir absent`
+instead, whether or not the file exists. Without --line, a missing map is
+reason=map-not-found.
+
+`drift <map> (--feed-seq <n> | --no-feed)` (ESAS-162 D5) compares the map
+file's own `feedSeq` (verdict mapSeq=, `none` when absent) with the seq the
+caller read from the map feed (verdict feedSeq=): equal is outcome=current,
+anything else (a map with no feedSeq included) outcome=drifted; --no-feed is
+outcome=skip reason=no-map-feed. The map is validated first. Refusals:
+missing-feed (neither flag), conflicting-feed (both), bad-feed-seq (not a
+non-negative integer).
+
 Standard library only for every map verb: `jsonschema` is not a dependency
 (`check-plan` is the one exception, since a `slices.yaml` is YAML, not JSON,
 and PyYAML is imported lazily inside it so its absence never breaks any
@@ -287,7 +312,7 @@ class Refusal(Exception):
         self.attrs = attrs
 
 
-EXIT_CODES = {"ok": 0, "fail": 1}
+EXIT_CODES = {"ok": 0, "fail": 1, "current": 0, "skip": 0, "drifted": 1}
 
 
 def verdict(outcome, **attrs):
@@ -298,8 +323,8 @@ def verdict(outcome, **attrs):
     return EXIT_CODES.get(outcome, 2)
 
 
-BOOLEAN_FLAGS = ("final", "stack", "closed")
-VALUE_FLAGS = ("expect", "out", "ticket")
+BOOLEAN_FLAGS = ("final", "stack", "closed", "line", "no-feed")
+VALUE_FLAGS = ("expect", "out", "ticket", "lane", "feed-seq")
 
 
 def parse_args(args):
@@ -1374,15 +1399,73 @@ def decisions(positional, flags):
     return counts
 
 
+LOST_PROVENANCE = re.compile(r"^mapProvenance:[ \t]*lost[ \t]*$", re.MULTILINE)
+
+
+def lane_lost(path):
+    """Stdlib only: a line-anchored `mapProvenance: lost`, never a YAML parse."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return bool(LOST_PROVENANCE.search(fh.read()))
+    except (OSError, UnicodeDecodeError):
+        raise Refusal("lane-unreadable")
+
+
+def count(positional, flags):
+    if not positional:
+        raise Refusal("missing-map")
+    path, line = positional[0], flags.get("line")
+    lost = "lane" in flags and lane_lost(flags["lane"])
+    if not os.path.exists(path):
+        if not line:
+            raise Refusal("map-not-found")
+        sys.stdout.write(("map: owner answers not carried: run dir absent" if lost else "map: none") + "\n")
+        return dict(map="none")
+    payload = load_map(path)
+    validate(payload)
+    kinds = [(f["status"]["kind"], f["status"].get("source")) for f in payload["forks"]]
+    c = dict(forks=len(kinds), owner=kinds.count(("decided", "owner")), code=kinds.count(("decided", "code")),
+             recommendation=kinds.count(("decided", "recommendation")), open=sum(k == "open" for k, _ in kinds),
+             moot=sum(k == "moot" for k, _ in kinds))
+    if line:
+        text = ("map: owner answers not carried: run dir absent" if lost else
+                f"{c['owner']} of {c['forks']} forks answered by the owner ({c['code']} by code, "
+                f"{c['recommendation']} on recommendation, {c['open']} open, {c['moot']} moot)")
+        sys.stdout.write(text + "\n")
+    return c
+
+
+def drift(positional, flags):
+    """The outcome travels in the returned attrs (current|drifted|skip); main pops it."""
+    if not positional:
+        raise Refusal("missing-map")
+    if "feed-seq" in flags and flags.get("no-feed"):
+        raise Refusal("conflicting-feed")
+    if "feed-seq" not in flags and not flags.get("no-feed"):
+        raise Refusal("missing-feed")
+    feed = None
+    if "feed-seq" in flags:
+        if not re.fullmatch(r"[0-9]+", flags["feed-seq"]):
+            raise Refusal("bad-feed-seq")
+        feed = int(flags["feed-seq"])
+    payload = load_map(positional[0])
+    validate(payload)
+    mine = payload.get("feedSeq")
+    seqs = dict(mapSeq="none" if mine is None else mine, feedSeq="none" if feed is None else feed)
+    if feed is None:
+        return dict(outcome="skip", **seqs, reason="no-map-feed")
+    return dict(outcome="current" if mine == feed else "drifted", **seqs)
+
+
 VERBS = {"validate": validate_map, "write": write, "render": render, "check-page": check,
          "apply-answers": apply_answers, "candidates": candidates, "check-plan": check_plan,
-         "project": project, "decisions": decisions}
+         "project": project, "decisions": decisions, "count": count, "drift": drift}
 # The flags each verb takes; any other parsed flag is reason=unknown-flag-<name>.
 # `candidates` and `check-plan` take positional arguments only, so `--map`
 # (the wording ESAS-165's block used) is refused as unknown-flag-map.
 FLAGS = {"validate": (), "write": (), "render": ("expect", "out", "stack"), "check-page": ("expect",),
          "apply-answers": ("final",), "candidates": (), "check-plan": (), "project": ("ticket",),
-         "decisions": ("closed",)}
+         "decisions": ("closed",), "count": ("lane", "line"), "drift": ("feed-seq", "no-feed")}
 
 
 def main(argv):
@@ -1397,7 +1480,8 @@ def main(argv):
         attrs = VERBS[verb](positional, flags)
     except Refusal as r:
         return verdict(r.outcome, verb=verb or "none", reason=r.reason, **r.attrs)
-    return verdict("ok", verb=verb, **attrs)
+    outcome = attrs.pop("outcome", "ok")
+    return verdict(outcome, verb=verb, **attrs)
 
 
 if __name__ == "__main__":

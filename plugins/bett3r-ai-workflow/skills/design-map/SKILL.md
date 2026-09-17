@@ -310,3 +310,40 @@ printed before it.
 See [`map-structure.schema.json`](./map-structure.schema.json) for the full
 payload shape and [`map.schema.json`](./map.schema.json) for the vocabulary it
 refers to.
+
+## Count and drift (ESAS-162)
+
+```
+design-map count <map.json> [--lane <lane.yaml>] [--line]
+design-map drift <map.json> (--feed-seq <n> | --no-feed)
+```
+
+`count` is a read-only reporter: `outcome=ok verb=count forks=<M> owner=<N>
+code=<C> recommendation=<R> open=<O> moot=<K>`, counted over each fork's
+`status.kind`/`status.source`. With `--line` it also prints exactly one
+PR-body line first — `N of M forks answered by the owner (C by code, R on
+recommendation, O open, K moot)` — or `map: none` with no file, or (`--lane`
+naming a lane brief with `mapProvenance: lost`) `map: owner answers not
+carried: run dir absent`, which takes precedence over a missing map. This is
+the line `/verify-build` pastes under `### Record`, per ADR-006.
+
+`drift` compares the map's own `feedSeq` (a **Map snapshot**'s own
+last-folded position — see Glossary) against a caller-supplied `--feed-seq`,
+never the live feed itself: `outcome=current|drifted|skip|error mapSeq=<n|
+none> feedSeq=<n|none> [reason=]`. `--no-feed` is `outcome=skip
+reason=no-map-feed`; a map with no `feedSeq` plus a live `--feed-seq` is
+`outcome=drifted mapSeq=none`; a missing map is `outcome=error`. Neither verb
+writes the file — `count` and `drift` are reporters, per ADR-006's one-writer
+rule.
+
+## Glossary
+
+- **Map snapshot** — the committed `docs/prs/<id>/map.json`: whatever
+  `design-map write` or `apply-answers` last produced, carried into the repo
+  by `/design` Step 4's commit (or, for a fleet lane, by the provisioner's
+  copy of the run dir's projection, ADR-006). It is a point-in-time copy, not
+  a live view of the feed.
+- **`feedSeq`** — the map snapshot's own record of the feed position it was
+  last folded against (optional, `map-structure.schema.json`). `drift`'s
+  `mapSeq=` is this value, read from the file; the feed's current position is
+  supplied by the caller as `--feed-seq` and reported back as `feedSeq=`.
