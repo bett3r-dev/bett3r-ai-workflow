@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Render a ticket's decisions from map.json into a generated, hashed region.
 
-The decision text of a design.md (and, from ESAS-163 slice 2, a Jira ticket
-block) is a per-ticket projection of map.json: the forks whose `tickets` hold
-the ticket, in map order. It lives between a marker pair carrying two hashes
+The decision text of a design.md (`--dialect md`) or a Jira ticket block
+(`--dialect jira`) is a per-ticket projection of map.json: the forks whose
+`tickets` hold the ticket, in map order. It lives between a marker pair carrying two hashes
 (ESAS-163 D2/D3):
 
     <!-- map-tree:v1 ticket=<KEY> gen=1 src=sha256:<hex> out=sha256:<hex> -->
@@ -19,9 +19,9 @@ trailing blank lines), so a hand edit inside the region reads `tampered`. A
 region whose `gen` differs from GEN is re-rendered, never counted as tampered.
 
 Usage:
-    map-tree render --map <map.json> --ticket <KEY> [--dialect md]
-    map-tree check  --map <map.json> --ticket <KEY> <file> [--dialect md]
-    map-tree write  --map <map.json> --ticket <KEY> <file> [--dialect md]
+    map-tree render --map <map.json> --ticket <KEY> [--dialect md|jira]
+    map-tree check  --map <map.json> --ticket <KEY> <file> [--dialect md|jira]
+    map-tree write  --map <map.json> --ticket <KEY> <file> [--dialect md|jira]
                     [--insert-after <heading>] [--on-tamper refuse|displace]
 
 The map is validated first by the SIBLING launcher `<plugin>/bin/design-map
@@ -156,12 +156,69 @@ def render_md(forks):
     return normalise("\n".join(out))
 
 
-RENDERERS = {"md": render_md}
+# A token is code-spanned in the jira dialect when it carries a dunder, a glob
+# character or a path separator (D6: paths/globs/dunders in inline code, so
+# `__x__` and `*` are not read as emphasis markup).
+CODE_TOKEN = re.compile(r"__\w+__|[*?]|\w/|/\w")
+TOKEN_EDGE = re.compile(r"^([(\[\"']*)(.*?)([)\]\"',.;:!?]*)$")
+
+
+def jira_text(text):
+    """`text` on one line with each dunder/glob/path token wrapped in inline code.
+
+    Every whitespace run, newlines included, collapses to one space, so a bold
+    run never crosses a line (D6); no character other than whitespace is
+    dropped. Spans already in backticks are left as they are, and a word that
+    itself holds a backtick is never wrapped. When a stray (unpaired) backtick
+    remains, generated spans use a double-backtick fence, which a single
+    backtick cannot close, so the stray cannot pair with a generated span."""
+    pieces = re.split(r"(`[^`]*`)", " ".join(text.split()))
+    fence = "`` " if any("`" in p for p in pieces[::2]) else "`"
+    for n, piece in enumerate(pieces):
+        if n % 2:
+            continue
+        words = piece.split(" ")
+        for w, word in enumerate(words):
+            if "`" in word:
+                continue
+            lead, core, trail = TOKEN_EDGE.match(word).groups()
+            if core and CODE_TOKEN.search(core):
+                words[w] = f"{lead}{fence}{core}{fence[::-1]}{trail}"
+        pieces[n] = " ".join(words)
+    return "".join(pieces)
+
+
+def render_jira(forks):
+    """Pre-compressed and ADF-safe (D6): one flat bullet list per fork, no
+    headings, no tables, bold only within a single line, and every free-text
+    field passed through `jira_text`."""
+    out = []
+    for fork in forks:
+        status, card = fork["status"], fork.get("card")
+        head = f"{fork['id']} — {jira_text(fork['title'])}"
+        if status["kind"] == "moot":
+            out += [f"- **{head}** — moot — {jira_text(status['reason'])}", ""]
+            continue
+        if card is None:
+            waits = ", ".join(fork["restsOn"]) or "an unrecorded fork"
+            out += [f"- **{head}** — LOCKED — waits on {waits}", ""]
+            continue
+        why = f"- Why: {jira_text(card['recommendation']['why'])}"
+        if status["kind"] == "open":
+            rec = jira_text(option_label(card, card["recommendation"]["option"]))
+            out += [f"- **{head}** — OPEN — recommended: {rec}", why, ""]
+            continue
+        chosen = jira_text(option_label(card, status["option"]))
+        out += [f"- **{head}: {chosen}** — decided({status['source']})", why]
+        out += [f"- {jira_text(rejected_line(o))}" for o in card["options"] if o["id"] != status["option"]]
+        out += [""]
+    return normalise("\n".join(out))
+
+
+RENDERERS = {"md": render_md, "jira": render_jira}
 
 
 def render_body(forks, dialect):
-    if dialect not in RENDERERS:
-        raise Refusal("dialect-not-implemented")
     return RENDERERS[dialect](forks)
 
 
@@ -252,6 +309,10 @@ def main(argv):
         on_tamper = flags.get("on-tamper", "refuse")
         if on_tamper not in ("refuse", "displace"):
             raise Refusal("unknown-on-tamper")
+        # Checked before the map is read: a Jira region is never displaced (F2),
+        # whatever the map or the file would otherwise say.
+        if verb == "write" and dialect == "jira" and on_tamper == "displace":
+            raise Refusal("displace-not-allowed-jira")
         if verb != "render":
             if len(positional) != 1:
                 raise Refusal("missing-file")
@@ -306,8 +367,6 @@ def main(argv):
                 if on_tamper == "refuse":
                     verdict("tampered", verb, ticket, counts, path=path)
                     return 1
-                if dialect == "jira":
-                    raise Refusal("displace-not-allowed-jira")
                 outcome = "displaced"
                 today = datetime.date.today().isoformat()
                 new += f"\n### Displaced from generated section ({today})\n\n{old_body}"

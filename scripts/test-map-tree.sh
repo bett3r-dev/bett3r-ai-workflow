@@ -185,8 +185,34 @@ expect 'render' ok 0
 check 'render: body before the verdict' "$( grep -c '^### ESAS-901-F1 — ' "$OUT" )" 1
 check 'render: no markers in the body' "$( grep -c 'map-tree:v1' "$OUT" )" 0
 
-mt render --map "$MAP" --ticket ESAS-901 --dialect jira
-expect 'jira dialect (slice 2)' error 2 dialect-not-implemented
+# ---------------------------------------------------------------------------
+printf 'T1 (jira): a ticket-block region is never displaced\n'
+# ---------------------------------------------------------------------------
+J="$TMP/t1.ticket-block.md"
+cp "$FIX/ticket-block.md" "$J"
+mt write --map "$MAP" --ticket ESAS-901 "$J" --dialect jira --insert-after "$H"
+expect 'jira first write' written 0
+mt check --map "$MAP" --ticket ESAS-901 "$J" --dialect jira
+expect 'jira check after write' fresh 0
+sed 's/keeps design-map.py untouched/keeps design-map.py pristine/' "$J" > "$TMP/t1j.edit" && cp "$TMP/t1j.edit" "$J"
+check 'jira tamper fixture: the word was edited' "$( grep -c 'pristine' "$J" )" 1
+cp "$J" "$TMP/t1j.tampered"
+mt check --map "$MAP" --ticket ESAS-901 "$J" --dialect jira
+expect 'jira check on an edited region' tampered 1
+mt write --map "$MAP" --ticket ESAS-901 "$J" --dialect jira
+expect 'jira write (default refuse) on an edited region' tampered 1
+holds 'jira refused write: file byte-identical' cmp "$J" "$TMP/t1j.tampered"
+mt write --map "$MAP" --ticket ESAS-901 "$J" --dialect jira --on-tamper displace
+expect 'jira write --on-tamper displace' error 2 displace-not-allowed-jira
+holds 'jira displace refusal: file byte-identical' cmp "$J" "$TMP/t1j.tampered"
+# The refusal precedes rendering and classification: it fires on an invalid
+# map and on a file with no region, where either would otherwise refuse first.
+mt write --map "$FIX/invalid.map.json" --ticket ESAS-901 "$J" --dialect jira --on-tamper displace
+expect 'jira displace on an invalid map: refused before validation' error 2 displace-not-allowed-jira
+cp "$FIX/ticket-block.md" "$TMP/t1j-noregion.md"
+mt write --map "$MAP" --ticket ESAS-901 "$TMP/t1j-noregion.md" --dialect jira --on-tamper displace
+expect 'jira displace with no region: refused before classification' error 2 displace-not-allowed-jira
+holds 'jira displace with no region: file byte-identical' cmp "$TMP/t1j-noregion.md" "$FIX/ticket-block.md"
 
 # ---------------------------------------------------------------------------
 printf 'T2: edits outside the region survive a regenerate\n'
@@ -260,6 +286,98 @@ check 'decided owner counted' "$( attr "$LINE" owner )" 1 "$LINE"
 check 'card-less moot fork renders its reason' "$( grep -c '^moot — the branch was dropped$' "$OUT" )" 1
 check 'card-less moot fork is not rendered LOCKED' "$( grep -c 'LOCKED — waits on' "$OUT" )" 1
 check 'card-less moot fork counts as moot' "$( attr "$LINE" moot )" 1 "$LINE"
+
+# ---------------------------------------------------------------------------
+printf 'T3: overturning ticket A changes only A (md and jira)\n'
+# ---------------------------------------------------------------------------
+TT="$FIX/two-ticket.map.json"
+TO="$FIX/two-ticket-overturned.map.json"
+for dialect in md jira; do
+  if [ "$dialect" = md ]; then base="$FIX/design.md"; else base="$FIX/ticket-block.md"; fi
+  A="$TMP/t3-a.$dialect"; B="$TMP/t3-b.$dialect"
+  cp "$base" "$A"; cp "$base" "$B"
+  mt write --map "$TT" --ticket ESAS-911 "$A" --dialect "$dialect" --insert-after "$H"
+  expect "T3 $dialect: setup write A" written 0
+  mt write --map "$TT" --ticket ESAS-912 "$B" --dialect "$dialect" --insert-after "$H"
+  expect "T3 $dialect: setup write B" written 0
+  check "T3 $dialect: A holds only its fork" "$( grep -c 'ESAS-912-F1' "$A" )" 0
+  cp "$A" "$TMP/t3-a.before"; cp "$B" "$TMP/t3-b.before"
+  mt check --map "$TO" --ticket ESAS-911 "$A" --dialect "$dialect"
+  expect "T3 $dialect: A after overturn" stale 1
+  mt check --map "$TO" --ticket ESAS-912 "$B" --dialect "$dialect"
+  expect "T3 $dialect: B after overturn" fresh 0
+  mt write --map "$TO" --ticket ESAS-911 "$A" --dialect "$dialect"
+  expect "T3 $dialect: write A" written 0
+  check "T3 $dialect: A's file changed" "$( cmp -s "$A" "$TMP/t3-a.before" && echo same || echo changed )" changed
+  mt write --map "$TO" --ticket ESAS-912 "$B" --dialect "$dialect"
+  expect "T3 $dialect: write B" written 0
+  holds "T3 $dialect: B's file byte-identical" cmp "$B" "$TMP/t3-b.before"
+  mt check --map "$TO" --ticket ESAS-911 "$A" --dialect "$dialect"
+  expect "T3 $dialect: A fresh after write" fresh 0
+done
+check 'T3: src is per ticket, the same across dialects' \
+  "$( grep '^<!-- map-tree:v1 ' "$TMP/t3-b.jira" | sed 's/ out=.*//' )" \
+  "$( grep '^<!-- map-tree:v1 ' "$TMP/t3-b.md" | sed 's/ out=.*//' )"
+check 'T3: out differs between dialects' \
+  "$( [ "$( grep '^<!-- map-tree:v1 ' "$TMP/t3-b.jira" )" = "$( grep '^<!-- map-tree:v1 ' "$TMP/t3-b.md" )" ] && echo same || echo differs )" differs
+
+# ---------------------------------------------------------------------------
+printf 'T8: the jira dialect is flat, table-free and code-spans paths, globs, dunders\n'
+# ---------------------------------------------------------------------------
+mt render --map "$TT" --ticket ESAS-911
+check 'T8 control: md render carries the bare dunder' "$( grep -c '__init__' "$OUT" )" 2
+mt render --map "$TT" --ticket ESAS-911 --dialect jira
+expect 'T8 jira render' ok 0
+cp "$OUT" "$TMP/t8.full"
+sed '$d' "$OUT" > "$TMP/t8.body"
+check 'T8: body is not empty' "$( [ -s "$TMP/t8.body" ] && echo non-empty )" non-empty
+check 'T8: no | table rows' "$( grep -c '^[[:space:]]*|' "$TMP/t8.body" )" 0
+check 'T8: no bare __x__ outside backticks' \
+  "$( sed 's/`[^`]*`//g' "$TMP/t8.body" | grep -c '__[A-Za-z0-9_]*__' )" 0
+check 'T8: no bare glob outside backticks' "$( sed 's/`[^`]*`//g' "$TMP/t8.body" | grep -c '\*\.md' )" 0
+check 'T8: no bare path outside backticks' "$( sed 's/`[^`]*`//g' "$TMP/t8.body" | grep -c '[A-Za-z0-9_.]/[A-Za-z0-9_*]' )" 0
+check 'T8: the dunder is code-spanned' "$( grep -c '`__init__`' "$TMP/t8.body" )" 2
+check 'T8: the glob is code-spanned' "$( grep -c '`\*\.md`' "$TMP/t8.body" )" 1
+check 'T8: the path is code-spanned' "$( grep -c '`plugins/bett3r-ai-workflow/scripts`' "$TMP/t8.body" )" 1
+check 'T8: every non-blank line is a flat bullet' "$( grep -v '^$' "$TMP/t8.body" | grep -vc '^- ' )" 0
+check 'T8: no headings' "$( grep -c '^#' "$TMP/t8.body" )" 0
+check 'T8: no bold run across lines (even ** per line outside code)' \
+  "$( sed 's/`[^`]*`//g' "$TMP/t8.body" | awk '{n=gsub(/\*\*/,"&"); if (n%2) c++} END{print c+0}' )" 0
+check 'T8: decided fork keeps its rejected option' "$( grep -c '^- Rejected — A subcommand of design-map: ' "$TMP/t8.body" )" 1
+mt render --map "$TT" --ticket ESAS-911 --dialect jira
+holds 'T8: two jira renders byte-identical' cmp "$OUT" "$TMP/t8.full"
+
+# Hostile text fields: newlines (F1) and pre-existing backticks (F2). The map
+# is synthesized from $TT so design-map validate still accepts it.
+python3 - "$TT" "$TMP/t8-edge.map.json" <<'PY'
+import json, sys
+m = json.load(open(sys.argv[1]))
+f = m["forks"][0]
+f["title"] = "Where the hook\nreads **files**"
+f["card"]["recommendation"]["why"] = "x\ny and docs/a.md"
+f["card"]["options"][0]["label"] = "a`b/c`"
+f["card"]["options"][0]["rejectedBecause"] = "a lone ` backtick then docs/x.md tail"
+f["card"]["options"][1]["label"] = "see `docs/a.md here"
+json.dump(m, open(sys.argv[2], "w"))
+PY
+mt render --map "$TMP/t8-edge.map.json" --ticket ESAS-911 --dialect jira
+expect 'T8 edge: newline and backtick fields render' ok 0
+sed '$d' "$OUT" > "$TMP/t8e.body"
+check 'T8 edge: no Traceback' "$( grep -c Traceback "$OUT" )" 0
+check 'T8 edge: every non-blank line is a flat bullet' "$( grep -v '^$' "$TMP/t8e.body" | grep -vc '^- ' )" 0
+check 'T8 edge: newline in title collapses to one bold line' \
+  "$( grep -c '^- \*\*ESAS-911-F1 — Where the hook reads `\*\*files\*\*`: ' "$TMP/t8e.body" )" 1
+check 'T8 edge: newline in why collapses to a space' "$( grep -c '^- Why: x y and `docs/a.md`$' "$TMP/t8e.body" )" 1
+check 'T8 edge: even ** per line outside code' \
+  "$( sed 's/`[^`]*`//g' "$TMP/t8e.body" | awk '{n=gsub(/\*\*/,"&"); if (n%2) c++} END{print c+0}' )" 0
+check 'T8 edge: an existing code span stays intact' "$( grep -c 'a`b/c`' "$TMP/t8e.body" )" 1
+check 'T8 edge: no span wrapped around a backtick word' "$( grep -c '``a`\|`a`b' "$TMP/t8e.body" )" 0
+check 'T8 edge: a lone backtick survives verbatim' "$( grep -c 'a lone ` backtick then ' "$TMP/t8e.body" )" 1
+check 'T8 edge: beside a stray backtick the span is double-backtick' \
+  "$( grep -c 'then `` docs/x.md `` tail ' "$TMP/t8e.body" )" 1
+check 'T8 edge: a path glued to an unclosed backtick is left bare' \
+  "$( grep -c '^- \*\*ESAS-911-F1 — Where the hook reads `\*\*files\*\*`: see `docs/a.md here\*\* — decided(owner)$' "$TMP/t8e.body" )" 1
+check 'T8 edge: no span wrapped around a backtick-glued path' "$( grep -c '`` `docs/a.md ``' "$TMP/t8e.body" )" 0
 
 printf '\n'
 if [ "$failed" -eq 0 ]; then

@@ -1,0 +1,107 @@
+{
+  "structureVersion": 2,
+  "shape": "decision",
+  "grounded": true,
+  "mapId": "map-tree-two-ticket",
+  "nodes": [],
+  "forks": [
+    {
+      "id": "ESAS-911-F1",
+      "title": "Where the __init__ hook reads *.md files",
+      "tickets": [
+        "ESAS-911"
+      ],
+      "card": {
+        "problem": "Which way?",
+        "useCases": [
+          "an owner answers"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "A subcommand of design-map",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ],
+            "rejectedBecause": "every docs/**/*.md caller would import __init__",
+            "evidence": [
+              "scripts/design-map.py"
+            ]
+          },
+          {
+            "id": "B",
+            "label": "A new map-tree script",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ],
+            "rejectedBecause": "two scripts to keep aligned"
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "keeps plugins/bett3r-ai-workflow/scripts untouched and __main__ free"
+        },
+        "ifOverturned": "The other option replaces it."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "A"
+      }
+    },
+    {
+      "id": "ESAS-912-F1",
+      "title": "How tamper is detected",
+      "tickets": [
+        "ESAS-912"
+      ],
+      "card": {
+        "problem": "Which way?",
+        "useCases": [
+          "an owner answers"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Hash the body",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ],
+            "rejectedBecause": "misses a moved map"
+          },
+          {
+            "id": "B",
+            "label": "Hash body and projection",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "catches both kinds of drift"
+        },
+        "ifOverturned": "The other option replaces it."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "recommendation",
+        "option": "B"
+      }
+    }
+  ]
+}
