@@ -111,3 +111,11 @@ sources: [design:F4, code:map.schema.json]
 rejected: —
 supersedes: —
 The skill repeats F4's dependency rule, but D1's schema has no fork-to-fork dependency field, so an agent cannot act on it. Follow-up for the design / ESAS-167.
+
+## D15 — the page's comment box never wakes the session; the owner hands back in the terminal
+kind: false-premise
+step: build · slice: 4 · decidedBy: human
+sources: [human, code:ArtifactComments read ("No comment threads on this artifact yet"), code:design-map apply-answers verdict (open=0 owner=10 moot=1), design:F4]
+rejected: keeping "a comment on the page" as a readback trigger — observed not to notify
+supersedes: D11, D12
+Measured 2026-09-17 ~00:03–00:06Z: a page published with {db:{}}, watch "connected, auto-replies armed"; the owner answered every fork and typed "done" in F1's box. No notification of any kind arrived, and the artifact had no comment threads — the box writes answers/<forkId>.comment, not a thread. read_db with out_dir landed the D10 layout directly. The owner said: "I have no way to ask you to read it or to wake up". So F4's page-comment wake does not exist. The readback trigger is the owner's word in the terminal, and the skill asks for it at publish. D11's rule (a wake never runs --final) and D12's report-and-wait now apply only to a comment-mode thread sent to Claude, which is UNMEASURED — neither its wake nor its banner text has been observed. D13's presence-oracle limit stands. Follow-up: measure the comment-mode thread path, and amend design F4's risk.

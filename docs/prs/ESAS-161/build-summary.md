@@ -1,6 +1,6 @@
 ---
 work_item: ESAS-161
-plugin: bett3r-ai-workflow@0.81.0+c377653
+plugin: bett3r-ai-workflow@0.81.0+011aa28
 base: 464e4c6
 slices:
   - id: 1
@@ -45,15 +45,15 @@ slices:
   - id: 4
     name: "Measure the artifact comment wake"
     origin: plan
-    mode: null
-    modeReason: null
-    commit: null
-    passed: false
-    attempts: 0
+    mode: sequential
+    modeReason: pool=0
+    commit: 011aa28
+    passed: true
+    attempts: 1
     fixRounds: []
-    verifier: null
-    redBeforeGreen: null
-    postDesignDecisions: []
+    verifier: pass
+    redBeforeGreen: mutation
+    postDesignDecisions: [D15]
 ---
 ## What shipped
 
@@ -69,7 +69,11 @@ the oracle), design-silent 1 (slice 3: a page comment could be read as consent t
 1 fresh (sonnet → opus). Slice 1 also fixed a data-loss path found by the verifier: a refusal deleted
 whatever sat at --out, including the map (D3).
 
-Slice 4 did not run: it is a manual measurement that needs the owner to comment on a published page so
-a real session's wake and banner text can be observed. ESCALATED to a human. No out-of-default suites
-are affected (no TypeScript, no integration tests). Open follow-ups: D9 (moot-fork invalid pick
-refuses; map mode narrowed to 0600), D14 (no fork dependency field in the schema).
+Slice 4 (measurement, run with the owner, 2026-09-17 UTC): a page published with {db:{}} and a connected,
+armed watch received every answer, but no notification reached the session and the artifact had no
+comment threads — the page's comment box writes to the answers store, never to a thread. Readback on the
+owner's terminal word worked: read_db with out_dir landed D10's layout directly, and apply-answers without
+--final gave open=0 owner=10 recommendation=0 moot=1. The skill now asks for the hand-back in the terminal;
+a comment-mode thread wake is recorded as UNMEASURED (D15). No out-of-default suites are affected.
+Open follow-ups: D9 (moot-fork invalid pick refuses; map mode narrowed to 0600), D14 (no fork dependency
+field in the schema), D15 (measure the comment-mode thread path; amend design F4's risk).
