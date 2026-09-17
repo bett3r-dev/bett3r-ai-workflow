@@ -39,3 +39,42 @@ sources: [design:block F2 (Jira = A)]
 rejected: refusing only when a tamper is found — would let a fresh-region call succeed with a flag the dialect forbids
 supersedes: —
 `--dialect jira --on-tamper displace` exits 2 `reason=displace-not-allowed-jira` before the file or map is read.
+
+## D6 — /design requires the literal `## Resolved decision tree` heading
+kind: silent-seam
+step: build · slice: 3 · decidedBy: verifier
+sources: [code:commands/design.md Sections list, code:docs/prs/{ESAS-161,ESAS-162,ESAS-178,XL-27}/design.md headings, code:map-tree --insert-after]
+rejected: fuzzy heading match in map-tree — a guess at which heading is "the" tree; per-folder heading discovery — undeclared contract
+supersedes: —
+`--insert-after` is exact; older design docs use heading variants. /design rewrites design.md in full every pass, so the required line is written before map-tree inserts. /verify-build's refresh does not rewrite design.md: a missing heading there is flagged `heading-not-found`, nothing committed.
+
+## D7 — tracker-writer's map-tree check runs only on a source that carries a region; the map is read beside the source
+kind: silent-seam
+step: build · slice: 3 · decidedBy: executor
+sources: [design:block D5 "non-zero refuses the item", code:agents/tracker-writer.md preflight]
+rejected: check every source — addenda, filed tickets and legacy blocks have no region and would always refuse
+supersedes: —
+Map path assumed `units/<id>.map.json` beside the source; the design-multi brief to tracker-writer does not carry it yet (follow-up, owner ESAS-166 which owns fold-back). A block that should carry a region but lacks one passes preflight — accepted risk.
+
+## D8 — Step 0 "last local source" is the local region whose out= matches the fetched marker
+kind: silent-seam
+step: build · slice: 3 · decidedBy: executor
+sources: [design:block D7]
+rejected: hashing a normalized fetched form — rejected by D7 itself
+supersedes: —
+No local source with that `out=` stops the item; this can stop a legitimate regeneration (conservative direction).
+
+## D9 — plugin.json not bumped; AC8 fails by directive
+kind: waiver
+step: build · slice: 3 · decidedBy: human
+sources: [human (orchestrator directive, CAMPAIGN-PLAN §5), design:block §2, §3 AC8]
+rejected: bump per block — the single bump happens at /merge-multi
+supersedes: —
+
+## D10 — Finding: the ESAS-156 epic oracle expects map-tree:begin/end markers
+kind: shipped-finding
+step: build · slice: 3 · decidedBy: verifier
+sources: [code:scripts/oracles/epic-esas-156.sh:223-228]
+rejected: edit the epic oracle here — owned by no unit, out of scope
+supersedes: —
+The shipped pair is `map-tree:v1` / `/map-tree:v1`; that stage will report `region-markers-absent` (loud, not a silent pass) until the oracle is updated. Routed to the orchestrator.
