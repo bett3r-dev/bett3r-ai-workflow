@@ -15,9 +15,22 @@ The thing to design (a ticket id, a feature description, or "the active work").
 
 ## Board mode
 
-If this repo has no `.esas/`, skip this section entirely and **say nothing about boards.**
+Two gates, in this order: the **map gate**, then the **eventstorming gate**. They answer different questions and each says yes or no on its own — **on a no, say nothing at all** holds per gate, so a no from one never becomes a mention in the other.
 
-If it does: board mode is on only when a board is both **possible** (`.esas/` with a `graph.json`, `esas-mcp` registered) and **warranted** (the design's forks name graph artifacts — commands, events, policies, read models, aggregates). Run the preflight in `../skills/esas-design/PREFLIGHT.md` for capability, and read `../skills/esas-design/BOARD-SETUP.md` for the seeding rules and what changes below; `esas-design` owns the standing rules once the tools are live.
+### The map gate
+
+A design map is posted with the `design-map` skill and needs no `.esas/`, which is why this gate comes first.
+
+- If `.work/lane.yaml` exists, the run is unattended: the map gate is a silent no.
+- Otherwise it is a yes when the drafted tree has at least one open owner fork — a decision only the owner can make.
+- Shape: **impact** for an epic parent, **decision** for a lone ticket. Judge it from the tree in front of you, not from the label on the ticket.
+- A map is live when `design-map` reports `DESIGN-MAP:v1 … outcome=ok`, whatever the target it wrote to.
+
+### The eventstorming gate
+
+No `.esas/` in this repo is a no for this gate, and silent like every no.
+
+Otherwise the eventstorming board is on only when a board is both **possible** (`.esas/` with a `graph.json`, `esas-mcp` registered) and **warranted** (the design's forks name graph artifacts — commands, events, policies, read models, aggregates). Run the preflight in `../skills/esas-design/PREFLIGHT.md` for capability, and read `../skills/esas-design/BOARD-SETUP.md` for the seeding rules and what changes below; `esas-design` owns the standing rules once the tools are live.
 
 **Relevance runs before the preflight, never after it.** The order is the mechanism, not a preference: the preflight prints verdicts and the table under it turns them into things you say out loud — *run the extractor*, *here is the launch line*, *another repo holds the port*. Run it first and the silent path has already spoken by the time the gate answers no. Which is also why relevance is **not** a preflight key and must never become one: a shell block cannot read a decision tree.
 
@@ -28,6 +41,22 @@ Three constraints on the gate itself:
 - **Re-ask at every new artifact-touching fork.** The gate is answered at the moment of least knowledge, so a design that opens on config and turns structural at fork 4 arms then. A late board loses nothing — it is a projection and catches up when it opens.
 
 Classify by the tree in front of you, not the label on the ticket. "Frontend" is not outside the model by definition (`ui` is a node type in the extractor's own graph).
+
+### Combining the gates
+
+Judge the five inputs, then run the block with them — it reads no files and prints one line, and that line is the verdict for both gates: `open_owner_forks` and `artifact_forks` are counts of forks in the drafted tree, `epic_parent`, `lane` (`.work/lane.yaml` exists) and `esas_capable` (`.esas/` with a `graph.json`, `esas-mcp` registered) are `1` or `0`. `map=yes` sends you to `design-map`; `es=offer` sends you to the preflight above; anything else is silence.
+
+<!-- BOARD-GATE:v1 -->
+```sh
+# usage: sh board-gate.sh open_owner_forks artifact_forks epic_parent lane esas_capable
+map=no; shape=-; es=silent
+if [ "$4" -eq 0 ] && [ "$1" -ge 1 ]; then
+  map=yes
+  if [ "$3" -eq 1 ]; then shape=impact; else shape=decision; fi
+fi
+if [ "$5" -eq 1 ] && [ "$2" -ge 1 ]; then es=offer; fi
+printf 'BOARD-GATE:v1 map=%s shape=%s es=%s\n' "$map" "$shape" "$es"
+```
 
 ---
 
@@ -101,7 +130,7 @@ Then **enumerate what the block does not decide.** Drift-checking is a check aga
 
 ## Step 3 — Grill, then critique
 
-Run the interview (`grill` + `domain-modeling`): every branch of the decision tree, one question at a time, each with your recommended answer, dependencies resolved before moving on. Under board mode the independent forks batch to the canvas and the dependent ones stay serial.
+Run the interview (`grill` + `domain-modeling`): every branch of the decision tree, one question at a time, each with your recommended answer, dependencies resolved before moving on. Under board mode the independent forks batch to the canvas and the dependent ones stay serial. Where a map is live (`map=yes`, and `design-map` reported `outcome=ok`), the forks are posted to the map as `grill` describes.
 
 **Every fork is presented picture → scenarios → per-option walk** — `grill`'s *Presenting a fork* owns the shape and this is where it is mandatory. Two option labels are not a question: the user cannot tell from them whether you are discussing the same thing they are. Where every scenario walks identically across the options there is no fork — resolve it and record it as an autonomous decision.
 
