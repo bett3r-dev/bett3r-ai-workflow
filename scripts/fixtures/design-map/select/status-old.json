@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "repoPath": "/work/design-repo",
+  "gitSha": "0123456789abcdef0123456789abcdef01234567",
+  "lastSeq": 12,
+  "cursorSeq": 12,
+  "pendingByAuthor": { "human": 0, "ai": 0 },
+  "lockState": { "held": false },
+  "warnings": []
+}

@@ -1159,6 +1159,201 @@ python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); print(",".join(f["i
 check 'fleet project: only the forks whose tickets contain ESAS-202' "$( cat "$TMP/f325/projected-ids" )" 'ESAS-202-F1,ESAS-202-F2'
 
 # ---------------------------------------------------------------------------
+printf '\nESAS-174: select — the map target is a first-match table, probes before start\n'
+# ---------------------------------------------------------------------------
+# `select` is pure over a captures directory (design.md P1). Each case builds
+# its own directory under $TMP from scripts/fixtures/design-map/select/ (the
+# shapes and their esas sources are in that directory's README.md), with a
+# synthesized pwd.txt so the repoPath comparison never reads this machine's cwd,
+# and runs from an empty cwd so no ambient .work/lane.yaml is found.
+SEL="$FIX/select"
+ERR="$TMP/err"
+
+# sel_case <name> <status|-> <tools|-> <board|-|empty> <start|-> — a case dir
+# $TMP/sel/<name> holding captures/ and an empty cwd/. `-` leaves the file out.
+sel_case(){
+  sc="$TMP/sel/$1"
+  mkdir -p "$sc/captures" "$sc/cwd"
+  [ "$2" = - ] || cp "$SEL/$2" "$sc/captures/status.json"
+  [ "$3" = - ] || cp "$SEL/$3" "$sc/captures/tools.txt"
+  case $4 in
+    -) ;;
+    empty) : > "$sc/captures/board.json" ;;
+    *) cp "$SEL/$4" "$sc/captures/board.json" ;;
+  esac
+  [ "$5" = - ] || cp "$SEL/$5" "$sc/captures/start.json"
+  printf '/work/design-repo\n/work/design-repo\n' > "$sc/captures/pwd.txt"
+}
+
+# dms <name> <args…> — run select from the case's cwd; stdout to $OUT, stderr to $ERR.
+dms(){
+  xname=$1; shift
+  ( cd "$TMP/sel/$xname/cwd" && "$DM_SH" "$DM" select "$@" ) > "$OUT" 2> "$ERR"
+  rc=$?
+  LINE=$( verdict "$OUT" )
+}
+
+# expect_select <description> <name> <phase> <target> <reason> <probe> [extra args…]
+expect_select(){
+  xd=$1 xn=$2 xp=$3 xt=$4 xr=$5 xpr=$6; shift 6
+  dms "$xn" --phase "$xp" --captures "$TMP/sel/$xn/captures" "$@"
+  check "$xd: outcome=ok"  "$( attr "$LINE" outcome )" ok "$( cat "$OUT" "$ERR" )"
+  check "$xd: verb=select" "$( attr "$LINE" verb )" select "$LINE"
+  check "$xd: target"      "$( attr "$LINE" target )" "$xt" "$LINE"
+  check "$xd: reason"      "$( attr "$LINE" reason )" "$xr" "$LINE"
+  check "$xd: probe"       "$( attr "$LINE" probe )" "$xpr" "$LINE"
+  check "$xd: exit 0"      "$rc" 0
+  check "$xd: stderr empty" "$( wc -c < "$ERR" | tr -d ' ' )" 0 "$( cat "$ERR" )"
+}
+
+# The board-ready case every row below breaks exactly one input of.
+sel_case ready status-map-ok.json tools-full.txt board-map.json start-ok.json
+
+# AC2 — an esas-mcp without capabilities is silent, on ok:true and on ESAS_DIR_MISSING.
+sel_case old status-old.json tools-full.txt board-map.json -
+expect_select 'S-old' old probe artifact mcp-no-map done
+sel_case old-dirmissing status-dirmissing-old.json tools-full.txt board-map.json -
+expect_select 'S-old-dirmissing' old-dirmissing probe artifact mcp-no-map done
+
+# AC3 — a fleet lane decides before anything is read, and board-off never hangs.
+sel_case lane status-map-ok.json tools-full.txt board-map.json start-ok.json
+mkdir -p "$TMP/sel/lane/cwd/.work" && printf 'ticket: ESAS-174\n' > "$TMP/sel/lane/cwd/.work/lane.yaml"
+expect_select 'S-lane (default .work/lane.yaml)' lane probe artifact fleet-lane skipped
+expect_select 'S-lane at --phase start' lane start artifact fleet-lane skipped
+printf 'ticket: ESAS-174\n' > "$TMP/sel/ready/lane.yaml"
+expect_select 'S-lane (--lane)' ready probe artifact fleet-lane skipped --lane "$TMP/sel/ready/lane.yaml"
+# Row 1 reads nothing further: an unreadable captures dir cannot turn it into an error.
+dms lane --phase probe --captures "$TMP/sel/lane/no-such-captures"
+check 'S-lane reads no captures: reason' "$( attr "$LINE" reason )" fleet-lane "$( cat "$OUT" "$ERR" )"
+check 'S-lane reads no captures: exit 0' "$rc" 0
+
+sel_case off status-map-ok.json tools-full.txt empty -
+if command -v timeout > /dev/null 2>&1; then
+  ( cd "$TMP/sel/off/cwd" && timeout 5 "$DM_SH" "$DM" select --phase probe --captures "$TMP/sel/off/captures" ) > "$OUT" 2> "$ERR"
+  rc=$?
+  LINE=$( verdict "$OUT" )
+  check 'S-off under timeout 5: reason' "$( attr "$LINE" reason )" board-off "$( cat "$OUT" "$ERR" )"
+  check 'S-off under timeout 5: exit 0 (124 is a hang)' "$rc" 0
+else
+  printf '  (no timeout(1) on PATH: S-off runs unbounded)\n'
+  expect_select 'S-off' off probe artifact board-off done
+fi
+sel_case off-absent status-map-ok.json tools-full.txt - -
+expect_select 'board.json absent is board-off' off-absent probe artifact board-off done
+
+# AC4 — side effects last: no probe row 1-8 ever says board, only all-pass does.
+sel_case no-mcp status-map-ok.json - board-map.json -
+sel_case tools status-map-ok.json tools-no-post.txt board-map.json -
+sel_case mcp-error status-error.json tools-full.txt board-map.json -
+sel_case other status-map-ok.json tools-full.txt board-other.json -
+sel_case nokinds status-map-ok.json tools-full.txt board-nokinds.json -
+for xrow in lane:fleet-lane no-mcp:no-mcp old:mcp-no-map tools:tools-missing mcp-error:mcp-error \
+            off:board-off other:board-other-repo nokinds:board-no-map; do
+  xname=${xrow%%:*}
+  dms "$xname" --phase probe --captures "$TMP/sel/$xname/captures"
+  check "S-order row ${xrow#*:}: never a board target" \
+    "$( attr "$LINE" target )" artifact "$LINE"
+done
+expect_select 'S-order all rows pass' ready probe board-candidate ok done
+dms ready --phase start --captures "$TMP/sel/no-mcp/captures"
+check 'S-order --phase start with no start.json: outcome=error' "$( attr "$LINE" outcome )" error "$LINE"
+check 'S-order --phase start with no start.json: reason' "$( attr "$LINE" reason )" missing-start "$LINE"
+check 'S-order --phase start with no start.json: exit 2' "$rc" 2
+# P2: start re-evaluates rows 0-8, so a stale probe is never promoted to board.
+sel_case stale status-old.json tools-full.txt board-map.json start-ok.json
+expect_select 'start re-evaluates the probe rows' stale start artifact mcp-no-map done
+
+# AC5 — the E10 envelope: ESAS_DIR_MISSING carrying capabilities is not an error.
+sel_case dirmissing-map status-dirmissing-map.json tools-full.txt board-map.json start-ok.json
+expect_select 'S-dirmissing-map' dirmissing-map probe board-candidate ok done
+
+# AC6 — a pinned artifact map short-circuits everything.
+expect_select 'S-pinned' ready probe artifact pinned skipped --map "$SEL/map-pinned-artifact.json"
+expect_select 'S-pinned at --phase start' ready start artifact pinned skipped --map "$SEL/map-pinned-artifact.json"
+expect_select 'an unpinned map re-probes' ready start board ok done --map "$FIX/decision-3-forks.json"
+dms ready --phase probe --captures "$TMP/sel/ready/captures" --map "$FIX/v1-map.json"
+check 'a map that fails validation is outcome=error' "$( attr "$LINE" outcome )" error "$LINE"
+check 'a map that fails validation exits 2' "$rc" 2
+dms ready --phase probe --captures "$TMP/sel/ready/captures" --map "$TMP/sel/no-map.json"
+check 'an unreadable --map is outcome=error' "$( attr "$LINE" outcome )" error "$LINE"
+
+# AC7 — one case per row.
+expect_select 'S-no-mcp (tools.txt absent)' no-mcp probe artifact no-mcp done
+sel_case no-status-tool status-map-ok.json tools-full.txt board-map.json -
+grep -v '^status$' "$SEL/tools-full.txt" > "$TMP/sel/no-status-tool/captures/tools.txt"
+expect_select 'S-no-mcp (no status tool listed)' no-status-tool probe artifact no-mcp done
+sel_case prefixed status-map-ok.json - board-map.json start-ok.json
+sed 's/^/mcp__esas__/' "$SEL/tools-full.txt" > "$TMP/sel/prefixed/captures/tools.txt"
+expect_select 'session-prefixed tool names (mcp__esas__*)' prefixed start board ok done
+expect_select 'S-tools' tools probe artifact tools-missing done
+expect_select 'S-mcp-error' mcp-error probe artifact mcp-error done
+expect_select 'S-other' other probe artifact board-other-repo done
+sel_case physical status-map-ok.json tools-full.txt board-map.json -
+printf '/work/link-to-repo\n/work/design-repo\n' > "$TMP/sel/physical/captures/pwd.txt"
+expect_select 'repoPath matching pwd -P only' physical probe board-candidate ok done
+expect_select 'S-nokinds' nokinds probe artifact board-no-map done
+sel_case linked status-map-ok.json tools-full.txt board-map.json start-linked.json
+expect_select 'S-linked' linked start artifact linked-worktree done
+sel_case start-failed status-map-ok.json tools-full.txt board-map.json start-other.json
+expect_select 'S-start-failed' start-failed start artifact start-failed done
+expect_select 'S-board' ready start board ok done
+
+# Malformed status reads as row 3; malformed CLI is an error.
+sel_case status-garbage - tools-full.txt board-map.json -
+printf 'not json {' > "$TMP/sel/status-garbage/captures/status.json"
+expect_select 'unparseable status.json' status-garbage probe artifact mcp-no-map done
+sel_case status-absent - tools-full.txt board-map.json -
+expect_select 'absent status.json' status-absent probe artifact mcp-no-map done
+dms ready --phase deploy --captures "$TMP/sel/ready/captures"
+check 'a bad --phase: outcome=error' "$( attr "$LINE" outcome )" error "$LINE"
+check 'a bad --phase: reason' "$( attr "$LINE" reason )" bad-phase "$LINE"
+check 'a bad --phase: exit 2' "$rc" 2
+dms ready --captures "$TMP/sel/ready/captures"
+check 'a missing --phase: reason' "$( attr "$LINE" reason )" missing-phase "$LINE"
+dms ready --phase probe
+check 'a missing --captures: reason' "$( attr "$LINE" reason )" missing-captures "$LINE"
+
+# Row precedence — every case above breaks one input, which cannot tell the
+# rows' ORDER apart. Each case here breaks two at once; the earlier row wins.
+sel_case prec-pin-lane status-map-ok.json tools-full.txt board-map.json start-ok.json
+printf 'ticket: ESAS-174\n' > "$TMP/sel/prec-pin-lane/lane.yaml"
+expect_select 'precedence row 0 over 1 (pinned + lane)' prec-pin-lane probe artifact pinned skipped \
+  --map "$SEL/map-pinned-artifact.json" --lane "$TMP/sel/prec-pin-lane/lane.yaml"
+sel_case prec-lane-nomcp status-map-ok.json - board-map.json -
+printf 'ticket: ESAS-174\n' > "$TMP/sel/prec-lane-nomcp/lane.yaml"
+expect_select 'precedence row 1 over 2 (lane + no status tool)' prec-lane-nomcp probe artifact fleet-lane skipped \
+  --lane "$TMP/sel/prec-lane-nomcp/lane.yaml"
+sel_case prec-nomcp-old status-old.json tools-full.txt board-map.json -
+grep -v '^status$' "$SEL/tools-full.txt" > "$TMP/sel/prec-nomcp-old/captures/tools.txt"
+expect_select 'precedence row 2 over 3 (no status tool + old status)' prec-nomcp-old probe artifact no-mcp done
+sel_case prec-old-tools status-old.json tools-no-post.txt board-map.json -
+expect_select 'precedence row 3 over 4 (old status + tools missing)' prec-old-tools probe artifact mcp-no-map done
+sel_case prec-tools-error status-error.json tools-no-post.txt board-map.json -
+expect_select 'precedence row 4 over 5 (tools missing + mcp error)' prec-tools-error probe artifact tools-missing done
+sel_case prec-error-off status-error.json tools-full.txt empty -
+expect_select 'precedence row 5 over 6 (mcp error + board off)' prec-error-off probe artifact mcp-error done
+sel_case prec-other-nokinds status-map-ok.json tools-full.txt - -
+grep -v 'boardKinds' "$SEL/board-other.json" | sed 's/"anchored": false,/"anchored": false/' \
+  > "$TMP/sel/prec-other-nokinds/captures/board.json"
+expect_select 'precedence row 7 over 8 (other repo + no boardKinds)' prec-other-nokinds probe artifact board-other-repo done
+sel_case prec-nokinds-linked status-map-ok.json tools-full.txt board-nokinds.json start-linked.json
+expect_select 'precedence row 8 over 9-11 (no boardKinds + linked worktree)' prec-nokinds-linked start artifact board-no-map done
+sel_case prec-tools-linked status-map-ok.json tools-no-post.txt board-map.json start-linked.json
+expect_select 'precedence row 4 over 9-11 (tools missing + linked worktree)' prec-tools-linked start artifact tools-missing done
+
+# No pwd.txt: repoPath is compared with this process's own cwd. The fixture
+# synthesizes both sides — board.json's repoPath is the case cwd's physical
+# path (matches) or a path no machine has (does not).
+sel_case nopwd-match status-map-ok.json tools-full.txt board-map.json -
+rm "$TMP/sel/nopwd-match/captures/pwd.txt"
+xphys=$( cd "$TMP/sel/nopwd-match/cwd" && pwd -P )
+sed "s#\"/work/design-repo\"#\"$xphys\"#" "$SEL/board-map.json" > "$TMP/sel/nopwd-match/captures/board.json"
+expect_select 'no pwd.txt: repoPath equal to the real cwd' nopwd-match probe board-candidate ok done
+sel_case nopwd-other status-map-ok.json tools-full.txt board-map.json -
+rm "$TMP/sel/nopwd-other/captures/pwd.txt"
+expect_select 'no pwd.txt: repoPath not the real cwd' nopwd-other probe artifact board-other-repo done
+
+# ---------------------------------------------------------------------------
 # skills/design-map/SKILL.md — presence oracle, in the style of
 # scripts/test-esas-design.sh (assert_md/refute_md). This is prose, not a
 # script: it catches deletion, not wrongness, as the design's own test-seams

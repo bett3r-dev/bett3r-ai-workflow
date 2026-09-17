@@ -1,0 +1,12 @@
+{
+  "ok": false,
+  "error": {
+    "code": "LINKED_WORKTREE",
+    "message": "/work/design-repo is a linked git worktree — start the map session in the main checkout",
+    "details": {
+      "repoPath": "/work/design-repo",
+      "gitDir": "/work/main-repo/.git/worktrees/design-repo",
+      "gitCommonDir": "/work/main-repo/.git"
+    }
+  }
+}
