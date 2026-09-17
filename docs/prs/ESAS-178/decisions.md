@@ -63,3 +63,11 @@ sources: [code:scripts/oracles/epic-esas-156.sh stage 1, code:plugins/bett3r-ai-
 rejected: —
 supersedes: —
 The real guard for D7 styling is test-design-map.sh's fork-class case. The README update lands with the last verb slice.
+
+## D9 — An answer naming a map, folded into a map with no `mapId`, is skipped as `otherMap`
+kind: silent-seam
+step: build · slice: 3 · decidedBy: executor
+sources: [design:block D5, code:fold (plugins/bett3r-ai-workflow/scripts/design-map.py)]
+rejected: apply it — its origin cannot be confirmed against a map that names none
+supersedes: —
+Also: `write` adds reason `map-dir-missing` (checked before stdin), and reuses `map-unparseable` for empty or non-JSON stdin.
