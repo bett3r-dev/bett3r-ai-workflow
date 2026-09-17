@@ -2412,6 +2412,14 @@ present "$VERIFY_BUILD_MD" 'post Step 6b'\''s status again, unchanged, on the ne
 present "$VERIFY_BUILD_MD" 'Among verdicts, only Step 2'\''s `FAIL` holds this step back' \
   '/verify-build Step 6: among verdicts, only the gate FAIL holds the PR back'
 present "$VERIFY_BUILD_MD" 'no concerns recorded' '/verify-build: an empty concerns.md is "no concerns recorded"'
+
+# ESAS-162 — the goal-signal line under ### Record, and the (inert) map-drift
+# step before Step 5b. Presence rows only: the executable half is
+# scripts/test-design-snapshot.sh's count/drift matrix (AC2/AC4); this is AC5.
+present "$VERIFY_BUILD_MD" 'design-map count' '/verify-build: ### Record carries the design-map count line'
+present "$VERIFY_BUILD_MD" 'design-map drift' '/verify-build: a map-drift step calls design-map drift'
+present "$VERIFY_BUILD_MD" 'no-map-feed' '/verify-build: the drift step names the no-map-feed skip reason'
+
 for refuted in 'one commit per slice' 'follow-up slice' '`verifyBuild.concerns` is `null` until' 'no concerns raised' 'none raised'; do
   if grep -qF -e "$refuted" "$( norm "$VERIFY_BUILD_MD" )"; then
     fail "/verify-build no longer says: $refuted" "found in ${VERIFY_BUILD_MD#"$ROOT"/}"
