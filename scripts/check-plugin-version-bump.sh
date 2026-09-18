@@ -34,6 +34,16 @@
 #     dots — `git diff <base>...HEAD` — is the whole of the fix, and re-spelling
 #     it as `HEAD~1` is the single most likely way this gate is quietly disabled.
 #
+# A version that moved *backwards* is refused too, and for the same reason
+# rather than out of semver tidiness: 0.83.0 on top of a released 0.84.0 is a
+# different string, so it satisfies the cache-key test, but it points at a cache
+# directory a user may already hold from the earlier release — same key, no copy,
+# stale bytes — and it un-ships whatever 0.84.0 carried. The comparison is
+# numeric MAJOR.MINOR.PATCH and only that; a version neither side can read as
+# three integers is allowed through on the difference alone, because the cache
+# copies on any difference and an unreadable spelling is not evidence that
+# nothing ships.
+#
 # It fails loudly rather than quietly whenever it cannot judge (no base ref, no
 # jq, an unreadable manifest), because the shape of every failure this guards
 # against is a check that stayed green while meaning nothing.
@@ -116,6 +126,36 @@ if [ -z "$touched" ]; then
   exit 0
 fi
 
+# semver_lt <a> <b> — true when <a> is strictly behind <b> as a numeric
+# MAJOR.MINOR.PATCH triple. Used for exactly one judgement: is the version at
+# HEAD *behind* the one on the base. Equality never reaches here; it is refused
+# above.
+#
+# A downgrade passes the "did the string change?" test, so before this existed
+# the gate waved one through — and a downgrade is the same failure the gate was
+# written for, wearing different clothes. The cache is keyed by the version
+# string, so shipping 0.83.0 on top of 0.84.0 lands in a cache directory a user
+# may already hold from the *earlier* release: same key, no copy, stale bytes,
+# green gate. It also silently un-ships whatever 0.84.0 carried.
+#
+# It answers "no" for anything it cannot read as three integers — a prerelease
+# tag, a `v` prefix, a date, a two-part version. Deliberately: the cache copies
+# on *any* difference, so an unparseable-but-changed version is not evidence
+# that nothing ships, and refusing on it would block a release over a spelling
+# the runtime does not care about. That shape keeps the behaviour this repo has
+# always had.
+semver_lt(){
+  awk -v a="$1" -v b="$2" 'BEGIN{
+    if (a !~ /^[0-9]+\.[0-9]+\.[0-9]+$/ || b !~ /^[0-9]+\.[0-9]+\.[0-9]+$/) exit 1
+    split(a, A, "."); split(b, B, ".")
+    for (i = 1; i <= 3; i++) {
+      if (A[i] + 0 < B[i] + 0) exit 0
+      if (A[i] + 0 > B[i] + 0) exit 1
+    }
+    exit 1
+  }'
+}
+
 status=0
 # Set the moment any manifest is unreadable — separately from `status`, because
 # a lane defers a *missing bump*, not a broken manifest. A manifest with no
@@ -171,6 +211,18 @@ for name in $touched; do
     printf '      %-24s %s\n' "$base_label" "$base_version"
     printf '      %-24s %s\n' 'at HEAD:' "$head_version"
     status=1
+  elif semver_lt "$head_version" "$base_version"; then
+    # A different string, so the cache-key test the gate was built around is
+    # satisfied — and the release is still broken. Spelled as its own verdict
+    # rather than folded into the unbumped message, because the fix is different:
+    # nothing was forgotten here, a number went the wrong way, usually a stale
+    # branch cut before someone else's release.
+    base_label=$( printf 'on %s:' "$base" )
+    printf '\033[31m✗\033[0m plugins/%s changed, but its version went backwards.\n' "$name"
+    printf '    %s\n' "$manifest"
+    printf '      %-24s %s\n' "$base_label" "$base_version"
+    printf '      %-24s %s\n' 'at HEAD:' "$head_version"
+    status=1
   else
     # `:-` because a manifest that was unreadable on the base leaves the left side
     # blank, and `✓ plugins/x:  → 1.0.0` reads like a bug in the gate rather than
@@ -208,7 +260,8 @@ if [ "$status" -ne 0 ]; then
   fi
 
   printf 'A plugin is copied into the version-keyed cache only when its `version` changes.\n'
-  printf 'Unbumped, the change lands in the repo and reaches nobody. Bump the plugin(s)\n'
+  printf 'Unbumped, the change lands in the repo and reaches nobody; moved backwards, it\n'
+  printf 'collides with a cache key users may already hold. Bump the plugin(s)\n'
   # `marketplace.json` is named here as convention and explicitly *not* as a pin:
   # its `plugins[]` entries carry name/source/description and no version at all,
   # and the marketplace checkout refreshes by `git pull` regardless of
