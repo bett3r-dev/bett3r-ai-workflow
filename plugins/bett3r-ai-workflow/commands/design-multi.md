@@ -19,7 +19,7 @@ Ticket ids (+ optional descriptions), then flags.
 
 | Flag | Effect |
 |---|---|
-| `--max-parallel N` | Cap concurrent design agents. Read-only, so higher than start-multi is safe; still respect host limits. |
+| `--max-parallel N` | Cap concurrent design agents. Read-only, so higher than start-multi is safe **for the machine** — not for the bill: each lane is still a full context, and spend scales with lanes regardless of whether they write anything. Respect host limits and say what the wave is expected to cost. |
 | `--run-id <id>` · `--fresh` | Resume-state controls. Default run-id: `design-multi-` + sorted ids. |
 
 ## Steps

@@ -1065,6 +1065,13 @@
       "commit": null,
       "was_in": "plugins/bett3r-ai-workflow/agents/provisioner.md",
       "note": "Why sliceBudget counts slices and not tokens: a step cannot see its own usage (run-metrics measures it afterwards, too late to act on), so the ceiling must be in a unit countable from inside, at a clean resume point."
+    },
+    {
+      "needle": "second axis, and it is not a machine resource",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "note": "Fleet sizing was reasoned entirely in memory, cores and swap. Five lanes fit in RAM comfortably and consumed most of a weekly allowance in six hours: machine headroom and spend are uncorrelated, and only one of them was ever written down."
     }
   ]
 }
