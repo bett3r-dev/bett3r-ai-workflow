@@ -84,23 +84,42 @@ so nothing below may be a rule only you know.
 
 Each step finds its own inputs in `.work/lane.yaml` and ends by printing its own
 `LANE-STEP:` line, so **you invoke it bare** — the command name and nothing
-else, neither the brief nor a pointer to it:
+else, neither the brief nor a pointer to it. A step that learns a fact from you
+is a step the scheduler cannot run.
 
-    /build
+**You do not invoke it in your own context. You dispatch it.** Each of the five
+steps is one fresh [`step-lane`](step-lane.md) agent, dispatched with the
+worktree path, the branch, and the single command to run — and nothing else.
 
-A step that learns a fact from you is a step the scheduler cannot run.
+**Why, in one measurement.** A lane that ran all five steps in its own context
+cost **66.72M weighted tokens over 9.7 hours** for +2164/−259 lines, **89% of it
+cache read**: the context re-reading its own history on every turn, so slice 1's
+executor report was still being re-sent during `/verify-build`. On the same
+fleet, the same work handed to a fresh context at a step boundary cost **3.26M
+against 35M**. The saving is not the dispatch, it is the **ending** — a context
+that ends stops being re-read — and it compounds, because what comes back to you
+is one line instead of five steps of transcript. **Your own context must stay
+small**: five dispatches, five verdicts, your state file. If you find yourself
+reading a step's output, you have re-created the thing this shape deletes.
 
-**Before step 1, assert you can actually call them.** Confirm you hold `Agent`
-(for `/build`'s executor, test-runner, verifier and scope-check) and **a tool that
-invokes a step — `SlashCommand` or `Skill`**, whichever this harness names it; one
-harness has only `Skill`, so demanding `SlashCommand` by name blocks every lane.
-**If either capability is missing, stop and report `blocked-on=lane-tools`**,
-naming the tools you do hold — do not read the command files and execute their
-substance inline. That substitution is the failure this assertion exists for:
-it produces good work, green gates and a plausible report, while `/build`'s
-dual gate never runs and **no `LANE-STEP:` line is ever emitted by any step**,
-so a scheduler classifying lanes by marker absence reads the whole fleet as
-`infra` — nine lanes across four fleets rediscovered this.
+So for each step:
+
+1. Dispatch `step-lane` with the worktree, the branch and the command.
+2. It tees the step's output to `.work/steps/<step>.log` **in the worktree** and
+   returns that step's `LANE-STEP:` line as the last line of its report.
+3. You parse the **file**, not the report — `lane-step .work/steps/<step>.log`.
+   The log is the contract and the verbose transcript never enters your window.
+
+**Before step 1, assert you can actually dispatch.** Confirm you hold `Agent`.
+**If it is missing, stop and report `blocked-on=lane-tools`**, naming the tools
+you do hold — do not read the command files and execute their substance inline,
+and do not fall back to invoking the steps yourself. That substitution is the
+failure this assertion exists for: it produces good work, green gates and a
+plausible report, while `/build`'s dual gate never runs and **no `LANE-STEP:`
+line is ever emitted by any step**, so a scheduler classifying lanes by marker
+absence reads the whole fleet as `infra` — nine lanes across four fleets
+rediscovered this. `step-lane` re-asserts the step-invoking half (`SlashCommand`
+or `Skill`, whichever this harness names it) inside the context that needs it.
 
 | # | Command | Its marker | On anything but `outcome=success` |
 |---|---------|-----------|------------------------------------|
@@ -109,6 +128,33 @@ so a scheduler classifying lanes by marker absence reads the whole fleet as
 | 3 | `/plan` | `step=plan` | stop and report; do not build an unplanned slice list |
 | 4 | `/build` | `step=build` | report which slices committed — `gate-red` after 2 of 3 is a partial lane, not a failed one |
 | 5 | `/verify-build` | `step=verify-build` | red here is a finding about the branch, and the PR says so |
+
+### Step 4 is dispatched more than once, on purpose
+
+`/build` is one step containing N slices, and N slices in one context is exactly
+where the 66.72M lane came from. So `/build` **yields at a slice boundary** once
+it has committed its `sliceBudget` (`.work/lane.yaml`, default 3) and slices
+remain. It reports its real counts and stops:
+
+    LANE-STEP:v1 step=build outcome=success slices=3/8 commits=3
+
+**That is a `success`, not a partial failure, and it needs no new outcome
+value** — the contract already says `slices=` carries the counts and the caller
+decides. Your rule is mechanical:
+
+- `outcome=success` and `slices=k/N` with **k < N** → dispatch a **fresh**
+  `step-lane` for `/build` again. It resumes from `passes: true` in
+  `.work/slices.yaml`, which is already the resume point, and it starts on an
+  empty context. Repeat until `k == N`.
+- **k did not advance** between two consecutive dispatches → stop and report
+  `blocked-on=build-no-progress` with both lines. A budget yield that resumes
+  onto the same slice forever is the one way this loop can burn more than it
+  saves, and it is the only thing you must guard.
+- Anything but `outcome=success` → the table's rule above; do not re-dispatch.
+
+Record each dispatch in your state file with its slice counts, so
+`slices: 3/8` then `6/8` then `8/8` reads as one `/build` step that yielded
+twice, never as three builds or as a lane that restarted.
 
 **Read the outcome; do not adjudicate it.** Capture each step's output to a file
 and put it through `lane-step`, the parser this plugin ships — on `PATH` from

@@ -144,6 +144,7 @@ runners: <the host repo's runner/glob map: which command runs which test paths>
 preconditions: <the host repo's build/test preconditions, from CLAUDE.md and every .claude/rules/ file — each LABELLED like handedDownFacts: `applies` only with the command that confirmed it at BASE, else `verify whether it applies`>
 adrAllocations: <the monotonically-numbered artifacts reserved for this lane, ADR numbers above all>
 modelRouting: <the model each step runs under>
+sliceBudget: <slices one `/build` invocation may commit before it yields to a fresh one; 3 unless the orchestrator says otherwise, 0 to disable>
 handedDownFacts: <each fact LABELLED `applies` or `verify whether it applies`, with the command that settles it>
 runId: <run-id>
 runDir: <absolute path of .work/multi/<run-id> in the orchestrator's checkout>
@@ -154,6 +155,8 @@ mapProvenance: <carried|lost>   # carried: the run's projection was copied to do
 ```
 
 `runDir` is what lets `run-metrics` find this unit at all: a lane's transcript is a subagent of the orchestrator's session, stamped with the orchestrator's branch, and the run's `agents.yaml` is the only map from unit to agent id. Lane checkouts are usually sibling clones, not git worktrees, so the path cannot be derived — stamp it.
+
+`sliceBudget` is the lane's **context ceiling, expressed in the one unit a step can actually count.** A step cannot see its own token usage — that is measured afterwards by `run-metrics`, which is too late to act on — so the budget is denominated in committed slices, which are countable from inside and are the only clean resume point `/build` has. Three is the default because the measured failure was a lane that drove nine slices in one context for 66.72M weighted tokens, 89% of it cache read, against 3.26M for the same work restarted fresh at a slice boundary.
 
 `gateDeferred` is the one signal that tells the lane's `/verify-build` it is **not** landing on its own: it runs the host repo's gate in `--fast` mode and leaves the full gate to `/merge-multi`, which runs it once on the integration branch — the only tree where cross-unit breakage exists at all.
 
