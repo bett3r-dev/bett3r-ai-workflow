@@ -1072,6 +1072,13 @@
       "commit": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/start-multi.md",
       "note": "Fleet sizing was reasoned entirely in memory, cores and swap. Five lanes fit in RAM comfortably and consumed most of a weekly allowance in six hours: machine headroom and spend are uncorrelated, and only one of them was ever written down."
+    },
+    {
+      "needle": "one local worktree and nowhere else",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
+      "note": "Why /build pushes every slice instead of once at the end. Until /verify-build step 6 a lane's commits exist only on the machine that made them, so a rate-limit kill, a cost stop or a reclaimed worktree loses every green slice already paid for. A slice costs minutes to earn; the push costs seconds."
     }
   ]
 }
