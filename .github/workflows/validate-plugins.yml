@@ -23,6 +23,15 @@ jobs:
           fetch-depth: 0
       - name: Validate plugin artifacts (frontmatter + manifests)
         run: python3 scripts/validate-plugins.py
+      # An agent with no `tools:` key runs unrestricted — the failure is
+      # silent (nothing errors, the agent just carries more capability than
+      # reviewed) until an incident traces it back. This suite is the oracle
+      # for that refusal; it must run here or a future agent without the key
+      # ships clean.
+      - name: Test the tools allowlist rule (validate-plugins)
+        run: |
+          sh scripts/test-validate-plugins.sh
+          VP_PY=python3 sh scripts/test-validate-plugins.sh
       # Shared facts now live in EVIDENCE.md and are *linked* rather than
       # restated, which trades one failure mode for another: a referenced file
       # is only as good as the reference being followed. EVIDENCE.md shipped
