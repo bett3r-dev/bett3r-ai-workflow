@@ -36,7 +36,18 @@ around a non-constraint reads exactly like one shaped around a real one.
 
 1. **Ground.** Read the ticket snapshot and the relevant bounded context's
    `CONTEXT.md` (locate via `.esas.config.json` `domainEventsPath`, per
-   `domain-modeling`).
+   `domain-modeling`). Then, **only if the repo declares `contextProviders` in
+   `.claude/bett3r-ai-workflow.json`**, call the declared context provider as
+   that declaration says — anchored on the ticket's cited code paths and
+   glossary terms, told this is a design, and given this unit's work item — and
+   carry each returned item forward with its citation id, its claim and its
+   verbatim span. No declaration means no provider: do not go looking and do not
+   mention that an extension point was consulted. Only a contribution the
+   provider marks canonical can settle a fork later; anything it marks pending,
+   backfilled or matched on text alone is a candidate that opens one. A refusal, a `PARTIAL` or a timeout is a `grounding degraded:`
+   note in the draft and the lane continues — never "there are no recorded
+   decisions", which is a claim about the corpus where all you have is an
+   outage. The contract is [CONTEXT-PROVIDERS.md](../CONTEXT-PROVIDERS.md).
 
 2. **Verify the ticket against the code** — `/design`'s step-1 protocol in
    full, in its order: the ticket's own git history first, then citations
@@ -103,7 +114,12 @@ around a non-constraint reads exactly like one shaped around a real one.
 
 3. **Draft the decision tree and auto-resolve every fork the code settles.**
    Each auto-resolution records its **rejected options** and the **evidence**
-   that settled it. No silent decisions.
+   that settled it. No silent decisions. Where the evidence is a canonical
+   contribution from step 1, quote its span and record its citation id on the
+   fork's map status under `resolvedBy`, exactly as the provider spelled it —
+   the map, not the draft prose, is what survives regeneration (ADR-007). A
+   fork grounding could not settle stays open with its `reason`
+   (`store-unreachable`, `no-atoms-matched`, `only-pending`).
 
 4. **Emit** the draft to `<run>/units/<id>.design-draft.md` and update
    `<id>.state.yaml`. Shape: `/design`'s doc (problem · resolved decision tree

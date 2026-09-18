@@ -1452,6 +1452,84 @@ rm "$TMP/sel/nopwd-other/captures/pwd.txt"
 expect_select 'no pwd.txt: repoPath not the real cwd' nopwd-other probe artifact board-other-repo done
 
 # ---------------------------------------------------------------------------
+# XL-67 — the atom citation rides on the fork status and survives the fold
+# ---------------------------------------------------------------------------
+# F1: `resolvedBy` is a plugin-only optional key on the DECIDED branch of
+# map-structure.schema.json; F2: `reason` is the same on the OPEN branch. The
+# value is the grammar's own string (packages/xp-mcp/src/resolved-by.ts owns
+# what parses), so the schema pins that it is a non-empty string and nothing
+# more. R4: `fold` replaces fork["status"] wholesale, so without the sibling
+# preservation the citation is dropped the moment an owner answers — the case
+# F1 exists to survive.
+printf '\nXL-67: resolvedBy on decided, reason on open, and both survive apply-answers\n'
+
+mkdir -p "$TMP/xl67"
+# x67map <name> <python statements over m> — a mutated copy of answers-map.json.
+x67map(){
+  python3 - "$FIX/answers-map.json" "$TMP/xl67/$1.json" "$2" <<'PY'
+import json, sys
+m = json.load(open(sys.argv[1]))
+exec(sys.argv[3])
+with open(sys.argv[2], "w") as fh:
+    json.dump(m, fh, indent=2)
+PY
+}
+# x67key <map> <fork index> <key> — one status key, or the literal `none`.
+x67key(){
+  python3 -c '
+import json, sys
+print(json.load(open(sys.argv[1]))["forks"][int(sys.argv[2])]["status"].get(sys.argv[3], "none"))' "$1" "$2" "$3" 2>&1
+}
+
+x67map accepted 'm["forks"][0]["status"] = {"kind": "decided", "source": "code", "option": "A", "resolvedBy": "atom:teselly-000412-03"}
+m["forks"][1]["status"] = {"kind": "open", "reason": "store-unreachable"}'
+dm validate "$TMP/xl67/accepted.json"
+check 'resolvedBy on decided and reason on open: accepted' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+
+# The branches stay closed to everything else: additionalProperties:false is
+# what makes the two new keys a decision rather than a hole.
+x67map stray-decided 'm["forks"][0]["status"] = {"kind": "decided", "source": "code", "option": "A", "resolvedByAtom": "x"}'
+refuse_validate 'a stray key on the decided branch' schema-invalid "$TMP/xl67/stray-decided.json"
+x67map stray-open 'm["forks"][0]["status"] = {"kind": "open", "why": "x"}'
+refuse_validate 'a stray key on the open branch' schema-invalid "$TMP/xl67/stray-open.json"
+x67map empty-resolvedby 'm["forks"][0]["status"] = {"kind": "decided", "source": "code", "option": "A", "resolvedBy": ""}'
+refuse_validate 'an empty resolvedBy' schema-invalid "$TMP/xl67/empty-resolvedby.json"
+x67map crossed 'm["forks"][0]["status"] = {"kind": "open", "resolvedBy": "atom:teselly-000412-03"}'
+refuse_validate 'resolvedBy on an open fork' schema-invalid "$TMP/xl67/crossed.json"
+x67map moot-resolvedby 'm["forks"][4]["status"]["resolvedBy"] = "atom:teselly-000412-03"'
+refuse_validate 'resolvedBy on a moot fork' schema-invalid "$TMP/xl67/moot-resolvedby.json"
+
+# R4, the whole point: an owner CONFIRMING the option the atom settled keeps the
+# citation; an owner OVERTURNING it drops the citation, because the atom no
+# longer settled what the fork says.
+x67map fold 'm["forks"][0]["status"] = {"kind": "decided", "source": "code", "option": "A", "resolvedBy": "atom:teselly-000412-03"}
+m["forks"][3]["status"] = {"kind": "decided", "source": "code", "option": "B", "resolvedBy": "atom:teselly-000412-07"}
+m["forks"][1]["status"] = {"kind": "open", "reason": "no-atoms-matched"}'
+cp "$TMP/xl67/fold.json" "$TMP/xl67/folded.json"
+dm apply-answers "$TMP/xl67/folded.json" "$ANS"
+check 'apply-answers over a cited fork: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+check 'the owner confirms the atom-settled option: the citation survives' \
+  "$( x67key "$TMP/xl67/folded.json" 0 resolvedBy )" 'atom:teselly-000412-03' "$( cat "$OUT" )"
+check 'the owner confirms: source becomes owner' "$( x67key "$TMP/xl67/folded.json" 0 source )" owner
+check 'the owner overturns the atom-settled option: the citation is dropped' \
+  "$( x67key "$TMP/xl67/folded.json" 3 resolvedBy )" none
+check 'the owner overturns: source becomes owner, option is the owner pick' \
+  "$( x67key "$TMP/xl67/folded.json" 3 source ):$( x67key "$TMP/xl67/folded.json" 3 option )" owner:A
+check 'an unanswered open fork keeps its reason' \
+  "$( x67key "$TMP/xl67/folded.json" 1 reason )" no-atoms-matched
+dm validate "$TMP/xl67/folded.json"
+check 'the folded map is still valid' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+
+# --final turns the remaining open fork into decided(recommendation): `reason`
+# belongs to the open branch only and must not ride along.
+dm apply-answers "$TMP/xl67/folded.json" "$ANS" --final
+check 'apply-answers --final: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+check '--final: an open fork folded to recommendation drops its reason' \
+  "$( x67key "$TMP/xl67/folded.json" 1 reason )" none
+dm validate "$TMP/xl67/folded.json"
+check 'the --final map is still valid' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+
+# ---------------------------------------------------------------------------
 # skills/design-map/SKILL.md — presence oracle, in the style of
 # scripts/test-esas-design.sh (assert_md/refute_md). This is prose, not a
 # script: it catches deletion, not wrongness, as the design's own test-seams

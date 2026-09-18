@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/bett3r-dev/bett3r-ai-workflow/plugins/bett3r-ai-workflow/skills/design-map/map-structure.schema.json",
   "title": "map.json structure (structureVersion 2)",
-  "$comment": "The structure of a design's map.json: nodes, forks and their cards, spelled as esas MapFile (ESAS-167 D12) plus the plugin-only tickets, mapId, feedSeq and target. Every closed set (fork status kind, decided source, node level, map shape) is a $ref into map.schema.json, the byte-identical copy of the vocabulary esas emits; no value set is restated here. scripts/design-map.py validates against this file with the standard library, resolving map.schema.json from this file's directory; it implements type, const, enum, required, properties, additionalProperties:false, items, minItems, minLength, minimum, pattern, $ref (#/<pointer>, or <file>#/<pointer> for a file in this directory), allOf, oneOf and if/then, and reads $schema, $id, $defs, title, description and $comment as annotations — nothing else; with no oneOf branch matching, it reports the violation of the one branch whose const properties the value carries. What JSON Schema cannot say (unique ids, references that resolve, a decided option naming a card option) is checked by the script after this file.",
+  "$comment": "The structure of a design's map.json: nodes, forks and their cards, spelled as esas MapFile (ESAS-167 D12) plus the plugin-only tickets, mapId, feedSeq, target and the two fork-status additions resolvedBy (decided) and reason (open). Every closed set (fork status kind, decided source, node level, map shape) is a $ref into map.schema.json, the byte-identical copy of the vocabulary esas emits; no value set is restated here. scripts/design-map.py validates against this file with the standard library, resolving map.schema.json from this file's directory; it implements type, const, enum, required, properties, additionalProperties:false, items, minItems, minLength, minimum, pattern, $ref (#/<pointer>, or <file>#/<pointer> for a file in this directory), allOf, oneOf and if/then, and reads $schema, $id, $defs, title, description and $comment as annotations — nothing else; with no oneOf branch matching, it reports the violation of the one branch whose const properties the value carries. What JSON Schema cannot say (unique ids, references that resolve, a decided option naming a card option) is checked by the script after this file.",
   "type": "object",
   "required": ["structureVersion", "grounded", "nodes", "forks"],
   "additionalProperties": false,
@@ -66,7 +66,13 @@
         {
           "required": ["kind"],
           "additionalProperties": false,
-          "properties": { "kind": { "const": "open" } }
+          "properties": {
+            "kind": { "const": "open" },
+            "reason": {
+              "$comment": "Plugin-only, optional. Why this fork could NOT be settled from grounding: an outage (the context provider refused or timed out) and an answered store holding nothing canonical are structurally different facts and are never conflated. Same slot shape as moot.reason. Absent is the normal case — a fork nobody tried to settle carries no reason.",
+              "$ref": "#/$defs/text"
+            }
+          }
         },
         {
           "required": ["kind", "source", "option"],
@@ -74,7 +80,12 @@
           "properties": {
             "kind": { "const": "decided" },
             "source": { "$ref": "map.schema.json#/$defs/decidedSource" },
-            "option": { "$ref": "#/$defs/id" }
+            "option": { "$ref": "#/$defs/id" },
+            "resolvedBy": {
+              "$comment": "Plugin-only, optional: the citation for what settled this fork, carried here rather than in the design's prose because regenerated text is a projection of this map (ADR-007) and a prose-only citation is destroyed on the next regeneration. The value is the citation string the provider spelled, kept verbatim: the provider stays its single source of truth and no value set is restated here, and source is untouched and stays one of the three esas emits. One value per fork — where two sources could both claim one, the one that ANSWERS the fork wins over the one that merely records where the answer was filed.",
+              "type": "string",
+              "minLength": 1
+            }
           }
         },
         {

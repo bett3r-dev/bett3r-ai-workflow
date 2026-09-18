@@ -39,6 +39,13 @@ declaration, there are no providers and every rule below is vacuous — do not g
 ask the user whether they meant to have one, do not mention that an extension point was consulted.
 The silence on a no is the same discipline the board gate already follows.
 
+**The declaration is a `contextProviders` key in the host repo's
+`.claude/bett3r-ai-workflow.json`** — the same per-repo config the flow already reads
+`workDocsRoot` from. Nothing else declares one. In particular: the presence of a provider's
+MCP tool in the session is **not** a declaration — that is this plugin deciding, from ambient
+state no repo owner opted into — and neither is a capture marker directory, which can say a
+repo captures and cannot say whether it wants its designs grounded.
+
 **Shape of a contribution.** Each item carries a short claim and, where it can, the **verbatim
 source span** it came from plus where that span lives. The span is the load-bearing field: it is
 what lets Step 3 present the item as a fork rather than as an assertion the designer must take on

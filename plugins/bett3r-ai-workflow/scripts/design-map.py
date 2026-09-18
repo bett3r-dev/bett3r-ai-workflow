@@ -1110,7 +1110,17 @@ def fold(payload, answers, final):
         if fork["status"]["kind"] == "moot" or answer is None:
             continue
         if answer["pick"] is not None:
-            fork["status"] = {"kind": "decided", "source": "owner", "option": answer["pick"]}
+            # The status is replaced whole, so any sibling key on it is dropped
+            # here unless it is carried across deliberately. `resolvedBy` — the
+            # citation for what settled the fork — survives only where the owner
+            # CONFIRMS the option that was already decided: an owner who picks a
+            # different option has overturned whatever settled it, and keeping
+            # the citation would credit a source that never said this.
+            prior = fork["status"]
+            status = {"kind": "decided", "source": "owner", "option": answer["pick"]}
+            if prior.get("option") == answer["pick"] and "resolvedBy" in prior:
+                status["resolvedBy"] = prior["resolvedBy"]
+            fork["status"] = status
         if answer["comment"]:
             comments.append((fork, answer["comment"]))
     commented = [f["id"] for f, _ in comments if f["status"]["kind"] == "open"]

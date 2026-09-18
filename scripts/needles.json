@@ -974,6 +974,34 @@
       "commit": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
       "note": "Every main-tree slice records modeReason: TV2-21's pool sized width 4 and every slice ran sequentially with nothing saying why."
+    },
+    {
+      "needle": "Only a contribution the provider marks canonical may settle a fork",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
+      "note": "XL-67 D3: a pending, backfilled or text-only contribution is a candidate that OPENS a fork and never closes one; only one the provider marks canonical can be cited as what settled it."
+    },
+    {
+      "needle": "a `contextProviders` key",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/CONTEXT-PROVIDERS.md",
+      "note": "XL-67 F4: a context provider is declared by the host repo in .claude/bett3r-ai-workflow.json. Tool presence is a sniff, not a declaration, and a capture marker cannot say whether a repo wants design-time grounding."
+    },
+    {
+      "needle": "a claim about the corpus where all you have is an outage",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
+      "note": "XL-67 D9/F2: a provider that refuses or times out degrades to one `grounding degraded:` note and the fork stays open with a reason. An outage and an empty corpus are different facts and are never conflated."
+    },
+    {
+      "needle": "a citation that lives only in the draft is destroyed by the next regeneration",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
+      "note": "XL-67 F1: the citation for what settled a fork rides on the fork's map status under resolvedBy, not in prose, because ADR-007 makes regenerated decision text a projection of the map."
     }
   ]
 }
