@@ -52,6 +52,17 @@ what lets Step 3 present the item as a fork rather than as an assertion the desi
 trust, and it is what makes the item auditable when it turns out to be wrong. An item with no span
 is a rumour and is presented as one.
 
+**The seam is not read-only.** The same `contextProviders` declaration may also name a call for
+**recording** a decision — a fork's answer, offered back at the moment it is answered — and that
+is the only route by which `/design` Step 3, the `design-lane` agent and the `/design-multi`
+sitting offer one. A declared provider therefore contributes grounding items *into* a design and,
+where the declaration names such a call, is offered answers *out of* it. The write half obeys
+every rule below, failure tolerance first: a declaration naming no recording call, a call that
+refuses, times out or is unreachable, and a repo that declares nothing at all are one behaviour —
+the command's verdict is unchanged, and one notice names the fork that went unrecorded. Where the
+call hands back an id, that id has one home, the sidecar `design-map record` names in its verdict,
+never `map.json`.
+
 **Failure is tolerated, always.** A provider that errors, times out, returns nothing, or returns
 something unparseable **does not fail `/design`**. Note the degrade in the design doc in the same
 voice as `"grounding degraded: no CONTEXT.md"`, and continue. A design session that cannot start
@@ -70,9 +81,17 @@ get no special ceremony, no dedicated section and no separate approval gesture. 
 not worth a fork is dropped in Step 1 — contributing something does not entitle it to the user's
 attention.
 
-**Scope: `/design` only.** Rejected for `/build` (read-only in a fleet lane — sonnet-routable
-executors and no human to answer a fork), for `/plan` (Step 4 already self-skips when unattended),
-and for `/start` (no anchors yet — nothing has been grounded for a contribution to attach to).
+**Scope: `/design` only — and this scope is about contribution.** Rejected for `/build` (a fleet
+lane runs unattended — no human to answer a fork), for `/plan` (Step 4 already
+self-skips when unattended), and for `/start` (no anchors yet — nothing has been grounded for a
+contribution to attach to).
+
+**What that rejection does not say.** It bounds the contribution seam, not retrieval. An executor
+that calls `recall( mode: build )` directly at slice start, and renders what comes back into the
+lane log before its first edit, never enters this seam: no provider is consulted, nothing is
+offered as a fork, nothing reaches Step 3, and no question is asked of anyone. That path is item
+**I-3** of `SCOPE-WORKING-MODEL.md` §5, and the `/build` rejection above must not be read as
+withdrawing it — the two govern different mechanisms. *Reconciled by XL-73.*
 
 ## The standing risk
 
