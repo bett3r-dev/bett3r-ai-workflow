@@ -1530,6 +1530,119 @@ dm validate "$TMP/xl67/folded.json"
 check 'the --final map is still valid' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
 
 # ---------------------------------------------------------------------------
+# XL-70 — `record`: the payloads for every answered fork, derived from the map
+# alone, and the fork-id-keyed sidecar that is the one home for the id a
+# recorder hands back.
+# ---------------------------------------------------------------------------
+# F1: argument derivation lives in this script, not in command prose, so the
+# whole mapping is testable with no recorder reachable and no network call —
+# `record` emits payloads as data and posts nothing. F3: the returned id is
+# written to a sidecar keyed by fork id BESIDE the map, and `map.json` itself
+# never carries it (the fork object is additionalProperties:false and the
+# vocabulary copy is byte-identical to what esas emits). The sidecar is named
+# after its own map, not `resolved-by.json` flat, because a run dir holds one
+# map per subject in a single directory and a flat name would cross-bind them.
+printf '\nXL-70: record emits one payload per answered fork and names the sidecar\n'
+
+mkdir -p "$TMP/xl70"
+# x70map <name> <python statements over m> — a mutated copy of answers-map.json.
+x70map(){
+  python3 - "$FIX/answers-map.json" "$TMP/xl70/$1.json" "$2" <<'PY'
+import json, sys
+m = json.load(open(sys.argv[1]))
+exec(sys.argv[3])
+with open(sys.argv[2], "w") as fh:
+    json.dump(m, fh, indent=2)
+PY
+}
+# x70field <out-file> <fork id> <field> — one field of one payload, or `none`.
+# Reads the JSON that precedes the verdict line, so a payload that does not
+# parse is a failure here rather than a surprise in a session.
+x70field(){
+  python3 -c '
+import json, sys
+text = open(sys.argv[1]).read()
+body = text[: text.rindex("DESIGN-MAP:v1")]
+hit = [p for p in json.loads(body) if p["forkKey"] == sys.argv[2]]
+v = hit[0].get(sys.argv[3], "none") if hit else "none"
+print(v if isinstance(v, str) else json.dumps(v))' "$1" "$2" "$3" 2>&1
+}
+
+x70map mixed 'm["forks"][0]["status"] = {"kind": "decided", "source": "owner", "option": "A"}
+m["forks"][1]["status"] = {"kind": "decided", "source": "code", "option": "B", "resolvedBy": "atom:teselly-000412-03"}
+m["forks"][2]["status"] = {"kind": "open", "reason": "store-unreachable"}'
+dm record "$TMP/xl70/mixed.json"
+check 'record over a mixed map: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+check 'record: verb' "$( attr "$LINE" verb )" record "$LINE"
+check 'record: every fork is counted once' "$( attr "$LINE" forks )" 6 "$LINE"
+check 'record: one payload per answered fork, none for open or moot' "$( attr "$LINE" payloads )" 4 "$LINE"
+check 'record: the owner answers are counted apart' "$( attr "$LINE" owner )" 1 "$LINE"
+check 'record: the code auto-resolutions are counted apart' "$( attr "$LINE" code )" 1 "$LINE"
+check 'record: applied-on-recommendation is counted apart' "$( attr "$LINE" recommendation )" 2 "$LINE"
+check 'record: open and moot are unresolved, and get no payload' "$( attr "$LINE" unresolved )" 2 "$LINE"
+check 'record: nothing was already recorded' "$( attr "$LINE" already )" 0 "$LINE"
+check 'record: the sidecar is named after its own map, beside it' \
+  "$( attr "$LINE" sidecar )" "$TMP/xl70/mixed.resolved-by.json" "$LINE"
+
+# The payload is derived from the map and from nothing else. `chosen` is the
+# map's own `status.option` — the join AC clause 1 is written against — and the
+# label rides alongside rather than in its place, because a label is prose that
+# reflows and an option id is the key.
+check 'payload: chosen is the map status.option, not the label' \
+  "$( x70field "$OUT" ESAS-1-F1 chosen )" A "$( cat "$OUT" )"
+check 'payload: the label rides alongside the id' \
+  "$( x70field "$OUT" ESAS-1-F1 chosenLabel )" 'Option A'
+check 'payload: forkKey is the map fork id, the join key' \
+  "$( x70field "$OUT" ESAS-1-F2 forkKey )" ESAS-1-F2
+check 'payload: question is the fork title' \
+  "$( x70field "$OUT" ESAS-1-F1 question )" 'Fork 1: which option?'
+check 'payload: options are every option label the owner chose among' \
+  "$( x70field "$OUT" ESAS-1-F1 options )" '["Option A", "Option B"]'
+check 'payload: rationale is the card recommendation why' \
+  "$( x70field "$OUT" ESAS-1-F1 rationale )" 'B is the smaller change.'
+check 'payload: source is carried so a recorder need not re-derive it' \
+  "$( x70field "$OUT" ESAS-1-F2 source )" code
+check 'payload: the tickets the fork carries' \
+  "$( x70field "$OUT" ESAS-1-F1 tickets )" '["ESAS-1"]'
+check 'payload: an open fork gets none' "$( x70field "$OUT" ESAS-1-F3 chosen )" none
+check 'payload: a moot fork gets none' "$( x70field "$OUT" ESAS-1-F5 chosen )" none
+
+# The sidecar is READ, never written, by this verb: a fork whose id it already
+# carries was recorded on an earlier pass and is not offered again. Re-running
+# Step 3 after answering two more forks must not post the first ones twice.
+printf '{\n  "ESAS-1-F1": "opaque:id-one",\n  "ESAS-1-F4": "opaque:id-four"\n}\n' \
+  > "$TMP/xl70/mixed.resolved-by.json"
+dm record "$TMP/xl70/mixed.json"
+check 'record with a sidecar: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+check 'record: a fork already in the sidecar is not offered again' "$( attr "$LINE" payloads )" 2 "$LINE"
+check 'record: and it is counted as already recorded' "$( attr "$LINE" already )" 2 "$LINE"
+check 'record: the fork already recorded has no payload' "$( x70field "$OUT" ESAS-1-F1 chosen )" none
+check 'record: the fork not yet recorded still has one' "$( x70field "$OUT" ESAS-1-F2 chosen )" B
+check 'record never writes the sidecar itself' \
+  "$( python3 -c 'import json,sys; print(",".join(sorted(json.load(open(sys.argv[1])))))' "$TMP/xl70/mixed.resolved-by.json" )" \
+  'ESAS-1-F1,ESAS-1-F4'
+
+# The map is never touched — the id has one home and it is not the map.
+cp "$TMP/xl70/mixed.json" "$TMP/xl70/mixed.before.json"
+dm record "$TMP/xl70/mixed.json"
+if cmp -s "$TMP/xl70/mixed.before.json" "$TMP/xl70/mixed.json"; then
+  pass 'record leaves the map byte-identical: the id never lands in map.json'
+else
+  fail 'record leaves the map byte-identical' 'the map changed'
+fi
+
+# Refusals. An invalid map is refused before any payload is derived, and a
+# sidecar that does not parse is an error rather than a silent "nothing is
+# recorded yet" — which would re-post every answer in the map.
+expect_error 'record with no map' missing-map record
+expect_error 'record over a path that is not there' map-unreadable record "$TMP/xl70/nope.json"
+x70map bad-status 'm["forks"][0]["status"] = {"kind": "decided", "source": "owner"}'
+expect_error 'record over a map that does not validate' schema-invalid record "$TMP/xl70/bad-status.json"
+x70map sidecar 'm["forks"][0]["status"] = {"kind": "decided", "source": "owner", "option": "A"}'
+printf 'not json\n' > "$TMP/xl70/sidecar.resolved-by.json"
+expect_error 'record over an unparseable sidecar' sidecar-unparseable record "$TMP/xl70/sidecar.json"
+
+# ---------------------------------------------------------------------------
 # skills/design-map/SKILL.md — presence oracle, in the style of
 # scripts/test-esas-design.sh (assert_md/refute_md). This is prose, not a
 # script: it catches deletion, not wrongness, as the design's own test-seams

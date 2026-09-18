@@ -311,6 +311,44 @@ See [`map-structure.schema.json`](./map-structure.schema.json) for the full
 payload shape and [`map.schema.json`](./map.schema.json) for the vocabulary it
 refers to.
 
+## Record — the payloads for an answered fork (XL-70)
+
+```
+design-map record <map.json>
+```
+
+`record` is pure over files, like `apply-answers`: no network call, no
+subprocess, no tool of its own. It prints, before the verdict line, a JSON
+array of one payload per fork the map says is **answered** — every fork with a
+`decided` status, in map order — each carrying `forkKey` (the fork's own map
+id, the join key), `question` (its title), `options` (every option label),
+`chosen` (the map's `status.option`: the option **id**, not its label),
+`chosenLabel`, `rationale` (the card's `recommendation.why`), `source` and
+`tickets`. The whole derivation is therefore testable with nothing reachable,
+and no caller retypes a fork id or an option from a transcript.
+
+An `open` or `moot` fork counts in `unresolved=` and gets no payload: nothing
+has been answered to record. A decided fork with no card counts in `nocard=`
+and gets none either — its options and rationale live on the card, and a
+payload missing them is a different claim, not a smaller one.
+
+`sidecar=` names where the id a recorder hands back is written:
+`<map path without its .json>.resolved-by.json`, beside the map, a JSON object
+keyed by fork id, committed with the map. **Beside, not inside:** the fork
+object is closed (`additionalProperties: false`), as is every `status` branch,
+and the status kind refs the byte-identical copy of esas's vocabulary — so an
+id in the map would be a cross-repo vocabulary change, not a field addition. **Named after its own map**, not a flat
+`resolved-by.json`, because a run dir holds one map per subject in one
+directory. That file is the id's one home. It is distinct from `resolvedBy` on
+a fork's status, which carries what **settled** the fork; an id handed back by
+a recorder says only where the answer was filed.
+
+`record` **reads** the sidecar and never writes it: a fork whose id it already
+holds counts in `already=` and is not offered again, so re-running the step
+after a later batch of answers cannot post an earlier one twice. A sidecar that
+does not parse is `reason=sidecar-unparseable` — never an empty start, which
+would re-offer every answer in the map.
+
 ## Count and drift (ESAS-162)
 
 ```

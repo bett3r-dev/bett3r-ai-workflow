@@ -120,6 +120,15 @@ around a non-constraint reads exactly like one shaped around a real one.
    the map, not the draft prose, is what survives regeneration (ADR-007). A
    fork grounding could not settle stays open with its `reason`
    (`store-unreachable`, `no-atoms-matched`, `only-pending`).
+   Then offer each auto-resolution back the way `/design` Step 3 does — `design-map
+   record` over this unit's map, one declared call per payload it prints, the
+   returned id into the `sidecar=` the verdict names and never into `map.json` —
+   and offer it **as this lane's own resolution, never as the owner's**. A lane
+   passes nothing that asserts which of the two it is: that is read from the
+   worktree the provisioner marked, by the one process the call goes to, and a
+   lane that could claim otherwise could sign its own guesses as the owner's
+   answers. A call that refuses or is unreachable is one line in the draft naming
+   the fork it did not record, and the lane continues.
 
 4. **Emit** the draft to `<run>/units/<id>.design-draft.md` and update
    `<id>.state.yaml`. Shape: `/design`'s doc (problem · resolved decision tree
