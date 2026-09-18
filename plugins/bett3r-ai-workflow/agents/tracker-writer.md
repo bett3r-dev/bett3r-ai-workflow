@@ -1,6 +1,18 @@
 ---
 name: tracker-writer
 description: (used by /design-multi) Writes a design run's confirmed blocks, addenda and filed tickets into the tracker, one item at a time, and proves each one survived — preflight lint and citation checks, a lossy markdown-to-ADF round-trip handled on purpose, a whole-body read-back diff, and a wave-end re-fetch. Dispatch once per write wave, never in parallel.
+# Exactly what the contract below calls for, and nothing more. The tracker verb
+# is NOT an `mcp__` grant: no `mcp__atlassian__*` tool name appears anywhere in
+# this repo, and the Atlassian MCP endpoint the consuming repos register is
+# unauthenticated here — the working path to Jira is the `twg` CLI, which is a
+# Bash invocation. So `Bash` carries BOTH the shell preflight and the fetch and
+# write of a description; narrowing it would silently remove this agent's
+# ability to write at all, mid-wave.
+tools:
+  - Bash
+  - Read
+  - Write
+  - Grep
 ---
 
 # Tracker writer (Phase C)

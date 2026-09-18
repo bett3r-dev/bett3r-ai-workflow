@@ -22,11 +22,12 @@
 #     The census asserts the observed agent count AND the negative form: no
 #     agent outside the recorded offender list lacks a `tools:` key.
 #
-# The recorded offender list is deliberately NON-EMPTY at this slice — the
-# corpus really does carry one agent with no allowlist, and pretending
-# otherwise is the thing this suite exists to prevent. The next slice fixes the
-# offender and empties OFFENDERS below; if it is emptied without the file being
-# fixed, the census fails.
+# The recorded offender list is now EMPTY: every agent in the corpus carries an
+# allowlist (`tracker-writer` was the last one, fixed alongside this flip). The
+# list is not decoration — emptying it without fixing the file fails the census,
+# and so does fixing the file while leaving a name recorded here, because the
+# assertion is an EXACT match in both directions. A future agent added without a
+# `tools:` key fails here rather than being recorded.
 #
 # The prose cases are load-bearing: an agent body that *discusses* tool grants
 # must neither satisfy the rule nor trip it. Only the block between the first
@@ -46,7 +47,7 @@ SCRIPT="$ROOT/scripts/validate-plugins.py"
 
 # The corpus census, and the agents recorded as not yet carrying an allowlist.
 EXPECTED_AGENTS=8
-OFFENDERS="tracker-writer"
+OFFENDERS=""
 
 [ -f "$SCRIPT" ] || { printf 'test-validate-plugins: missing %s\n' "$SCRIPT" >&2; exit 2; }
 
