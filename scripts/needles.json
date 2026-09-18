@@ -974,6 +974,62 @@
       "commit": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
       "note": "Every main-tree slice records modeReason: TV2-21's pool sized width 4 and every slice ran sequentially with nothing saying why."
+    },
+    {
+      "needle": "Only a contribution the provider marks canonical may settle a fork",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
+      "note": "XL-67 D3: a pending, backfilled or text-only contribution is a candidate that OPENS a fork and never closes one; only one the provider marks canonical can be cited as what settled it."
+    },
+    {
+      "needle": "a `contextProviders` key",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/CONTEXT-PROVIDERS.md",
+      "note": "XL-67 F4: a context provider is declared by the host repo in .claude/bett3r-ai-workflow.json. Tool presence is a sniff, not a declaration, and a capture marker cannot say whether a repo wants design-time grounding."
+    },
+    {
+      "needle": "a claim about the corpus where all you have is an outage",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
+      "note": "XL-67 D9/F2: a provider that refuses or times out degrades to one `grounding degraded:` note and the fork stays open with a reason. An outage and an empty corpus are different facts and are never conflated."
+    },
+    {
+      "needle": "a citation that lives only in the draft is destroyed by the next regeneration",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
+      "note": "XL-67 F1: the citation for what settled a fork rides on the fork's map status under resolvedBy, not in prose, because ADR-007 makes regenerated decision text a projection of the map."
+    },
+    {
+      "needle": "that id has one home: the sidecar the verdict names",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
+      "note": "XL-70 F3: the id a recorder hands back for an answered fork lives in the fork-id-keyed sidecar beside map.json and nowhere else. map.json itself never carries it — the fork status is additionalProperties:false and refs the byte-identical copy of esas's vocabulary, so an id in the map is a cross-repo vocabulary change."
+    },
+    {
+      "needle": "`record` is pure over files",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/skills/design-map/SKILL.md",
+      "note": "XL-70 F1: argument derivation lives in design-map, not in command prose, so every field of the payload is testable with nothing reachable. The verb posts nothing; the caller makes the declared call."
+    },
+    {
+      "needle": "Never probe whether the provider is up before calling",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
+      "note": "XL-70 F4, dissolved on ADR-053's Principle: a rule an agent must follow across commands belongs in the one process every command calls, as a typed refusal — never restated as a health check in each command's prompt. The command degrades on RECEIVING a refusal."
+    },
+    {
+      "needle": "as this lane's own resolution, never as the owner's",
+      "issue": null,
+      "commit": null,
+      "was_in": "plugins/bett3r-ai-workflow/agents/design-lane.md",
+      "note": "XL-70 R1: a lane passes nothing asserting whether it is attended — that is derived from the marked worktree by the process the call goes to. A lane that could claim otherwise could sign its own guesses as the owner's answers."
     }
   ]
 }

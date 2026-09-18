@@ -12,6 +12,7 @@
     DESIGN-MAP:v1 outcome=fail verb=check-plan reason=candidate-in-oracle slice=<id>
     DESIGN-MAP:v1 outcome=ok verb=project ticket=<K> forks=<n> nodes=<n>
     DESIGN-MAP:v1 outcome=ok verb=decisions open=<n> owner=<n> recommendation=<n> code=<n> moot=<n>
+    DESIGN-MAP:v1 outcome=ok verb=record forks=<n> payloads=<n> owner=<n> recommendation=<n> code=<n> unresolved=<n> nocard=<n> already=<n> sidecar=<path>
     DESIGN-MAP:v1 outcome=fail verb=decisions reason=open-forks open=<n> owner=<n> ...
     DESIGN-MAP:v1 outcome=ok verb=count forks=<n> owner=<n> code=<n> recommendation=<n> open=<n> moot=<n>
     DESIGN-MAP:v1 outcome=ok verb=count map=none                          (--line, no map file)
@@ -39,6 +40,7 @@ Usage:
   design-map render --stack <m1> <m2>... --expect <n1> <n2>... --out <page.html>
   design-map project --ticket <K> <map.json>...   (the map, then the verdict, on stdout)
   design-map decisions <map.json> [--closed]
+  design-map record <map.json>         (the payloads, then the verdict, on stdout)
   design-map count <map.json> [--lane <lane.yaml>] [--line]
   design-map drift <map.json> (--feed-seq <n> | --no-feed)
   design-map select --phase probe|start --captures <dir> [--map <map.json>] [--lane <lane.yaml>]
@@ -253,6 +255,36 @@ carrying that ticket: `- <id> <title>: owner — <option> (<label>)`, `applied
 on recommendation — ...`, `code — ...`, `moot — <reason>` or `open`. The
 verdict counts each fork once. With --closed, open > 0 is outcome=fail
 reason=open-forks (exit 1), printed after the Markdown.
+
+`record <map>` (XL-70 F1) prints, before the verdict, the JSON array of
+payloads for every fork the map says is answered — one object per fork with a
+`decided` status, in map order, each carrying `forkKey` (the fork's own map id,
+which is the join key), `question` (its title), `options` (every option label),
+`chosen` (the map's `status.option`, the id and not the label), `chosenLabel`,
+`rationale` (the card's `recommendation.why`), `source` and `tickets`. It is
+pure over files, like `apply-answers`: no network call, no subprocess, no tool
+of its own. Whoever hands the payload to a recorder is the caller; this verb
+only derives what would be said, which is what makes the whole derivation
+testable with nothing reachable.
+
+An `open` or `moot` fork is `unresolved=` and gets no payload — nothing has been
+answered to record. A decided fork with no card is `nocard=` and gets none
+either: its options and rationale live on the card, and a payload missing them
+is not a smaller payload but a different claim.
+
+The `sidecar=` the verdict names is where the id a recorder hands back is
+written: `<map path without its .json>.resolved-by.json`, beside the map, a
+JSON object keyed by fork id. Beside rather than inside because the fork object
+is closed (`additionalProperties: false`), as is every `status` branch, and the
+status kind refs the byte-identical copy of what esas emits, so the id would be
+a cross-repo vocabulary change and not a field addition; named after its own map rather than a flat
+`resolved-by.json` because a run dir holds one map per subject in a single
+directory. That file is the id's ONE home: it is never written into the map.
+`record` READS it and writes nothing — a fork whose id it already carries is
+`already=` and is not offered a second time, so re-running the step after two
+more answers cannot post the earlier ones twice. A sidecar that does not parse
+is `reason=sidecar-unparseable`, never an empty start, which would re-offer
+every answer in the map.
 
 `count <map>` (ESAS-162 D4) counts the forks by status as `decisions` does,
 and validates the map first. With --line it prints, before the verdict, the
@@ -1110,7 +1142,17 @@ def fold(payload, answers, final):
         if fork["status"]["kind"] == "moot" or answer is None:
             continue
         if answer["pick"] is not None:
-            fork["status"] = {"kind": "decided", "source": "owner", "option": answer["pick"]}
+            # The status is replaced whole, so any sibling key on it is dropped
+            # here unless it is carried across deliberately. `resolvedBy` — the
+            # citation for what settled the fork — survives only where the owner
+            # CONFIRMS the option that was already decided: an owner who picks a
+            # different option has overturned whatever settled it, and keeping
+            # the citation would credit a source that never said this.
+            prior = fork["status"]
+            status = {"kind": "decided", "source": "owner", "option": answer["pick"]}
+            if prior.get("option") == answer["pick"] and "resolvedBy" in prior:
+                status["resolvedBy"] = prior["resolvedBy"]
+            fork["status"] = status
         if answer["comment"]:
             comments.append((fork, answer["comment"]))
     commented = [f["id"] for f, _ in comments if f["status"]["kind"] == "open"]
@@ -1413,6 +1455,73 @@ def lane_lost(path):
         raise Refusal("lane-unreadable")
 
 
+def sidecar_path(map_path):
+    """`<map>.json` -> `<map>.resolved-by.json`, beside it. Named after its own
+    map because a run dir holds one map per subject in one directory."""
+    base = map_path[:-5] if map_path.endswith(".json") else map_path
+    return base + ".resolved-by.json"
+
+
+def read_sidecar(path):
+    """The fork ids already recorded. Absent is the empty set — nothing has been
+    recorded yet. Unreadable or unparseable is a REFUSAL: treating either as
+    empty would re-offer every answer the map holds."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+    except FileNotFoundError:
+        return set()
+    except (OSError, UnicodeDecodeError):
+        raise Refusal("sidecar-unreadable")
+    try:
+        loaded = json.loads(text)
+    except ValueError:
+        raise Refusal("sidecar-unparseable")
+    if not isinstance(loaded, dict):
+        raise Refusal("sidecar-unparseable")
+    return set(loaded)
+
+
+def record(positional, flags):
+    if not positional:
+        raise Refusal("missing-map")
+    map_path = positional[0]
+    payload = load_map(map_path)
+    validate(payload)
+    side = sidecar_path(map_path)
+    recorded = read_sidecar(side)
+    counts = dict(forks=len(payload["forks"]), payloads=0, owner=0, recommendation=0,
+                  code=0, unresolved=0, nocard=0, already=0)
+    items = []
+    for fork in payload["forks"]:
+        status = fork["status"]
+        if status["kind"] != "decided":
+            counts["unresolved"] += 1
+            continue
+        card = fork.get("card")
+        if card is None:
+            counts["nocard"] += 1
+            continue
+        if fork["id"] in recorded:
+            counts["already"] += 1
+            continue
+        counts[status["source"]] += 1
+        counts["payloads"] += 1
+        items.append({
+            "forkKey": fork["id"],
+            "question": fork["title"],
+            "options": [o["label"] for o in card["options"]],
+            "chosen": status["option"],
+            "chosenLabel": next(o["label"] for o in card["options"] if o["id"] == status["option"]),
+            "rationale": card["recommendation"]["why"],
+            "source": status["source"],
+            "tickets": list(fork["tickets"]),
+        })
+    sys.stdout.write(json.dumps(items, indent=2) + "\n")
+    counts["sidecar"] = side
+    return counts
+
+
 def count(positional, flags):
     if not positional:
         raise Refusal("missing-map")
@@ -1624,14 +1733,14 @@ def post(positional, flags):
 
 VERBS = {"validate": validate_map, "write": write, "render": render, "check-page": check,
          "apply-answers": apply_answers, "candidates": candidates, "check-plan": check_plan,
-         "project": project, "decisions": decisions, "count": count, "drift": drift,
+         "project": project, "decisions": decisions, "record": record, "count": count, "drift": drift,
          "select": select, "post": post}
 # The flags each verb takes; any other parsed flag is reason=unknown-flag-<name>.
 # `candidates` and `check-plan` take positional arguments only, so `--map`
 # (the wording ESAS-165's block used) is refused as unknown-flag-map.
 FLAGS = {"validate": (), "write": (), "render": ("expect", "out", "stack"), "check-page": ("expect",),
          "apply-answers": ("final",), "candidates": (), "check-plan": (), "project": ("ticket",),
-         "decisions": ("closed",), "count": ("lane", "line"), "drift": ("feed-seq", "no-feed"),
+         "decisions": ("closed",), "record": (), "count": ("lane", "line"), "drift": ("feed-seq", "no-feed"),
          "select": ("phase", "captures", "map", "lane"), "post": ("expect", "map", "readback")}
 
 
