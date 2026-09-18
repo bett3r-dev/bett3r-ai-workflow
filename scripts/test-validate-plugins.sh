@@ -290,6 +290,31 @@ run "$d"
 if [ "$rc" -eq 0 ]; then ok "commands and skills are not required to declare \`tools:\`"
 else fail "commands and skills are not required to declare \`tools:\` — expected 0, got $rc"; fi
 
+# --- 7b. an agent NESTED under agents/ is refused, not silently ignored ---
+# The rule reaches `agents/*.md`, because that is what Claude Code registers.
+# That scope is correct but silent: a file one directory deeper is neither
+# loaded nor checked for an allowlist, so a missing `tools:` there would fail
+# OPEN — the same absence-shaped failure this whole suite exists to catch.
+# The boundary is therefore asserted rather than assumed.
+d=$( mktree nested_agent ); add_agent "$d" scribe 'tools: Read'
+mkdir -p "$d/plugins/alpha/agents/archive"
+printf -- '---\ndescription: an agent hidden one level down\n---\nbody\n' \
+  > "$d/plugins/alpha/agents/archive/buried.md"
+run "$d"
+if [ "$rc" -ne 0 ] && grep -q 'archive/buried.md' "$TMP/err"; then
+  ok "markdown nested under agents/ is refused and named, not silently unchecked"
+else
+  fail "markdown nested under agents/ is refused and named — rc=$rc"
+fi
+
+# --- 7c. negative control: a flat agents/ dir is untouched by 7b ----------
+# The nesting rule must not fire on the ordinary shape, or every clean tree
+# above would be failing for the wrong reason.
+d=$( mktree flat_agent ); add_agent "$d" scribe 'tools: Read'; add_agent "$d" herald 'tools: Read'
+run "$d"
+if [ "$rc" -eq 0 ]; then ok "a flat agents/ directory does not trip the nesting rule"
+else fail "a flat agents/ directory does not trip the nesting rule — expected 0, got $rc"; fi
+
 # --- 8. the pre-existing checks still fire --------------------------------
 # The new rule must not displace what the script already refused. An agent
 # WITH an allowlist and no description is still a failure, and the ✓ summary

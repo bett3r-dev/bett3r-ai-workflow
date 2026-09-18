@@ -70,6 +70,32 @@ def entrypoints(plugin_dir: pathlib.Path):
     yield from sorted((plugin_dir / "skills").glob("*/SKILL.md"))
 
 
+def check_agents_dir_is_flat(plugin_dir: pathlib.Path) -> None:
+    """The `tools:` rule reaches exactly `agents/*.md`, because that is what
+    Claude Code registers. That scope is deliberate, but it is SILENT: an agent
+    added one directory deeper is neither registered nor checked, and nothing
+    says so. Make the boundary loud instead of leaving it to be discovered.
+
+    Note what this rule does NOT cover, and cannot: the BUILT-IN agent types
+    (`general-purpose`, `claude`) carry `*` — every tool, including any mcp
+    write verb — and are not files in this repo at all. An agent that declares
+    `Agent` can dispatch them. See ADR-066 in bett3r-xp-layer: the tool grant
+    and the lane marker are two mechanisms covering two different paths, and
+    the built-in types sit outside both.
+    """
+    agents = plugin_dir / "agents"
+    if not agents.is_dir():
+        return
+    for nested in sorted(agents.rglob("*.md")):
+        if nested.parent != agents:
+            errors.append(
+                f"{rel(nested)}: markdown under `agents/` but not directly in it. "
+                f"Claude Code registers `agents/*.md` only, so this file is never "
+                f"loaded AND never checked for a `tools:` allowlist. Move it to "
+                f"`agents/{nested.name}`, or out of `agents/` if it is a support doc."
+            )
+
+
 def check_frontmatter(path: pathlib.Path) -> None:
     global checked
     checked += 1
@@ -230,6 +256,7 @@ def main() -> int:
 
     for plugin_dir in sorted(p for p in PLUGINS.iterdir() if p.is_dir()):
         check_manifest(plugin_dir / ".claude-plugin" / "plugin.json", ["name", "version", "description"])
+        check_agents_dir_is_flat(plugin_dir)
         for f in entrypoints(plugin_dir):
             check_frontmatter(f)
 
