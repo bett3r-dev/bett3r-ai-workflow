@@ -396,8 +396,8 @@ check(not dep_bad,
       " || ".join(dep_bad))
 
 # Every path that merges a unit head re-rules that exact head.
-step2_text = section("2 — Merge into integration", "3 — Run the full gate")
-step3_text = section("3 — Run the full gate", "4 — Collect the closing keywords")
+step2_text = section("2 — Merge into integration", "3 — Run the gate")
+step3_text = section("3 — Run the gate", "4 — Collect the closing keywords")
 # CLOSED SETS. Keyword heuristics admit rewrites that undo a rule ("Its
 # children land regardless." names no forbidden word), so each rule-bearing
 # family of sentences is compared, as a set, with an exact pinned list, using
@@ -551,7 +551,7 @@ def closed_sections(label, found, pinned):
     check(not notes, label, " || ".join(notes))
 
 PINNED_FILE = [
-    ["(preamble)", "FRONTMATTER: description: Land a finished fleet — merge each reviewed unit PR into the run's integration branch (conflicts resolved once), run the full gate there, and open the single integration PR to the default branch."],
+    ["(preamble)", "FRONTMATTER: description: Land a finished fleet — merge each reviewed unit PR into the run's integration branch (conflicts resolved once), run the gate there, scoped to the fleet's combined diff, and open the single integration PR to the default branch."],
     ["/merge-multi — land the fleet", "# /merge-multi — land the fleet"],
     ["/merge-multi — land the fleet", "`/start-multi` ends with N reviewable PRs open against the run's integration branch `int/<run-id>`, and nothing merged."],
     ["/merge-multi — land the fleet", "You review them at your own pace."],
@@ -575,9 +575,10 @@ PINNED_FILE = [
     ["Why an integration branch at all", "- Conflicts are resolved once."],
     ["Why an integration branch at all", "Inter-unit conflicts surface when units merge into integration, and are resolved *there*, as merge commits."],
     ["Why an integration branch at all", "Merging the units individually into the default branch instead would resolve the same conflicts a second time, against a moving target."],
-    ["Why an integration branch at all", "- The full gate runs once."],
-    ["Why an integration branch at all", "Cross-unit breakage exists only on the assembled tree, so no per-unit gate can see it — and running the full gate N times to look for something structurally invisible to it is the fleet's most wasteful step."],
-    ["Why an integration branch at all", "Units run `--fast`; integration runs `--full`."],
+    ["Why an integration branch at all", "- The gate runs once, and scoped."],
+    ["Why an integration branch at all", "Cross-unit breakage exists only on the assembled tree, so no per-unit gate can see it — and running a gate N times to look for something structurally invisible to it is the fleet's most wasteful step."],
+    ["Why an integration branch at all", "Units run `--fast`; integration runs the repo's scoped mode over the fleet's combined diff."],
+    ["Why an integration branch at all", "The whole-repo `--full` run is CI's, or the user's on request — never a flow step's."],
     ["Steps", "## Steps"],
     ["1 — Inventory. Report; do not act.", "FENCE[sh]: gh pr view <n> --json number,title,state,baseRefName,headRefName,headRefOid,mergeable,mergeStateStatus,reviewDecision"],
     ["1 — Inventory. Report; do not act.", "1 — Inventory."],
@@ -651,18 +652,21 @@ PINNED_FILE = [
     ["2 — Merge into integration, in dependency order.", "`/design-multi` Phase B's cross-cutting policies are not restated there: each unit's committed `design.md` already carries its resolved design."],
     ["2 — Merge into integration, in dependency order.", "If `work-docs-path --item <run-id>` refuses (a hand-made run id, or one built from a unit id `work-docs-path` cannot carry, such as a Jira key with an underscore), write no run-level `decisions.md` entry: put its `WORK-DOCS-PATH:v1` verdict line in the integration PR body under *Conflict resolutions* instead, and continue merging."],
     ["2 — Merge into integration, in dependency order.", "`/merge-multi` is the file's single writer, allocating each `## D<n> — <title>` id the way `commands/build.md`'s *The committed record* does (one more than the highest id already in the file, read at the moment of the append) and never editing or removing an entry it did not just write, using the exact header grammar `concerns-check`'s docstring quotes back from `build.md`:"],
-    ["3 — Run the full gate, once, on integration.", "3 — Run the full gate, once, on integration."],
-    ["3 — Run the full gate, once, on integration.", "Per the [full-gate](../skills/full-gate/SKILL.md) skill: `node .claude/gate.mjs --full` (or the repo's `.claude/gate.sh`) on `int/<run-id>`, verdict read from the `GATE-STEP:` lines and baseline-diffed against the default branch."],
-    ["3 — Run the full gate, once, on integration.", "Read that skill for the discovery order and the four ways a green read is wrong; do not re-derive them here."],
-    ["3 — Run the full gate, once, on integration.", "They are all [EVIDENCE.md](../EVIDENCE.md) §1 — *a verdict is evidence only about what it actually executed* — and this is the one run in the whole fleet that certifies the assembled tree, so a misread here is unbacked by anything downstream."],
-    ["3 — Run the full gate, once, on integration.", "The integration branch is where the fleet's single version bump happens: bump each touched plugin's `plugin.json` once on `int/<run-id>` before the gate; the version-bump step MUST read `PASS` there."],
-    ["3 — Run the full gate, once, on integration.", "A `SKIP reason=deferred-to-merge-multi` on integration is refused as red — integration carries no `.work/lane.yaml`, so the gate `FAIL`s a missing bump by construction, and a `SKIP` there means a stale lane brief leaked into the integration checkout; remove it and re-run, never open the integration PR over it."],
-    ["3 — Run the full gate, once, on integration.", "The verdict names the ref it ran at and therefore which units it covers — the assembled tree covers every merged unit; a unit excluded with `--only` is not covered and is named as such."],
-    ["3 — Run the full gate, once, on integration.", "A red gate is fixed on integration, not deferred."],
-    ["3 — Run the full gate, once, on integration.", "If a failure traces cleanly to one unit and the fix is more than a line, push the fix to that unit's branch and re-merge — that keeps the unit PR an honest record of its own work."],
-    ["3 — Run the full gate, once, on integration.", "A fix pushed to a unit branch changes its head: re-run Step 1b at the new head sha before re-merging, and refuse on anything but `outcome=pass`."],
-    ["3 — Run the full gate, once, on integration.", "Otherwise fix on integration and name the unit in the commit message."],
-    ["3 — Run the full gate, once, on integration.", "Do not open the integration PR over a red gate; an integration branch that looks landed and is red is the worst state this flow can produce, because the fleet is torn down and nobody owns it."],
+    ["3 — Run the gate, once, on integration.", "3 — Run the gate, once, on integration."],
+    ["3 — Run the gate, once, on integration.", "Per the [full-gate](../skills/full-gate/SKILL.md) skill: `node .claude/gate.mjs` with no argument — the repo's scoped mode — (or the repo's `.claude/gate.sh`) on `int/<run-id>`, verdict read from the `GATE-STEP:` lines and baseline-diffed against the default branch."],
+    ["3 — Run the gate, once, on integration.", "Never `--full` or `--all`: the whole-repo run is the CI pipeline's, or the user's on request, and no flow step selects it."],
+    ["3 — Run the gate, once, on integration.", "Scoped here is not thin — the integration branch's diff against the default branch is the *union of every unit's diff*, so the scoping selects everything the fleet touched and nothing it did not."],
+    ["3 — Run the gate, once, on integration.", "Read that skill for the discovery order and the four ways a green read is wrong; do not re-derive them here."],
+    ["3 — Run the gate, once, on integration.", "They are all [EVIDENCE.md](../EVIDENCE.md) §1 — *a verdict is evidence only about what it actually executed* — and this is the one run in the whole fleet that exercises the assembled tree, so a misread here is unbacked by anything downstream."],
+    ["3 — Run the gate, once, on integration.", "Report it for what it is: it certifies the fleet's combined diff and its importers, not the whole repository."],
+    ["3 — Run the gate, once, on integration.", "The integration branch is where the fleet's single version bump happens: bump each touched plugin's `plugin.json` once on `int/<run-id>` before the gate; the version-bump step MUST read `PASS` there."],
+    ["3 — Run the gate, once, on integration.", "A `SKIP reason=deferred-to-merge-multi` on integration is refused as red — integration carries no `.work/lane.yaml`, so the gate `FAIL`s a missing bump by construction, and a `SKIP` there means a stale lane brief leaked into the integration checkout; remove it and re-run, never open the integration PR over it."],
+    ["3 — Run the gate, once, on integration.", "The verdict names the ref it ran at and therefore which units it covers — the assembled tree covers every merged unit; a unit excluded with `--only` is not covered and is named as such."],
+    ["3 — Run the gate, once, on integration.", "A red gate is fixed on integration, not deferred."],
+    ["3 — Run the gate, once, on integration.", "If a failure traces cleanly to one unit and the fix is more than a line, push the fix to that unit's branch and re-merge — that keeps the unit PR an honest record of its own work."],
+    ["3 — Run the gate, once, on integration.", "A fix pushed to a unit branch changes its head: re-run Step 1b at the new head sha before re-merging, and refuse on anything but `outcome=pass`."],
+    ["3 — Run the gate, once, on integration.", "Otherwise fix on integration and name the unit in the commit message."],
+    ["3 — Run the gate, once, on integration.", "Do not open the integration PR over a red gate; an integration branch that looks landed and is red is the worst state this flow can produce, because the fleet is torn down and nobody owns it."],
     ["4 — Collect the closing keywords.", "4 — Collect the closing keywords."],
     ["4 — Collect the closing keywords.", "A PR merged into `int/<run-id>` does not close its issues."],
     ["4 — Collect the closing keywords.", "GitHub fires closing keywords only for PRs merged into the repository's default branch."],
@@ -678,7 +682,7 @@ PINNED_FILE = [
     ["4 — Collect the closing keywords.", "The integration branch name is not evidence of scope: it is derived from the requested unit list at cut time and never revised, so it reads as confirmation of a scope the run may not have delivered."],
     ["4 — Collect the closing keywords.", "The epic's goal oracle is reported here, red or green."],
     ["4 — Collect the closing keywords.", "A fleet that lands every unit with the goal oracle still red is a reportable outcome, not a silent success."],
-    ["5 — Open the integration PR.", "FENCE[]: ## Fleet <run-id> — <N> units ⏎ | Unit | PR | ADR | ⏎ |---|---|---| ⏎ | TV1-1001 — <title> | #101 | ADR-0142 | ⏎ | TV1-1002 — <title> | #102 | — | ⏎ ### Conflict resolutions ⏎ - TV1-1004 × TV1-1007 in `src/foo.ts` — kept X, dropped Y, because <reason>. ⏎ - (or \"none\") ⏎ ### Gate ⏎ <the full-gate report block, verbatim — step names, counts, baseline diff, and ⏎ anything reported SKIP / INCONCLUSIVE or excluded from --full by name> ⏎ Closes #56, closes #62, closes #63"],
+    ["5 — Open the integration PR.", "FENCE[]: ## Fleet <run-id> — <N> units ⏎ | Unit | PR | ADR | ⏎ |---|---|---| ⏎ | TV1-1001 — <title> | #101 | ADR-0142 | ⏎ | TV1-1002 — <title> | #102 | — | ⏎ ### Conflict resolutions ⏎ - TV1-1004 × TV1-1007 in `src/foo.ts` — kept X, dropped Y, because <reason>. ⏎ - (or \"none\") ⏎ ### Gate ⏎ <the full-gate report block, verbatim — step names, counts, baseline diff, and ⏎ anything reported SKIP / INCONCLUSIVE, not selected by the scoping, or ⏎ excluded from the repo's widest run, by name> ⏎ Closes #56, closes #62, closes #63"],
     ["5 — Open the integration PR.", "5 — Open the integration PR."],
     ["5 — Open the integration PR.", "`gh pr create --base <default> --head int/<run-id>` — ready for review, not a draft."],
     ["5 — Open the integration PR.", "Then verify its base after the fact; `gh pr create` succeeds silently against the wrong ref."],
@@ -711,8 +715,9 @@ PINNED_FILE = [
     ["Principles", "Any design that resolves the same conflict twice has lost the argument for having it."],
     ["Principles", "- The unit branch is the reviewed artifact."],
     ["Principles", "Resolve into integration; never rebase what a human approved."],
-    ["Principles", "- The gate runs once, where it can see something."],
-    ["Principles", "Cross-unit breakage is invisible per-unit by construction; N full gates buy less than one integration gate and cost N times as much."],
+    ["Principles", "- The gate runs once, where it can see something, and only over what changed."],
+    ["Principles", "Cross-unit breakage is invisible per-unit by construction; N gates buy less than one integration gate and cost N times as much."],
+    ["Principles", "Widening that one run to the whole repo is the user's call, not this command's."],
     ["Principles", "- Merged is not delivered, and merged is not closed."],
     ["Principles", "A wrong-target merge and an inert closing keyword both report success."],
     ["Principles", "Each has an explicit assertion above; run them."],
@@ -930,14 +935,14 @@ mutate_and_expect_bad \
 
 mutate_and_expect_bad \
   '(i) re-adding an epic-id folder branch is caught' \
-  '**3 — Run the full gate' \
-  'Resolve the folder through `work-docs-path --item <epic-id>` when the run has an epic id.\n\n**3 — Run the full gate' \
+  '**3 — Run the gate' \
+  'Resolve the folder through `work-docs-path --item <epic-id>` when the run has an epic id.\n\n**3 — Run the gate' \
   'no epic-id branch and no no-epic gap remain'
 
 mutate_and_expect_bad \
   '(j) re-adding "restate Phase B policies" is caught' \
-  '**3 — Run the full gate' \
-  "Record \`/design-multi\` Phase B's cross-cutting policies there too, restated as entries at merge time.\\n\\n**3 — Run the full gate" \
+  '**3 — Run the gate' \
+  "Record \`/design-multi\` Phase B's cross-cutting policies there too, restated as entries at merge time.\\n\\n**3 — Run the gate" \
   'no sentence has /merge-multi restate /design-multi Phase B policies'
 
 mutate_and_expect_bad \

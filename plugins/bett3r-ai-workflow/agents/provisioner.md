@@ -158,11 +158,11 @@ mapProvenance: <carried|lost>   # carried: the run's projection was copied to do
 
 `sliceBudget` is the lane's **context ceiling, expressed in the one unit a step can actually count.** A step cannot see its own token usage — that is measured afterwards by `run-metrics`, which is too late to act on — so the budget is denominated in committed slices, which are countable from inside and are the only clean resume point `/build` has. Three is the default because the measured failure was a lane that drove nine slices in one context for 66.72M weighted tokens, 89% of it cache read, against 3.26M for the same work restarted fresh at a slice boundary.
 
-`gateDeferred` is the one signal that tells the lane's `/verify-build` it is **not** landing on its own: it runs the host repo's gate in `--fast` mode and leaves the full gate to `/merge-multi`, which runs it once on the integration branch — the only tree where cross-unit breakage exists at all.
+`gateDeferred` is the one signal that tells the lane's `/verify-build` it is **not** landing on its own: it runs the host repo's gate in `--fast` mode and leaves the branch-wide run to `/merge-multi`, which runs it once, scoped to the fleet's combined diff, on the integration branch — the only tree where cross-unit breakage exists at all. No lane, and no step, ever runs `--full`.
 
 `handedDownFacts` carries its labels into the file for the same reason the rest of it is here: a fact remembered as settled, when it was only ever *"verify whether it applies"*, is how a lane skips the check that would have disproved it. `preconditions` carries them too, because a rules file rots like any other claim — one extracted repo's rules said packages export `build/esm/index.js` while every `package.json` at BASE exported `./src/index.ts`, and that went into three briefs as settled (`git show <BASE>:<pkg>/package.json` is the confirming command).
 
-It has to be a **file in the worktree**, not a message. A lane that is `/clear`ed, handed off, or resumed by a fresh agent loses the message and keeps the file — and a step invoked on its own is the limit case, because every step is then a fresh agent with no memory of a dispatch it never saw. The failure mode of losing `gateDeferred` is N full gate runs where one was wanted, which is slow but survivable; the failure mode of a *stale* brief inherited from a previous run is a PR that silently claims a deferral to a fleet that no longer exists. Step 2's archive-and-scrub covers the second — this file is one of the `.work/` artifacts that must not survive into a different run, and `/start` deletes it outright for the same reason.
+It has to be a **file in the worktree**, not a message. A lane that is `/clear`ed, handed off, or resumed by a fresh agent loses the message and keeps the file — and a step invoked on its own is the limit case, because every step is then a fresh agent with no memory of a dispatch it never saw. The failure mode of losing `gateDeferred` is N branch-wide gate runs where one was wanted, which is slow but survivable; the failure mode of a *stale* brief inherited from a previous run is a PR that silently claims a deferral to a fleet that no longer exists. Step 2's archive-and-scrub covers the second — this file is one of the `.work/` artifacts that must not survive into a different run, and `/start` deletes it outright for the same reason.
 
 **One brief file, so one scrub path.** Splitting it in two means two scrub paths, and a scrub that misses one leaves exactly the stale marker above.
 
@@ -170,8 +170,8 @@ It has to be a **file in the worktree**, not a message. A lane that is `/clear`e
 There is deliberately no dual-read for the older per-fleet marker it absorbed (named in ADR-003,
 and deliberately not repeated here — see below): reinstating it would restore
 the two-scrub-paths failure this file exists to close. The cost of not having one is worth naming,
-because both halves fail *quietly* — a lane still holding the old file silently runs `--full` where
-`--fast` was wanted (slow, survivable), and `run-metrics` silently resolves **nothing** rather than
+because both halves fail *quietly* — a lane still holding the old file silently runs the branch-wide
+scoped gate where `--fast` was wanted (slow, survivable), and `run-metrics` silently resolves **nothing** rather than
 erroring, which is the failure `/run-report` already warns about: a fleet unit is not findable by
 branch, by construction. Re-provision the worktree, or rename the file by hand.
 
@@ -181,7 +181,7 @@ Write `.work/known-baseline-failures.md` exactly as `/start` step 4 specifies: t
 
 **The eager capture is withdrawn** (2026-08-24). The argument for it was "paying once here beats N lanes paying in parallel" — but the base side of a baseline diff is only needed when a lane's `HEAD` is **red**, and a fleet's lanes are usually green. Paying once per *worktree* to serve the minority case is the same unbounded cost one level down. A lane that goes red captures the base side then, for **its red suites by name**.
 
-**But "not captured" must not read as "nothing to know here."** That is the opposite of true when a tier is **deliberately red** — a committed-red acceptance oracle is a practice this flow's ecosystem encourages, so the more it spreads the more this costs, and three lanes once each re-proved the same intentional failure. This is a **hand-down, not a capture**: the orchestrator ran the host repo's full gate on the integration base before cutting any child (`/start-multi` step 5), so **that run's verdict is the integration-tier baseline** and it arrives as an input to you. Record per tier the command, the verdict, and for each known failure its name, reason and whether it is deliberate — one line is the whole fix:
+**But "not captured" must not read as "nothing to know here."** That is the opposite of true when a tier is **deliberately red** — a committed-red acceptance oracle is a practice this flow's ecosystem encourages, so the more it spreads the more this costs, and three lanes once each re-proved the same intentional failure. This is a **hand-down, not a capture**: the orchestrator ran the host repo's gate on the integration base before cutting any child (`/start-multi` step 5), so **that run's verdict is the integration-tier baseline** and it arrives as an input to you. Record per tier the command, the verdict, and for each known failure its name, reason and whether it is deliberate — one line is the whole fix:
 
     epic-goal-oracle.integration.test.ts — COMMITTED RED ON PURPOSE
     (ESAS-82 seams REGISTRATION, GIT EXPORT); inherited, not yours; do not "fix"

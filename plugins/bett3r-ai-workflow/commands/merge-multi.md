@@ -1,5 +1,5 @@
 ---
-description: Land a finished fleet — merge each reviewed unit PR into the run's integration branch (conflicts resolved once), run the full gate there, and open the single integration PR to the default branch.
+description: Land a finished fleet — merge each reviewed unit PR into the run's integration branch (conflicts resolved once), run the gate there, scoped to the fleet's combined diff, and open the single integration PR to the default branch.
 ---
 
 # /merge-multi — land the fleet
@@ -23,7 +23,7 @@ Each unit branch is cut from `int/<run-id>`, and each unit PR's base is `int/<ru
 
 - **Reviews stay per-unit.** A unit PR's diff against integration is exactly that unit's work — no sibling noise.
 - **Conflicts are resolved once.** Inter-unit conflicts surface when units merge into integration, and are resolved *there*, as merge commits. Merging the units individually into the default branch instead would resolve the same conflicts a second time, against a moving target.
-- **The full gate runs once.** Cross-unit breakage exists only on the assembled tree, so no per-unit gate can see it — and running the full gate N times to look for something structurally invisible to it is the fleet's most wasteful step. Units run `--fast`; integration runs `--full`.
+- **The gate runs once, and scoped.** Cross-unit breakage exists only on the assembled tree, so no per-unit gate can see it — and running a gate N times to look for something structurally invisible to it is the fleet's most wasteful step. Units run `--fast`; integration runs the repo's scoped mode over the fleet's combined diff. The whole-repo `--full` run is CI's, or the user's on request — never a flow step's.
 
 ## Steps
 
@@ -105,9 +105,9 @@ rejected: <option> — <why not>
 supersedes: —            # set when this overturns an earlier entry
 ```
 
-**3 — Run the full gate, once, on integration.**
+**3 — Run the gate, once, on integration.**
 
-Per the [full-gate](../skills/full-gate/SKILL.md) skill: `node .claude/gate.mjs --full` (or the repo's `.claude/gate.sh`) on `int/<run-id>`, verdict read from the `GATE-STEP:` lines and baseline-diffed against the default branch. Read that skill for the discovery order and the four ways a green read is wrong; do not re-derive them here. They are all [EVIDENCE.md](../EVIDENCE.md) §1 — *a verdict is evidence only about what it actually executed* — and this is the one run in the whole fleet that certifies the assembled tree, so a misread here is unbacked by anything downstream.
+Per the [full-gate](../skills/full-gate/SKILL.md) skill: `node .claude/gate.mjs` with **no argument** — the repo's scoped mode — (or the repo's `.claude/gate.sh`) on `int/<run-id>`, verdict read from the `GATE-STEP:` lines and baseline-diffed against the default branch. **Never `--full` or `--all`**: the whole-repo run is the CI pipeline's, or the user's on request, and no flow step selects it. Scoped here is not thin — the integration branch's diff against the default branch is the *union of every unit's diff*, so the scoping selects everything the fleet touched and nothing it did not. Read that skill for the discovery order and the four ways a green read is wrong; do not re-derive them here. They are all [EVIDENCE.md](../EVIDENCE.md) §1 — *a verdict is evidence only about what it actually executed* — and this is the one run in the whole fleet that exercises the assembled tree, so a misread here is unbacked by anything downstream. Report it for what it is: it certifies the fleet's combined diff and its importers, not the whole repository.
 
 The integration branch is where the fleet's single version bump happens: bump each touched plugin's `plugin.json` once on `int/<run-id>` before the gate; the version-bump step **MUST read `PASS`** there. A `SKIP reason=deferred-to-merge-multi` on integration is refused as red — integration carries no `.work/lane.yaml`, so the gate `FAIL`s a missing bump by construction, and a `SKIP` there means a stale lane brief leaked into the integration checkout; remove it and re-run, never open the integration PR over it.
 
@@ -145,7 +145,8 @@ So collect the union of issues referenced across every unit PR, and carry them i
 
 ### Gate
 <the full-gate report block, verbatim — step names, counts, baseline diff, and
- anything reported SKIP / INCONCLUSIVE or excluded from --full by name>
+ anything reported SKIP / INCONCLUSIVE, not selected by the scoping, or
+ excluded from the repo's widest run, by name>
 
 Closes #56, closes #62, closes #63
 ```
@@ -182,7 +183,7 @@ Units merged (and any skipped, with why) · **`declared − landed`, always, eve
 - **Fresh session, always.** The fleet conversation holds the run's memory; this command needs only its bookkeeping. Reopening it to merge is the single largest avoidable cost in the fleet flow.
 - **Conflicts resolved once, in one place.** The integration branch exists for exactly this. Any design that resolves the same conflict twice has lost the argument for having it.
 - **The unit branch is the reviewed artifact.** Resolve into integration; never rebase what a human approved.
-- **The gate runs once, where it can see something.** Cross-unit breakage is invisible per-unit by construction; N full gates buy less than one integration gate and cost N times as much.
+- **The gate runs once, where it can see something, and only over what changed.** Cross-unit breakage is invisible per-unit by construction; N gates buy less than one integration gate and cost N times as much. Widening that one run to the whole repo is the user's call, not this command's.
 - **Merged is not delivered, and merged is not closed.** A wrong-target merge and an inert closing keyword both report success. Each has an explicit assertion above; run them.
 - **The integration PR records the landing, not the work.** Each unit PR remains the system of record for its own change — [verify-build](./verify-build.md)'s principle is unchanged, one level up.
 - **Nothing is merged without `--land`.** Review gates the merge; the flag gates the default branch.
