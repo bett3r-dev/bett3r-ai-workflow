@@ -178,6 +178,9 @@ EOF
 step no-full-gate fast <<'EOF'
 python3 scripts/check-no-full-gate.py
 EOF
+step repeat-causes fast <<'EOF'
+python3 scripts/check-repeat-causes.py
+EOF
 step hooks full 'plugins/bett3r-ai-workflow/hooks/*' 'plugins/*/hooks/*' 'scripts/test-hooks.sh' 'scripts/fixtures/esas-pending/*' <<'EOF'
 sh scripts/test-hooks.sh
 HOOK_SH=dash sh scripts/test-hooks.sh

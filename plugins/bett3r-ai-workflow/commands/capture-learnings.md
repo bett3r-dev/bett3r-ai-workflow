@@ -12,6 +12,16 @@ Turn what this session taught into durable records, each routed to where its sou
 
 Read **`.work/learnings.md`** first — the in-flight `record` buffer, the primary input. Then review the session for anything not yet recorded.
 
+## Step 1b — Classify before you filter: mechanical, or judgement?
+
+**Ask of every candidate, first: is the thing it guards against MECHANICAL?** A fixed syntactic pattern, a banned API, an import shape, a file-location rule, a census over call sites, a required field, an artifact that must exist. If it is, **it gets a deterministic check, full stop — building the check is the default disposition, and writing the rule is the fallback.** A rule that a future agent has to *remember* is not a control; it competes for attention with every other rule in the same artifact and loses quietly, and the same defect ships again with every gate green.
+
+Reserve prose for **genuine judgement calls** — where the right answer depends on the situation and no pattern separates the good case from the bad one. Say which you chose and why; "we wrote it down" is not a disposition for a mechanical cause.
+
+**A REPEATING fix-round cause is the strongest possible input here, and it is already measured.** `/build` classifies every fix round before dispatching it (`oracle-wrong` · `design-silent` · `ripple` · `invariant` · `mis-routed` · `flake`) and `build-summary.md` records it. A cause that keeps recurring is the flow telling you the same thing every run: classify it by this rule, and record what was *done* — this repo keeps that in `docs/causes.md`, with `scripts/check-repeat-causes.py` red until a thrice-recorded cause has an entry naming either the check that now fires or the judgement that no check can. A tally nobody disposes of is a statistic, not a learning.
+
+**Where the rule lands matters as much as whether it is written.** A standard is imposed by the **review** agent, not the implementation agent: the implementation agent is under the most context pressure at exactly the moment it would have to remember. So a mechanical disposition goes in `scripts/` and the gate; a judgement one goes where the **verifier** reads — never as one more line in the executor's brief.
+
 ## Step 2 — The three filters
 
 Every candidate passes all three, in this order. **Say which filter killed the ones that die** — that report is how you and the user calibrate the bar.
@@ -115,5 +125,7 @@ Report: each learning filed with its destination, **each candidate dropped with 
 - **Amend before you append.** A bullet per session is how a coherent artifact becomes a list.
 - **True everywhere, or only here and now?** A local workaround is a bug report about your machine.
 - **A failure whose signature is absence needs a gate, not a paragraph.**
+- **Mechanical → a deterministic check, full stop.** Prose is for judgement calls, and a repeating fix-round cause is a disposition owed, not a number to quote.
+- **The reviewer imposes standards, not the implementer** — the implementer has the most context pressure exactly where it would have to remember.
 - **Every rule carries an expiry**, or it is permanent by default.
 - Issues are *actionable changes to shared artifacts*; memory is *assistant context*.
