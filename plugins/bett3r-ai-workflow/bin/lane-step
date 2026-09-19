@@ -1,5 +1,8 @@
 #!/bin/sh
-# Launcher for scripts/lane-step-parse.py — the LANE-STEP:v1 verdict reader.
+# Launcher for scripts/lane-step-parse.py — the verdict reader for a marker
+# line. The marker is an argument (`--marker NAME`) defaulting to `LANE-STEP`,
+# so a call that passes only a transcript path reads a step's verdict and
+# `--marker FLEET-STEP` reads an orchestrator's wave yield, through one parser.
 #
 # Same two runtime facts that put `run-metrics` here, and the same shape:
 #

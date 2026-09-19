@@ -1,97 +1,48 @@
 ---
-description: Turn a plugin repo's ai-learning issues into reviewed PRs — with a mandatory prune pass and a net-change budget, so the artifacts converge instead of accreting.
+description: Turn a plugin repo's ai-learning issues into reviewed PRs, with a prune pass first and a net-change budget, so the artifacts converge instead of accreting.
+disable-model-invocation: true
 ---
 
 # /evolve — issues → reviewed PRs, with pruning pressure
 
-Process the `ai-learning` issues routed to **this** repo: prune, cluster, propose, and open PRs for review.
+`Call the Skill tool with "writing-for-agents"`. Every prune decision and every proposed edit below is judged by it. Run this inside a plugin repo: `/evolve` is the only process that reads these artifacts regularly, so it is the only place a rule can die.
 
-A process that only ever adds is convergent about the *backlog* and monotonic about the *artifacts* — nothing is ever positioned to take anything out. `/evolve` is the only process that reads these files regularly, so **it is the only place a rule can die.** That is what steps 1 and 5 exist for.
+## Step 1 — Prune before reading an issue
 
-## Step 1 — Prune, before you read a single issue
-
-For **every artifact this run will touch**, and its immediate siblings, find what should come out. Do this first, deliberately, and report the result even when it is nothing — a prune pass that always finds nothing is itself a finding about this step.
-
-Four tests. A rule failing any one is a **prune candidate**, and prune candidates are proposed to the user like any other change:
-
-1. **Expired.** The issue that created it named an expiry (`/capture-learnings` requires one), or the rule visibly depends on a tool version, a model behaviour, a repo shape, or a workaround. **Check whether the condition still holds.** A rule defending against a mistake the current model no longer makes is pure attention cost.
-2. **Redundant.** Another rule in the same artifact, or in an artifact loaded alongside it, already says this. Duplication is invisible while it is spread across files and obvious the moment you look for it — one real audit collapsed 3 files / 1,487 words into 1 file / 1,439 by inlining, and the duplication only surfaced during the move.
-3. **Anecdote outweighing rule.** The behavioural instruction is one sentence and the story justifying it is a paragraph. Keep the rule, compress the story to the clause that makes it credible ("three lanes once picked the same `ADR-057`"). The story is what makes a rule *stick* on first read and what makes the artifact unreadable on the twentieth — one clause buys most of the first at little of the second.
-4. **Restating a default.** The rule tells a competent model to do what it would do anyway. Delete it. If it is a real trap that caution alone cannot avoid, **replace it with a gate in `scripts/`** rather than a longer paragraph.
-
-**What is never pruned**, however old: a **cross-repo literal** (a route, an error code, a port, a spelled id) — a paraphrase breaks the gesture with both suites green on both sides; a **fact about this system** that competence does not supply; and a rule whose failure mode is **silent**, unless you can show the condition is gone.
+For every artifact this run will touch, and its immediate siblings, list what comes out, judged by writing-for-agents' pruning tests: a rule whose `Expiry` condition no longer holds or whose tool, model or repo shape has changed; a second occurrence of a meaning that has a home elsewhere (it becomes a pointer); a sentence the model obeys by default; and an incident, measurement or story sitting in instruction text (it moves to the ledger, Step 4). Not pruned without showing the condition is gone: a cross-repo literal (a route, an error code, a port, a spelled id, since a paraphrase breaks the gesture with both suites green), a fact about this system that competence does not supply, and a rule whose failure mode is silent. Report the result even when it is empty; a prune pass that always finds nothing is a finding about this step. Done when each touched artifact has a prune list with a reason per item.
 
 ## Step 2 — Collect, cluster, dedupe
 
-`gh issue list --label ai-learning --state open`. Read each fully (body + comments). Group issues touching the same artifact or proposing the same change. Close exact duplicates (referencing the survivor). Drop or flag stale ones. Converge the backlog — don't let it sprawl.
+`gh issue list --label ai-learning --state open`; read each fully, body and comments. Group issues touching the same artifact or proposing the same change; close exact duplicates naming the survivor; flag stale ones. Read each issue's `Filters` and `Expiry` as part of the proposal: an issue that cannot say why a competent model gets this wrong with no guidance closes unfiled. Done when every open issue is in a cluster, closed, or flagged.
 
-**Read each issue's `Filters` and `Expiry` sections as part of the proposal.** An issue that cannot say why a competent model gets this wrong with no guidance is a candidate for closing unfiled, not a candidate for a rule.
+## Step 3 — Propose under a net-change budget
 
-## Step 3 — Propose, under a net-change budget
+Decide the concrete change per cluster and surface genuine trade-offs rather than guessing. Prefer, in order: amend an existing rule, merge two rules under one frame, add a gate in `scripts/`, add a new rule. Every PR that adds lines states in its body what it removed, or why nothing could be; record each touched artifact's line and word count before and after. A new rule names what it replaces or sits next to.
 
-For each cluster, decide the concrete change. Where it is contentious or a genuine trade-off, surface it rather than guessing.
+Splitting an artifact is a decision on its own. Split by trigger, never by topic: content leaves only when its loading is gated on a condition something already evaluates and acts on. Explanation may be referenced. Behavior may not: if the artifact still acts correctly with the pointer unfollowed, the split is safe. For behavior, dispatch a subagent instead, a split with loading probability 1. Splitting is not a token optimisation; split for attention, and prune to reduce the total. A split you can delete beats a split you have to verify forever. Done when every cluster has a change, its preference rank, and its budget line.
 
-**Every PR that adds lines to an artifact states, in its body, what it removed — or why nothing could be.** Not a hard cap: a genuinely new rule may cost net lines. It is a forcing function, and the honest answer is often that the addition should be an *amendment* to the rule three paragraphs up. Record each touched artifact's line and word count **before and after**.
+## Step 4 — Ledger the evidence
 
-**Prefer, in this order:** amend an existing rule → merge two rules under one frame → add a gate in `scripts/` → add a new rule.
+Where a rule's justification is an incident, a measurement or a war story, the artifact keeps the rule and the story moves to the plugin's ledger, the file `LEDGER.md` at the root of the plugin's payload beside its `README.md`, as one entry: the rule, the source it came from, the evidence verbatim, when it was recorded, and what retires it. Done when no touched artifact carries a date, a figure or a "once" story as instruction text.
 
-### Whether to split an artifact — decide before deciding how
+## Step 5 — Open PRs
 
-Sooner or later an artifact is "too big" and the reflex is to move a section to a reference file. That reflex is wrong about as often as it is right, and silent either way.
+Branch, edit, and bump the touched plugin's `.claude-plugin/plugin.json` `version` (ADR-001: the install is a version-keyed cache that copies nothing while the string stands still, so an unbumped edit merges cleanly and reaches nobody; `scripts/check-plugin-version-bump.sh` refuses the omission, and `plugins/<name>/README.md` counts as a touch). Run `python3 scripts/validate-plugins.py`: a malformed artifact never errors, it silently stops loading. One PR per coherent change, reviewed before merge.
 
-**The trade is attention against loading probability.** A long artifact dilutes: every rule competes with the whole file for finite attention and the ones in the middle lose. A split concentrates what remains, but the extracted content is now read only if the pointer is followed — probability < 1, with nothing observable saying which.
+The body links the issues it closes with one keyword per issue, `Closes #12, closes #13` (the rule's home is `/verify-build` Step 6; `scripts/check-closes-syntax.py` refuses a bare list in commit messages and in these artifacts' own examples). A PR that splits an artifact writes the eval scenario in the same pass: a `guards_split` scenario in `scripts/eval/scenarios.json` asserting `must_open` on the companion, because every gate in `scripts/` asserts presence corpus-wide and only a session that opened the file is evidence the pointer works; `scripts/check-eval-coverage.py` refuses an unguarded split.
 
-- **There is a floor, and below it inlining wins outright.** Measured case: a 468-word skill whose two references were 668 and 351 words — smaller than its own references combined. **A split you can delete beats a split you have to verify forever.**
-- **Split by trigger, never by topic.** Content may leave only when its loading is gated on a condition something *already evaluates and acts on*. "Fleet mechanics" is a topic and makes an unsafe split; "this unit checks out 2+ repos" is a trigger and makes a safe one.
-- **Explanation may be referenced. Behavior may not.** Ask what happens when the pointer is *not* followed. If the artifact still acts correctly and merely loses the *why*, the split is safe.
-- **For behavior, use a subagent instead — a split with loading probability 1.** Fresh context, dispatched at the moment it applies, nothing competing. What must *not* go: anything the parent is required to verify for itself.
-- **Splitting is not a token optimisation.** Measured on a real fleet run, cache reads were **97% of raw tokens**, and an artifact's own text is 1–4% of a typical agent's ~210k per-turn context. When the split content *is* needed it is loaded anyway, so the saving is zero exactly when it matters. Split for **attention**; if the stated reason is cost, the lever is elsewhere.
+When a round opens several PRs, allocate the versions up front and state the merge order in each body. Cut from one base: two PRs bumping to the same string produce no textual conflict, and the version gate's green on the second is about a base the first has since replaced ([EVIDENCE.md](../EVIDENCE.md) §3), so re-run the gate locally against the current base before merging. Stacked: merge the parent keeping its branch, `gh pr edit <child> --base <default>`, re-run the diff-reading gates against the new base, merge, and delete the stack's branches only after the last one lands. Done when every PR is open with its version, its merge order, and its closes lines.
 
-Plugin-wide totals barely move on a split — extraction relocates words. Per-artifact load is what changed. **Pruning is the only thing that reduces the total**, which is why Step 1 exists.
+## Step 6 — Audit and measure
 
-## Step 4 — Open PRs
+For every artifact touched and its siblings: does it still load (`validate-plugins.py`, not a glance); is anything stale or local; has a list grown one bullet per round past a shared frame. Then report the ratio, per artifact and for the round: lines and words added against removed, and rules added, amended and deleted. A round that only adds says so. Done when the ratio is stated.
 
-Branch, edit, **bump the touched plugin's `.claude-plugin/plugin.json` `version`**, and open a PR that **links the issues it closes, repeating the keyword on every one**: `Closes #56, closes #62, closes #63`. **One PR per coherent change.**
+## Step 7 — Report
 
-**A closing keyword binds to exactly one reference** — `Closes #56 #62 #63`, with or without commas, closes `#56` alone; repeat the keyword, `Closes #56, closes #62, closes #63`. Nothing goes red: the only tell is a backlog count (80 references once produced 7 closures). `scripts/check-closes-syntax.py` refuses the malformed line in commit messages *and* in the artifacts' own examples, because a wrong example is how the next round writes it again.
-
-**When a round opens N PRs, allocate the versions up front and state the merge order in each body.** Each topology has its own silent failure:
-
-- **Cut from one base.** Two PRs that bump to the *same* string produce no textual conflict — both read `MERGEABLE`/`CLEAN`, and the version gate's green on the second is a claim about a base the first has since replaced ([EVIDENCE.md](../EVIDENCE.md) §3). Re-run the gate locally against the current base before merging.
-- **Stacked** — the natural shape when the PRs edit one file. **Never merge a parent with `--delete-branch` while a child targets it:** deleting a base branch through `gh` closes the child *unmerged* (`base_ref_deleted` → `closed`), not retargeted, and it cannot be reopened while the base is gone — one round had to reopen a PR under a new number. Merge the parent keeping its branch, `gh pr edit <child> --base <default>`, re-run the diff-reading gates against the new base, merge, and delete the stack's branches only after the last one lands.
-
-**The version bump is not bookkeeping.** A plugin is copied into its version-keyed cache only when that string changes, so an unbumped edit merges cleanly and reaches nobody — exactly how two behaviour-changing commits shipped to no one with every gate green (`docs/adr/ADR-001`). `scripts/check-plugin-version-bump.sh` refuses the omission; `plugins/<name>/README.md` counts as a touch, because it ships inside the payload.
-
-**A PR that splits an artifact writes the eval scenario in the same pass** — not a follow-up issue: this pass is the last moment anyone knows what the pointer was for. Every gate in `scripts/` asserts presence **corpus-wide** by design, so a split is green whether the pointer is ever opened or not. The only remaining evidence is a session that opened the file: a scenario in `scripts/eval/` asserting `must_open`, testing a rule that exists **only** behind the pointer (an answer the model could produce from priors proves nothing — the tool call is the evidence). `scripts/check-eval-coverage.py` refuses an unguarded split.
-
-## Step 5 — Audit, and measure the ratio
-
-**The backlog is not the whole to-do list** — issues contain only what someone *noticed*, and the defects that rot a shared plugin fastest produce no signal at all.
-
-For every artifact touched, and its siblings:
-
-1. **Does it still load?** Frontmatter parses; it appears in the commands/skills list. A malformed command does not error or warn — it silently never registers and vanishes from every consuming repo. (Real miss: `/verify-build`, `/start` and `create-readmodel` were all dead this way; one had never once loaded while another command referenced it.) Run `scripts/validate-plugins.py`; do not eyeball it.
-2. **Is anything stale or local?** *Is this true everywhere, or only here and now?*
-3. **Has it accreted past coherence?** A list that grew one bullet per round reads as N unrelated rules. Ask whether the accumulated items still share a frame, and give them one rather than letting the reader derive it.
-
-Then **report the ratio, per artifact and for the round: lines and words added vs removed, and rules added vs amended vs deleted.** This is the number that tells you whether the plugin is converging or accreting, and it is the whole reason this step exists. If a round adds and never removes, say so plainly in the report rather than letting it pass as progress.
-
-## Step 6 — Report
-
-The prune candidates (accepted and rejected), the clusters, the PRs opened with what each closes, what the audit surfaced, the add/remove ratio, and anything left for the user to decide.
-
-**For any PR of this round already merged, report the closure verdict — not the merge.** The issues are this command's deliverable, and `MERGED` is evidence about the branch:
+The prune candidates accepted and rejected, the clusters, the PRs with what each closes, the audit findings, the ratio, and what is left for the user. For any PR already merged, report the closure verdict rather than the merge:
 
 ```sh
-for n in 56 62 63 78 139; do printf '%s %s\n' "$n" "$(gh issue view "$n" --json state -q .state)"; done
+for n in <every issue this round references>; do printf '%s %s\n' "$n" "$(gh issue view "$n" --json state -q .state)"; done
 ```
 
-Expect **one line per reference, every one `CLOSED`**, and read the line count before the verdict — a short list or a blank state is `gh` failing, indistinguishable from calm if you only grep for offenders. Close stragglers by hand and say the syntax slipped.
-
-## Principles
-- **Convergent in both directions.** Converge the backlog *and* the artifacts. A round that only adds is a round that made every future session slightly worse.
-- **Amend > merge > gate > add.** In that order, every time.
-- **Attention is the scarce resource**, not tokens. Split for attention, prune for attention, and never split as a cost optimisation.
-- **A failure mode whose signature is *absence* needs a gate, not a reviewer.** No one files a bug for a skill that was never there.
-- **Never prune a cross-repo literal, a system fact, or a silent-failure rule** without showing the condition is gone.
-- One coherent change per PR; **reviewed before merge**. Evolve proposes; review disposes. Don't auto-merge.
+One line per reference, every one `CLOSED`; read the line count before the states, since a blank state is `gh` failing. Close stragglers by hand and say the syntax slipped.

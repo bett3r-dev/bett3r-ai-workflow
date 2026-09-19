@@ -1,0 +1,12 @@
+#!/bin/sh
+# Launcher for scripts/fleet-loop.py — the shell driver that re-invokes one
+# fresh orchestrator tick per wave (GH-429-F2) and stops when the wave count
+# does not advance.
+#
+# Here for the same reason as `lane-step` and `worktree-pool`:
+# `CLAUDE_PLUGIN_ROOT` is substituted for hook invocations only, while every
+# enabled plugin's `bin/` is on `PATH`, keyed by the version the session loaded.
+# The driver reports the version of whichever copy this launcher sits in and
+# compares it with the version the orchestrator recorded having loaded; it does
+# not predict what `claude -p` will resolve.
+exec python3 "$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)/scripts/fleet-loop.py" "$@"

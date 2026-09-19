@@ -40,263 +40,20 @@ pass(){
   printf '  \033[32m✓\033[0m %s\n' "$1"
 }
 
-# ---------------------------------------------------------------------------
-printf '\nSeam — /merge-multi rules each unit'"'"'s concerns from its own head, before merging (XL-27 slice 7)\n\n'
-# ---------------------------------------------------------------------------
-
-# --- extract Step 1b's fenced sh block, anchored on the concerns-check
-# --decisions line, which is unique to this one block in the whole file ---
-BLOCK_RAW="$TMP/block-raw.sh"
-awk '
-  /^```sh$/ { buf=""; capturing=1; next }
-  capturing && /^```$/ {
-    if (buf ~ /concerns-check --decisions/) { printf "%s", buf; found=1 }
-    capturing=0; buf=""; next
-  }
-  capturing { buf = buf $0 "\n" }
-  END { if (!found) exit 1 }
-' "$MERGE_MULTI_MD" > "$BLOCK_RAW"
-if [ ! -s "$BLOCK_RAW" ]; then
-  fail 'merge-multi.md Step 1b'\''s concerns fenced sh block is extractable' \
-       'no fenced ```sh block containing `concerns-check --decisions` found'
-else
-  pass 'merge-multi.md Step 1b'\''s concerns fenced sh block is extractable'
-fi
-
-# Fail loudly if the substitution grammar this test depends on (the literal
-# placeholders <sha>, <run-id>, <unit-id>, and the $DOCS folder the block
-# resolves) has drifted — a silent block edit here must not quietly stop
-# testing anything.
-if grep -qF '<sha>:$DOCS/concerns.md' "$BLOCK_RAW" && grep -qF '<sha>:$DOCS/decisions.md' "$BLOCK_RAW" \
-   && grep -qF '.work/multi/<run-id>/units/<unit-id>.state.yaml' "$BLOCK_RAW"; then
-  pass 'the block'\''s substitution grammar (<sha>, <run-id>, <unit-id>, $DOCS) is intact'
-else
-  fail 'the block'\''s substitution grammar (<sha>, <run-id>, <unit-id>, $DOCS) is intact' \
-       'expected literal <sha>:$DOCS/concerns.md, <sha>:$DOCS/decisions.md and .work/multi/<run-id>/units/<unit-id>.state.yaml in the extracted block:' \
-       "$( cat "$BLOCK_RAW" )"
-fi
-
-# --- build a throwaway repo with unit branches at a fixed work-docs path ---
-REPO="$TMP/repo"
-mkdir -p "$REPO"
-# The branch is named explicitly: an ambient `init.defaultBranch` (say
-# `trunk`) must not change which commit every unit branch is cut from.
-git -C "$REPO" init -q -b master
-git -C "$REPO" config user.email test@example.com
-git -C "$REPO" config user.name Test
-git -C "$REPO" commit -q --allow-empty -m 'root'
-
-UNIT_PATH="docs/prs/UNIT-1"
-
-write_unit(){
-  # write_unit <branch> <concerns-content-or-none> <decisions-content-or-none> [path]
-  branch=$1; concerns=$2; decisions=$3; wpath=${4:-$UNIT_PATH}
-  # Every unit is cut from the root commit on master, never stacked on the
-  # previous unit: a stacked unit inherits its sibling's concerns.md, and the
-  # "no concerns.md" case then tests a file that is present.
-  if ! git -C "$REPO" checkout -q -b "$branch" master; then
-    fail "fixture: unit branch $branch is cut from master" 'git checkout -b failed; every outcome below would be meaningless'
-    exit 1
-  fi
-  mkdir -p "$REPO/$wpath"
-  if [ "$concerns" != "NONE" ]; then
-    printf '%s' "$concerns" > "$REPO/$wpath/concerns.md"
-    git -C "$REPO" add "$wpath/concerns.md"
-  fi
-  if [ "$decisions" != "NONE" ]; then
-    printf '%s' "$decisions" > "$REPO/$wpath/decisions.md"
-    git -C "$REPO" add "$wpath/decisions.md"
-  fi
-  git -C "$REPO" commit -q -m "unit $branch" --allow-empty
-}
-
-ALL_MET='## C1 — must not lose data
-bar: hard
-raisedBy: owner · step: design
-quote: "must not lose data"
-why: it matters
-verify: check it
-verdict: met
-evidence: verified in review
-'
-
-HARD_UNMET='## C1 — must not lose data
-bar: hard
-raisedBy: owner · step: design
-quote: "must not lose data"
-why: it matters
-verify: check it
-verdict: unmet
-evidence: not addressed
-'
-
-MALFORMED='## C1 not a real header
-this is not the entry grammar at all
-'
-
-WAIVED_FAKE_D='## C1 — must not lose data
-bar: hard
-raisedBy: owner · step: design
-quote: "must not lose data"
-why: it matters
-verify: check it
-verdict: waived
-evidence: waived, see decisions.md#D7
-'
-
-EMPTY=''
-
-# a) all met -> merge allowed
-write_unit unit-all-met "$ALL_MET" NONE
-sha_all_met=$( git -C "$REPO" rev-parse unit-all-met )
-
-# b) hard unmet -> refuse
-write_unit unit-hard-unmet "$HARD_UNMET" NONE
-sha_hard_unmet=$( git -C "$REPO" rev-parse unit-hard-unmet )
-
-# c) malformed -> refuse (error)
-write_unit unit-malformed "$MALFORMED" NONE
-sha_malformed=$( git -C "$REPO" rev-parse unit-malformed )
-
-# d) waived citing a D-entry that does not exist in decisions.md -> refuse
-write_unit unit-fake-waiver "$WAIVED_FAKE_D" "## D1 — an unrelated decision
-kind: deviation
-step: build · slice: 1 · decidedBy: executor
-sources: [none]
-rejected: —
-supersedes: —
-unrelated body
-"
-sha_fake_waiver=$( git -C "$REPO" rev-parse unit-fake-waiver )
-
-# d2) waived citing a real, human-decided waiver record — for a DIFFERENT
-# concern (C2) -> refuse
-WAIVED_D1='## C1 — must not lose data
-bar: hard
-raisedBy: owner · step: design
-quote: "must not lose data"
-why: it matters
-verify: check it
-verdict: waived
-evidence: waived, see decisions.md#D1
-'
-write_unit unit-foreign-waiver "$WAIVED_D1" '## D1 — waive C2
-kind: waiver
-step: build · slice: — · decidedBy: human
-sources: [human]
-rejected: —
-supersedes: —
-The owner said "C2 can wait".
-'
-sha_foreign_waiver=$( git -C "$REPO" rev-parse unit-foreign-waiver )
-
-# e) no concerns.md at head -> refuse
-write_unit unit-no-concerns NONE NONE
-sha_no_concerns=$( git -C "$REPO" rev-parse unit-no-concerns )
-
-# f) empty committed concerns.md -> allowed
-write_unit unit-empty "$EMPTY" NONE
-sha_empty=$( git -C "$REPO" rev-parse unit-empty )
-
-# h) a unit whose run.yaml id (UNIT-2) names a folder that IS all-met at its
-# head — but whose state file records no work_item. A block that fell back to
-# units[].id would pass it; the state file is the only source, so it refuses.
-write_unit unit-two "$ALL_MET" NONE docs/prs/UNIT-2
-sha_unit2=$( git -C "$REPO" rev-parse unit-two )
-
-# The orchestrator checkout's run dir: one state file per unit, as each lane
-# writes it (`work_item:` copied from its own /start's .work/mode.yaml).
-# Untracked, like the real `.work/` — git show never sees it.
-STATE_DIR="$REPO/.work/multi/multi-test/units"
-mkdir -p "$STATE_DIR"
-printf 'step: done\nstatus: passed\nwork_item: UNIT-1   # copied from .work/mode.yaml\n' > "$STATE_DIR/unit-a.state.yaml"
-printf 'step: done\nwork_item: "UNIT-1"\n' > "$STATE_DIR/unit-quoted.state.yaml"
-printf 'step: done\nstatus: passed\n' > "$STATE_DIR/UNIT-2.state.yaml"
-printf 'work_item:\nstep: done\n' > "$STATE_DIR/unit-empty-key.state.yaml"
-
-# g) working tree differs from head: head is met, working tree (uncommitted)
-# is unmet -> must pass on the HEAD content; a block reading the checkout on
-# disk would print outcome=fail here instead.
-write_unit unit-worktree-drift "$ALL_MET" NONE
-sha_worktree_drift=$( git -C "$REPO" rev-parse unit-worktree-drift )
-git -C "$REPO" checkout -q unit-worktree-drift
-printf '%s' "$HARD_UNMET" > "$REPO/$UNIT_PATH/concerns.md"   # uncommitted, working-tree only
-
-run_block(){
-  # run_block <sha> -> the block's whole output, for the unit named $UNIT_ID
-  sha=$1
-  sed -e "s|<sha>|$sha|g" -e "s|<run-id>|multi-test|g" -e "s|<unit-id>|$UNIT_ID|g" "$BLOCK_RAW" > "$TMP/run.sh"
-  ( cd "$REPO" && PATH="$PLUGIN/bin:$PATH" sh "$TMP/run.sh" ) 2>&1
-}
-
-check_outcome(){
-  # check_outcome <sha> <outcome> <reason|-> <label>
-  # Asserts on the LAST line only (the verdict line, ADR-004), token-exact:
-  # `outcome=<outcome>` and, when <reason> is not `-`, `reason=<reason>`; when
-  # it is `-`, the line must carry no reason token at all. Matching only the
-  # outcome let a fixture built wrong (a unit that DID contain concerns.md)
-  # pass the "no concerns.md" case for the wrong reason.
-  out=$( run_block "$1" )
-  last=$( printf '%s\n' "$out" | tail -1 )
-  ok=1
-  case "$last" in "CONCERNS-CHECK:v1 "*) ;; *) ok=0 ;; esac
-  case " $last " in *" outcome=$2 "*) ;; *) ok=0 ;; esac
-  if [ "$3" = "-" ]; then
-    case " $last " in *" reason="*) ok=0 ;; esac
-  else
-    case " $last " in *" reason=$3 "*) ;; *) ok=0 ;; esac
-  fi
-  if [ "$ok" -eq 1 ]; then
-    pass "$4"
-  else
-    fail "$4" "expected a last line CONCERNS-CHECK:v1 … outcome=$2 (reason: $3) for sha $1" "got: $out"
-  fi
-}
-
-check_refused(){
-  # check_refused <sha> <label> — the unit's work item did not resolve: the
-  # block ran no concerns-check (no CONCERNS-CHECK line, which the mapping
-  # refuses) and its last line says refuse.
-  out=$( run_block "$1" )
-  if printf '%s\n' "$out" | grep -q '^CONCERNS-CHECK:'; then
-    fail "$2" 'expected no CONCERNS-CHECK line (the work item must not resolve)' "got: $out"
-  elif printf '%s\n' "$out" | tail -1 | grep -q 'refuse'; then
-    pass "$2"
-  else
-    fail "$2" 'expected a last line saying refuse' "got: $out"
-  fi
-}
-
-UNIT_ID=unit-a
-check_outcome "$sha_all_met"        pass  -                   'a unit whose committed concerns.md is all met -> merge allowed (outcome=pass, no reason)'
-check_outcome "$sha_hard_unmet"     fail  hard-unmet          'a unit with an unmet hard concern -> refused (outcome=fail reason=hard-unmet)'
-check_outcome "$sha_malformed"      error malformed-header    'a unit whose concerns.md is malformed -> refused (outcome=error reason=malformed-header)'
-check_outcome "$sha_fake_waiver"    error waiver-record-missing 'a unit waiving via a D-entry absent from its decisions.md -> refused (outcome=error reason=waiver-record-missing, proves --decisions is passed)'
-check_outcome "$sha_foreign_waiver" error waiver-record-other-concern 'a unit waiving via a human D-entry that waives a DIFFERENT concern -> refused (outcome=error reason=waiver-record-other-concern)'
-check_outcome "$sha_no_concerns"    error file-not-found      'a unit with no concerns.md at its head -> refused (outcome=error reason=file-not-found)'
-check_outcome "$sha_empty"          pass  -                   'a unit with an empty committed concerns.md -> allowed (outcome=pass, no reason)'
-check_outcome "$sha_worktree_drift" pass  -                   'the block reads the unit HEAD, not the working tree (head is all-met -> pass despite an uncommitted unmet copy)'
-
-UNIT_ID=unit-quoted
-check_outcome "$sha_all_met"        pass  -                   'a quoted work_item: in the state file resolves the same folder -> pass'
-UNIT_ID=unit-ghost
-check_refused "$sha_all_met" 'a unit with no state file -> refused, no concerns-check run'
-UNIT_ID=UNIT-2
-check_refused "$sha_unit2"   'a state file with no work_item: -> refused, although units[].id (UNIT-2) names an all-met folder at the head (no fallback)'
-UNIT_ID=unit-empty-key
-check_refused "$sha_all_met" 'an empty work_item: -> refused'
-
-# ---------------------------------------------------------------------------
-printf '\nSeam — merge-multi.md: ORDER, the refusal mapping, and mutation controls\n\n'
-# ---------------------------------------------------------------------------
-
+# The merge-multi.md parser is defined up front so `--print-pinned` can reuse it
+# before the executable fixtures run; its assertions are reported further down,
+# after the executed Step 1b block, in the order the file is read.
 first_line(){ grep -nF -e "$2" "$1" | head -1 | cut -d: -f1; }
 
 check_seams(){
-  # check_seams <file> -> emits ok|bad lines, same protocol as slice 6's parser
-  "$MARKER_PY" - "$1" <<'PYMM'
-import re, sys
+  # check_seams <file> [--print-pinned] -> emits ok|bad lines, same protocol as
+  # slice 6's parser; with --print-pinned it instead prints the PINNED_FILE list
+  # the closed-set check below would compare the file against (see the
+  # regeneration procedure beside PINNED_FILE) and checks nothing.
+  "$MARKER_PY" - "$1" ${2:+"$2"} <<'PYMM'
+import json, re, sys
 path = sys.argv[1]
+mode = sys.argv[2] if len(sys.argv) > 2 else "check"
 text = open(path, encoding="utf-8").read()
 lines = text.splitlines()
 out = []
@@ -550,183 +307,140 @@ def closed_sections(label, found, pinned):
     notes += ["EXTRA in [" + e[0] + "]: " + e[1] for e in extra]
     check(not notes, label, " || ".join(notes))
 
+# Regenerated, never hand-edited: `sh scripts/test-merge-multi-concerns.sh
+# --print-pinned` prints this list from the tracked merge-multi.md with the
+# normalisation above; paste it over the list and review the diff — every
+# changed line is a sentence the closed set stopped or started protecting.
 PINNED_FILE = [
-    ["(preamble)", "FRONTMATTER: description: Land a finished fleet — merge each reviewed unit PR into the run's integration branch (conflicts resolved once), run the gate there, scoped to the fleet's combined diff, and open the single integration PR to the default branch."],
+    ["(preamble)", "FRONTMATTER: description: Land a finished fleet — merge each reviewed unit PR into `int/<run-id>` (conflicts resolved once), run the scoped gate there, and open the single integration PR to the default branch."],
     ["/merge-multi — land the fleet", "# /merge-multi — land the fleet"],
-    ["/merge-multi — land the fleet", "`/start-multi` ends with N reviewable PRs open against the run's integration branch `int/<run-id>`, and nothing merged."],
-    ["/merge-multi — land the fleet", "You review them at your own pace."],
-    ["/merge-multi — land the fleet", "This command is the landing, run afterwards — in a fresh session."],
-    ["/merge-multi — land the fleet", "Run it fresh; do not reopen the fleet conversation."],
-    ["/merge-multi — land the fleet", "That session is the largest context in the run — it dispatched N lanes, collected N escalations, aggregated N state files — and re-invoking it to perform a mechanical merge sequence re-sends all of it."],
-    ["/merge-multi — land the fleet", "Everything this command needs is on disk (`run.yaml`) or on GitHub (`gh pr view`)."],
-    ["/merge-multi — land the fleet", "The bookkeeping is cheap; the memory is not."],
+    ["/merge-multi — land the fleet", "`/start-multi` ends with N reviewable PRs open against the run's integration branch `int/<run-id>` and nothing merged."],
+    ["/merge-multi — land the fleet", "You review them at your own pace; this command is the landing, run afterwards in a fresh session: everything it needs is on disk (`run.yaml`) or on GitHub (`gh pr view`)."],
+    ["/merge-multi — land the fleet", "The integration branch is why reviews stay per unit, conflicts are resolved once as merge commits, and the gate runs once on the assembled tree, the only place cross-unit breakage exists."],
     ["Argument: $ARGUMENTS", "ROW: | Flag | Effect |"],
     ["Argument: $ARGUMENTS", "ROW: |---|---|"],
     ["Argument: $ARGUMENTS", "ROW: | `--dry-run` | Print the inventory (step 1), run step 1b's read-only ruling and report the would-refuse set, then stop. Merges nothing. |"],
     ["Argument: $ARGUMENTS", "ROW: | `--only <ids>` | Land a subset; the rest stay open against integration. |"],
-    ["Argument: $ARGUMENTS", "ROW: | `--land` | Also merge the integration PR into the default branch (step 6). **Off by default** — that is the last irreversible act. |"],
-    ["Argument: $ARGUMENTS", "## Argument: $ARGUMENTS Optional run-id."],
+    ["Argument: $ARGUMENTS", "ROW: | `--land` | Also merge the integration PR into the default branch (step 6). **Off by default**: that is the last irreversible act. |"],
+    ["Argument: $ARGUMENTS", "## Argument: $ARGUMENTS"],
+    ["Argument: $ARGUMENTS", "Optional run-id."],
     ["Argument: $ARGUMENTS", "Default: the most recent run in `.work/multi/` for this repo."],
-    ["Why an integration branch at all", "## Why an integration branch at all"],
-    ["Why an integration branch at all", "Each unit branch is cut from `int/<run-id>`, and each unit PR's base is `int/<run-id>`."],
-    ["Why an integration branch at all", "That buys three things at once, and they are otherwise in tension:"],
-    ["Why an integration branch at all", "- Reviews stay per-unit."],
-    ["Why an integration branch at all", "A unit PR's diff against integration is exactly that unit's work — no sibling noise."],
-    ["Why an integration branch at all", "- Conflicts are resolved once."],
-    ["Why an integration branch at all", "Inter-unit conflicts surface when units merge into integration, and are resolved *there*, as merge commits."],
-    ["Why an integration branch at all", "Merging the units individually into the default branch instead would resolve the same conflicts a second time, against a moving target."],
-    ["Why an integration branch at all", "- The gate runs once, and scoped."],
-    ["Why an integration branch at all", "Cross-unit breakage exists only on the assembled tree, so no per-unit gate can see it — and running a gate N times to look for something structurally invisible to it is the fleet's most wasteful step."],
-    ["Why an integration branch at all", "Units run `--fast`; integration runs the repo's scoped mode over the fleet's combined diff."],
-    ["Why an integration branch at all", "The whole-repo `--full` run is CI's, or the user's on request — never a flow step's."],
     ["Steps", "## Steps"],
     ["1 — Inventory. Report; do not act.", "FENCE[sh]: gh pr view <n> --json number,title,state,baseRefName,headRefName,headRefOid,mergeable,mergeStateStatus,reviewDecision"],
     ["1 — Inventory. Report; do not act.", "1 — Inventory."],
     ["1 — Inventory. Report; do not act.", "Report; do not act."],
-    ["1 — Inventory. Report; do not act.", "Read `.work/multi/<run-id>/run.yaml` for the unit set, the wave order, and the integration branch."],
+    ["1 — Inventory. Report; do not act.", "Read `.work/multi/<run-id>/run.yaml` for the unit set, the wave order and the integration branch."],
     ["1 — Inventory. Report; do not act.", "`git fetch origin`."],
-    ["1 — Inventory. Report; do not act.", "Then, per unit, read the real state from GitHub rather than from `run.yaml` — the state file was written before review:"],
-    ["1 — Inventory. Report; do not act.", "Print one row per unit and stop on any of these, naming the unit:"],
+    ["1 — Inventory. Report; do not act.", "Then read each unit's real state from GitHub, since `run.yaml` was written before review:"],
+    ["1 — Inventory. Report; do not act.", "Print one row per unit and act on each finding as its bullet says:"],
     ["1 — Inventory. Report; do not act.", "- Base is not `int/<run-id>`."],
-    ["1 — Inventory. Report; do not act.", "Do not merge it."],
-    ["1 — Inventory. Report; do not act.", "A PR merged into the wrong target returns exit 0, shows `MERGED`, and delivers nothing where you meant it — the merge itself reports success, so this is the one precondition with no downstream tell."],
-    ["1 — Inventory. Report; do not act.", "Retarget (`gh pr edit <n> --base int/<run-id>`) or exclude the unit."],
+    ["1 — Inventory. Report; do not act.", "Retarget (`gh pr edit <n> --base int/<run-id>`) or exclude the unit; a wrong-target merge reports `MERGED` and delivers nothing."],
     ["1 — Inventory. Report; do not act.", "- State is already `MERGED`."],
-    ["1 — Inventory. Report; do not act.", "Skip it — this command is idempotent and re-running after a partial land is the expected path."],
+    ["1 — Inventory. Report; do not act.", "Skip it; re-running after a partial land is the expected path."],
     ["1 — Inventory. Report; do not act.", "- `reviewDecision` is `CHANGES_REQUESTED`."],
     ["1 — Inventory. Report; do not act.", "Stop; that is the human's outstanding objection."],
-    ["1 — Inventory. Report; do not act.", "- The unit never reached `passed` in `run.yaml`, or has no PR."],
-    ["1 — Inventory. Report; do not act.", "`--dry-run` continues into step 1b, because that ruling is read-only and is exactly what a dry run exists to show: it reports the would-refuse set (each refused unit with its verdict line, plus its stacked dependents) and stops before step 2."],
-    ["1 — Inventory. Report; do not act.", "The two steps act differently on purpose: a finding above acts on the unit it names, as its bullet says — skip it, retarget or exclude it, or stop on the human's outstanding objection — while a step-1b refusal removes that unit and its stacked dependents from the landing, and the rest proceed."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "FENCE[sh]: STATE=\".work/multi/<run-id>/units/<unit-id>.state.yaml\" ⏎ WORK_ITEM=$(sed -n 's/^work_item:[[:space:]]*//p' \"$STATE\" 2>/dev/null | head -n 1 \\ ⏎ | sed -e 's/[[:space:]]#.*$//' -e 's/[[:space:]]*$//' -e \"s/^[\\\"']\\(.*\\)[\\\"']$/\\1/\") ⏎ DOCS= ⏎ [ -n \"$WORK_ITEM\" ] && DOCS=$(work-docs-path --item \"$WORK_ITEM\" | tail -n 1 \\ ⏎ | sed -n 's/^WORK-DOCS-PATH:v1 outcome=ok .* path=\\([^ ]*\\) .*$/\\1/p') ⏎ if [ -z \"$DOCS\" ]; then ⏎ echo \"unit <unit-id>: refuse — no work_item in $STATE, or work-docs-path did not resolve it\" ⏎ else ⏎ TMP=$(mktemp -d) ⏎ git show \"<sha>:$DOCS/concerns.md\" > \"$TMP/concerns.md\" 2>/dev/null || rm -f \"$TMP/concerns.md\" ⏎ git show \"<sha>:$DOCS/decisions.md\" > \"$TMP/decisions.md\" 2>/dev/null || rm -f \"$TMP/decisions.md\" ⏎ concerns-check --decisions \"$TMP/decisions.md\" \"$TMP/concerns.md\" ⏎ fi"],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "1b — Rule each unit's concerns, before merging it."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "Never the `flow/concerns` status."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "`/verify-build` posted a `flow/concerns` commit status on each unit's head, but that status is advisory only (a private free-plan repo cannot make it required) and a human can merge over a red one."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "This command is the hard block (design F4/C2): before merging a unit (step 2), rule it yourself, from files taken off *its own head commit* — never the working tree, never a sibling's checkout, and never by reading the GitHub status back."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "The unit's work-docs folder comes from its lane's own record: read `work_item:` from `.work/multi/<run-id>/units/<unit-id>.state.yaml` — the exact value the unit's lane copied from its `/start`'s `.work/mode.yaml` — and resolve it with `work-docs-path --item <work_item>`."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "The state file is found by the unit's `units[].id`, which is not itself the work item."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "A missing state file, a missing or empty `work_item:`, or a `work-docs-path` verdict other than `outcome=ok` refuses the unit: the block below then runs no `concerns-check` and prints no verdict line."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "Never fall back to `run.yaml`'s `units[].id` as the work item."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "`<sha>` is the head sha step 1's inventory already read (`headRefOid`)."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "Read the last line, `CONCERNS-CHECK:v1 outcome=pass|fail|error …`, never the exit code (ADR-004)."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "The mapping is exactly this, each outcome named once:"],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "- `outcome=pass` → merge the unit."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "- `outcome=fail` → refuse the unit."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "- `outcome=error` → refuse the unit."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "This is not-success exactly like `fail` — a malformed file, a fabricated or foreign waiver citation, or a corrupt `decisions.md` never reads as a pass or as \"no concerns\"."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "- No verdict line at all (the command produced nothing, died before printing one, or never ran because the unit's work item did not resolve) → refuse the unit."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "A missing `concerns.md` at the unit head is a refusal, not \"no concerns\"."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "`/verify-build` always commits the file, empty when the unit raised none, so `git show` failing to find it at that sha means that unit's `/verify-build` did not complete — and the `git show` above already reproduces that: with no file written to `$TMP/concerns.md`, `concerns-check` itself returns `outcome=error reason=file-not-found`, which the mapping above already refuses."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "A missing `decisions.md` is not by itself a refusal — `concerns-check` only reads it when a concern is waived, exactly the behaviour `/verify-build` already relies on; an absent one simply means this unit raised no waiver."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "Report a refused unit by id, with the verdict line, and do not merge it; that same line goes into the integration PR body under step 4's `declared − landed` heading, as the reason the unit did not land."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "A refusal blocks its dependents: a stacked child's branch is cut from its parent's tip (`/start-multi` step 2), so merging the child without the parent already in `int/<run-id>` would deliver the parent's unruled work into integration by the back door — refuse every unit stacked (directly or transitively) on a refused one, and say so."],
-    ["1b — Rule each unit's concerns, before merging it. Never the `flow/concerns` status.", "Units in other waves with no dependency on the refused one are unaffected and still merge."],
-    ["2 — Merge into integration, in dependency order.", "FENCE[]: ## D<n> — <title> ⏎ kind: silent-seam # false-premise | silent-seam | deviation | shipped-finding | overruled | waiver ⏎ step: merge-multi · slice: — · decidedBy: orchestrator ⏎ sources: [code:<symbol> (<file>), adr:ADR-NNN, design:<section>, xp:<atom-id>, human] ⏎ rejected: <option> — <why not> ⏎ supersedes: — # set when this overturns an earlier entry"],
+    ["1 — Inventory. Report; do not act.", "- The unit did not reach `passed` in `run.yaml`, or has no PR."],
+    ["1 — Inventory. Report; do not act.", "Exclude it."],
+    ["1 — Inventory. Report; do not act.", "`--dry-run` continues into the read-only step 1b, reports the would-refuse set (each refused unit with its verdict line and its stacked dependents) and stops before step 2."],
+    ["1 — Inventory. Report; do not act.", "Done when every unit has a row and a disposition: merge, skip, retarget or exclude, or stop."],
+    ["1b — Rule each unit's concerns, before merging it.", "FENCE[sh]: STATE=\".work/multi/<run-id>/units/<unit-id>.state.yaml\" ⏎ WORK_ITEM=$(sed -n 's/^work_item:[[:space:]]*//p' \"$STATE\" 2>/dev/null | head -n 1 \\ ⏎ | sed -e 's/[[:space:]]#.*$//' -e 's/[[:space:]]*$//' -e \"s/^[\\\"']\\(.*\\)[\\\"']$/\\1/\") ⏎ DOCS= ⏎ [ -n \"$WORK_ITEM\" ] && DOCS=$(work-docs-path --item \"$WORK_ITEM\" | tail -n 1 \\ ⏎ | sed -n 's/^WORK-DOCS-PATH:v1 outcome=ok .* path=\\([^ ]*\\) .*$/\\1/p') ⏎ if [ -z \"$DOCS\" ]; then ⏎ echo \"unit <unit-id>: refuse — no work_item in $STATE, or work-docs-path did not resolve it\" ⏎ else ⏎ TMP=$(mktemp -d) ⏎ git show \"<sha>:$DOCS/concerns.md\" > \"$TMP/concerns.md\" 2>/dev/null || rm -f \"$TMP/concerns.md\" ⏎ git show \"<sha>:$DOCS/decisions.md\" > \"$TMP/decisions.md\" 2>/dev/null || rm -f \"$TMP/decisions.md\" ⏎ concerns-check --decisions \"$TMP/decisions.md\" \"$TMP/concerns.md\" ⏎ fi"],
+    ["1b — Rule each unit's concerns, before merging it.", "1b — Rule each unit's concerns, before merging it."],
+    ["1b — Rule each unit's concerns, before merging it.", "`/verify-build` posted a `flow/concerns` commit status on each unit's head; that status is advisory (a private free-plan repo cannot require it), and a human can merge over a red one."],
+    ["1b — Rule each unit's concerns, before merging it.", "This command is the hard block: before merging a unit, rule it yourself from files taken off its own head commit, not the working tree, a sibling's checkout, or the status read back."],
+    ["1b — Rule each unit's concerns, before merging it.", "The unit's work-docs folder comes from its lane's own record: `work_item:` in `.work/multi/<run-id>/units/<unit-id>.state.yaml`, the exact value the lane copied from its `/start`'s `.work/mode.yaml`, resolved with `work-docs-path --item <work_item>`."],
+    ["1b — Rule each unit's concerns, before merging it.", "The state file is found by the unit's `units[].id`, which is not itself the work item."],
+    ["1b — Rule each unit's concerns, before merging it.", "A missing state file, a missing or empty `work_item:`, or a `work-docs-path` verdict other than `outcome=ok` refuses the unit, and the block then runs no `concerns-check` and prints no verdict line."],
+    ["1b — Rule each unit's concerns, before merging it.", "Never fall back to `run.yaml`'s `units[].id` as the work item."],
+    ["1b — Rule each unit's concerns, before merging it.", "`<sha>` is the `headRefOid` step 1 read."],
+    ["1b — Rule each unit's concerns, before merging it.", "Read the last line, `CONCERNS-CHECK:v1 outcome=pass|fail|error …`, not the exit code (ADR-004)."],
+    ["1b — Rule each unit's concerns, before merging it.", "The mapping, each outcome once:"],
+    ["1b — Rule each unit's concerns, before merging it.", "- `outcome=pass` → merge the unit."],
+    ["1b — Rule each unit's concerns, before merging it.", "- `outcome=fail` → refuse the unit."],
+    ["1b — Rule each unit's concerns, before merging it.", "- `outcome=error` → refuse the unit."],
+    ["1b — Rule each unit's concerns, before merging it.", "A malformed file, a fabricated or foreign waiver citation, or a corrupt `decisions.md` is not-success exactly like `fail`."],
+    ["1b — Rule each unit's concerns, before merging it.", "- No verdict line at all (the command produced nothing, died before printing one, or never ran because the unit's work item did not resolve) → refuse the unit."],
+    ["1b — Rule each unit's concerns, before merging it.", "A missing `concerns.md` at the unit head is a refusal, not \"no concerns\"."],
+    ["1b — Rule each unit's concerns, before merging it.", "`/verify-build` always commits the file, empty when the unit raised none, so its absence at that sha means that unit's `/verify-build` did not complete, and the block already refuses it: `concerns-check` returns `outcome=error reason=file-not-found`."],
+    ["1b — Rule each unit's concerns, before merging it.", "A missing `decisions.md` is not by itself a refusal, since `concerns-check` reads it only when a concern is waived."],
+    ["1b — Rule each unit's concerns, before merging it.", "Report a refused unit by id with its verdict line; the same line goes into the integration PR body under step 4's `declared − landed` heading."],
+    ["1b — Rule each unit's concerns, before merging it.", "A refusal blocks its dependents: a stacked child's branch is cut from its parent's tip, so merging the child without the parent in `int/<run-id>` would deliver the parent's unruled work by the back door; refuse every unit stacked (directly or transitively) on a refused one, and say so."],
+    ["1b — Rule each unit's concerns, before merging it.", "Units with no dependency on the refused one merge."],
+    ["1b — Rule each unit's concerns, before merging it.", "Done when every unit has a ruling: `merge`, or `refuse` with its verdict line and its dependents named."],
     ["2 — Merge into integration, in dependency order.", "2 — Merge into integration, in dependency order."],
     ["2 — Merge into integration, in dependency order.", "Follow `run.yaml`'s waves — a stacked child after its parent."],
     ["2 — Merge into integration, in dependency order.", "Merge each unit PR into `int/<run-id>`."],
     ["2 — Merge into integration, in dependency order.", "Merge exactly the head sha Step 1b ruled (`gh pr merge <n> --match-head-commit <sha>`, or `git merge <sha>` in the integration worktree), never whatever the branch points at now: if the head has moved since that ruling, re-run Step 1b at the new head sha and refuse on anything but `outcome=pass`."],
-    ["2 — Merge into integration, in dependency order.", "A stacked child's PR targets its parent's branch, so `gh pr edit <n> --base int/<run-id>` before merging it — merged in place it reports MERGED and delivers nothing to integration — and delete no unit branch while a PR still targets it: deleting a base closes the child unmerged ([verify-build](./verify-build.md) step 6)."],
-    ["2 — Merge into integration, in dependency order.", "Resolve conflicts in the integration worktree, as merge commits."],
-    ["2 — Merge into integration, in dependency order.", "Never by rewriting a unit branch — the unit branch is the artifact the human reviewed and approved, and rebasing it invalidates that review silently."],
-    ["2 — Merge into integration, in dependency order.", "Rules that apply to any merge in this flow apply here:"],
+    ["2 — Merge into integration, in dependency order.", "A stacked child's PR targets its parent's branch: `gh pr edit <n> --base int/<run-id>` before merging it, and delete no unit branch while a PR still targets it, since deleting a base closes the child unmerged."],
+    ["2 — Merge into integration, in dependency order.", "Resolve conflicts in the integration worktree as merge commits, never by rewriting a unit branch: the unit branch is the artifact the human reviewed, and a rebase invalidates that review silently."],
     ["2 — Merge into integration, in dependency order.", "- Generated / codegen files: `git checkout --theirs`, then re-run the generator."],
-    ["2 — Merge into integration, in dependency order.", "Never hand-merge them."],
-    ["2 — Merge into integration, in dependency order.", "- Hand-authored additive files: splice complete units."],
-    ["2 — Merge into integration, in dependency order.", "A marker-strip breaks on array tails and interleaves two partial blocks at their shared prefix."],
-    ["2 — Merge into integration, in dependency order.", "- Check for `*.orig` residue before committing."],
-    ["2 — Merge into integration, in dependency order.", "A `.ts.orig` is not compiled, so it passes every gate invisibly."],
-    ["2 — Merge into integration, in dependency order.", "A pinned counter touched by N units is RECOMPUTED, never picked."],
-    ["2 — Merge into integration, in dependency order.", "For any monotonic pin several units moved — tier counts, node-registry census, deployment-unit counts, topology ratchets — every branch's value is correct on its own base and wrong on the merged tree, so there is no side to take: `ours`/`theirs` ships a wrong pin the suite then *enforces*, surfacing as an authorization defect rather than a merge defect."],
-    ["2 — Merge into integration, in dependency order.", "Write `base + Σ (each unit's delta measured against its own base)` — `run.yaml`'s step-8 report carries the addends — and verify by running the suite, which prints the received length, not by the merge being clean."],
-    ["2 — Merge into integration, in dependency order.", "One fleet's correct value (704) appeared on no branch."],
-    ["2 — Merge into integration, in dependency order.", "A clean merge does not discharge a cross-unit obligation."],
-    ["2 — Merge into integration, in dependency order.", "Before merging, list every obligation the units recorded for the merge — `owesSiblings` in each `units/<id>.state.yaml`, and any PR-body \"for the <sibling> merge\" section."],
-    ["2 — Merge into integration, in dependency order.", "Check each against the merged file whether or not git conflicted there, apply it on integration with a test that is red without it, and record it as a resolution like any conflict; an obligation with no matching resolution blocks step 5."],
-    ["2 — Merge into integration, in dependency order.", "One was written three times — design, state file, PR body — and merged away cleanly with every gate green, because no unit's tests could reach the intersection."],
-    ["2 — Merge into integration, in dependency order.", "Record every resolution as you make it — which units, which file, what was kept and what was dropped, and why."],
-    ["2 — Merge into integration, in dependency order.", "This is the one part of what lands that nobody reviewed: the reviewer approved unit diffs, and what ships is those diffs *plus* your resolutions."],
-    ["2 — Merge into integration, in dependency order.", "It goes in the integration PR body (step 5), which is the only section there allowed to be verbose, and as a `decisions.md` entry in the run-level folder below — the body keeps being written exactly as before; the entry is additive, not a replacement."],
-    ["2 — Merge into integration, in dependency order.", "The run-level `decisions.md` is `<root>/<run-id>/decisions.md`, for every fleet run, resolved with `work-docs-path --item <run-id>` (`run.yaml`'s `runId:`) — never a hardcoded root."],
-    ["2 — Merge into integration, in dependency order.", "It holds this command's own conflict resolutions only, since no single unit owns them."],
-    ["2 — Merge into integration, in dependency order.", "`/design-multi` Phase B's cross-cutting policies are not restated there: each unit's committed `design.md` already carries its resolved design."],
+    ["2 — Merge into integration, in dependency order.", "- Hand-authored additive files: splice complete units; a marker-strip breaks on array tails."],
+    ["2 — Merge into integration, in dependency order.", "- `*.orig` residue is checked before committing; a `.ts.orig` passes every gate uncompiled."],
+    ["2 — Merge into integration, in dependency order.", "- A pinned counter touched by N units is recomputed, never picked: write `base + Σ (each unit's delta against its own base)`, the addends `/start-multi`'s step-8 report carries, and verify by running the suite, since every branch's value is wrong on the merged tree."],
+    ["2 — Merge into integration, in dependency order.", "- A clean merge does not discharge a cross-unit obligation."],
+    ["2 — Merge into integration, in dependency order.", "For every `owesSiblings` entry in `units/<id>.state.yaml` and every PR-body \"for the <sibling> merge\" section, check the merged file even where git did not conflict, apply the obligation on integration with a test red without it, and record it as a resolution; an unresolved one blocks step 5."],
+    ["2 — Merge into integration, in dependency order.", "Record every resolution as you make it (which units, which file, what was kept and dropped, why), in the integration PR body (step 5) and as an entry in the run-level `decisions.md`: the reviewer approved unit diffs; what ships is those diffs plus your resolutions."],
+    ["2 — Merge into integration, in dependency order.", "The run-level `decisions.md` is `<root>/<run-id>/decisions.md`, resolved with `work-docs-path --item <run-id>` (`run.yaml`'s `runId:`), never a hardcoded root."],
+    ["2 — Merge into integration, in dependency order.", "It holds this command's own conflict resolutions only; `/design-multi` Phase B's policies are not restated there, since each unit's committed `design.md` carries them."],
     ["2 — Merge into integration, in dependency order.", "If `work-docs-path --item <run-id>` refuses (a hand-made run id, or one built from a unit id `work-docs-path` cannot carry, such as a Jira key with an underscore), write no run-level `decisions.md` entry: put its `WORK-DOCS-PATH:v1` verdict line in the integration PR body under *Conflict resolutions* instead, and continue merging."],
-    ["2 — Merge into integration, in dependency order.", "`/merge-multi` is the file's single writer, allocating each `## D<n> — <title>` id the way `commands/build.md`'s *The committed record* does (one more than the highest id already in the file, read at the moment of the append) and never editing or removing an entry it did not just write, using the exact header grammar `concerns-check`'s docstring quotes back from `build.md`:"],
+    ["2 — Merge into integration, in dependency order.", "`/merge-multi` is the file's single writer: each entry is a `## D<n> — <title>` with `step: merge-multi · slice: — · decidedBy: orchestrator`, its id one more than the highest already in the file, in the D-entry grammar `/build`'s record companion (`reference/build-record.md`) states."],
+    ["2 — Merge into integration, in dependency order.", "Done when every unit ruled `merge` is in `int/<run-id>` at its ruled sha, every conflict and obligation has a recorded resolution, and no `*.orig` remains."],
     ["3 — Run the gate, once, on integration.", "3 — Run the gate, once, on integration."],
-    ["3 — Run the gate, once, on integration.", "Per the [full-gate](../skills/full-gate/SKILL.md) skill: `node .claude/gate.mjs` with no argument — the repo's scoped mode — (or the repo's `.claude/gate.sh`) on `int/<run-id>`, verdict read from the `GATE-STEP:` lines and baseline-diffed against the default branch."],
-    ["3 — Run the gate, once, on integration.", "Never `--full` or `--all`: the whole-repo run is the CI pipeline's, or the user's on request, and no flow step selects it."],
-    ["3 — Run the gate, once, on integration.", "Scoped here is not thin — the integration branch's diff against the default branch is the *union of every unit's diff*, so the scoping selects everything the fleet touched and nothing it did not."],
-    ["3 — Run the gate, once, on integration.", "Read that skill for the discovery order and the four ways a green read is wrong; do not re-derive them here."],
-    ["3 — Run the gate, once, on integration.", "They are all [EVIDENCE.md](../EVIDENCE.md) §1 — *a verdict is evidence only about what it actually executed* — and this is the one run in the whole fleet that exercises the assembled tree, so a misread here is unbacked by anything downstream."],
-    ["3 — Run the gate, once, on integration.", "Report it for what it is: it certifies the fleet's combined diff and its importers, not the whole repository."],
-    ["3 — Run the gate, once, on integration.", "The integration branch is where the fleet's single version bump happens: bump each touched plugin's `plugin.json` once on `int/<run-id>` before the gate; the version-bump step MUST read `PASS` there."],
-    ["3 — Run the gate, once, on integration.", "A `SKIP reason=deferred-to-merge-multi` on integration is refused as red — integration carries no `.work/lane.yaml`, so the gate `FAIL`s a missing bump by construction, and a `SKIP` there means a stale lane brief leaked into the integration checkout; remove it and re-run, never open the integration PR over it."],
-    ["3 — Run the gate, once, on integration.", "The verdict names the ref it ran at and therefore which units it covers — the assembled tree covers every merged unit; a unit excluded with `--only` is not covered and is named as such."],
+    ["3 — Run the gate, once, on integration.", "Bump each touched plugin's `plugin.json` once on `int/<run-id>` before the gate; the version-bump step must read `PASS` there, and a `SKIP reason=deferred-to-merge-multi` is refused as red, since integration carries no `.work/lane.yaml` and a `SKIP` means a stale lane brief leaked in; remove it and re-run."],
+    ["3 — Run the gate, once, on integration.", "Run the gate as the `full-gate` skill says, in the repo's scoped mode (`--fast` where the host has no scoped mode, and say so), on `int/<run-id>`, reading the verdict from the `GATE-STEP:` lines and baseline-diffing against the default branch."],
+    ["3 — Run the gate, once, on integration.", "The whole-repo `--full` and `--all` runs are never a flow step's; that run is CI's, or the user's on request."],
+    ["3 — Run the gate, once, on integration.", "The integration diff is the union of every unit's diff, so the scoped verdict certifies the fleet's combined diff and its importers; report the ref it ran at and therefore which units it covers, naming a unit excluded with `--only` as not covered."],
     ["3 — Run the gate, once, on integration.", "A red gate is fixed on integration, not deferred."],
-    ["3 — Run the gate, once, on integration.", "If a failure traces cleanly to one unit and the fix is more than a line, push the fix to that unit's branch and re-merge — that keeps the unit PR an honest record of its own work."],
+    ["3 — Run the gate, once, on integration.", "If a failure traces cleanly to one unit and the fix is more than a line, push the fix to that unit's branch and re-merge, so the unit PR stays an honest record of its own work."],
     ["3 — Run the gate, once, on integration.", "A fix pushed to a unit branch changes its head: re-run Step 1b at the new head sha before re-merging, and refuse on anything but `outcome=pass`."],
     ["3 — Run the gate, once, on integration.", "Otherwise fix on integration and name the unit in the commit message."],
-    ["3 — Run the gate, once, on integration.", "Do not open the integration PR over a red gate; an integration branch that looks landed and is red is the worst state this flow can produce, because the fleet is torn down and nobody owns it."],
+    ["3 — Run the gate, once, on integration.", "The integration PR opens over `GATE: PASS` only; a red integration branch has no owner once the fleet is torn down."],
+    ["3 — Run the gate, once, on integration.", "Done when the gate printed `GATE: PASS` on the current tip of `int/<run-id>` and the version-bump step read `PASS`."],
     ["4 — Collect the closing keywords.", "4 — Collect the closing keywords."],
-    ["4 — Collect the closing keywords.", "A PR merged into `int/<run-id>` does not close its issues."],
-    ["4 — Collect the closing keywords.", "GitHub fires closing keywords only for PRs merged into the repository's default branch."],
-    ["4 — Collect the closing keywords.", "Every `Closes #N` written into a unit PR body by `/verify-build` is therefore inert under this topology — well-formed, rendered as a cross-reference, and closing nothing."],
-    ["4 — Collect the closing keywords.", "The failure has no tell anywhere: well-formed commits, PRs `MERGED`, gates green, and the only symptom is a backlog count nobody has a reason to read."],
-    ["4 — Collect the closing keywords.", "So collect the union of issues referenced across every unit PR, and carry them into the integration PR body — one `closes` keyword per issue, repeated."],
-    ["4 — Collect the closing keywords.", "`Closes #56, closes #62, closes #63`."],
-    ["4 — Collect the closing keywords.", "A bare list (`Closes #56, #62`) closes the first and turns the rest into mentions."],
-    ["4 — Collect the closing keywords.", "RECONCILE the manifest before you open the PR."],
-    ["4 — Collect the closing keywords.", "`run.yaml` declares the run's units and you have just enumerated what merged: compute `declared − landed`."],
-    ["4 — Collect the closing keywords.", "If it is non-empty, the integration PR body states it under its own heading and the report leads with it; a unit step 1b refused is listed there with its `CONCERNS-CHECK:v1` verdict line as the reason; a unit deliberately dropped is recorded as dropped, with a reason, because deliberate omission and silent disappearance must not look identical."],
-    ["4 — Collect the closing keywords.", "One line of set arithmetic against state you already hold — without it a nine-unit run once landed eight with every gate green and correct."],
-    ["4 — Collect the closing keywords.", "The integration branch name is not evidence of scope: it is derived from the requested unit list at cut time and never revised, so it reads as confirmation of a scope the run may not have delivered."],
-    ["4 — Collect the closing keywords.", "The epic's goal oracle is reported here, red or green."],
-    ["4 — Collect the closing keywords.", "A fleet that lands every unit with the goal oracle still red is a reportable outcome, not a silent success."],
+    ["4 — Collect the closing keywords.", "A PR merged into `int/<run-id>` does not close its issues: GitHub fires closing keywords only on merges into the default branch, so every `Closes #N` in a unit PR body is inert."],
+    ["4 — Collect the closing keywords.", "Collect the union of issues referenced across every unit PR into the integration PR body, one `closes` keyword per issue: `Closes #56, closes #62, closes #63`."],
+    ["4 — Collect the closing keywords.", "A bare list (`Closes #56, #62`) closes the first and turns the rest into mentions; `/verify-build` step 6 states the binding rule."],
+    ["4 — Collect the closing keywords.", "Reconcile the manifest: `run.yaml` declares the run's units and you have just enumerated what merged, so compute `declared − landed`."],
+    ["4 — Collect the closing keywords.", "If it is non-empty, the integration PR body states it under its own heading and the report leads with it: a unit step 1b refused is listed with its `CONCERNS-CHECK:v1` verdict line, and a deliberately dropped unit is recorded as dropped with a reason."],
+    ["4 — Collect the closing keywords.", "The integration branch name is not evidence of scope; it was fixed at cut time."],
+    ["4 — Collect the closing keywords.", "The epic's goal oracle is reported here, red or green; landing every unit with it still red is a reportable outcome, not a silent success."],
+    ["4 — Collect the closing keywords.", "Done when the body carries one `closes` per referenced issue, the `declared − landed` set (even when empty), and the goal oracle's verdict."],
     ["5 — Open the integration PR.", "FENCE[]: ## Fleet <run-id> — <N> units ⏎ | Unit | PR | ADR | ⏎ |---|---|---| ⏎ | TV1-1001 — <title> | #101 | ADR-0142 | ⏎ | TV1-1002 — <title> | #102 | — | ⏎ ### Conflict resolutions ⏎ - TV1-1004 × TV1-1007 in `src/foo.ts` — kept X, dropped Y, because <reason>. ⏎ - (or \"none\") ⏎ ### Gate ⏎ <the full-gate report block, verbatim — step names, counts, baseline diff, and ⏎ anything reported SKIP / INCONCLUSIVE, not selected by the scoping, or ⏎ excluded from the repo's widest run, by name> ⏎ Closes #56, closes #62, closes #63"],
     ["5 — Open the integration PR.", "5 — Open the integration PR."],
     ["5 — Open the integration PR.", "`gh pr create --base <default> --head int/<run-id>` — ready for review, not a draft."],
-    ["5 — Open the integration PR.", "Then verify its base after the fact; `gh pr create` succeeds silently against the wrong ref."],
-    ["5 — Open the integration PR.", "The body is an index, not a concatenation."],
-    ["5 — Open the integration PR.", "Every unit PR keeps its full body at its own URL permanently, and the ADRs are committed files — copying them here duplicates rather than preserves, and a twelve-ticket wall of text is a body nobody reads."],
-    ["5 — Open the integration PR.", "Only three things are genuinely new at this level, and none of them exists anywhere else: what landed, what you resolved, and what the gate said."],
+    ["5 — Open the integration PR.", "Then verify its base, since `gh pr create` succeeds silently against the wrong ref."],
+    ["5 — Open the integration PR.", "The body is an index, not a concatenation: what landed, what you resolved and what the gate said; every unit PR keeps its full body at its own URL."],
+    ["5 — Open the integration PR.", "Done when the PR exists with `baseRefName` equal to the default branch."],
     ["6 — Land (`--land` only).", "FENCE[sh]: git fetch origin ⏎ git merge-base --is-ancestor origin/int/<run-id> origin/<default> # the merge actually delivered ⏎ for n in <every referenced issue>; do printf '%s %s\\n' \"$n\" \"$(gh issue view \"$n\" --json state -q .state)\"; done"],
     ["6 — Land (`--land` only).", "FENCE[sh]: comm -13 <(gh issue list --state closed --limit 500 --json number -q '.[].number' | sort) \\ ⏎ <(printf '%s\\n' <referenced> | sort)"],
     ["6 — Land (`--land` only).", "6 — Land (`--land` only)."],
     ["6 — Land (`--land` only).", "Merge the integration PR into the default branch."],
     ["6 — Land (`--land` only).", "Then two assertions, because both failures report success:"],
-    ["6 — Land (`--land` only).", "One line per reference, every one `CLOSED`."],
-    ["6 — Land (`--land` only).", "Check the line count before the states — a `gh` failure prints a blank state and greps clean."],
+    ["6 — Land (`--land` only).", "Check the line count before the states, since a `gh` failure prints a blank state and greps clean."],
     ["6 — Land (`--land` only).", "Close the stragglers (`gh issue close <n> -c \"landed in #<pr>\"`)."],
     ["6 — Land (`--land` only).", "Bulk form when the set is long:"],
-    ["6 — Land (`--land` only).", "Whatever that prints is what stayed open."],
+    ["6 — Land (`--land` only).", "Whatever that prints is still open."],
     ["6 — Land (`--land` only).", "Then delete `int/<run-id>` if the repo deletes merged branches, and report the default-branch sha the fleet landed at."],
-    ["6 — Land (`--land` only).", "Without `--land`, stop at step 5 and report the integration PR URL and its `mergeable` state."],
-    ["6 — Land (`--land` only).", "Say plainly that nothing has merged into the default branch."],
+    ["6 — Land (`--land` only).", "Done when the ancestor check succeeded and every referenced issue printed `CLOSED`."],
+    ["6 — Land (`--land` only).", "Without `--land`, stop at step 5 and report the integration PR URL and its `mergeable` state, saying plainly that nothing has landed."],
     ["7 — Report.", "7 — Report."],
     ["7 — Report.", "Units merged (and any skipped, with why) · `declared − landed`, always, even when empty · the epic goal oracle's verdict · conflict resolutions, counted · the gate verdict · the integration PR URL · issues closed vs."],
     ["7 — Report.", "still open."],
-    ["7 — Report.", "Update `run.yaml` — `landedAt`, `integrationPr` — so a re-run is a no-op rather than a second attempt."],
+    ["7 — Report.", "Done when `run.yaml` carries `landedAt` and `integrationPr`, so a re-run is a no-op."],
     ["Principles", "## Principles"],
     ["Principles", "- Fresh session, always."],
     ["Principles", "The fleet conversation holds the run's memory; this command needs only its bookkeeping."],
-    ["Principles", "Reopening it to merge is the single largest avoidable cost in the fleet flow."],
-    ["Principles", "- Conflicts resolved once, in one place."],
-    ["Principles", "The integration branch exists for exactly this."],
-    ["Principles", "Any design that resolves the same conflict twice has lost the argument for having it."],
-    ["Principles", "- The unit branch is the reviewed artifact."],
-    ["Principles", "Resolve into integration; never rebase what a human approved."],
-    ["Principles", "- The gate runs once, where it can see something, and only over what changed."],
-    ["Principles", "Cross-unit breakage is invisible per-unit by construction; N gates buy less than one integration gate and cost N times as much."],
-    ["Principles", "Widening that one run to the whole repo is the user's call, not this command's."],
     ["Principles", "- Merged is not delivered, and merged is not closed."],
-    ["Principles", "A wrong-target merge and an inert closing keyword both report success."],
-    ["Principles", "Each has an explicit assertion above; run them."],
-    ["Principles", "- The integration PR records the landing, not the work."],
-    ["Principles", "Each unit PR remains the system of record for its own change — [verify-build](./verify-build.md)'s principle is unchanged, one level up."],
-    ["Principles", "- Nothing is merged without `--land`."],
-    ["Principles", "Review gates the merge; the flag gates the default branch."],
+    ["Principles", "A wrong-target merge and an inert closing keyword both report success; each has an explicit assertion above, and nothing lands without `--land`."],
 ]
 whole_units, executed_fences = file_units(text)
+if mode == "--print-pinned":
+    # The generator for PINNED_FILE: the same units the closed-set check reads,
+    # printed as the Python list this file pins. Nothing is checked in this mode.
+    print("PINNED_FILE = [")
+    for sec, unit in whole_units:
+        print("    [%s, %s]," % (json.dumps(sec, ensure_ascii=False), json.dumps(unit, ensure_ascii=False)))
+    print("]")
+    sys.exit(0)
 check(executed_fences == 1,
       "exactly one fence holds the executed Step 1b block (concerns-check --decisions)",
       "found %d" % executed_fences)
@@ -798,6 +512,265 @@ for l in out:
     print(l)
 PYMM
 }
+
+# Regenerate PINNED_FILE from the tracked merge-multi.md, with the suite's own
+# normalisation, and exit. The closed set is a change detector by design
+# (ADR-005 D94): a rewrite of merge-multi.md re-baselines it here, never by
+# hand-editing the list, and the re-baseline is reviewed as a diff of the list.
+if [ "${1:-}" = --print-pinned ]; then
+  check_seams "$MERGE_MULTI_MD" --print-pinned
+  exit $?
+fi
+
+# ---------------------------------------------------------------------------
+printf '\nSeam — /merge-multi rules each unit'"'"'s concerns from its own head, before merging (XL-27 slice 7)\n\n'
+# ---------------------------------------------------------------------------
+
+# --- extract Step 1b's fenced sh block, anchored on the concerns-check
+# --decisions line, which is unique to this one block in the whole file ---
+BLOCK_RAW="$TMP/block-raw.sh"
+awk '
+  /^```sh$/ { buf=""; capturing=1; next }
+  capturing && /^```$/ {
+    if (buf ~ /concerns-check --decisions/) { printf "%s", buf; found=1 }
+    capturing=0; buf=""; next
+  }
+  capturing { buf = buf $0 "\n" }
+  END { if (!found) exit 1 }
+' "$MERGE_MULTI_MD" > "$BLOCK_RAW"
+if [ ! -s "$BLOCK_RAW" ]; then
+  fail 'merge-multi.md Step 1b'\''s concerns fenced sh block is extractable' \
+       'no fenced ```sh block containing `concerns-check --decisions` found'
+else
+  pass 'merge-multi.md Step 1b'\''s concerns fenced sh block is extractable'
+fi
+
+# Fail loudly if the substitution grammar this test depends on (the literal
+# placeholders <sha>, <run-id>, <unit-id>, and the $DOCS folder the block
+# resolves) has drifted — a silent block edit here must not quietly stop
+# testing anything.
+if grep -qF '<sha>:$DOCS/concerns.md' "$BLOCK_RAW" && grep -qF '<sha>:$DOCS/decisions.md' "$BLOCK_RAW" \
+   && grep -qF '.work/multi/<run-id>/units/<unit-id>.state.yaml' "$BLOCK_RAW"; then
+  pass 'the block'\''s substitution grammar (<sha>, <run-id>, <unit-id>, $DOCS) is intact'
+else
+  fail 'the block'\''s substitution grammar (<sha>, <run-id>, <unit-id>, $DOCS) is intact' \
+       'expected literal <sha>:$DOCS/concerns.md, <sha>:$DOCS/decisions.md and .work/multi/<run-id>/units/<unit-id>.state.yaml in the extracted block:' \
+       "$( cat "$BLOCK_RAW" )"
+fi
+
+# --- build a throwaway repo with unit branches at a fixed work-docs path ---
+REPO="$TMP/repo"
+mkdir -p "$REPO"
+# The branch is named explicitly: an ambient `init.defaultBranch` (say
+# `trunk`) must not change which commit every unit branch is cut from.
+git -C "$REPO" init -q -b master
+git -C "$REPO" config user.email test@example.com
+git -C "$REPO" config user.name Test
+git -C "$REPO" commit -q --allow-empty -m 'root'
+
+UNIT_PATH="docs/prs/UNIT-1"
+
+write_unit(){
+  # write_unit <branch> <concerns-content-or-none> <decisions-content-or-none> [path]
+  branch=$1; concerns=$2; decisions=$3; wpath=${4:-$UNIT_PATH}
+  # Every unit is cut from the root commit on master, never stacked on the
+  # previous unit: a stacked unit inherits its sibling's concerns.md, and the
+  # "no concerns.md" case then tests a file that is present.
+  if ! git -C "$REPO" checkout -q -b "$branch" master; then
+    fail "fixture: unit branch $branch is cut from master" 'git checkout -b failed; every outcome below would be meaningless'
+    exit 1
+  fi
+  mkdir -p "$REPO/$wpath"
+  if [ "$concerns" != "NONE" ]; then
+    printf '%s' "$concerns" > "$REPO/$wpath/concerns.md"
+    git -C "$REPO" add "$wpath/concerns.md"
+  fi
+  if [ "$decisions" != "NONE" ]; then
+    printf '%s' "$decisions" > "$REPO/$wpath/decisions.md"
+    git -C "$REPO" add "$wpath/decisions.md"
+  fi
+  git -C "$REPO" commit -q -m "unit $branch" --allow-empty
+}
+
+ALL_MET='## C1 — must not lose data
+bar: hard
+raisedBy: owner · step: design
+quote: "must not lose data"
+why: it matters
+verify: check it
+verdict: met
+evidence: verified in review
+'
+
+HARD_UNMET='## C1 — must not lose data
+bar: hard
+raisedBy: owner · step: design
+quote: "must not lose data"
+why: it matters
+verify: check it
+verdict: unmet
+evidence: not addressed
+'
+
+MALFORMED='## C1 not a real header
+this is not the entry grammar at all
+'
+
+WAIVED_FAKE_D='## C1 — must not lose data
+bar: hard
+raisedBy: owner · step: design
+quote: "must not lose data"
+why: it matters
+verify: check it
+verdict: waived
+evidence: waived, see decisions.md#D7
+'
+
+EMPTY=''
+
+# a) all met -> merge allowed
+write_unit unit-all-met "$ALL_MET" NONE
+sha_all_met=$( git -C "$REPO" rev-parse unit-all-met )
+
+# b) hard unmet -> refuse
+write_unit unit-hard-unmet "$HARD_UNMET" NONE
+sha_hard_unmet=$( git -C "$REPO" rev-parse unit-hard-unmet )
+
+# c) malformed -> refuse (error)
+write_unit unit-malformed "$MALFORMED" NONE
+sha_malformed=$( git -C "$REPO" rev-parse unit-malformed )
+
+# d) waived citing a D-entry that does not exist in decisions.md -> refuse
+write_unit unit-fake-waiver "$WAIVED_FAKE_D" "## D1 — an unrelated decision
+kind: deviation
+step: build · slice: 1 · decidedBy: executor
+sources: [none]
+rejected: —
+supersedes: —
+unrelated body
+"
+sha_fake_waiver=$( git -C "$REPO" rev-parse unit-fake-waiver )
+
+# d2) waived citing a real, human-decided waiver record — for a DIFFERENT
+# concern (C2) -> refuse
+WAIVED_D1='## C1 — must not lose data
+bar: hard
+raisedBy: owner · step: design
+quote: "must not lose data"
+why: it matters
+verify: check it
+verdict: waived
+evidence: waived, see decisions.md#D1
+'
+write_unit unit-foreign-waiver "$WAIVED_D1" '## D1 — waive C2
+kind: waiver
+step: build · slice: — · decidedBy: human
+sources: [human]
+rejected: —
+supersedes: —
+The owner said "C2 can wait".
+'
+sha_foreign_waiver=$( git -C "$REPO" rev-parse unit-foreign-waiver )
+
+# e) no concerns.md at head -> refuse
+write_unit unit-no-concerns NONE NONE
+sha_no_concerns=$( git -C "$REPO" rev-parse unit-no-concerns )
+
+# f) empty committed concerns.md -> allowed
+write_unit unit-empty "$EMPTY" NONE
+sha_empty=$( git -C "$REPO" rev-parse unit-empty )
+
+# h) a unit whose run.yaml id (UNIT-2) names a folder that IS all-met at its
+# head — but whose state file records no work_item. A block that fell back to
+# units[].id would pass it; the state file is the only source, so it refuses.
+write_unit unit-two "$ALL_MET" NONE docs/prs/UNIT-2
+sha_unit2=$( git -C "$REPO" rev-parse unit-two )
+
+# The orchestrator checkout's run dir: one state file per unit, as each lane
+# writes it (`work_item:` copied from its own /start's .work/mode.yaml).
+# Untracked, like the real `.work/` — git show never sees it.
+STATE_DIR="$REPO/.work/multi/multi-test/units"
+mkdir -p "$STATE_DIR"
+printf 'step: done\nstatus: passed\nwork_item: UNIT-1   # copied from .work/mode.yaml\n' > "$STATE_DIR/unit-a.state.yaml"
+printf 'step: done\nwork_item: "UNIT-1"\n' > "$STATE_DIR/unit-quoted.state.yaml"
+printf 'step: done\nstatus: passed\n' > "$STATE_DIR/UNIT-2.state.yaml"
+printf 'work_item:\nstep: done\n' > "$STATE_DIR/unit-empty-key.state.yaml"
+
+# g) working tree differs from head: head is met, working tree (uncommitted)
+# is unmet -> must pass on the HEAD content; a block reading the checkout on
+# disk would print outcome=fail here instead.
+write_unit unit-worktree-drift "$ALL_MET" NONE
+sha_worktree_drift=$( git -C "$REPO" rev-parse unit-worktree-drift )
+git -C "$REPO" checkout -q unit-worktree-drift
+printf '%s' "$HARD_UNMET" > "$REPO/$UNIT_PATH/concerns.md"   # uncommitted, working-tree only
+
+run_block(){
+  # run_block <sha> -> the block's whole output, for the unit named $UNIT_ID
+  sha=$1
+  sed -e "s|<sha>|$sha|g" -e "s|<run-id>|multi-test|g" -e "s|<unit-id>|$UNIT_ID|g" "$BLOCK_RAW" > "$TMP/run.sh"
+  ( cd "$REPO" && PATH="$PLUGIN/bin:$PATH" sh "$TMP/run.sh" ) 2>&1
+}
+
+check_outcome(){
+  # check_outcome <sha> <outcome> <reason|-> <label>
+  # Asserts on the LAST line only (the verdict line, ADR-004), token-exact:
+  # `outcome=<outcome>` and, when <reason> is not `-`, `reason=<reason>`; when
+  # it is `-`, the line must carry no reason token at all. Matching only the
+  # outcome let a fixture built wrong (a unit that DID contain concerns.md)
+  # pass the "no concerns.md" case for the wrong reason.
+  out=$( run_block "$1" )
+  last=$( printf '%s\n' "$out" | tail -1 )
+  ok=1
+  case "$last" in "CONCERNS-CHECK:v1 "*) ;; *) ok=0 ;; esac
+  case " $last " in *" outcome=$2 "*) ;; *) ok=0 ;; esac
+  if [ "$3" = "-" ]; then
+    case " $last " in *" reason="*) ok=0 ;; esac
+  else
+    case " $last " in *" reason=$3 "*) ;; *) ok=0 ;; esac
+  fi
+  if [ "$ok" -eq 1 ]; then
+    pass "$4"
+  else
+    fail "$4" "expected a last line CONCERNS-CHECK:v1 … outcome=$2 (reason: $3) for sha $1" "got: $out"
+  fi
+}
+
+check_refused(){
+  # check_refused <sha> <label> — the unit's work item did not resolve: the
+  # block ran no concerns-check (no CONCERNS-CHECK line, which the mapping
+  # refuses) and its last line says refuse.
+  out=$( run_block "$1" )
+  if printf '%s\n' "$out" | grep -q '^CONCERNS-CHECK:'; then
+    fail "$2" 'expected no CONCERNS-CHECK line (the work item must not resolve)' "got: $out"
+  elif printf '%s\n' "$out" | tail -1 | grep -q 'refuse'; then
+    pass "$2"
+  else
+    fail "$2" 'expected a last line saying refuse' "got: $out"
+  fi
+}
+
+UNIT_ID=unit-a
+check_outcome "$sha_all_met"        pass  -                   'a unit whose committed concerns.md is all met -> merge allowed (outcome=pass, no reason)'
+check_outcome "$sha_hard_unmet"     fail  hard-unmet          'a unit with an unmet hard concern -> refused (outcome=fail reason=hard-unmet)'
+check_outcome "$sha_malformed"      error malformed-header    'a unit whose concerns.md is malformed -> refused (outcome=error reason=malformed-header)'
+check_outcome "$sha_fake_waiver"    error waiver-record-missing 'a unit waiving via a D-entry absent from its decisions.md -> refused (outcome=error reason=waiver-record-missing, proves --decisions is passed)'
+check_outcome "$sha_foreign_waiver" error waiver-record-other-concern 'a unit waiving via a human D-entry that waives a DIFFERENT concern -> refused (outcome=error reason=waiver-record-other-concern)'
+check_outcome "$sha_no_concerns"    error file-not-found      'a unit with no concerns.md at its head -> refused (outcome=error reason=file-not-found)'
+check_outcome "$sha_empty"          pass  -                   'a unit with an empty committed concerns.md -> allowed (outcome=pass, no reason)'
+check_outcome "$sha_worktree_drift" pass  -                   'the block reads the unit HEAD, not the working tree (head is all-met -> pass despite an uncommitted unmet copy)'
+
+UNIT_ID=unit-quoted
+check_outcome "$sha_all_met"        pass  -                   'a quoted work_item: in the state file resolves the same folder -> pass'
+UNIT_ID=unit-ghost
+check_refused "$sha_all_met" 'a unit with no state file -> refused, no concerns-check run'
+UNIT_ID=UNIT-2
+check_refused "$sha_unit2"   'a state file with no work_item: -> refused, although units[].id (UNIT-2) names an all-met folder at the head (no fallback)'
+UNIT_ID=unit-empty-key
+check_refused "$sha_all_met" 'an empty work_item: -> refused'
+
+# ---------------------------------------------------------------------------
+printf '\nSeam — merge-multi.md: ORDER, the refusal mapping, and mutation controls\n\n'
+# ---------------------------------------------------------------------------
 
 report_seams(){
   file=$1

@@ -46,8 +46,10 @@ PROVISIONER_MD="$PLUGIN/agents/provisioner.md"
 RUN_REPORT_MD="$PLUGIN/commands/run-report.md"
 VERIFY_BUILD_MD="$PLUGIN/commands/verify-build.md"
 DESIGN_MULTI_MD="$PLUGIN/commands/design-multi.md"
+PHASE_MD="$PLUGIN/reference/design-multi-phase-boundary.md"
 DESIGN_LANE_MD="$PLUGIN/agents/design-lane.md"
 ADR_006_MD="$ROOT/docs/adr/ADR-006-one-program-writes-map-json.md"
+ADR_013_MD="$ROOT/docs/adr/ADR-013-a-fleet-orchestrator-is-a-tick-not-a-session.md"
 LANE_STEP_FIXTURES="$ROOT/scripts/fixtures/lane-step"
 MARKER_PY=${MARKER_PY:-python3}
 
@@ -114,22 +116,26 @@ present "$BUILD_MD"  'mode: build'  '[SEAM 4] /build writes mode: build'
 present "$START_MD"  'mode: start'  '[SEAM 4] /start writes mode: start'
 
 # [SEAM 2] The load-bearing half. `/start` must CLEAR, not merge — a marker that
-# survives a new `/start` is confidently wrong about the work item.
-present "$START_MD" 'clear and rewrite' '[SEAM 2] /start clears the marker before writing it'
-present "$START_MD" 'never merge with, patch, or preserve a field' \
-  '[SEAM 2] /start is forbidden from preserving a prior work item'\''s fields'
+# survives a new `/start` is confidently wrong about the work item. The clear is
+# a DELETE of the file — Seam D pins the sentence, `Delete any existing
+# .work/mode.yaml or .work/lane.yaml outright` — and deleting the file is what
+# makes merging, patching or preserving a field impossible rather than merely
+# forbidden, so the old wording pins on those verbs (`clear and rewrite`, `never
+# merge with, patch, or preserve a field`) are retired in favour of the one
+# mechanism sentence. What stays here is the reason, and the overwrite rule.
 present "$START_MD" 'A marker that survives a new `/start` is worse than no marker' \
   '[SEAM 2] and the reason the clearing matters is stated, not just the rule'
 
-# Overwrite-not-append, in all four. Append-only reproduces the residue bug.
-present "$START_MD"  'never appended' '/start states overwrite-not-append'
-present "$DESIGN_MD" 'never appended' '/design states overwrite-not-append'
-present "$PLAN_MD"   'never an append' '/plan states overwrite-not-append'
-present "$BUILD_MD"  'never an append' '/build states overwrite-not-append'
+# Overwrite-not-append. /start states it for every later command in its own
+# words; the four later commands carry it inside the byte-identical `## Step
+# protocol` section (`replaced, not merged or appended`), which Seam F extracts
+# once and compares across the copies — so the rule has one home there and one
+# statement here, and no per-file wording pin.
+present "$START_MD" 'rewrites the file whole' '/start states every later command overwrites the marker whole'
 
-# A repo not using this must be unaffected — the marker lives in the already
-# gitignored workspace and nothing else changes.
-present "$START_MD" 'already-gitignored' 'the marker is confined to the gitignored .work/'
+# A repo not using this must be unaffected — the marker lives in the gitignored
+# workspace (/start adds `.work/` to `.gitignore`) and nothing else changes.
+present "$START_MD" '`.gitignore`' 'the marker is confined to the gitignored .work/'
 
 # --- executed: the marker format actually parses, and is exactly four fields ---
 #
@@ -244,6 +250,8 @@ design.md|$DESIGN_MD
 start.md|$START_MD
 plan.md|$PLAN_MD
 build.md|$BUILD_MD
+build-pool.md|$PLUGIN/reference/build-pool.md
+build-record.md|$PLUGIN/reference/build-record.md
 unit-lane.md|$UNIT_LANE_MD
 provisioner.md|$PROVISIONER_MD"}
 
@@ -280,6 +288,8 @@ design.md
 start.md
 plan.md
 build.md
+build-pool.md
+build-record.md
 unit-lane.md
 provisioner.md'
 COUPLING_REQUIRED_TERMS='experience layer
@@ -582,6 +592,62 @@ else
     fail 'a value ending in sentence punctuation is NO VERDICT, not a value ending in a full stop' \
          "rc=$rc got: $( printf '%s' "${got:-<none>}" | tr '\n' ' ' )" \
          'a `\S+` value grammar absorbs the full stop, and on `outcome=` it corrupts the verdict token.'
+  fi
+fi
+
+# The marker is a PARAMETER, not a literal (GH-429). An orchestrator's wave yield
+# is a second marker word on the same grammar, and the alternative to a parameter
+# is a second parser — which is the drift the uniqueness guard below exists to
+# stop. So `lane-step --marker FLEET-STEP` reads a `FLEET-STEP:v1` line with the
+# SAME column-0 anchor, last-line-only rule, attribute grammar and exit 3; the
+# three-outcome vocabulary is untouched and no fourth outcome word appears
+# (GH-429-F3). Two fixtures, because a parameterisation that reads the happy line
+# while quietly losing a clause for the new marker is the failure worth catching:
+# one asserts the attributes come back in the carried order, the other that
+# absence still reads as `infra` for the new marker too.
+lane_fleet="$LANE_STEP_FIXTURES/fleet-yield-transcript.txt"
+if [ ! -f "$lane_fleet" ]; then
+  fail 'the FLEET-STEP yield transcript fixture exists' "no such file: $lane_fleet"
+else
+  got=$( "$LANE_STEP" --marker FLEET-STEP "$lane_fleet" 2>"$TMP/err" )
+  want=$( printf 'outcome=success\nwaves=1/3\nunits=2/7' )
+  if [ "$got" = "$want" ]; then
+    pass 'the same parse rule reads a FLEET-STEP:v1 yield line when asked for that marker'
+  else
+    fail 'the same parse rule reads a FLEET-STEP:v1 yield line when asked for that marker' \
+         "got:  $( printf '%s' "${got:-<no verdict>}" | tr '\n' ' ' )" \
+         "want: $( printf '%s' "$want" | tr '\n' ' ' )" \
+         'a marker hard-coded as a literal forces a second parser for the orchestrator'\''s yield.'
+  fi
+fi
+
+lane_fleet_trailing="$LANE_STEP_FIXTURES/fleet-trailing-prose-transcript.txt"
+if [ ! -f "$lane_fleet_trailing" ]; then
+  fail 'the FLEET-STEP trailing-prose transcript fixture exists' "no such file: $lane_fleet_trailing"
+else
+  got=$( "$LANE_STEP" --marker FLEET-STEP "$lane_fleet_trailing" 2>"$TMP/err" )
+  rc=$?
+  if [ "$rc" -eq 3 ] && [ -z "$got" ]; then
+    pass 'a FLEET-STEP marker followed by more prose is NO VERDICT, so absence still means infra'
+  else
+    fail 'a FLEET-STEP marker followed by more prose is NO VERDICT, so absence still means infra' \
+         "rc=$rc got: $( printf '%s' "${got:-<none>}" | tr '\n' ' ' )" \
+         'the final-line clause has to hold for the parameterised marker, not just the default one.'
+  fi
+fi
+
+# Backward compatibility: every caller shipped today passes a path and nothing
+# else, and must go on reading LANE-STEP. Asserted on a fixture whose verdict is
+# known (the decoy's), so a default silently changed to the new marker reads as
+# NO VERDICT here rather than as a pass.
+if [ -f "$lane_decoy" ]; then
+  got=$( "$LANE_STEP" "$lane_decoy" 2>"$TMP/err" )
+  if [ "$got" = "$( printf 'step=build\noutcome=success\nslices=3/3\ncommits=3' )" ]; then
+    pass 'with no marker argument the reader still reads LANE-STEP, as every shipped caller invokes it'
+  else
+    fail 'with no marker argument the reader still reads LANE-STEP, as every shipped caller invokes it' \
+         "got: $( printf '%s' "${got:-<no verdict>}" | tr '\n' ' ' )" \
+         'the marker is a parameter DEFAULTING to LANE-STEP; five commands pass only a path.'
   fi
 fi
 
@@ -957,10 +1023,22 @@ present "$UNIT_LANE_MD" 'through `lane-step`' \
 # consumed the line; this slice makes `unit-lane` the reader, and a reference
 # copy left standing beside the production one is drift nothing can see —
 # nobody runs both, so the fixtures would go on certifying a rule production had
-# stopped using. Pinned on the regex SOURCE shape — the marker token followed
-# immediately by a capture-group open-paren — which a transcript's literal
-# marker (`LANE-STEP:v1 step=...`) never contains, so a fixture is never
-# mistaken for an implementation.
+# stopped using. Pinned on the regex SOURCE shape — the version group followed
+# immediately by the attribute-list group — which a transcript's literal marker
+# (`LANE-STEP:v1 step=...`) never contains, so a fixture is never mistaken for
+# an implementation.
+#
+# The needle is the MARKER-INDEPENDENT half of the regex, not the marker literal
+# (GH-429). It was the literal while the marker was one, and the marker is now a
+# parameter: a needle carrying `LANE-STEP` would miss a second parser written for
+# `FLEET-STEP` — the exact copy this slice's parameterisation exists instead of —
+# while matching prose that merely QUOTES the old regex, which is what a design
+# document does. So the pin moved onto the ATTRIBUTE clause every marker of this
+# family shares -- specifically its key grammar, which `resolved-marker-lint.py`'s
+# looser `[^\s=]+` keys do not match: that file parses a DIFFERENT marker family
+# under a different grammar and is not a copy of this rule. A positive
+# control is asserted first, because a needle that matches nothing turns a guard
+# over a population into a guard over the empty set, and both read as a pass.
 #
 # The needle is assembled at runtime and never written as one literal, because
 # a guard searching for its own search string finds itself: written whole, this
@@ -975,8 +1053,15 @@ present "$UNIT_LANE_MD" 'through `lane-step`' \
 # whose binary-ness grep implementations disagree about. `-F` so the paren is a
 # character and not the start of a group.
 LANE_PARSER="$PLUGIN/scripts/lane-step-parse.py"
-lane_token_needle='LANE-STEP:v'
-lane_token_needle="$lane_token_needle("
+lane_token_needle='((?:\s+[A-Za-z_]'
+lane_token_needle="$lane_token_needle[A-Za-z0-9_]*="
+if grep -qaF "$lane_token_needle" "$LANE_PARSER"; then
+  pass 'the token-regex needle matches the production parser (positive control)'
+else
+  fail 'the token-regex needle matches the production parser (positive control)' \
+       "the needle no longer occurs in $( printf '%s' "$LANE_PARSER" | sed "s#^$ROOT/##" )" \
+       'a needle that matches nothing makes the uniqueness guard below a guard over the empty set.'
+fi
 # `__pycache__` is excluded, and this is a NARROWING rather than an exemption:
 # a `.pyc` there is not loadable without its source (sourceless import requires
 # the file to sit AT the source path -- byte-compile a module, delete the .py,
@@ -1031,17 +1116,86 @@ present "$VERIFY_BUILD_MD" 'LANE-STEP:v1 step=verify-build' '/verify-build emits
 # parse rule as the mitigation; the emitter has to carry the other side of it.
 # A closing remark after the marker reads as NO verdict, not a stale one, and
 # that is `infra`, and `infra` is retried.
-for f in "$START_MD" "$DESIGN_MD" "$PLAN_MD" "$BUILD_MD" "$VERIFY_BUILD_MD"; do
-  present "$f" 'as the **final** line' \
-    "$( basename "$f" .md ) tells the model the marker must be the LAST line"
-done
+#
+# --- executed: the Step protocol is ONE section, byte-identical in the four
+# commands that share it (ADR-012). design, plan, build and verify-build each
+# carry a `## Step protocol` section — the brief, the mode marker, the verdict —
+# and /start carries its own variant, because it deletes and rewrites the marker
+# instead of carrying it forward. Each copy is extracted (heading to the next
+# `## ` heading), whitespace-normalised and compared with design.md's: a rule
+# reworded in one copy is a rule three steps no longer share, and the failure
+# prints the word diff. The rules the section carries are then pinned ONCE, on
+# design.md's copy (the stated home); the comparison carries each pin to the
+# other three. This replaces the per-file wording pins on the old tail
+# paragraphs (`as the **final** line`, `Read your brief, if there is one`,
+# `never an append`, `carried forward exactly as /start recorded it`), which
+# five files each restated and which kept every restatement un-prunable.
+protocol_section(){
+  awk '/^## Step protocol$/{f=1;next} /^## /{if(f)exit} f' "$1" | tr '\n' ' ' | tr -s ' ' | sed 's/^ //; s/ $//'
+}
+word_diff(){
+  # word_diff <file-a> <file-b> — the words that differ, ndiff style
+  "$MARKER_PY" - "$1" "$2" <<'PYWD'
+import difflib, sys
+a = open(sys.argv[1], encoding="utf-8").read().split()
+b = open(sys.argv[2], encoding="utf-8").read().split()
+print("DIFF: " + (" ".join(d for d in difflib.ndiff(a, b) if d[:2] in ("- ", "+ ")) or "(identical words)"))
+PYWD
+}
+PROTOCOL_HOME="$DESIGN_MD"
+protocol_section "$PROTOCOL_HOME" > "$TMP/protocol-home.txt"
+if [ ! -s "$TMP/protocol-home.txt" ]; then
+  fail 'the Step protocol section is extractable from design.md' \
+       'no `## Step protocol` section in commands/design.md — the shared step rules are now stated nowhere comparable'
+else
+  pass 'the Step protocol section is extractable from design.md'
+  for f in "$PLAN_MD" "$BUILD_MD" "$VERIFY_BUILD_MD"; do
+    protocol_section "$f" > "$TMP/protocol-other.txt"
+    if cmp -s "$TMP/protocol-home.txt" "$TMP/protocol-other.txt"; then
+      pass "$( basename "$f" .md )'s Step protocol section is identical to design.md's (whitespace aside)"
+    else
+      fail "$( basename "$f" .md )'s Step protocol section is identical to design.md's (whitespace aside)" \
+           "$( word_diff "$TMP/protocol-home.txt" "$TMP/protocol-other.txt" )"
+    fi
+  done
+  # protocol_pin <literal> <description> — the rule's one home is the shared section.
+  protocol_pin(){
+    needle=$( printf '%s' "$1" | tr '\n' ' ' | tr -s ' ' )
+    if grep -qF "$needle" "$TMP/protocol-home.txt"; then
+      pass "$2"
+    else
+      fail "$2" 'expected literal not found in the `## Step protocol` section of commands/design.md:' "  $1"
+    fi
+  }
+  protocol_pin 'If `.work/lane.yaml` exists you are an unattended lane' \
+    'Step protocol: a step reads its brief from .work/lane.yaml and asks no one (Seam G)'
+  protocol_pin 'Rewrite `.work/mode.yaml` whole' 'Step protocol: a step rewrites the mode marker whole (Seam A)'
+  protocol_pin 'carried forward exactly as `/start` recorded them' \
+    'Step protocol: work_item and branch are carried forward as /start recorded them, never re-derived'
+  protocol_pin 'replaced, not merged or appended' 'Step protocol: the marker is replaced, never merged or appended (Seam A)'
+  protocol_pin 'at column 0 with nothing after it' 'Step protocol: the verdict is the LAST line, nothing after it (ADR-004)'
+  protocol_pin "Run \`lane-step-record '<the identical line>'\`" \
+    'Step protocol: the identical line is handed to the branch sink before it is printed (Seam C2)'
+  protocol_pin 'take no turn after it' 'Step protocol: printing the verdict ends the run'
+fi
+# /start's own variant carries the same two verdict clauses in its own words.
+present "$START_MD" 'at column 0 with nothing after it' 'start tells the model the marker must be the LAST line'
+present "$START_MD" "Run \`lane-step-record '<the identical line>'\`" 'start records its verdict on the branch when the brief asks'
 
-# And every step hands the same line to the branch sink (Seam C2). One per
-# command for the reason above: a scheduler reading git sees four verdicts and
-# one permanent `infra`, and the run still produces a PR.
-for f in "$START_MD" "$DESIGN_MD" "$PLAN_MD" "$BUILD_MD" "$VERIFY_BUILD_MD"; do
-  present "$f" "run \`lane-step-record '<the identical line>'\`" \
-    "$( basename "$f" .md ) records its verdict on the branch when the brief asks"
+# Each command names its step ONCE in its opening — the text before the first
+# `## ` heading: `This is the `<step>` step; its verdict is `LANE-STEP:v1
+# step=<step> …``. One per command, for the reason above (a corpus count stays
+# green at 4 of 5), and counted, so a second statement cannot drift from the first.
+for pair in "$START_MD|start" "$DESIGN_MD|design" "$PLAN_MD|plan" "$BUILD_MD|build" "$VERIFY_BUILD_MD|verify-build"; do
+  f=${pair%|*}; s=${pair#*|}
+  awk '/^## /{exit} {print}' "$f" | tr '\n' ' ' | tr -s ' ' > "$TMP/opening.txt"
+  n=$( grep -oF 'its verdict is `LANE-STEP:v1 step=' "$TMP/opening.txt" | wc -l | tr -d ' ' )
+  if grep -qF "This is the \`$s\` step; its verdict is \`LANE-STEP:v1 step=$s" "$TMP/opening.txt" && [ "$n" -eq 1 ]; then
+    pass "/$s states its own verdict once in its opening"
+  else
+    fail "/$s states its own verdict once in its opening" \
+         "expected exactly one \`This is the \`$s\` step; its verdict is \`LANE-STEP:v1 step=$s …\` before the first ## heading; found $n verdict statement(s)"
+  fi
 done
 
 # The recorder folds the verdict into the step's commit only while that commit is
@@ -1076,10 +1230,12 @@ printf '\nSeam G — every step READS the lane brief\n\n'
 # Its reader assertion is the scrub exemption below -- the one clause whose
 # absence actually costs a lane its brief. Two needles over one fact would make
 # each other unkillable.
-for f in "$DESIGN_MD" "$PLAN_MD" "$BUILD_MD"; do
-  present "$f" 'Read your brief, if there is one' \
-    "$( basename "$f" .md ) opens by reading its own brief"
-done
+# The reader clause is the `**Brief.**` paragraph of the shared `## Step
+# protocol` section: pinned once on design.md's copy in Seam F (`If
+# .work/lane.yaml exists you are an unattended lane`) and carried to plan and
+# build by the identical-section comparison there. A per-file wording pin here
+# would be a second needle over the same clause, and two needles over one fact
+# make each other unkillable.
 # `/verify-build`'s own reader assertion is not repeated here: Seam D already
 # needles the `gateDeferred` clause it reads, and a second needle over the same
 # clause would make both unkillable.
@@ -1154,37 +1310,62 @@ printf '\nSeam H — /build runs ready slices in a worktree pool, through the sc
 # suite can execute is /build CHOOSING to call them, so these needles pin the
 # calls and the one rule most likely to be "optimised" away: the reset that runs
 # install and build even when nothing changed.
-for sub in size provision reset land teardown; do
-  present "$BUILD_MD" "worktree-pool $sub" "/build calls worktree-pool $sub"
-done
-present "$BUILD_MD" 'unconditionally' '/build resets a pool worktree unconditionally'
-present "$BUILD_MD" 'Never skip it because the lockfile did not move' \
-  '/build refuses the lockfile-conditional reset by name'
+#
+# /build sizes the pool itself (Step 2) and opens the companion
+# reference/build-pool.md only when `size` reports `pool>0` (ADR-012): the
+# sizing call and the brief's cap stay in the command, the provision / reset /
+# land / teardown mechanics and their verdict readings live in the companion.
+# The pointer and its condition are pinned in the thin-context seam below.
+BUILD_POOL_MD="$PLUGIN/reference/build-pool.md"
+present "$BUILD_MD" 'worktree-pool size' '/build calls worktree-pool size'
 present "$BUILD_MD" 'worktreePoolMax' '/build reads the brief'\''s worktreePoolMax'
-present "$BUILD_MD" 'the **landed** sha, never the worker'\''s' '/build records the landed sha'
-present "$BUILD_MD" 'Workers never write the record' '/build keeps the orchestrator the single writer'
-present "$BUILD_MD" 'takes no further slice until teardown' \
-  '/build retires a worktree whose slice did not land (its uncommitted work survives to teardown)'
 present "$BUILD_MD" '[--only <ids>]' '/build sizes a targeted run by the slices it will run'
-present "$BUILD_MD" 'already=true' '/build reads an idempotent re-land as landed'
-present "$BUILD_MD" 'reason=main-checkout-dirty' '/build has a reading for a refused land, not only landed/conflict'
-present "$BUILD_MD" 'no verdict line' '/build reads a missing verdict line as the script dying, never as a pass'
-present "$BUILD_MD" 'In a pool worktree' '/build says where step 0 reads the design layer for a pool slice'
-present "$BUILD_MD" 'at the land, with the landed sha' '/build Step 4 sets passes: true at the land for a pool slice'
+if [ ! -f "$BUILD_POOL_MD" ]; then
+  fail 'the pool companion reference/build-pool.md exists' "no such file: $BUILD_POOL_MD"
+else
+  pass 'the pool companion reference/build-pool.md exists'
+  for sub in provision reset land teardown; do
+    present "$BUILD_POOL_MD" "worktree-pool $sub" "the pool companion calls worktree-pool $sub"
+  done
+  present "$BUILD_POOL_MD" 'pool-provisioner' 'the pool companion dispatches the pool-provisioner per worktree'
+  present "$BUILD_POOL_MD" 'unconditionally' 'the pool companion resets a pool worktree unconditionally'
+  present "$BUILD_POOL_MD" 'Never skip it because the lockfile did not move' \
+    'the pool companion refuses the lockfile-conditional reset by name'
+  present "$BUILD_POOL_MD" 'the **landed** sha, never the worker'\''s' 'the pool companion records the landed sha'
+  present "$BUILD_POOL_MD" 'Workers never write the record' 'the pool companion keeps the orchestrator the single writer'
+  present "$BUILD_POOL_MD" 'takes no further slice until teardown' \
+    'the pool companion retires a worktree whose slice did not land (its uncommitted work survives to teardown)'
+  present "$BUILD_POOL_MD" 'already=true' 'the pool companion reads an idempotent re-land as landed'
+  present "$BUILD_POOL_MD" 'reason=main-checkout-dirty' 'the pool companion has a reading for a refused land, not only landed/conflict'
+  present "$BUILD_POOL_MD" 'no verdict line' 'the pool companion reads a missing verdict line as the script dying, never as a pass'
+  present "$BUILD_POOL_MD" 'In a pool worktree' 'the pool companion says where step 0 reads the design layer for a pool slice'
+  present "$BUILD_POOL_MD" 'at the land, with the landed sha' 'the pool companion sets passes: true at the land for a pool slice'
+fi
 
-# And the same-tree parallelism it replaced is gone. Asserting only the new
-# text would stay green with both procedures present, and the old one is the
-# shorter and more tempting to follow.
-for old in 'be run in parallel (dispatch their executors concurrently)' 'When unsure, go sequential'; do
-  if grep -qF "$old" "$( norm "$BUILD_MD" )"; then
-    fail '/build no longer carries the same-tree "may be run in parallel" procedure' "still present: $old"
-  else
-    pass "/build no longer carries: $old"
-  fi
+# And the same-tree parallelism it replaced is gone — from the command and from
+# the companion. Asserting only the new text would stay green with both
+# procedures present, and the old one is the shorter and more tempting to follow.
+for f in "$BUILD_MD" "$BUILD_POOL_MD"; do
+  [ -f "$f" ] || continue
+  for old in 'be run in parallel (dispatch their executors concurrently)' 'When unsure, go sequential'; do
+    if grep -qF "$old" "$( norm "$f" )"; then
+      fail "${f##*/} no longer carries the same-tree \"may be run in parallel\" procedure" "still present: $old"
+    else
+      pass "${f##*/} no longer carries: $old"
+    fi
+  done
 done
 
 present "$PROVISIONER_MD" 'Use from `/start-multi` step 2, once per unit' 'the provisioner still serves /start-multi'
-present "$PROVISIONER_MD" 'or from `/build` step 2, once per `worktree-pool` worktree' 'the provisioner is dispatchable for a /build pool worktree'
+# A /build pool worktree is the pool-provisioner's, and the provisioner says so
+# by name instead of claiming the dispatch itself (the old description claimed
+# `/build` step 2 while build.md dispatched pool-provisioner there).
+present "$PROVISIONER_MD" 'pool-provisioner' 'the provisioner hands a /build pool worktree to pool-provisioner by name'
+if grep -qF 'or from `/build` step 2' "$( norm "$PROVISIONER_MD" )"; then
+  fail 'the provisioner no longer claims the /build step 2 dispatch' 'still present: or from `/build` step 2 — build.md dispatches pool-provisioner there'
+else
+  pass 'the provisioner no longer claims the /build step 2 dispatch'
+fi
 
 # ---------------------------------------------------------------------------
 # The design is committed beside the code, at the work-docs root (XL-27)
@@ -1423,16 +1604,10 @@ present "$START_MD" '**ask the user for a slug**' '/start says what to do when t
 # `work_item:` forward, not re-derive it: the date /start fixed is not
 # recoverable from the branch, so a re-derived id is malformed and a re-dated
 # one splits the record into a second folder.
-carry='carried forward exactly as `/start` recorded it'
-for f in commands/design.md commands/plan.md commands/build.md; do
-  if [ ! -f "$CENSUS_ROOT/$f" ]; then
-    fail "$f carries work_item forward when it rewrites mode.yaml" "file not found: $f"
-  elif grep -qF -e "$carry" "$( norm "$CENSUS_ROOT/$f" )"; then
-    pass "$f carries work_item forward when it rewrites mode.yaml"
-  else
-    fail "$f carries work_item forward when it rewrites mode.yaml" "no \"$carry\" in $f"
-  fi
-done
+# The clause is the `**Mode marker.**` paragraph of the shared `## Step
+# protocol` section (`carried forward exactly as /start recorded them`), pinned
+# once on design.md's copy in Seam F and carried to plan and build by the
+# identical-section comparison there.
 if grep -qF 'lower-case dash-separated slug when there is no id' "$( norm "$START_MD" )"; then
   fail 'the marker spec no longer calls an undated slug a work_item' 'still present: lower-case dash-separated slug when there is no id'
 else
@@ -1478,26 +1653,32 @@ fi
 printf '\nSeam I — /build leaves a committed record: decisions.md and build-summary.md (XL-27)\n\n'
 # ---------------------------------------------------------------------------
 #
-# build.md states each record's shape ONCE, as a fenced block. Both blocks are
-# PARSED here, and the D-entry grammar parsed out of build.md is then executed
-# against a real `decisions.md` — this unit's own — so an entry that drifts from
-# the header build.md specifies goes red naming the entry, rather than a
-# presence needle staying green beside an inverted meaning.
+# The record's shape is stated ONCE, as fenced blocks, in /build's companion
+# reference/build-record.md (ADR-012: the command opens it when it writes
+# `decisions.md` or `build-summary.md`; the pointer is pinned in the
+# thin-context seam below). Both blocks are PARSED here, and the D-entry grammar
+# parsed out of the companion is then executed against a real `decisions.md` —
+# this unit's own — so an entry that drifts from the header it specifies goes red
+# naming the entry, rather than a presence needle staying green beside an
+# inverted meaning. What stays in build.md itself — the dispatch-description
+# rule, the slice commit line, the resolver call — is pinned there.
 #
 # Overrides, for mutation tests on scratch copies (never on tracked files):
-#   CENSUS_ROOT  — the plugin tree build.md is read from (defined above);
+#   CENSUS_ROOT  — the plugin tree the files are read from (defined above);
 #   RECORD_ROOT  — the repo whose work-docs folder holds decisions.md. The
 #                  folder is resolved by work-docs-path, never spelled here.
 #                  It must be a git repository: a mutation recipe copies the
 #                  folder and runs `git init` in the copy, rather than leaning
 #                  on work-docs-path accepting a non-repo `--repo` (finding Q4,
 #                  which a fix would close).
-RECORD_BUILD_MD="$CENSUS_ROOT/commands/build.md"
+RECORD_BUILD_MD="$CENSUS_ROOT/reference/build-record.md"
+RECORD_CMD_MD="$CENSUS_ROOT/commands/build.md"
+RECORD_POOL_MD="$CENSUS_ROOT/reference/build-pool.md"
 RECORD_ROOT=${RECORD_ROOT:-$ROOT}
 RECORD_ITEM=${RECORD_ITEM:-XL-27}
 
-# The grammar the extractor holds build.md's blocks to — any edit outside it
-# fails loudly, it never skips:
+# The grammar the extractor holds the companion's blocks to — any edit outside
+# it fails loudly, it never skips:
 #   * a fence is a column-0 line starting ``` ; blocks are taken from the whole
 #     file. The D-entry block is the ONE block whose first line is `## D1 — `;
 #     the build-summary block is the ONE block whose first line is `---` and
@@ -1529,7 +1710,7 @@ for l in lines:
     elif cur is not None:
         cur.append(l)
 if cur is not None:
-    sys.exit("unterminated fence in build.md")
+    sys.exit("unterminated fence in build-record.md")
 
 KEY = re.compile(r"([a-z][A-Za-z_]*):(?:\s+(.*))?$")
 def split_comment(v):
@@ -1538,7 +1719,7 @@ def split_comment(v):
 
 d = [b for b in blocks if b and re.match(r"## D1 — ", b[0])]
 if len(d) != 1:
-    sys.exit("expected exactly one fenced block starting `## D1 — ` in build.md, found %d" % len(d))
+    sys.exit("expected exactly one fenced block starting `## D1 — ` in build-record.md, found %d" % len(d))
 keys, enums = [], {}
 for l in d[0][1:]:
     value, comment = split_comment(l)
@@ -1568,7 +1749,7 @@ json.dump({"keys": keys, "kind": enums.get("kind", []), "decidedBy": enums.get("
 
 s = [b for b in blocks if b and b[0] == "---" and any(l.startswith("slices:") for l in b)]
 if len(s) != 1:
-    sys.exit("expected exactly one fenced `---` frontmatter block with `slices:` in build.md, found %d" % len(s))
+    sys.exit("expected exactly one fenced `---` frontmatter block with `slices:` in build-record.md, found %d" % len(s))
 b = s[0]
 try:
     close = b.index("---", 1)
@@ -1612,9 +1793,9 @@ print("s.pdd.comment\t" + comments.get("postDesignDecisions", ""))
 print("s.prose\t" + " | ".join(l for l in b[close + 1:] if l.strip()))
 PYREC
 if [ $? -ne 0 ]; then
-  fail 'build.md states the D-entry header and the build-summary frontmatter as parseable fenced blocks' "$( cat "$TMP/err" )"
+  fail 'build-record.md states the D-entry header and the build-summary frontmatter as parseable fenced blocks' "$( cat "$TMP/err" )"
 else
-  pass 'build.md states the D-entry header and the build-summary frontmatter as parseable fenced blocks'
+  pass 'build-record.md states the D-entry header and the build-summary frontmatter as parseable fenced blocks'
   shape(){ awk -F '\t' -v k="$1" '$1 == k { sub(/^[^\t]*\t/, ""); print }' "$TMP/record-shape"; }
   # expect <label> <shape key> <wanted>
   expect(){
@@ -1661,25 +1842,28 @@ else
   esac
 fi
 
-# The old principle is gone; the rules that replace it are present.
-for old in 'No `build-progress.md`, no `build-summary.md`' 'The commits and `passes` flags are the truth'; do
-  if grep -qF -e "$old" "$( norm "$RECORD_BUILD_MD" )"; then
-    fail "/build no longer carries: $old" "still present in commands/build.md"
-  else
-    pass "/build no longer carries: $old"
-  fi
+# The old principle is gone — from the command and from its companion; the
+# rules that replace it are present, each in its one home.
+for f in "$RECORD_CMD_MD" "$RECORD_BUILD_MD"; do
+  for old in 'No `build-progress.md`, no `build-summary.md`' 'The commits and `passes` flags are the truth'; do
+    if [ -f "$f" ] && grep -qF -e "$old" "$( norm "$f" )"; then
+      fail "${f##*/} no longer carries: $old" "still present in ${f#"$CENSUS_ROOT"/}"
+    else
+      pass "${f##*/} no longer carries: $old"
+    fi
+  done
 done
 present "$RECORD_BUILD_MD" 'The orchestrator is the single writer of `decisions.md` and `build-summary.md`' \
   '/build names the orchestrator the single writer of both record files'
 present "$RECORD_BUILD_MD" 'never write `decisions.md` or `build-summary.md`' \
   '/build forbids workers and executors from writing either record file'
-present "$RECORD_BUILD_MD" 'Every dispatch description names `slice <id>`' \
+present "$RECORD_CMD_MD" 'Every dispatch description names `slice <id>`' \
   '/build names the slice in every dispatch description'
 present "$RECORD_BUILD_MD" 'generated later by `/verify-build`' \
   '/build says the usage and verifyBuild blocks are generated by /verify-build'
 present "$RECORD_BUILD_MD" '`postDesignDecisions: []`' '/build writes zero decisions as postDesignDecisions: []'
 present "$RECORD_BUILD_MD" 'green **or partial**' '/build writes build-summary.md on a partial end too'
-present "$RECORD_BUILD_MD" 'work-docs-path --item <work_item>' '/build resolves the record folder with work-docs-path'
+present "$RECORD_CMD_MD" 'work-docs-path --item <work_item>' '/build resolves the record folder with work-docs-path'
 present "$RECORD_BUILD_MD" '`.work/slices.yaml` stays working state' '/build keeps slices.yaml as uncommitted working state'
 present "$RECORD_BUILD_MD" 'spelled `work_item:`, not `workItem:`' '/build names the work_item spelling for the frontmatter'
 # A resumed or repeated /build has no source for an earlier session's per-slice
@@ -1697,8 +1881,8 @@ present "$RECORD_BUILD_MD" 'a `passes: false` one keeps its entry with `passed: 
 # (`<base>..HEAD`, so master's history of other work items is out of reach).
 present "$RECORD_BUILD_MD" "git log --format=%H -E --grep '^Slice <id> of <work_item> ' <base>..HEAD" \
   '/build finds an earlier-session slice'\''s commit by an anchored, ranged lookup'
-present "$RECORD_BUILD_MD" 'Slice <id> of <work_item> — <slice name>' \
-  '/build Step 4'\''s commit line carries the work_item the lookup searches for'
+present "$RECORD_CMD_MD" 'Slice <id> of <work_item> — <slice name>' \
+  '/build'\''s commit line carries the work_item the lookup searches for'
 present "$RECORD_BUILD_MD" 'never pick one' '/build refuses to choose between several candidate commits'
 present "$RECORD_BUILD_MD" '`passed: true` with `commit: null` is legal' \
   '/build states a passed slice whose commit cannot be found is recorded, not guessed'
@@ -1712,9 +1896,9 @@ present "$RECORD_BUILD_MD" 'read it as `fixRounds:`' '/build still reads a build
 present "$RECORD_BUILD_MD" 'never an absent key' '/build writes zero decisions as [], never an absent key'
 present "$RECORD_BUILD_MD" 'Executors, verifiers and pool workers never write' \
   '/build names all three non-writers of the record (C1)'
-present "$RECORD_BUILD_MD" 'unless the run stopped before any slice ran' \
+present "$RECORD_BUILD_MD" 'before any slice ran' \
   '/build Step 6 skips build-summary.md only when no slice ran'
-if [ -f "$TMP/record-shape" ]; then
+if [ -s "$TMP/record-shape" ]; then
   case $( shape s.comment.commit ) in *null*) pass 'the block allows commit: null for a slice that did not land' ;;
     *) fail 'the block allows commit: null for a slice that did not land' "comment: $( shape s.comment.commit )" ;; esac
   case $( shape s.comment.attempts ) in *'0 = never started'*) pass 'the block allows attempts: 0 for a never-started slice' ;;
@@ -1722,35 +1906,39 @@ if [ -f "$TMP/record-shape" ]; then
   case $( shape s.comment.verifier ) in *null*) pass 'the block allows verifier: null for a slice no verifier saw' ;;
     *) fail 'the block allows verifier: null for a slice no verifier saw' "comment: $( shape s.comment.verifier )" ;; esac
 fi
-# The softenings, refuted over the whole record section (`## The committed
-# record` … `## Step 5`): a word that makes a fact estimable, a slice or the
-# postDesignDecisions key omissible, or a non-orchestrator a writer. The two
-# literals that NAME the forbidden thing are removed before matching; any other
-# use of these words in the section must be reworded, never allowlisted.
-record_section="$TMP/build-record-section.md"
-awk '/^## The committed record/{f=1} /^## Step 5/{f=0} f' "$RECORD_BUILD_MD" > "$record_section"
-if [ ! -s "$record_section" ]; then
-  fail '/build'\''s record section is extractable' 'no `## The committed record` … `## Step 5` span in commands/build.md'
+# The softenings, refuted over the WHOLE record companion (the section that
+# used to be `## The committed record` … `## Step 5` is now that file): a word
+# that makes a fact estimable, a slice or the postDesignDecisions key omissible,
+# or a non-orchestrator a writer. The two literals that NAME the forbidden thing
+# are removed before matching; any other use of these words in the companion
+# must be reworded, never allowlisted.
+if [ ! -s "$RECORD_BUILD_MD" ]; then
+  fail '/build'\''s record companion is readable' 'reference/build-record.md is missing or empty'
 else
-  soft=$( tr '\n' ' ' < "$record_section" | sed -e 's/never a guessed value//g' -e 's/never an absent key//g' \
+  soft=$( tr '\n' ' ' < "$RECORD_BUILD_MD" | sed -e 's/never a guessed value//g' -e 's/never an absent key//g' \
     | grep -oiE '\b(estimat[a-z]*|guess[a-z]*|omit[a-z]*|optional|absent|left out|may append|may write|infer[a-z]*)\b' | sort -u | tr '\n' ' ' )
   if [ -n "$soft" ]; then
-    fail '/build'\''s record section makes no fact guessable, no key or slice omissible, no worker a writer' "softening word(s): $soft"
+    fail '/build'\''s record companion makes no fact guessable, no key or slice omissible, no worker a writer' "softening word(s): $soft"
   else
-    pass '/build'\''s record section makes no fact guessable, no key or slice omissible, no worker a writer'
+    pass '/build'\''s record companion makes no fact guessable, no key or slice omissible, no worker a writer'
   fi
 fi
-if grep -qF -e 'unless Step 1'\''s `work-docs-path` stopped the run' "$( norm "$RECORD_BUILD_MD" )"; then
-  fail '/build Step 6 no longer ties the skip to work-docs-path alone' 'still present'
-else
-  pass '/build Step 6 no longer ties the skip to work-docs-path alone'
-fi
-# No hardcoded root: the folder is work-docs-path's to name.
-if grep -qF 'docs/prs' "$RECORD_BUILD_MD"; then
-  fail '/build hardcodes no work-docs root' "$( grep -nF 'docs/prs' "$RECORD_BUILD_MD" )"
-else
-  pass '/build hardcodes no work-docs root'
-fi
+for f in "$RECORD_CMD_MD" "$RECORD_BUILD_MD"; do
+  if [ -f "$f" ] && grep -qF -e 'unless Step 1'\''s `work-docs-path` stopped the run' "$( norm "$f" )"; then
+    fail "${f##*/} no longer ties the build-summary skip to work-docs-path alone" 'still present'
+  else
+    pass "${f##*/} no longer ties the build-summary skip to work-docs-path alone"
+  fi
+done
+# No hardcoded root, in the command or either companion: the folder is
+# work-docs-path's to name.
+for f in "$RECORD_CMD_MD" "$RECORD_BUILD_MD" "$RECORD_POOL_MD"; do
+  if [ -f "$f" ] && grep -qF 'docs/prs' "$f"; then
+    fail "${f##*/} hardcodes no work-docs root" "$( grep -nF 'docs/prs' "$f" )"
+  else
+    pass "${f##*/} hardcodes no work-docs root"
+  fi
+done
 # The reason for the `slice <id>` rule stays true: run-metrics attributes by
 # that regex. `-a`: the file is classified binary by grep.
 RUN_METRICS="$PLUGIN/scripts/run-metrics.mjs"
@@ -1761,9 +1949,9 @@ else
        'the regex /build'\''s dispatch-description rule relies on is gone from scripts/run-metrics.mjs'
 fi
 
-# --- executed: this unit's decisions.md holds to the grammar build.md states --
+# --- executed: this unit's decisions.md holds to the grammar the companion states --
 #
-# Grammar (from the parsed build.md block, not restated): `## D<n> — <title>`
+# Grammar (from the parsed build-record.md block, not restated): `## D<n> — <title>`
 # headings with ids contiguous from 1; the header keys, in the extracted order,
 # on the lines right after the title (the same ` · ` joining and trailing-
 # comment rule as above); `kind` and `decidedBy` in the extracted enums; `slice`
@@ -1776,7 +1964,7 @@ record_dir=$( printf '%s' "$wdp_line" | sed -n 's/.* outcome=ok .*path=\([^ ]*\)
 if [ -z "$record_dir" ]; then
   fail "work-docs-path resolves $RECORD_ITEM's record folder" "verdict: $wdp_line"
 elif [ ! -f "$TMP/d-grammar.json" ]; then
-  fail "$RECORD_ITEM decisions.md holds to build.md's D-entry grammar" 'no grammar was extracted from build.md (see above)'
+  fail "$RECORD_ITEM decisions.md holds to build-record.md's D-entry grammar" 'no grammar was extracted from build-record.md (see above)'
 else
   case $record_dir in /*) ;; *) record_dir="$RECORD_ROOT/$record_dir" ;; esac
   DECISIONS="$record_dir/decisions.md"
@@ -1861,9 +2049,9 @@ PYDEC
   if [ $? -ne 0 ]; then
     set --
     while IFS= read -r e; do set -- "$@" "$e"; done < "$TMP/decisions-out"
-    fail "$RECORD_ITEM decisions.md holds to build.md's D-entry grammar (${DECISIONS#"$RECORD_ROOT"/})" "$@"
+    fail "$RECORD_ITEM decisions.md holds to build-record.md's D-entry grammar (${DECISIONS#"$RECORD_ROOT"/})" "$@"
   else
-    pass "$RECORD_ITEM decisions.md holds to build.md's D-entry grammar — $( cat "$TMP/decisions-out" )"
+    pass "$RECORD_ITEM decisions.md holds to build-record.md's D-entry grammar — $( cat "$TMP/decisions-out" )"
   fi
 fi
 
@@ -2392,7 +2580,11 @@ done < "$TMP/vb-concerns"
 present "$VERIFY_BUILD_MD" 'opens the PR either way' '/verify-build opens the PR either way'
 present "$VERIFY_BUILD_MD" 'work-docs-path --item <work_item>' '/verify-build resolves concerns.md through work-docs-path'
 present "$VERIFY_BUILD_MD" 'Only the owner waives.' '/verify-build: only the owner waives'
-present "$VERIFY_BUILD_MD" 'Never waive on an agent'\''s own judgment' '/verify-build: never waive on an agent'\''s judgment'
+# The inversion — an agent waiving — is refuted by the sentence parser above
+# (`no sentence lets an agent waive a concern`) and refused by the checker itself
+# (`--decisions: a kind: waiver entry decided by an executor -> error`, executed
+# above), so the old wording pin `Never waive on an agent's own judgment` is
+# retired: the positive rule is `Only the owner waives.`, one home, one line.
 present "$VERIFY_BUILD_MD" '`kind: waiver`, `decidedBy: human`' '/verify-build: a waiver appends kind: waiver, decidedBy: human'
 present "$VERIFY_BUILD_MD" 'the owner'\''s verbatim waiver quote' '/verify-build: the decisions.md entry carries the owner'\''s verbatim waiver quote'
 present "$VERIFY_BUILD_MD" 'cites it as `decisions.md#D<n>`' '/verify-build: the C-entry'\''s evidence cites the waiver as decisions.md#D<n>'
@@ -2414,8 +2606,10 @@ present "$VERIFY_BUILD_MD" 'one slice commit per slice' '/verify-build Step 1: o
 present "$VERIFY_BUILD_MD" 'except the counts Step 5b records' '/verify-build Step 3: the review is uncommitted except the counts Step 5b records (D78)'
 present "$VERIFY_BUILD_MD" 'Its title names every C-entry it waives by id (`## D<n> — The owner waives C<n>: <label>`)' \
   '/verify-build: a waiver entry'\''s title names every C-entry it waives by id'
-present "$VERIFY_BUILD_MD" '`concerns-check` refuses a citation from a C-entry the title does not name' \
-  '/verify-build: the checker refuses a waiver cited by a concern its title does not name'
+# The checker's refusal of a waiver whose title does not name the citing
+# concern is EXECUTED above (`cites-other-concern.md -> waiver-record-other-concern`),
+# and verify-build states the rule it enforces (`Its title names every C-entry it
+# waives by id`); the sentence that restated the tool's behaviour is retired.
 present "$VERIFY_BUILD_MD" 'written without backticks' '/verify-build: the waiver citation is written without backticks'
 present "$VERIFY_BUILD_MD" 'post Step 6b'\''s status again, unchanged, on the new head' \
   '/verify-build Step 9: the lane-step-record push gets the same flow/concerns status on its new head'
@@ -2535,6 +2729,726 @@ present "$ADR_006_MD" 'design-multi-subjects' \
   '[ESAS-166] ADR-006 names the design-multi-subjects helper'
 present "$ADR_006_MD" 'so `/design` proceeds' \
   '[ESAS-166] ADR-006 says a map-only owner=none folder lets /design proceed'
+
+# ---------------------------------------------------------------------------
+printf '\nSeam — thin context (ADR-012): companions, a delegation-only lane, one routing table, the lane git guard\n\n'
+# ---------------------------------------------------------------------------
+#
+# The rewrite moved branch-only reference out of the commands into companions
+# (`reference/`, and beside the skills), made the unit-lane a pure caller, and
+# turned the stash/reset prohibition into a hook. Each is a mechanism with a
+# shape a test can hold: a companion that exists and is linked from its parent
+# with its condition named on the pointer's own line (a companion nobody links is
+# a rule nobody reads; `check-eval-coverage.py` demands the scenario, this pins
+# the edge), a `tools:` block that cannot run a step inline, one routing table,
+# one registered hook, one sentence naming the sanctioned alternative.
+REFERENCE_DIR="$PLUGIN/reference"
+
+# Every companion under reference/ is linked from at least one entrypoint, and
+# the census read the files ADR-012 created (fewer means one was deleted or
+# moved without its pointer going red).
+if [ ! -d "$REFERENCE_DIR" ]; then
+  fail 'the reference/ companion directory exists' "no $REFERENCE_DIR"
+else
+  n_ref=0
+  for c in "$REFERENCE_DIR"/*.md; do
+    [ -f "$c" ] || continue
+    n_ref=$(( n_ref + 1 ))
+    name=${c##*/}
+    if grep -rlF "reference/$name)" "$PLUGIN/commands" "$PLUGIN/agents" "$PLUGIN/skills" >/dev/null 2>&1; then
+      pass "reference/$name is linked from an entrypoint"
+    else
+      fail "reference/$name is linked from an entrypoint" \
+           "no \`](…/reference/$name)\` link in commands/, agents/ or skills/ — a companion nobody points at is unread"
+    fi
+  done
+  if [ "$n_ref" -ge 3 ]; then
+    pass "the companion census read $n_ref file(s) under reference/"
+  else
+    fail "the companion census read $n_ref file(s) under reference/" 'fewer than the three companions ADR-012 created'
+  fi
+fi
+
+# pointer_names <parent> <link-target> <condition-literal> <label>: the line that
+# links the companion also names the condition that opens it, so the reader
+# knows when to follow the pointer without opening the file to find out.
+pointer_names(){
+  hits=$( grep -F "]($2)" "$1" )
+  if [ -z "$hits" ]; then
+    fail "$4" "no \`]($2)\` link in ${1#"$ROOT"/}"
+  elif printf '%s\n' "$hits" | grep -qF -- "$3"; then
+    pass "$4"
+  else
+    fail "$4" "the link to $2 names no \`$3\` on its line:" "$hits"
+  fi
+}
+pointer_names "$BUILD_MD" '../reference/build-pool.md' 'pool>0' \
+  '/build opens the pool companion on pool>0, and says so on the pointer line'
+pointer_names "$BUILD_MD" '../reference/build-record.md' 'build-summary.md' \
+  '/build opens the record companion when it writes build-summary.md, and says so on the pointer line'
+pointer_names "$PLUGIN/commands/start-multi.md" '../reference/start-multi-serial.md' '--serial' \
+  '/start-multi opens the serial companion on --serial, and says so on the pointer line'
+pointer_names "$PLUGIN/commands/start-multi.md" '../reference/start-multi-tick-boundary.md' 'normative' \
+  '/start-multi opens the tick-boundary companion and calls it normative on the pointer line (the five preconditions live there; a pointer that reads as optional is how a silently-failing precondition gets skipped)'
+pointer_names "$PLUGIN/skills/design-map/SKILL.md" './FLEET.md' '/design-multi' \
+  'design-map opens its fleet companion under /design-multi (test-design-map.sh pins the same edge from the map side)'
+
+# The unit-lane is a CALLER: its frontmatter `tools:` grants `Agent` and neither
+# `Skill` nor `SlashCommand`, so a step can only be dispatched, never run inline
+# — a lane that ran a command body inline would produce plausible green with no
+# dual gate and no verdict line, which a scheduler reads as fleet-wide `infra`.
+# Read from the frontmatter block only, both spellings (inline and block list).
+"$MARKER_PY" - "$UNIT_LANE_MD" > "$TMP/lane-tools" 2>"$TMP/err" <<'PYT'
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+m = re.match(r"\A---\r?\n(.*?)\r?\n---\r?\n", text, re.S)
+if not m:
+    sys.exit("no frontmatter block in unit-lane.md")
+lines = m.group(1).splitlines()
+tools = []
+for i, line in enumerate(lines):
+    key, sep, value = line.partition(":")
+    if line.startswith((" ", "\t", "-", "#")) or not sep or key.strip() != "tools":
+        continue
+    value = value.split(" #", 1)[0].strip()
+    if value:
+        tools += [t.strip() for t in value.strip("[]").split(",") if t.strip()]
+        break
+    for nxt in lines[i + 1:]:
+        if not nxt.strip() or nxt.lstrip().startswith("#"):
+            continue
+        if not nxt.startswith((" ", "\t", "-")):
+            break
+        tools.append(nxt.lstrip(" \t-").split(" #", 1)[0].strip())
+    break
+if not tools:
+    sys.exit("no tools: allowlist in unit-lane.md's frontmatter")
+print("\n".join(tools))
+PYT
+if [ $? -ne 0 ]; then
+  fail 'unit-lane declares a tools: allowlist' "$( cat "$TMP/err" )"
+else
+  pass 'unit-lane declares a tools: allowlist'
+  if grep -qx 'Agent' "$TMP/lane-tools"; then
+    pass 'unit-lane holds Agent (it dispatches its steps)'
+  else
+    fail 'unit-lane holds Agent (it dispatches its steps)' "tools: $( tr '\n' ' ' < "$TMP/lane-tools" )"
+  fi
+  for forbidden in Skill SlashCommand; do
+    if grep -qx "$forbidden" "$TMP/lane-tools"; then
+      fail "unit-lane cannot run a step inline: no $forbidden in tools:" "tools: $( tr '\n' ' ' < "$TMP/lane-tools" )"
+    else
+      pass "unit-lane cannot run a step inline: no $forbidden in tools:"
+    fi
+  done
+fi
+
+# The file-reading lane variant carries the two skill-free steps (/start, /build)
+# without the Skill tool, so the skill listing never rides in the longest lanes.
+# Same parser as above, run on step-lane-file.md; the unit-lane must link both
+# variants and route /build's re-dispatch to the file variant.
+STEP_LANE_FILE_MD="$PLUGIN/agents/step-lane-file.md"
+if [ -f "$STEP_LANE_FILE_MD" ]; then
+  pass 'agents/step-lane-file.md exists (the skill-free lane for /start and /build)'
+  "$MARKER_PY" - "$STEP_LANE_FILE_MD" > "$TMP/slf-tools" 2>"$TMP/err" <<'PYT'
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+m = re.match(r"\A---\r?\n(.*?)\r?\n---\r?\n", text, re.S)
+if not m:
+    sys.exit("no frontmatter block in step-lane-file.md")
+lines = m.group(1).splitlines()
+tools = []
+for i, line in enumerate(lines):
+    key, sep, value = line.partition(":")
+    if line.startswith((" ", "\t", "-", "#")) or not sep or key.strip() != "tools":
+        continue
+    value = value.split(" #", 1)[0].strip()
+    if value:
+        tools += [t.strip() for t in value.strip("[]").split(",") if t.strip()]
+        break
+    for nxt in lines[i + 1:]:
+        if not nxt.strip() or nxt.lstrip().startswith("#"):
+            continue
+        if not nxt.startswith((" ", "\t", "-")):
+            break
+        tools.append(nxt.lstrip(" \t-").split(" #", 1)[0].strip())
+    break
+if not tools:
+    sys.exit("no tools: allowlist in step-lane-file.md's frontmatter")
+print("\n".join(tools))
+PYT
+  if [ $? -ne 0 ]; then
+    fail 'step-lane-file declares a tools: allowlist' "$( cat "$TMP/err" )"
+  else
+    if grep -qx 'Agent' "$TMP/slf-tools"; then
+      pass 'step-lane-file holds Agent (/build dispatches its gate agents from inside it)'
+    else
+      fail 'step-lane-file holds Agent (/build dispatches its gate agents from inside it)' "tools: $( tr '\n' ' ' < "$TMP/slf-tools" )"
+    fi
+    for forbidden in Skill SlashCommand; do
+      if grep -qx "$forbidden" "$TMP/slf-tools"; then
+        fail "step-lane-file pays no skill listing: no $forbidden in tools:" "tools: $( tr '\n' ' ' < "$TMP/slf-tools" )"
+      else
+        pass "step-lane-file pays no skill listing: no $forbidden in tools:"
+      fi
+    done
+  fi
+  present "$STEP_LANE_FILE_MD" 'command -v lane-step' 'step-lane-file locates the command file through the bin/ directory on PATH'
+  present "$STEP_LANE_FILE_MD" 'commands/<step>.md' 'step-lane-file reads commands/<step>.md and follows it as the command'
+  present "$UNIT_LANE_MD" '](step-lane-file.md)' 'unit-lane links the file variant beside step-lane'
+  present "$UNIT_LANE_MD" 'dispatch a **fresh** `step-lane-file` for `/build`' 'unit-lane re-dispatches a yielded /build to the file variant'
+else
+  fail 'agents/step-lane-file.md exists (the skill-free lane for /start and /build)' 'missing'
+fi
+
+# One routing table, in /build. The `verifier` row is the pin — the one dispatch
+# that is never downgraded — no other artifact carries a routing row, and every
+# caller that routes points at /build's table by name instead of restating it.
+present "$BUILD_MD" '| `verifier` |' '/build carries the model routing table (its verifier row)'
+routing_copies=$( grep -rlF '| `verifier` |' "$PLUGIN/commands" "$PLUGIN/agents" "$PLUGIN/skills" "$PLUGIN/reference" 2>/dev/null \
+                  | grep -vF "$BUILD_MD" || true )
+if [ -z "$routing_copies" ]; then
+  pass 'no artifact other than /build carries a routing table row'
+else
+  fail 'no artifact other than /build carries a routing table row' 'a second routing table lives in:' \
+       $( printf '%s\n' "$routing_copies" | sed "s#^$ROOT/##" )
+fi
+present "$UNIT_LANE_MD" "Route models as \`/build\`'s table does" 'unit-lane routes models as /build'\''s table does'
+present "$VERIFY_BUILD_MD" "routed as \`/build\`'s table does" '/verify-build routes its sweeps as /build'\''s table does'
+present "$PLAN_MD" 'routes as its table does' '/plan defers model routing to /build'\''s table'
+
+# The stash/reset/checkout guard is a hook, not prose: hooks.json registers
+# lane-git-guard.sh under PreToolUse, matched on the Bash tool (the script itself
+# is driven by scripts/test-hooks.sh). The artifacts that carried the NEVER list
+# now carry one sentence naming the sanctioned alternative.
+HOOKS_JSON="$PLUGIN/hooks/hooks.json"
+"$MARKER_PY" - "$HOOKS_JSON" > "$TMP/hook-out" 2>&1 <<'PYH'
+import json, sys
+h = json.load(open(sys.argv[1], encoding="utf-8"))["hooks"]
+hits = [x for entry in h.get("PreToolUse", []) for x in entry.get("hooks", [])
+        if entry.get("matcher") == "Bash"
+        and any(str(a).endswith("hooks/lane-git-guard.sh") for a in x.get("args", []))]
+print(len(hits))
+PYH
+if [ "$( cat "$TMP/hook-out" )" = 1 ]; then
+  pass 'hooks.json registers lane-git-guard.sh once, under PreToolUse, matched on Bash'
+else
+  fail 'hooks.json registers lane-git-guard.sh once, under PreToolUse, matched on Bash' "$( cat "$TMP/hook-out" )"
+fi
+for f in agents/executor.md agents/scope-check.md agents/provisioner.md commands/build.md; do
+  present "$PLUGIN/$f" 'git stash create' "$f names the sanctioned alternative to the blocked git forms (git stash create)"
+done
+
+printf '\nSeam I — /start-multi is a TICK: it yields at the wave boundary\n\n'
+# ---------------------------------------------------------------------------
+#
+# GH-429-F1/F3/F4. The orchestrator was one context for a whole run; it is now a
+# re-dispatchable tick that ends at wave completion and is dispatched again on a
+# fresh context. A presence oracle, for this file's header reason: the yield is
+# prose a model reads, and the failure it exists to prevent is a DELETION of one
+# of its preconditions. That matters more here than anywhere else in this file,
+# because EVERY precondition fails silently:
+#
+#   - the push dropped: a gate-red lane's commits live only in a worktree, so the
+#     next tick (possibly on another machine) resumes from a branch that never saw
+#     them, and a recycled worktree loses them outright;
+#   - the lock precondition dropped: the heartbeat refresher dies with the
+#     context, so a lock left held is reclaimable only after the full
+#     `5 x interval` wait — paid by every later tick, looking like slowness;
+#   - the tick stamp dropped: tick 2 resolves a `SendMessage` recipient from tick
+#     1's rows and messages corpses, and a message that goes nowhere is
+#     indistinguishable from a lane not answering.
+#
+# None of the three turns anything red on its own. Hence one assertion each,
+# never one over the paragraph: losing a single precondition is the failure, and
+# a needle over the whole block would stay green while two of the three went.
+START_MULTI_MD="$PLUGIN/commands/start-multi.md"
+TICK_MD="$PLUGIN/reference/start-multi-tick-boundary.md"
+
+present "$TICK_MD" 'FLEET-STEP:v1 outcome=success waves=<k>/<N> units=<t>/<u>' \
+  '/start-multi emits the FLEET-STEP:v1 wave verdict (GH-429-F3)'
+present "$TICK_MD" 'at column 0 with nothing after it, and take no turn after it' \
+  '/start-multi'\''s verdict is the final line and ends the tick (ADR-004)'
+
+# The push precondition, in the YIELD's own words. Deliberately NOT the wording of
+# the step 2 cost stop (`keep its worktree, because a lane that has not reached
+# /verify-build has pushed nothing`): two needles over one sentence make each
+# other unkillable, and the cost stop's sentence is about whether to dispatch,
+# while this one is about whether ending is safe. Deleting the yield's sentence
+# must redden this and leave the cost stop's pin alone — that is the slice's probe.
+present "$TICK_MD" '`git push` every started lane'\''s branch and keep every worktree this tick touched' \
+  '/start-multi pushes every started branch and keeps the worktrees before it yields (GH-429-F1)'
+present "$TICK_MD" 'Hold no lock directory and leave no background `heartbeat` refresher alive' \
+  '/start-multi holds no lock and leaves no heartbeat refresher alive when it yields (design risk 3)'
+
+# The tick stamp, and BOTH readers. One needle over the stamp alone would be
+# green on the state that costs the run its addressing: rows stamped, and tick 2
+# still messaging every row it finds. So the addressing lifetime and the
+# attribution lifetime are separately pinned (design risk 2 — two readers, two
+# lifetimes); losing either one is silent.
+present "$TICK_MD" 'Stamp every `agents.yaml` row you wrote with `tick: <n>`' \
+  '/start-multi stamps agents.yaml rows with the tick that wrote them (design risk 2)'
+present "$TICK_MD" 'recipient **only** from rows stamped with the current tick' \
+  '/start-multi addresses only the current tick'\''s rows'
+present "$TICK_MD" 'attribution (`/run-report --fleet`) reads **every** tick'\''s rows' \
+  '/start-multi keeps attribution reading every tick'\''s rows'
+
+# F4's positive half: the resume point is DERIVED. Pinned on the derivation
+# sentence rather than on the word "derive", because "derived from the state
+# file" is the exact misread the command itself calls its commonest (git is the
+# primary signal).
+present "$TICK_MD" 'Wave progress is `units[].wave` plus `step`/`status`, cross-checked against `git log' \
+  '/start-multi derives wave progress from units[] cross-checked against git (GH-429-F4)'
+# F3's positive half, in the command's own words: a yield is a short success, not
+# a fourth outcome word.
+present "$TICK_MD" 'a wave short of the total is a `success` whose `waves=` is short' \
+  '/start-multi spells a yield as a short success, not a fourth outcome (GH-429-F3)'
+
+# The orchestrator is the WRITER of pluginVersion (GH-429 design risk 4), because
+# it is the only reader that can observe which plugin copy `claude -p` loaded —
+# it is that copy. The pin is on the UNCONDITIONAL half of the rule, not on the
+# key's name: `bin/fleet-loop` refuses when the value is absent after a tick, so
+# a step 0 that writes it only when run.yaml is created reads as contract drift
+# on every resumed run and stops the fleet on its second tick. "Writes
+# pluginVersion" would stay green on exactly that state.
+present "$START_MULTI_MD" 'Record `pluginVersion` in `run.yaml` on every tick, resume included' \
+  '/start-multi records pluginVersion on every tick, resume path included (GH-429 risk 4)'
+present "$START_MULTI_MD" 'your own loaded manifest' \
+  '/start-multi takes pluginVersion from the manifest IT loaded, not the branch checkout'\''s'
+
+# --- executed: the run.yaml block gains waveBudget and a spend addend, and
+# NOTHING else. The fenced block under `## run.yaml` is the only specification of
+# the file any tick writes, so it is extracted and read as text: the two additive
+# keys must be there, and `wavesDone:` / `phase:` must not, because a stored wave
+# pointer is a second and staler answer to a question `units[]` already answers
+# (GH-429-F4) and the command names that misread as its commonest. Extraction is
+# positive-controlled first: an empty block would make both halves pass.
+awk '/^## run.yaml/{f=1} f&&/^```/{n++; if(n==1){next} if(n==2){exit}} f&&n==1{print}' \
+  "$START_MULTI_MD" > "$TMP/start-multi-runyaml.txt"
+if [ ! -s "$TMP/start-multi-runyaml.txt" ] || ! grep -q 'runId:' "$TMP/start-multi-runyaml.txt"; then
+  fail 'the run.yaml block is extractable from start-multi.md (positive control)' \
+       'no fenced YAML block carrying runId: under the `## run.yaml` heading' \
+       'an empty extraction makes every assertion over the block pass, in both directions.'
+else
+  pass 'the run.yaml block is extractable from start-multi.md (positive control)'
+  if grep -q '^waveBudget:' "$TMP/start-multi-runyaml.txt"; then
+    pass 'run.yaml carries waveBudget — the one policy input no unit determines (GH-429-F4)'
+  else
+    fail 'run.yaml carries waveBudget — the one policy input no unit determines (GH-429-F4)' \
+         "block keys: $( grep -o '^[a-zA-Z]*:' "$TMP/start-multi-runyaml.txt" | tr '\n' ' ' )" \
+         'without it a resumed tick invents its own wave ceiling, which is the cost stop with no trigger.'
+  fi
+  if grep -q '^spendToDate:' "$TMP/start-multi-runyaml.txt"; then
+    pass 'run.yaml carries the cumulative spend addend (design risk 5)'
+  else
+    fail 'run.yaml carries the cumulative spend addend (design risk 5)' \
+         "block keys: $( grep -o '^[a-zA-Z]*:' "$TMP/start-multi-runyaml.txt" | tr '\n' ' ' )" \
+         'spend is an accumulator, not a projection of units[]: after the yield nothing else can notice the ceiling.'
+  fi
+  if grep -q '^pluginVersion:' "$TMP/start-multi-runyaml.txt"; then
+    pass 'run.yaml carries pluginVersion — the key bin/fleet-loop'\''s version guard reads (GH-429 risk 4)'
+  else
+    fail 'run.yaml carries pluginVersion — the key bin/fleet-loop'\''s version guard reads (GH-429 risk 4)' \
+         "block keys: $( grep -o '^[a-zA-Z]*:' "$TMP/start-multi-runyaml.txt" | tr '\n' ' ' )" \
+         'the schema block is the only specification of the file: a key step 0 writes but the block omits is a key the next writer drops.'
+  fi
+  stored=$( grep -n 'wavesDone:\|phase:' "$TMP/start-multi-runyaml.txt" || true )
+  if [ -z "$stored" ]; then
+    pass 'run.yaml stores no wavesDone or phase key — both are projections of units[] (GH-429-F4)'
+  else
+    fail 'run.yaml stores no wavesDone or phase key — both are projections of units[] (GH-429-F4)' \
+         "stored in the run.yaml block: $stored" \
+         'a state file that says step: plan while the branch carries three slices is the commonest misread.'
+  fi
+fi
+
+# --- executed: no FOURTH outcome word enters the vocabulary (GH-429-F3).
+# Two halves, because either alone reads as a pass. The positive half is a
+# census: every `FLEET-STEP:v1 outcome=<word>` written anywhere in the corpus —
+# plugin, docs and the parser's fixtures — must spell one of the three, and the
+# census must have found something, or it is a guard over the empty set.
+fleet_words=$( grep -rhao 'FLEET-STEP:v1 outcome=[A-Za-z-]*' "$PLUGIN" "$ROOT/docs" "$ROOT/scripts/fixtures" 2>/dev/null \
+               | sed 's/.*outcome=//' | sort -u )
+if [ -z "$fleet_words" ]; then
+  fail 'the FLEET-STEP outcome census found verdict lines to check (positive control)' \
+       'no `FLEET-STEP:v1 outcome=` occurrence anywhere under plugins/, docs/ or scripts/fixtures/' \
+       'a vocabulary census over zero verdict lines passes whatever the vocabulary is.'
+else
+  pass 'the FLEET-STEP outcome census found verdict lines to check (positive control)'
+  bad_words=
+  for w in $fleet_words; do
+    case $w in success|gate-red|blocked-on) ;; *) bad_words="$bad_words $w" ;; esac
+  done
+  if [ -z "$bad_words" ]; then
+    pass 'every FLEET-STEP verdict spells success / gate-red / blocked-on and nothing else (GH-429-F3)'
+  else
+    fail 'every FLEET-STEP verdict spells success / gate-red / blocked-on and nothing else (GH-429-F3)' \
+         "outcome word(s) outside the three:$bad_words" \
+         'the reader of the line (verdict.ts OUTCOMES) is a three-value table; a fourth word is `infra unknown-outcome`.'
+  fi
+fi
+# The negative half: the rejected word appears NOWHERE outside the design that
+# rejected it. Positive-controlled against that design first — a needle that
+# matches nothing would make this a guard over the empty set too, and the word
+# genuinely does occur there (the F3 rejected option and its evidence line).
+# `docs/prs/GH-429/` is excluded as a whole rather than design.md alone: the
+# design's map.json / map.html are one generated artifact set with it, carrying
+# the same rejected-option label, and no tick reads any of the three.
+if grep -qF 'outcome=yield' "$ROOT/docs/prs/GH-429/design.md"; then
+  pass 'the rejected outcome word is spelled in the design that rejected it (positive control)'
+else
+  fail 'the rejected outcome word is spelled in the design that rejected it (positive control)' \
+       'no `outcome=yield` in docs/prs/GH-429/design.md' \
+       'if the needle matches nothing, the census below is a guard over the empty set.'
+fi
+yield_word=$( grep -ralF 'outcome=yield' "$PLUGIN" "$ROOT/docs" 2>/dev/null \
+              | grep -v '^'"$ROOT"'/docs/prs/GH-429/' || true )
+if [ -z "$yield_word" ]; then
+  pass 'no artifact outside the design that rejected it spells outcome=yield (GH-429-F3)'
+else
+  fail 'no artifact outside the design that rejected it spells outcome=yield (GH-429-F3)' \
+       'the fourth outcome word is spelled in:' \
+       $( printf '%s\n' "$yield_word" | sed "s#^$ROOT/##" ) \
+       'a fourth outcome word is a vocabulary the three-value reader of the line knows nothing about.'
+fi
+
+# --- executed: teardown is gated on `terminal: true`, not on a pushed branch.
+# The yield's precondition 1 pushes EVERY started lane's branch, including a
+# gate-red lane that is not terminal. If step 7 removes a worktree on "branch is
+# pushed" alone, the same tick destroys the tree precondition 1 exists to
+# preserve — and the loss is silent, because the branch really is pushed and the
+# removal really did succeed. So step 7's own paragraph is extracted and read:
+# the removal condition must name `terminal: true`, and the literal Bash call
+# must still be there (a condition pinned onto a paragraph that no longer issues
+# the command is a guard over nothing). Extraction is positive-controlled first,
+# and narrowed to the REMOVAL CONDITION's own sentence rather than the whole
+# paragraph: step 7's Done line also spells `terminal: true`, so a needle over
+# the paragraph stays green while the condition itself reverts to pushed-alone —
+# measured, not supposed: that probe produced zero reds before this narrowing.
+awk '/^\*\*7 — Teardown\./{f=1} /^\*\*8 —/{f=0} f' "$START_MULTI_MD" > "$TMP/start-multi-step7.txt"
+grep -F 'remove only worktrees' "$TMP/start-multi-step7.txt" > "$TMP/start-multi-step7-cond.txt"
+if [ ! -s "$TMP/start-multi-step7.txt" ] || ! grep -qF 'git worktree remove <path>' "$TMP/start-multi-step7.txt" \
+   || [ ! -s "$TMP/start-multi-step7-cond.txt" ]; then
+  fail 'step 7 is extractable and still issues the literal worktree removal (positive control)' \
+       'no `**7 — Teardown.**` section carrying both a `remove only worktrees …` condition and `git worktree remove <path>`' \
+       'an empty extraction makes the terminal-condition assertion below pass whatever step 7 says.'
+else
+  pass 'step 7 is extractable and still issues the literal worktree removal (positive control)'
+  if grep -qF 'terminal: true' "$TMP/start-multi-step7-cond.txt"; then
+    pass 'step 7 removes a worktree only for a unit at `terminal: true` (GH-429 precondition 1)'
+  else
+    fail 'step 7 removes a worktree only for a unit at `terminal: true` (GH-429 precondition 1)' \
+         "step 7's removal condition reads: $( cat "$TMP/start-multi-step7-cond.txt" )" \
+         'expected the condition to require `terminal: true`; a pushed-branch-alone condition tears down the' \
+         'gate-red lane the yield just pushed, which is the tree the next tick resumes from.'
+  fi
+fi
+# The tick boundary must say the same thing step 7 now says, in the place a
+# reader of the yield looks. Two opposite claims about one mechanism in one file
+# is what this pins against.
+present "$TICK_MD" 'keeps its worktree even though its branch is now pushed' \
+  '/start-multi keeps a non-terminal lane'\''s worktree after the yield pushes its branch (GH-429-F1)'
+
+# --- executed: the spend accumulator carries its UNIT, and the ceiling it is
+# measured against carries the same one. `spendToDate` is written as an addend by
+# a tick that cannot see the previous tick's reasoning (design risk 5, a named
+# mitigation): an unlabelled addend lets tick 1 write dollars and tick 2 tokens,
+# and the sum is silently meaningless — which is the accumulator failure the risk
+# names. Guarded on the extracted run.yaml block, reusing the positive control
+# above ($TMP/start-multi-runyaml.txt is non-empty or that control already failed).
+if grep -q '^spendToDate:.*USD' "$TMP/start-multi-runyaml.txt" 2>/dev/null; then
+  pass 'run.yaml names the unit of the spend addend (USD) (design risk 5)'
+else
+  fail 'run.yaml names the unit of the spend addend (USD) (design risk 5)' \
+       "spendToDate reads: $( grep '^spendToDate:' "$TMP/start-multi-runyaml.txt" 2>/dev/null )" \
+       'an addend with no unit sums dollars onto tokens across ticks and reads as a number.'
+fi
+if grep -q '^waveBudget:.*ceiling:.*USD' "$TMP/start-multi-runyaml.txt" 2>/dev/null; then
+  pass 'run.yaml states the spend ceiling in the same unit as the addend (USD) (design risk 5)'
+else
+  fail 'run.yaml states the spend ceiling in the same unit as the addend (USD) (design risk 5)' \
+       "waveBudget reads: $( grep '^waveBudget:' "$TMP/start-multi-runyaml.txt" 2>/dev/null )" \
+       'the cost stop compares spendToDate against this ceiling; two units make the comparison a coin flip.'
+fi
+
+printf '\nSeam J — /design-multi ends at the A/B and B/C phase boundaries\n\n'
+# ---------------------------------------------------------------------------
+#
+# GH-429-F5. `/design-multi` was one context for three phases; it is now three
+# ticks, ending at the A/B and the B/C boundary and reopening cold against the
+# run dir. Presence oracle, for Seam I's reason one command over: the boundary is
+# prose, and the failure it prevents is a DELETION. Each half fails silently on
+# its own, so each gets its own assertion and never one over the paragraph:
+#
+#   - an end sentence dropped: the phase runs on into the next one and the
+#     context is a session again — nothing is red, it is just long;
+#   - a restart source dropped: the next phase opens cold with nothing named to
+#     read back, so it re-derives from its own memory, which is empty;
+#   - "the human opens Phase B" dropped: a driver opens a sitting nobody is
+#     sitting in, and every fork is then taken on its recommendation;
+#   - the derivation dropped: a `phase:` key appears, and a stale pointer becomes
+#     a second answer to a question `units[].step` already answers.
+SERIAL_MD="$PLUGIN/reference/start-multi-serial.md"
+
+# --- the two boundaries, each named as a session end in its own sentence. Two
+# needles, deliberately not one over both: a single pin over "ends its context
+# twice" stays green while either boundary's own instruction is deleted, and the
+# A/B one is this slice's probe.
+present "$PHASE_MD" 'Step 3'\''s collect is the A/B boundary: print the A/B verdict and **end your context**' \
+  '/design-multi ends its context at the A/B boundary (GH-429-F5)'
+present "$DESIGN_MULTI_MD" 'the B/C boundary ends this context the same way' \
+  '/design-multi ends its context at the B/C boundary, the same kind of end (GH-429-F5)'
+
+# --- each phase names the ON-DISK source it restarts from. Separate pins per
+# phase: the whole point of ending is that the next phase reads its input back,
+# and a phase with no named source reconstructs from a memory it does not have.
+present "$PHASE_MD" 'Phase B opens cold and restarts from `<run>/units/`, which is its primary source' \
+  'Phase B restarts cold from <run>/units/, named as its primary source (GH-429-F5 walk 1)'
+present "$PHASE_MD" 'Phase C opens cold and restarts from `<run>/subjects/` and `<run>/answers/`' \
+  'Phase C restarts cold from <run>/subjects/ and <run>/answers/ (GH-429-F5)'
+# The restart claim above is only TRUE if the answers are already on disk when
+# the context ends. Its own pin, narrowed to the obligation's own clause (the
+# shape and the deadline) and not to the sentence's subject: Step 5.2, which
+# reads those rows, sits inside Step 5 — Phase C, so without this clause a
+# terminal answer is written AFTER the boundary and the restart source is empty
+# for exactly the answers only the sitting saw.
+present "$PHASE_MD" 'in the shape Step 5.2 reads, `map: <S>` included — **before** this context ends' \
+  'terminal answers are written to <run>/answers/ in Step 5.2'\''s shape BEFORE the B/C context ends (GH-429-F5)'
+# The half-answered sitting (walk 2): the answers come out of the artifact db,
+# not out of a session that ended. Pinned on the read_db readback rather than on
+# the directory, because the directory is also where a remembered answer would
+# be written — the source is what is being asserted.
+present "$PHASE_MD" 'reads the owner'\''s answers back with `read_db` over the `answers` collection, never from any surviving session state' \
+  'a fresh Phase B reads the owner'\''s answers back with read_db, not from session state (GH-429-F5 walk 2)'
+
+# --- the human opens Phase B, and the mechanism that makes that more than a
+# request. Two pins: the rule, and the token a driver actually reads. The rule
+# alone is green on a design-multi that says "the human opens Phase B" and then
+# prints a verdict any driver ticks again on.
+present "$PHASE_MD" 'The owner opens Phase B by hand, and no driver ever does' \
+  'Phase B is opened by the human, never by a driver (GH-429-F5, option C rejected)'
+present "$DESIGN_MULTI_MD" 'blockedOn=awaiting-owner-sitting' \
+  'the A/B verdict stops a driver rather than inviting it to tick again (GH-429-F5)'
+
+# --- F4 one command over: the phase is DERIVED from units[].step.
+present "$DESIGN_MULTI_MD" 'The phase is read from `units[].step` and never stored' \
+  '/design-multi derives the phase from units[].step (GH-429-F4)'
+
+# --- executed: the structural census. NO state-file block anywhere in the plugin
+# gains a `phase:` key. Both halves, because either alone reads as a pass: the
+# census must have found the blocks (an extraction that found none passes the
+# absence assertion whatever the files say), and the needle must be able to fire
+# (a `phase:` that the grep cannot see passes too). Comment lines are stripped
+# first: a fenced block's `# step: pending|drafting|...` comment is documentation
+# of the enum, not a key, and the prohibition itself is written as `phase:` in
+# start-multi's precondition 4 prose.
+find "$PLUGIN" -name '*.md' -print0 \
+  | xargs -0 awk '/^```ya?ml/{f=1; next} f&&/^```/{f=0; next} f' \
+  > "$TMP/plugin-state-blocks-raw.txt"
+sed 's/#.*$//' "$TMP/plugin-state-blocks-raw.txt" > "$TMP/plugin-state-blocks.txt"
+blocks=$( grep -c 'runId:\|work_item:\|unitId:\|slices:\|id:' "$TMP/plugin-state-blocks.txt" || true )
+if [ ! -s "$TMP/plugin-state-blocks.txt" ] || [ "$blocks" -lt 5 ]; then
+  fail 'the plugin'\''s fenced state-file blocks are extractable (positive control)' \
+       "extracted $(wc -l < "$TMP/plugin-state-blocks.txt" 2>/dev/null) line(s), $blocks key-bearing" \
+       'an empty extraction makes the phase-key census below pass whatever the state files say.'
+else
+  pass 'the plugin'\''s fenced state-file blocks are extractable (positive control)'
+  # The needle's own positive control: injected into a copy, it must fire.
+  { cat "$TMP/plugin-state-blocks.txt"; echo 'phase: B'; } > "$TMP/plugin-state-blocks-mutant.txt"
+  if grep -q '^ *phase:' "$TMP/plugin-state-blocks-mutant.txt"; then
+    pass 'the phase-key needle fires on a block that carries one (positive control)'
+  else
+    fail 'the phase-key needle fires on a block that carries one (positive control)' \
+         'an injected `phase: B` line was not matched' \
+         'a census whose needle cannot match is a guard over nothing.'
+  fi
+  # The negative half, which is the assertion.
+  phase_keys=$( grep -n '^ *phase:' "$TMP/plugin-state-blocks.txt" || true )
+  if [ -z "$phase_keys" ]; then
+    pass 'no state-file block in the plugin carries a `phase:` key — it is derived from units[].step (GH-429-F4)'
+  else
+    fail 'no state-file block in the plugin carries a `phase:` key — it is derived from units[].step (GH-429-F4)' \
+         "stored phase key(s): $phase_keys" \
+         'a stored phase is a second and staler answer to a question units[].step already answers.'
+  fi
+  # And the census's own subject: the enum the derivation reads must still be
+  # there, or the derivation sentence points at nothing.
+  # Read from the RAW extraction, not the comment-stripped one: design-multi
+  # documents the enum in the block's own trailing comment, which is exactly the
+  # line the census above has to strip in order not to read it as a key.
+  if grep -q 'pending | drafting | critiqued | resolved | written | done' "$TMP/plugin-state-blocks-raw.txt" \
+     || grep -q 'pending|drafting|critiqued|resolved|written|done' "$TMP/plugin-state-blocks-raw.txt"; then
+    pass 'the units[].step enum the phase is derived from is still in a state-file block (GH-429-F4)'
+  else
+    fail 'the units[].step enum the phase is derived from is still in a state-file block (GH-429-F4)' \
+         "design-multi step: line(s): $( grep -n 'step:' "$TMP/plugin-state-blocks-raw.txt" | head -3 | tr '\n' ' ' )" \
+         'the derivation reads this enum; without it the phase is derived from nothing.'
+  fi
+fi
+
+# --- the negative half of the design's Unspecified seams: NOTHING licenses a
+# /merge-multi yield by analogy. Positive half first (the refusal is written
+# down), then the census over the corpus: no merge-multi artifact may spell a
+# tick/yield boundary of its own.
+present "$DESIGN_MULTI_MD" 'nothing here licenses a `/merge-multi` yield by analogy' \
+  'the phase boundary refuses to generalise itself to /merge-multi (design Unspecified seams)'
+merge_yield=$( grep -n 'FLEET-STEP\|tick boundary\|phase boundary\|end your context' \
+               "$PLUGIN/commands/merge-multi.md" || true )
+if [ -z "$merge_yield" ]; then
+  pass '/merge-multi invents no yield boundary of its own (design Unspecified seams)'
+else
+  fail '/merge-multi invents no yield boundary of its own (design Unspecified seams)' \
+       "merge-multi.md now carries: $merge_yield" \
+       'the design states plainly that nothing in it licenses a merge-multi yield by analogy.'
+fi
+
+# --- `--serial` answers the question in its OWN words (design Unspecified
+# seams: it must either yield on the same boundary or say that it never does).
+# Pinned in reference/start-multi-serial.md, not in start-multi.md: the reference
+# file is what the serial path reads, and a rule stated only in the parallel
+# command is one the serial reader never sees.
+present "$SERIAL_MD" '`--serial` never yields' \
+  '--serial states in its own words that it does not yield (design Unspecified seams)'
+# ...and the parallel command, which used to record the question as OPEN, must
+# now record it as ANSWERED and point at the file that answers it. Pinned
+# because two opposite status claims about one mechanism shipping in one branch
+# is exactly the drift a reader resolves by believing the wrong one.
+present "$TICK_MD" 'whether a serialised run yields on this boundary **is decided there, and the answer is never**' \
+  'start-multi records the --serial yield question as decided, in start-multi-serial.md (GH-429-F5)'
+# And the tick stamp it must therefore write, which is behaviourally constant
+# here precisely BECAUSE it never yields — unstamped rows are addressable by no
+# tick, so "always 1" has to be written down rather than left implied.
+present "$SERIAL_MD" 'stamp every row `tick: 1`' \
+  '--serial stamps its agents.yaml rows tick: 1 (slice 3 carry-over)'
+
+# ---------------------------------------------------------------------------
+printf '\nSeam K — ADR-013 records the tick, and attribution is stated per tick\n\n'
+# ---------------------------------------------------------------------------
+#
+# GH-429 slice 5. Two artifacts, and the failure mode of each is different.
+#
+# ADR-013 is the decision record: it must exist, follow the ADR-004/ADR-012
+# shape, and carry the two things the design reserved it for — the
+# projection/accumulator split (the rule that makes a resumed tick safe) and the
+# CORRECTED reason a yield is not a fourth outcome word. The correction is the
+# part worth a test: the issue attributed the blocker to a `step=` enum, and an
+# ADR that repeats a mechanism which does not exist sends every future reader to
+# look for it. So the pin is on the sentence that denies the enum, not on the
+# words "three outcomes", which a wrong version of the record would also carry.
+#
+# `run-report.md` is the measurement instrument, and it is the design's
+# GATE-LESS seam: with N ticks per run, nothing goes red when the attribution is
+# wrong — the numbers are simply mis-attributed. A presence oracle is what is
+# available, so the per-tick wording is pinned, and the retired claim's ABSENCE
+# is pinned separately, because a file can gain the new sentence while keeping
+# the old one and read as two opposite rules to whichever the reader hits first.
+
+# The record exists and is shaped like its siblings: an H1 title sentence and a
+# `## Status` section (ADR-004 and ADR-012 both end on one). Positive control
+# FIRST — every assertion below this point would pass vacuously on a file that
+# is missing or empty, and `present` on an absent file reports "literal not
+# found", which reads like a wording drift rather than a missing record.
+if [ ! -s "$ADR_013_MD" ]; then
+  fail 'docs/adr/ADR-013 exists and is non-empty (positive control)' \
+       "no ${ADR_013_MD#"$ROOT"/}" \
+       'ADR-013 is the number this work reserved; the design defers its content to this slice.'
+else
+  pass 'docs/adr/ADR-013 exists and is non-empty (positive control)'
+  present "$ADR_013_MD" '# A fleet orchestrator is a re-dispatchable tick, not a session' \
+    'ADR-013 states the decision in its H1, as ADR-004 and ADR-012 do'
+  present "$ADR_013_MD" '## Status' \
+    'ADR-013 carries the Status section every accepted ADR here ends on'
+
+  # The projection/accumulator split (GH-429-F4 + design risk 5). Three pins,
+  # because the split has three halves that fail separately: a derived
+  # projection, a stored policy input, and a stored ACCUMULATOR — which F4's
+  # "derive everything but waveBudget" does not reach, and which is the half a
+  # summary of this ADR would drop.
+  present "$ADR_013_MD" 'Projections are derived, every tick' \
+    'ADR-013 states that wave progress and phase are derived on every tick (GH-429-F4)'
+  present "$ADR_013_MD" '`waveBudget` is a **policy input**' \
+    'ADR-013 names waveBudget the one stored policy input (GH-429-F4)'
+  present "$ADR_013_MD" '`spendToDate` is an **accumulator**' \
+    'ADR-013 names cumulative spend an accumulator, not a projection (design risk 5)'
+  present "$ADR_013_MD" 'a `wavesDone:` or `phase:` key there is a second, staler answer' \
+    'ADR-013 carries the negative half: no stored wave or phase pointer (GH-429-F4)'
+
+  # The corrected verdict-grammar constraint (GH-429-F3). The enum denial is the
+  # whole point of re-deriving it, so it is pinned as its own sentence.
+  present "$ADR_013_MD" 'The `OUTCOMES` table is exactly three values' \
+    'ADR-013 names the three-value OUTCOMES table as the first constraint (GH-429-F3)'
+  present "$ADR_013_MD" 'takes an `expectedStep`' \
+    'ADR-013 names the scheduler'\''s expectedStep lease as the second constraint (GH-429-F3)'
+  present "$ADR_013_MD" '**There is no `step=` enum anywhere.**' \
+    'ADR-013 says explicitly that no step= enum exists — the correction the issue got wrong'
+fi
+
+# --- run-report.md: the per-tick window wording. The probe for this slice is
+# deleting the N-disjoint-windows sentence, so it is pinned on its own and not
+# as part of a paragraph.
+present "$RUN_REPORT_MD" '`--fleet --all`'\''s orchestrator-only time is N disjoint windows' \
+  'run-report states that a ticking run'\''s orchestrator time is N disjoint windows'
+present "$RUN_REPORT_MD" 'an approximation, labelled as one' \
+  'run-report labels the orchestrator-only figure an approximation where it is one'
+# The two lifetimes of agents.yaml, which is the half a reader needs to know is
+# not a bug: addressing may only use this tick's rows (an agentId does not
+# outlive its session) while attribution must use every tick's.
+present "$RUN_REPORT_MD" 'read per tick for addressing, across every tick for attribution' \
+  'run-report states agents.yaml'\''s two lifetimes: per tick to address, across ticks to attribute'
+
+# --- STRUCTURAL: the retired claim is gone everywhere it was a live rule, not
+# just from the line this slice rewrote.
+#
+# The retired claim is that a fleet unit's records carry ONE orchestrator's
+# branch as an invariant of the run. Census of `carry|carries the orchestrator's
+# branch` under plugins/ at this slice's base (88d798d), read with
+# /usr/bin/grep -rn:
+#
+#   commands/run-report.md:32      the live rule — RETIRED here
+#   LEDGER.md:1711, LEDGER.md:1714 the recorded incident, verbatim
+#   scripts/run-metrics.mjs:369,486 two docstrings in the implementation
+#
+# and one near-miss inspected and left alone: `agents/provisioner.md:108` says a
+# lane's transcript "is stamped with the orchestrator's branch", which is a
+# per-tick fact that stays true and does not match the pattern.
+#
+# Two exclusions, both by full path and both for a stated reason:
+#   - LEDGER.md carries EVIDENCE, not rules (ADR-012). Rewriting an entry to
+#     match a later change falsifies the record — the same reasoning the
+#     ADR-003 exclusion above gives.
+#   - scripts/run-metrics.mjs is out of this slice's scope by instruction; the
+#     `--fleet` reader's own docstrings are a code change, not a prose one.
+# A third file gaining the sentence is what this guard is for.
+#
+# `-a` is mandatory, not tidy: run-metrics.mjs is classified BINARY (`file` says
+# "binary data"), ugrep matches nothing in it and BSD/GNU grep match two lines,
+# so without `-a` the guard's reach is a property of whose grep is on PATH.
+#
+# The traversal is pinned by a LIVE positive control rather than a planted
+# fixture: the unexcluded census must still find LEDGER.md, which proves the walk
+# reached the tree and the pattern matches real prose. A pattern that matched
+# nothing anywhere would otherwise make the absence assertion pass by walking
+# past everything.
+retired_re="carr(y|ies) the orchestrator's branch"
+census=$( grep -ralE "$retired_re" "$PLUGIN" 2>/dev/null | sed "s#^$ROOT/##" | sort || true )
+if printf '%s\n' "$census" | grep -q 'LEDGER\.md$'; then
+  pass 'the retired-claim census reaches the tree and matches real prose (positive control)'
+else
+  fail 'the retired-claim census reaches the tree and matches real prose (positive control)' \
+       "census: $( printf '%s' "$census" | tr '\n' ' ' )" \
+       'LEDGER.md records the claim verbatim, so a census that misses it is matching nothing.'
+fi
+live=$( printf '%s\n' "$census" \
+        | grep -v '^plugins/bett3r-ai-workflow/LEDGER\.md$' \
+        | grep -v '^plugins/bett3r-ai-workflow/scripts/run-metrics\.mjs$' \
+        | grep -v '^$' || true )
+if [ -z "$live" ]; then
+  pass 'no live artifact under plugins/ still carries the one-orchestrator-branch invariant (GH-429 risk 1)'
+else
+  fail 'no live artifact under plugins/ still carries the one-orchestrator-branch invariant (GH-429 risk 1)' \
+       "still claimed in:" $( printf '%s\n' "$live" ) \
+       'a run has N orchestrator ticks; a rule that says one mis-attributes every fleet report and nothing goes red.'
+fi
 
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"

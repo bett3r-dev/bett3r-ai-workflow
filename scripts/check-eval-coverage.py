@@ -82,7 +82,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 # The globs Claude Code registers, as `validate-plugins.py` spells them. Nested
-# references/*.md are support docs — that they are *not* here is the whole point:
+# reference/*.md and every other nested *.md are support docs — that they are *not* here is the whole point:
 # they have no trigger, so reaching them depends on a pointer being followed.
 ENTRYPOINT_GLOBS = ("commands/*.md", "agents/*.md", "skills/*/SKILL.md")
 

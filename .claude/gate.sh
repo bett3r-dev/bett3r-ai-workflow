@@ -191,7 +191,13 @@ sh scripts/test-xp-layer-hooks.sh
 HOOK_SH=dash sh scripts/test-xp-layer-hooks.sh
 HOOK_SH=bash sh scripts/test-xp-layer-hooks.sh
 EOF
-step flow-seams full 'plugins/bett3r-ai-workflow/commands/*' 'plugins/bett3r-ai-workflow/agents/*' 'plugins/bett3r-ai-workflow/skills/*' 'docs/adr/*' 'scripts/test-flow-seams.sh' <<'EOF'
+# Surface: the suite reads the command/agent/skill prose AND drives
+# `scripts/lane-step-parse.py` over `scripts/fixtures/lane-step/*`, and it holds the
+# uniqueness guard that fails a second copy of the verdict-token rule anywhere under
+# the plugin. So `bin/*`, `scripts/*` and the fixtures are in the surface too
+# (GH-429 slice 1, F5/D6): without them a diff touching lane-step-parse.py alone
+# printed SKIP for the only suite that guards it.
+step flow-seams full 'plugins/bett3r-ai-workflow/commands/*' 'plugins/bett3r-ai-workflow/agents/*' 'plugins/bett3r-ai-workflow/skills/*' 'plugins/bett3r-ai-workflow/bin/*' 'plugins/bett3r-ai-workflow/scripts/*' 'scripts/fixtures/lane-step/*' 'docs/adr/*' 'scripts/test-flow-seams.sh' <<'EOF'
 sh scripts/test-flow-seams.sh
 EOF
 step esas-design full 'plugins/bett3r-ai-workflow/skills/esas-design/*' 'plugins/bett3r-ai-workflow/skills/esas-pending/*' 'plugins/bett3r-ai-workflow/hooks/*' 'plugins/bett3r-ai-workflow/bin/*' 'scripts/test-esas-design.sh' 'scripts/fixtures/esas-design/*' <<'EOF'
@@ -203,6 +209,14 @@ step worktree-pool full 'plugins/bett3r-ai-workflow/bin/worktree-pool' 'plugins/
 sh scripts/test-worktree-pool.sh
 POOL_SH=dash dash scripts/test-worktree-pool.sh
 POOL_SH=bash bash scripts/test-worktree-pool.sh
+EOF
+# Surface: the driver, its launcher, the parser it reads the verdict through (a
+# change to the line grammar changes what the driver decides), the orchestrator
+# command whose yield it consumes, and the suite itself.
+step fleet-loop full 'plugins/bett3r-ai-workflow/bin/fleet-loop' 'plugins/bett3r-ai-workflow/scripts/fleet-loop.py' 'plugins/bett3r-ai-workflow/scripts/lane-step-parse.py' 'plugins/bett3r-ai-workflow/commands/start-multi.md' 'scripts/test-fleet-loop.sh' <<'EOF'
+sh scripts/test-fleet-loop.sh
+FLEET_SH=dash dash scripts/test-fleet-loop.sh
+FLEET_SH=bash bash scripts/test-fleet-loop.sh
 EOF
 step work-docs-path full 'plugins/bett3r-ai-workflow/bin/work-docs-path' 'plugins/bett3r-ai-workflow/commands/*' 'plugins/bett3r-ai-workflow/skills/*' 'scripts/test-work-docs-path.sh' <<'EOF'
 sh scripts/test-work-docs-path.sh

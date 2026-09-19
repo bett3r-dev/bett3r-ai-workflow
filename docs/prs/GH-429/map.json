@@ -1,0 +1,456 @@
+{
+  "structureVersion": 2,
+  "shape": "decision",
+  "grounded": true,
+  "mapId": "GH-429",
+  "target": "artifact",
+  "nodes": [],
+  "forks": [
+    {
+      "id": "GH-429-F1",
+      "title": "Where the orchestrator's yield sits",
+      "tickets": [
+        "GH-429"
+      ],
+      "card": {
+        "problem": "The orchestrator is the last context that lives as long as the whole fleet. It can end and be re-dispatched, resuming from run.yaml. The question is at which boundary it is allowed to end.",
+        "useCases": [
+          "a 7-unit fleet across 3 waves on one laptop",
+          "a wave whose lane ends gate-red in /build having pushed nothing"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Wave completion only",
+            "walks": [
+              {
+                "scenario": "3-wave fleet",
+                "text": "the orchestrator ends 3 times; each tick holds one wave's dispatches, notifications and reconciliation"
+              },
+              {
+                "scenario": "lane ends gate-red mid-pipeline",
+                "text": "the wave is still complete (every lane reported), so the tick ends; that unit's commits live only in its worktree, which survives because teardown needs terminal: true"
+              },
+              {
+                "scenario": "run moves machines",
+                "text": "breaks — unpushed lane commits are local-only"
+              }
+            ],
+            "evidence": [
+              "commands/start-multi.md:52",
+              "commands/start-multi.md:97"
+            ],
+            "rejectedBecause": "the same boundary with the safety half dropped: it leaves a gate-red lane commits only in its worktree, so the run cannot move machines and a recycled worktree loses them"
+          },
+          {
+            "id": "B",
+            "label": "Wave completion, and push every started branch first",
+            "walks": [
+              {
+                "scenario": "3-wave fleet",
+                "text": "identical to A, plus one push per started lane at the boundary"
+              },
+              {
+                "scenario": "lane ends gate-red mid-pipeline",
+                "text": "its commits reach origin, so the next tick can resume from any tree"
+              },
+              {
+                "scenario": "run moves machines",
+                "text": "survives — this is the existing cost-stop protocol, generalised to every yield"
+              }
+            ],
+            "evidence": [
+              "commands/start-multi.md:52"
+            ]
+          },
+          {
+            "id": "C",
+            "label": "Any time, with lanes as detached claude -p processes",
+            "walks": [
+              {
+                "scenario": "3-wave fleet",
+                "text": "the orchestrator ends whenever it likes; lanes write verdicts on their branches via lane-step-record"
+              },
+              {
+                "scenario": "lane ends gate-red mid-pipeline",
+                "text": "the verdict is on the branch, readable by any later tick"
+              },
+              {
+                "scenario": "run moves machines",
+                "text": "survives, but needs process management the plugin has never done and drops the Agent tool's notification path"
+              }
+            ],
+            "rejectedBecause": "premise unverified: whether a claude -p exit kills its background subagents is a known-unknown; take it only if B's per-wave context still measures too large",
+            "evidence": [
+              "agents/unit-lane.md:21-40"
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "/start-multi already defines a cost stop at exactly this boundary and already says what it costs to stop there: 'git push every started lane's branch first and keep its worktree, because a lane that has not reached /verify-build has pushed nothing.' A is that stop with the safety half dropped."
+        },
+        "ifOverturned": "C makes the driver a process supervisor and the tracer bullet becomes the subagent-lifetime probe instead of a two-unit fleet"
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "B"
+      }
+    },
+    {
+      "id": "GH-429-F2",
+      "title": "Who re-dispatches the orchestrator, and what stops a driver looping forever",
+      "tickets": [
+        "GH-429"
+      ],
+      "card": {
+        "problem": "Something must re-invoke /start-multi after each yield. /build's yield already has this exact loop one level down, and it ships with a non-progress guard: 'k did not advance between two consecutive dispatches -> stop and report blocked-on=build-no-progress; a yield that resumes onto the same slice forever is the one way this loop costs more than it saves.' Whatever drives the orchestrator needs the same guard.",
+        "useCases": [
+          "a 3-wave fleet run overnight",
+          "a wave that yields without advancing because its lane keeps dying"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "A shell driver (bin/fleet-loop)",
+            "walks": [
+              {
+                "scenario": "3-wave fleet overnight",
+                "text": "one fresh claude -p per tick until the verdict is terminal; no context survives between ticks"
+              },
+              {
+                "scenario": "wave does not advance",
+                "text": "the driver owns the guard: compare waves=k/N across two ticks and stop on no progress, mirroring build-no-progress"
+              },
+              {
+                "scenario": "census",
+                "text": "a bin/ script with a scripts/ implementation and a test-*.sh; the agent census stays 11, and the bin/ name is a contract from the day it ships"
+              }
+            ],
+            "evidence": [
+              "agents/unit-lane.md:64-72",
+              "commands/build.md:90"
+            ]
+          },
+          {
+            "id": "B",
+            "label": "The human re-invokes each tick",
+            "walks": [
+              {
+                "scenario": "3-wave fleet overnight",
+                "text": "does not run overnight; unattended is /start-multi's stated contract"
+              },
+              {
+                "scenario": "wave does not advance",
+                "text": "the human sees it, so no mechanical guard is needed"
+              },
+              {
+                "scenario": "census",
+                "text": "nothing new ships"
+              }
+            ],
+            "rejectedBecause": "breaks the unattended contract the command states in its first line"
+          },
+          {
+            "id": "C",
+            "label": "/loop inside one session",
+            "walks": [
+              {
+                "scenario": "3-wave fleet overnight",
+                "text": "runs, but the babysitter's own context is the 403k-median row; it re-loads the orchestration bodies into a context that never ends"
+              },
+              {
+                "scenario": "wave does not advance",
+                "text": "the babysitter would have to hold the guard in prose, in the context we are trying to end"
+              },
+              {
+                "scenario": "census",
+                "text": "nothing new ships"
+              }
+            ],
+            "rejectedBecause": "it re-creates the unbounded context this work exists to remove"
+          }
+        ],
+        "recommendation": {
+          "option": "A",
+          "why": "it is the only option that keeps the unattended contract while ending the context, and the guard it must carry is already specified and proven one level down in unit-lane's /build loop"
+        },
+        "ifOverturned": "B drops the driver slice entirely and the work is only the yield plus the resume point"
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "A"
+      }
+    },
+    {
+      "id": "GH-429-F3",
+      "title": "How a yield is spelled in the verdict line",
+      "tickets": [
+        "GH-429"
+      ],
+      "card": {
+        "problem": "The issue proposed a new marker carrying outcome=yield. The evidence says that word has nowhere to land. remote-ai-agents' verdict.ts hardcodes exactly three outcomes (success, gate-red, blocked-on) and maps anything else to infra with infraReason 'unknown-outcome'; unit-lane's spec block emits the same three. /build already expresses a yield without a fourth word: 'a yield is a success whose slices= is short of its total.' Separately, lane-step-parse.py enforces no enum at all but does hardcode the marker token LANE-STEP:v(\\d+).",
+        "useCases": [
+          "the driver reads the tick's verdict to decide whether to tick again",
+          "remote-ai-agents leases a step and reads the same line"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "New marker FLEET-STEP:v1, with outcome=yield",
+            "walks": [
+              {
+                "scenario": "driver reads the tick",
+                "text": "works — the driver is new code and can know the word"
+              },
+              {
+                "scenario": "remote-ai-agents reads it",
+                "text": "unknown-outcome -> infra, if the line ever reaches that reader"
+              },
+              {
+                "scenario": "a reader of both markers",
+                "text": "two yield vocabularies in one flow: success-with-short-counts at the slice level, outcome=yield at the wave level"
+              }
+            ],
+            "rejectedBecause": "invents a fourth outcome word for a concept the flow already spells a different way one level down"
+          },
+          {
+            "id": "B",
+            "label": "New marker FLEET-STEP:v1, reusing the three outcomes; a yield is success with waves=k/N short of total",
+            "walks": [
+              {
+                "scenario": "driver reads the tick",
+                "text": "success with k<N means tick again, exactly as unit-lane reads slices=3/8"
+              },
+              {
+                "scenario": "remote-ai-agents reads it",
+                "text": "the outcome vocabulary is the one it already knows; only the marker token differs"
+              },
+              {
+                "scenario": "a reader of both markers",
+                "text": "one yield idiom at both levels; lane-step-parse needs its marker parameterised and nothing else, since its attribute grammar already accepts waves=k/N"
+              }
+            ],
+            "evidence": [
+              "agents/unit-lane.md:64-72",
+              "scripts/lane-step-parse.py:64",
+              "remote-ai-agents/src/scheduler/verdict.ts:109-113"
+            ]
+          },
+          {
+            "id": "C",
+            "label": "Reuse LANE-STEP:v1 with step=start-multi",
+            "walks": [
+              {
+                "scenario": "driver reads the tick",
+                "text": "works with today's parser unchanged"
+              },
+              {
+                "scenario": "remote-ai-agents reads it",
+                "text": "verdict.ts compares step against the step the scheduler leased, so an unleased step is wrong-step -> infra; it holds no enum, so this is about the lease, not a list"
+              },
+              {
+                "scenario": "a reader of both markers",
+                "text": "one marker for two different things: a pipeline step and a fleet tick"
+              }
+            ],
+            "rejectedBecause": "conflates a step's verdict with a run's; the orchestrator is not one of the five leased steps"
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "it is the only option that adds a marker without adding a vocabulary. The correction that drives it: the blocker on C is verdict.ts's expectedStep lease, not a step= enum, and the blocker on A is the three-value OUTCOMES table, which the issue attributed to the wrong place."
+        },
+        "ifOverturned": "A costs a fourth outcome in every reader that ever sees the line; C costs no code today and a conflated contract later"
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "B"
+      }
+    },
+    {
+      "id": "GH-429-F4",
+      "title": "Is the resume point stored, or derived from the units",
+      "tickets": [
+        "GH-429"
+      ],
+      "card": {
+        "problem": "The issue proposes three additive run.yaml keys: waveBudget, wavesDone and phase. But /start-multi already carries units[].wave plus step and status, and /design-multi already carries units[].step as pending|drafting|critiqued|resolved|written|done, which is the phase. And the command itself states the principle: 'Git is the primary signal and the state file a hint', naming 'a state file that says step: plan while the branch carries three slices' as the orchestrator's commonest misread. A stored resume pointer is exactly that kind of second truth.",
+        "useCases": [
+          "a tick is killed between dispatch and collection",
+          "a lane advances after the orchestrator wrote run.yaml"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Store all three: waveBudget, wavesDone, phase",
+            "walks": [
+              {
+                "scenario": "tick killed mid-wave",
+                "text": "wavesDone says the wave finished; the units say otherwise; the stored value wins and a wave is skipped"
+              },
+              {
+                "scenario": "lane advances after the write",
+                "text": "the pointer is stale in the dangerous direction"
+              },
+              {
+                "scenario": "reading the run",
+                "text": "one line to read"
+              }
+            ],
+            "rejectedBecause": "denormalises state the units already determine, in a file the command already calls a hint"
+          },
+          {
+            "id": "B",
+            "label": "Store only waveBudget; derive wave progress and phase from units[]",
+            "walks": [
+              {
+                "scenario": "tick killed mid-wave",
+                "text": "the next tick derives progress from units[] and git, and re-enters the incomplete wave, which is step 4's existing resume rule"
+              },
+              {
+                "scenario": "lane advances after the write",
+                "text": "nothing to go stale; the derivation reads the current units"
+              },
+              {
+                "scenario": "reading the run",
+                "text": "one derivation, which is the same one step 4 already performs"
+              }
+            ],
+            "evidence": [
+              "commands/start-multi.md:73",
+              "commands/start-multi.md:81",
+              "commands/start-multi.md:114",
+              "commands/design-multi.md:126"
+            ]
+          },
+          {
+            "id": "C",
+            "label": "Store all three, but treat them as hints re-derived on read",
+            "walks": [
+              {
+                "scenario": "tick killed mid-wave",
+                "text": "safe, because the derivation runs anyway"
+              },
+              {
+                "scenario": "lane advances after the write",
+                "text": "safe, same reason"
+              },
+              {
+                "scenario": "reading the run",
+                "text": "the stored value is now decoration that must be kept honest by every writer, for no read that trusts it"
+              }
+            ],
+            "rejectedBecause": "pays the write cost of a cache nothing is allowed to read"
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "waveBudget is a policy input and genuinely not derivable, so it is stored; wavesDone and phase are projections of units[], and the repo has already named the failure mode of storing them."
+        },
+        "ifOverturned": "A makes the invariant 'run.yaml changes are additive' true in letter and adds the misread the command warns about"
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "B"
+      }
+    },
+    {
+      "id": "GH-429-F5",
+      "title": "Which /design-multi boundaries end the session",
+      "tickets": [
+        "GH-429"
+      ],
+      "card": {
+        "problem": "Phase A (unattended lanes) ends with subject maps on disk; Phase B is the one attended sitting; Phase C is the write-back. The issue proposes ending at both A/B and B/C. But Phase B holds a live Monitor websocket and a published design-map page, and Phase C must re-verify the pinned base.",
+        "useCases": [
+          "a 13-ticket design run",
+          "the owner answers half the forks, then stops for the day"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "End at A/B and B/C; the human opens Phase B by hand",
+            "walks": [
+              {
+                "scenario": "13-ticket run",
+                "text": "three sessions; Phase B starts cold on the subject maps, which are its primary source"
+              },
+              {
+                "scenario": "owner answers half, stops",
+                "text": "the answers are in the artifact db, not the session; a fresh Phase B reads them back with read_db"
+              },
+              {
+                "scenario": "base drift",
+                "text": "Phase C already re-verifies the pin, so a fresh session changes nothing"
+              }
+            ],
+            "evidence": [
+              "commands/design-multi.md:7",
+              "commands/design-multi.md:19",
+              "commands/design-multi.md:83"
+            ]
+          },
+          {
+            "id": "B",
+            "label": "End at A/B only; B and C stay one session",
+            "walks": [
+              {
+                "scenario": "13-ticket run",
+                "text": "two sessions; the largest single context is the sitting plus the whole write-back"
+              },
+              {
+                "scenario": "owner answers half, stops",
+                "text": "same as A, the db holds the answers"
+              },
+              {
+                "scenario": "base drift",
+                "text": "unchanged"
+              }
+            ],
+            "rejectedBecause": "Phase C is tracker-writer waves, which is the part that most resembles a wave loop and least needs the sitting's context"
+          },
+          {
+            "id": "C",
+            "label": "The driver opens Phase B too",
+            "walks": [
+              {
+                "scenario": "13-ticket run",
+                "text": "the driver opens a session nobody is sitting in"
+              },
+              {
+                "scenario": "owner answers half, stops",
+                "text": "no one is there to ask the next question"
+              },
+              {
+                "scenario": "base drift",
+                "text": "unchanged"
+              }
+            ],
+            "rejectedBecause": "a driver cannot sit in for the human, and design-multi already batches every human moment into this one phase"
+          }
+        ],
+        "recommendation": {
+          "option": "A",
+          "why": "each phase's primary source is already on disk (units/, subjects/, answers/), which is the test for whether ending loses anything; and the sitting is attended by definition, so the human opening it is not a cost."
+        },
+        "ifOverturned": "B drops the phase: resume point to a single A/B boundary and makes slice 2 smaller"
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "A"
+      }
+    }
+  ],
+  "links": []
+}

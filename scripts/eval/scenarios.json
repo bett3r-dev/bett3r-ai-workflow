@@ -1,5 +1,5 @@
 {
-  "_comment": "Behavioral eval scenarios. Each one puts an artifact in front of a real headless session and asserts what the session DOES — which reference it opens, and which rule it states. See README.md for why this exists and why it is not a CI gate.",
+  "_comment": "Behavioral eval scenarios. Each one puts an artifact in front of a real headless session and asserts what the session DOES \u2014 which reference it opens, and which rule it states. See README.md for why this exists and why it is not a CI gate.",
   "defaults": {
     "runs": 3,
     "min_pass": 2,
@@ -29,11 +29,11 @@
         ]
       ],
       "must_not_state": [],
-      "_calibration": "The first version of this asserted the orchestrator would state `build:all` / the baseline filename. It opened provisioner.md 3/3 and failed the text assertion 3/3 — because that assertion encoded a PRE-split expectation. After the split the orchestrator is right not to recite the agent's internals; that is what delegating means. The build rule is now asserted where it lives, by `provisioner-states-its-own-rules`. A behavioral eval can be wrong about what correct looks like, and this one was."
+      "_calibration": "The first version of this asserted the orchestrator would state `build:all` / the baseline filename. It opened provisioner.md 3/3 and failed the text assertion 3/3 \u2014 because that assertion encoded a PRE-split expectation. After the split the orchestrator is right not to recite the agent's internals; that is what delegating means. The build rule is now asserted where it lives, by `provisioner-states-its-own-rules`. A behavioral eval can be wrong about what correct looks like, and this one was."
     },
     {
       "id": "provisioner-states-its-own-rules",
-      "why": "The other half of the split above. The moved content is only as good as its new home: this asserts the rules actually land when the provisioner agent is the one running, which is the context they now load in. Pairs with provisioner-reached — one proves the pointer is followed, this proves what is behind it works.",
+      "why": "The other half of the split above. The moved content is only as good as its new home: this asserts the rules actually land when the provisioner agent is the one running, which is the context they now load in. Pairs with provisioner-reached \u2014 one proves the pointer is followed, this proves what is behind it works.",
       "guards_split": "agents/provisioner.md (the content that moved out of start-multi)",
       "artifact": "plugins/bett3r-ai-workflow/agents/provisioner.md",
       "prompt": "Read the agent file plugins/bett3r-ai-workflow/agents/provisioner.md. You are the provisioner. You have been handed unit TV1-1900, worktree /tmp/run/wt/TV1-1900, repo kind 'standard', run dir /tmp/run, scratchpad /tmp/scratch/TV1-1900. The worktree was reused from an earlier unit and already has a .work/ directory in it. Walk through exactly what you do, naming actual commands, and say what you report back.",
@@ -55,7 +55,7 @@
     },
     {
       "id": "base-check-not-delegated",
-      "why": "NEGATIVE CONTROL for the split above. Verifying the branch base must stay with the orchestrator — 'never trust an agent's ahead/behind' ('74 ahead' was really 74 behind). A split that quietly hands this to the provisioner would still look correct and would still pass the provisioner-reached scenario. If this never fails, the suite is not discriminating.",
+      "why": "NEGATIVE CONTROL for the split above. Verifying the branch base must stay with the orchestrator \u2014 'never trust an agent's ahead/behind' ('74 ahead' was really 74 behind). A split that quietly hands this to the provisioner would still look correct and would still pass the provisioner-reached scenario. If this never fails, the suite is not discriminating.",
       "guards_split": "commands/start-multi.md (what deliberately did NOT move)",
       "artifact": "plugins/bett3r-ai-workflow/commands/start-multi.md",
       "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/start-multi.md. You are running it as the orchestrator. A unit's worktree has just been cut and its branch created from the pinned BASE. How do you establish that the branch is actually on the base you intended? State the exact command and say who runs it.",
@@ -81,7 +81,7 @@
     },
     {
       "id": "board-setup-pointer-followed",
-      "why": "design.md's Step 0 prints a verdict and five rows became pointers into BOARD-SETUP.md. The mcp:unregistered path ends in a session restart — the single most disruptive instruction in the flow, and the one most costly to miss.",
+      "why": "design.md's Step 0 prints a verdict and five rows became pointers into BOARD-SETUP.md. The mcp:unregistered path ends in a session restart \u2014 the single most disruptive instruction in the flow, and the one most costly to miss.",
       "guards_split": "commands/design.md -> skills/esas-design/BOARD-SETUP.md",
       "artifact": "plugins/bett3r-ai-workflow/commands/design.md",
       "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/design.md. You are running /design in a repo that has a .esas/ directory. The board-mode preflight has just printed 'mcp: unregistered'. The design question is structural, so relevance passed. What exactly do you do now, and what do you tell the user? Be specific about any cost to them.",
@@ -102,7 +102,7 @@
     },
     {
       "id": "evidence-consulted-for-a-sweep",
-      "why": "EVIDENCE.md is the original split and the one with 9 declared consumers. Its stated risk is that a reference is only as good as the reference being followed — and it already shipped linked from 5 while needed by 8.",
+      "why": "EVIDENCE.md is the original split and the one with 9 declared consumers. Its stated risk is that a reference is only as good as the reference being followed \u2014 and it already shipped linked from 5 while needed by 8.",
       "guards_split": "commands/verify-build.md -> EVIDENCE.md",
       "artifact": "plugins/bett3r-ai-workflow/commands/verify-build.md",
       "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/verify-build.md. You are running /verify-build. The full test suite reported 'Tests: 0 total' and exited 0, and a slice's oracle is in a tier excluded from the default run. Is this branch green? Justify your answer using this flow's own definition of evidence, and say what you record.",
@@ -125,7 +125,7 @@
     {
       "id": "mutation-when-red-is-unavailable",
       "why": "The executor's rule for a slice whose deliverable IS a test or a guard: there is no natural RED, so mutation is the only evidence available. A rule with no oracle behind it is exactly the kind that gets smoothed away, and it lives in an agent file that loads in a fresh context.",
-      "guards_split": "agents/executor.md (+ EVIDENCE.md §2)",
+      "guards_split": "agents/executor.md (+ EVIDENCE.md \u00a72)",
       "artifact": "plugins/bett3r-ai-workflow/agents/executor.md",
       "prompt": "Read the agent file plugins/bett3r-ai-workflow/agents/executor.md. You are the executor. Your slice's entire deliverable is a new CI guard script that must fail when a forbidden pattern appears. You cannot get a natural RED, because before your slice there is nothing to run. What evidence do you produce that the guard actually works, and what exactly do you report?",
       "must_open": [],
@@ -146,8 +146,8 @@
     },
     {
       "id": "adr-numbering-reached",
-      "why": "The highest-stakes rule behind any of these pointers. Duplicate ADR numbers are silent — different slugs mean different filenames, so nothing conflicts and both land — and one repo's namespace reached 22% duplicates this way. Every inbound ADR-0NN citation breaks permanently, and the cheap moment is before the number is used.",
-      "guards_split": "skills/domain-modeling/SKILL.md — ADR numbering, now inline",
+      "why": "The highest-stakes rule behind any of these pointers. Duplicate ADR numbers are silent \u2014 different slugs mean different filenames, so nothing conflicts and both land \u2014 and one repo's namespace reached 22% duplicates this way. Every inbound ADR-0NN citation breaks permanently, and the cheap moment is before the number is used.",
+      "guards_split": "skills/domain-modeling/SKILL.md \u2014 ADR numbering, now inline",
       "artifact": "plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md",
       "prompt": "Read plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md. A decision in this session qualifies for an ADR. The repo already has ADRs under docs/adr/. Give me the exact steps to write it, including precisely how you determine its number and why that way.",
       "must_open": [],
@@ -162,15 +162,17 @@
         ]
       ],
       "must_not_state": [],
-      "_calibration": "Written to guard a split that no longer exists: ADR-FORMAT.md and CONTEXT-FORMAT.md were inlined into SKILL.md and deleted. The parent was 468 words and its two references 668 and 351, so the split sat below the floor where splitting pays — it cost loading probability and bought no attention. must_open is empty because there is nothing left to open; loading probability is 1. Kept anyway, because the ADR numbering rule is high-stakes and silent when wrong, and asserting an INLINE rule is still a legibility regression check — it just is not evidence about a pointer any more. Note guards_split must not name the deleted files: check-eval-coverage.py reads every .md path in that field as a guarded target and correctly flags one the corpus no longer has."
+      "_calibration": "Written when ADR-FORMAT.md and CONTEXT-FORMAT.md had been inlined into SKILL.md and deleted. Those files returned with the Pocock adoption (ADR-012) and are guarded by adr-format-reached and context-format-reached; the numbering rule this scenario asserts stayed INLINE, in SKILL.md's `## In this flow` section, because Pocock's ADR-FORMAT.md numbers from a directory listing and this flow's rule (`git log --all`, every ref) overrides it. must_open stays empty on purpose: the rule is in the parent, and a session that opened ADR-FORMAT.md and took its numbering rule instead would FAIL must_state \u2014 which is the regression this scenario now guards. guards_split must not name a companion, since check-eval-coverage.py reads every .md path in that field as a guarded target."
     },
     {
       "id": "context-format-reached",
-      "why": "CONTEXT.md is a glossary and nothing else; the format file is what keeps it from drifting into a spec or a scratchpad. The failure is cheap to fix but easy to start, and it compounds — a CONTEXT.md that has become a scratchpad stops being read.",
-      "guards_split": "skills/domain-modeling/SKILL.md — glossary format, now inline",
+      "why": "CONTEXT.md is a glossary and nothing else; the format file is what keeps it from drifting into a spec or a scratchpad. The failure is cheap to fix but easy to start, and it compounds \u2014 a CONTEXT.md that has become a scratchpad stops being read.",
+      "guards_split": "skills/domain-modeling/SKILL.md -> skills/domain-modeling/CONTEXT-FORMAT.md",
       "artifact": "plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md",
       "prompt": "Read plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md. During a grill the user settles that 'Publication' is the right word for an item listed on an external sales channel, and that 'Listing' should not be used. Write exactly what goes into CONTEXT.md, in the exact format required, and say where the file lives.",
-      "must_open": [],
+      "must_open": [
+        "CONTEXT-FORMAT.md"
+      ],
       "must_state": [
         [
           "_avoid_"
@@ -180,11 +182,11 @@
         ]
       ],
       "must_not_state": [],
-      "_calibration": "Written to guard a split that no longer exists: ADR-FORMAT.md and CONTEXT-FORMAT.md were inlined into SKILL.md and deleted. The parent was 468 words and its two references 668 and 351, so the split sat below the floor where splitting pays — it cost loading probability and bought no attention. must_open is empty because there is nothing left to open; loading probability is 1. Kept anyway, because the ADR numbering rule is high-stakes and silent when wrong, and asserting an INLINE rule is still a legibility regression check — it just is not evidence about a pointer any more. Note guards_split must not name the deleted files: check-eval-coverage.py reads every .md path in that field as a guarded target and correctly flags one the corpus no longer has."
+      "_calibration": "First written when ADR-FORMAT.md and CONTEXT-FORMAT.md had been inlined into SKILL.md and deleted, so must_open was empty. The thin-context rewrite (ADR-012) adopted Matt Pocock's domain-modeling skill verbatim, and the two companions are back as real files behind real links; the `_avoid_` line and the tight-definition rule now live ONLY in CONTEXT-FORMAT.md, so must_open is the load-bearing assertion again. must_state is unchanged: `_avoid_` is the token a session that read only SKILL.md cannot produce."
     },
     {
       "id": "aggregate-patterns-reached",
-      "why": "ddd-patterns became a hub plus six references; this is the most-used spoke. Its trigger row is the plain 'writing an aggregate' case, so if the trigger table works at all it works here — which makes this the canary for the whole hub.",
+      "why": "ddd-patterns became a hub plus six references; this is the most-used spoke. Its trigger row is the plain 'writing an aggregate' case, so if the trigger table works at all it works here \u2014 which makes this the canary for the whole hub.",
       "guards_split": "ddd-patterns/SKILL.md -> AGGREGATES.md",
       "artifact": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md",
       "prompt": "Read plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md. I am adding a new PV3 aggregate with two command handlers, an invariant, and an idempotency check that reads existing state. What patterns and gotchas must I follow? Be specific and name the failure each one prevents.",
@@ -224,7 +226,7 @@
     },
     {
       "id": "policy-patterns-reached",
-      "why": "Policy failures are the ones that re-emit commands — a fan-out restarted from the top re-issues every event, and a soft-deleted aggregate is not protected by invariants.stateExists(). The blast radius is external side effects, not just a wrong projection.",
+      "why": "Policy failures are the ones that re-emit commands \u2014 a fan-out restarted from the top re-issues every event, and a soft-deleted aggregate is not protected by invariants.stateExists(). The blast radius is external side effects, not just a wrong projection.",
       "guards_split": "ddd-patterns/SKILL.md -> POLICIES.md",
       "artifact": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md",
       "prompt": "Read plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md. I am writing a PV3 policy that reacts to one event by dispatching a command per line item, and it can be redelivered halfway through. How do I make that safe? Name the specific mechanism and what happens if I get it wrong.",
@@ -248,11 +250,11 @@
         ]
       ],
       "must_not_state": [],
-      "_calibration": "First version required one of four narrow phrasings of the partial-progress mechanism. It opened POLICIES.md 3/3 and passed must_state only 1/3 — not because the split failed, but because the model states the same correct idea many ways: 'per-command idempotency', 'withIdempotencyCheck', 'no-op when already applied', 'the source aggregate's own recorded progress'. The assertion was testing phrasing, not comprehension. Broadened to the concept. This is the second scenario where the ASSERTION, not the artifact, was at fault — must_open is the discriminating half and must_state should confirm the idea landed, not pin a wording."
+      "_calibration": "First version required one of four narrow phrasings of the partial-progress mechanism. It opened POLICIES.md 3/3 and passed must_state only 1/3 \u2014 not because the split failed, but because the model states the same correct idea many ways: 'per-command idempotency', 'withIdempotencyCheck', 'no-op when already applied', 'the source aggregate's own recorded progress'. The assertion was testing phrasing, not comprehension. Broadened to the concept. This is the second scenario where the ASSERTION, not the artifact, was at fault \u2014 must_open is the discriminating half and must_state should confirm the idea landed, not pin a wording."
     },
     {
       "id": "readmodel-patterns-reached",
-      "why": "The read-model gotchas are the ones that reach production silently — op:'contains' on a default B-tree index left six live admin search boxes dead, and an upsert that cannot remove a key left eight nav sections collapsed forever. All green in tests.",
+      "why": "The read-model gotchas are the ones that reach production silently \u2014 op:'contains' on a default B-tree index left six live admin search boxes dead, and an upsert that cannot remove a key left eight nav sections collapsed forever. All green in tests.",
       "guards_split": "ddd-patterns/SKILL.md -> READMODELS.md",
       "artifact": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md",
       "prompt": "Read plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md. I am writing a PV3 read model whose projector rebuilds a nested object on each event, and I need a query route that filters on a field inside it. What must I know before writing it? Name the concrete failures.",
@@ -274,10 +276,10 @@
     },
     {
       "id": "schema-evolution-reached",
-      "why": "The smallest reference (377 words) and the sharpest failure: a PR scoped as a 'pure rename' rehydrated the aggregate to accounts[\"undefined\"] — replay silently broken, and the replay path usually has no test to go red. Small references are the easiest to skip past.",
+      "why": "The smallest reference (377 words) and the sharpest failure: a PR scoped as a 'pure rename' rehydrated the aggregate to accounts[\"undefined\"] \u2014 replay silently broken, and the replay path usually has no test to go red. Small references are the easiest to skip past.",
       "guards_split": "ddd-patterns/SKILL.md -> SCHEMAS.md",
       "artifact": "plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md",
-      "prompt": "Read plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md. I want to rename a field on a persisted event — it is just a rename, the type is unchanged. Is that safe? Say exactly what I have to do and what breaks if I treat it as a rename.",
+      "prompt": "Read plugins/bett3r-pv3-ai-skills/skills/ddd-patterns/SKILL.md. I want to rename a field on a persisted event \u2014 it is just a rename, the type is unchanged. Is that safe? Say exactly what I have to do and what breaks if I treat it as a rename.",
       "must_open": [
         "SCHEMAS.md"
       ],
@@ -321,7 +323,7 @@
     },
     {
       "id": "build-routes-models-per-dispatch",
-      "why": "The model-routing policy is inline in /build and costs nothing to read past — and reading past it is silent: every dispatch still works, on the most expensive model available, which is exactly what it looked like before the policy existed. Nothing observable distinguishes 'routed to opus deliberately' from 'never routed'. This is also the scenario that guards the scope-check dispatch, a behaviour delegation (a split with loading probability 1) rather than a reference file.",
+      "why": "The model-routing policy is inline in /build and costs nothing to read past \u2014 and reading past it is silent: every dispatch still works, on the most expensive model available, which is exactly what it looked like before the policy existed. Nothing observable distinguishes 'routed to opus deliberately' from 'never routed'. This is also the scenario that guards the scope-check dispatch, a behaviour delegation (a split with loading probability 1) rather than a reference file.",
       "guards_split": "commands/build.md -> agents/scope-check.md (behaviour delegated to a subagent, not to a reference file)",
       "artifact": "plugins/bett3r-ai-workflow/commands/build.md",
       "prompt": "Read plugins/bett3r-ai-workflow/commands/build.md. You are running it. Slice 3 of 5 is marked `model: sonnet` in .work/slices.yaml and its executor has just reported COMPLETED with a clean RED. State concretely every agent you dispatch next, and for each one name the model you dispatch it on and why.",
@@ -342,14 +344,14 @@
         ]
       ],
       "must_not_state": [],
-      "_calibration": "must_open is deliberately empty: the routing lives inline in build.md, so there is no pointer to follow. What is asserted is that both gate agents are named AND that a model is attached to each dispatch — an answer that dispatches the verifier without naming opus has read the step and skipped the policy, which is the exact failure."
+      "_calibration": "must_open is deliberately empty: the routing lives inline in build.md, so there is no pointer to follow. What is asserted is that both gate agents are named AND that a model is attached to each dispatch \u2014 an answer that dispatches the verifier without naming opus has read the step and skipped the policy, which is the exact failure."
     },
     {
       "id": "context-providers-reached",
-      "why": "Seam B declares an extension point in /design Step 1 and moves its whole contract behind a pointer. The rules that only exist behind it are the ones that keep it harmless: failure is tolerated (a throwing or timing-out provider must NOT fail /design), zero providers is the normal case and is silent, and a hook was rejected on this repo's own measured evidence (esas-pending.sh). A session that reads past the pointer will improvise the failure policy, and the improvised answer — surface the error, or abort grounding — is the one this seam exists to prevent.",
+      "why": "Seam B declares an extension point in /design Step 1 and moves its whole contract behind a pointer. The rules that only exist behind it are the ones that keep it harmless: failure is tolerated (a throwing or timing-out provider must NOT fail /design), zero providers is the normal case and is silent, and a hook was rejected on this repo's own measured evidence (esas-pending.sh). A session that reads past the pointer will improvise the failure policy, and the improvised answer \u2014 surface the error, or abort grounding \u2014 is the one this seam exists to prevent.",
       "guards_split": "commands/design.md -> CONTEXT-PROVIDERS.md",
       "artifact": "plugins/bett3r-ai-workflow/commands/design.md",
-      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/design.md. You are running it on a repo that DOES declare a context provider. You are in Step 1 (Ground). You have read the ticket and CONTEXT.md, and you now invoke the declared provider — it hangs, then raises. State concretely what you do next, what (if anything) the user sees, and what you write in the design doc. Then state what would have happened instead in a repo that declares no provider at all.",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/design.md. You are running it on a repo that DOES declare a context provider. You are in Step 1 (Ground). You have read the ticket and CONTEXT.md, and you now invoke the declared provider \u2014 it hangs, then raises. State concretely what you do next, what (if anything) the user sees, and what you write in the design doc. Then state what would have happened instead in a repo that declares no provider at all.",
       "must_open": [
         "CONTEXT-PROVIDERS.md"
       ],
@@ -456,7 +458,7 @@
       "why": "Re-check mode narrows the verifier to its own findings plus the fix-round diff. The risk that narrowing creates is trusting the executor's per-finding response instead of the diff. Here the response claims both findings fixed and the diff fixes only F1; a re-check that PASSes has turned the gate into a relay.",
       "guards_split": "agents/verifier.md re-check mode (not a split: guards the narrowed pass itself)",
       "artifact": "plugins/bett3r-ai-workflow/agents/verifier.md",
-      "prompt": "Read the agent file plugins/bett3r-ai-workflow/agents/verifier.md. You are that verifier, dispatched in re-check mode for slice 3. Your previous findings were: F1 — src/billing/invoice.ts:42 formats the amount with toFixed(2) instead of the repo's formatMoney helper. F2 — src/billing/invoice.test.ts covers only the happy path; the zero-amount branch at src/billing/invoice.ts:57 has no test. The executor's per-finding response: 'F1 → fixed. F2 → fixed, coverage added.' The complete diff since the tree you reviewed:\n\n--- a/src/billing/invoice.ts\n+++ b/src/billing/invoice.ts\n@@ -41,3 +41,3 @@\n-  return amount.toFixed(2)\n+  return formatMoney(amount)\n\nNo other file changed. Return your report.",
+      "prompt": "Read the agent file plugins/bett3r-ai-workflow/agents/verifier.md. You are that verifier, dispatched in re-check mode for slice 3. Your previous findings were: F1 \u2014 src/billing/invoice.ts:42 formats the amount with toFixed(2) instead of the repo's formatMoney helper. F2 \u2014 src/billing/invoice.test.ts covers only the happy path; the zero-amount branch at src/billing/invoice.ts:57 has no test. The executor's per-finding response: 'F1 \u2192 fixed. F2 \u2192 fixed, coverage added.' The complete diff since the tree you reviewed:\n\n--- a/src/billing/invoice.ts\n+++ b/src/billing/invoice.ts\n@@ -41,3 +41,3 @@\n-  return amount.toFixed(2)\n+  return formatMoney(amount)\n\nNo other file changed. Return your report.",
       "must_open": [],
       "must_state": [
         [
@@ -473,6 +475,269 @@
         "**Status:** PASS",
         "Status: PASS"
       ]
+    },
+    {
+      "id": "build-pool-reached",
+      "why": "/build's Step 2 sizes the pool inline and hands every pool mechanic to reference/build-pool.md behind one link. The rule most likely to be improvised past is the unconditional reset before every take \u2014 install and build whether or not anything changed \u2014 because skipping it looks like an optimisation and the stale build output it prevents fails as a flaky test three slices later, not as a reset error.",
+      "guards_split": "commands/build.md -> reference/build-pool.md",
+      "artifact": "plugins/bett3r-ai-workflow/commands/build.md",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/build.md. You are running /build on five slices with no brief. You have ordered the slices and run `worktree-pool size .work/slices.yaml`; its last line was `WORKTREE-POOL:v1 cmd=size outcome=ok pool=2 ready=2 worktrees=/tmp/pool/wt-1,/tmp/pool/wt-2`. Slices 1 and 2 are ready now. State concretely, naming actual commands and agents, everything you do from here until slice 1's executor is dispatched, and say what happens to a worktree whose lockfile did not change since its last use.",
+      "must_open": [
+        "reference/build-pool.md"
+      ],
+      "must_state": [
+        [
+          "worktree-pool provision",
+          "provision"
+        ],
+        [
+          "pool-provisioner"
+        ],
+        [
+          "worktree-pool reset",
+          "reset"
+        ],
+        [
+          "unconditional",
+          "whether or not anything changed",
+          "every take",
+          "before every take",
+          "lockfile did not move",
+          "even if the lockfile"
+        ]
+      ],
+      "must_not_state": [
+        "skip the reset",
+        "skip the install",
+        "reuse the build output"
+      ]
+    },
+    {
+      "id": "build-record-reached",
+      "why": "The D-entry grammar and the build-summary frontmatter moved whole into reference/build-record.md; /build names the two files and links the companion three times. The grammar is executed by test-flow-seams.sh against a real decisions.md, so a wrong entry is caught after the fact \u2014 this asserts the session reaches the grammar before writing, since an entry written from memory (a `confidence:` field, a free-text `kind`) is exactly what the fixed header exists to prevent.",
+      "guards_split": "commands/build.md -> reference/build-record.md",
+      "artifact": "plugins/bett3r-ai-workflow/commands/build.md",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/build.md. You are running /build. Slice 2 (`inventory read model`) has just been committed as a1b2c3d after one fix round classified `design-silent`: the executor had to pick a cursor shape the design left open and chose a per-stream position, rejecting a global one. Write the exact decisions.md entry you append now \u2014 every header line, spelled as the record requires \u2014 and then say who writes build-summary.md, when, and what its entry for slice 5 looks like if the run yields before slice 5 ever starts.",
+      "must_open": [
+        "reference/build-record.md"
+      ],
+      "must_state": [
+        [
+          "kind: silent-seam",
+          "silent-seam"
+        ],
+        [
+          "decidedBy: executor",
+          "decidedBy"
+        ],
+        [
+          "supersedes"
+        ],
+        [
+          "orchestrator",
+          "you alone",
+          "single writer"
+        ],
+        [
+          "attempts: 0",
+          "never started",
+          "commit: null"
+        ]
+      ],
+      "must_not_state": [
+        "confidence:",
+        "the executor writes decisions.md",
+        "the executor appends to decisions.md"
+      ]
+    },
+    {
+      "id": "start-multi-serial-reached",
+      "why": "`--serial` drops the unit-lane and makes the orchestrator run each unit's five steps itself from inside the worktree; the mechanics (EnterWorktree, the run-state mirror, the isolation-safe brief shapes, rescuing learnings before ExitWorktree) live only in reference/start-multi-serial.md. Read past, the orchestrator dispatches unit-lanes it has no tool for, or writes run.yaml from inside a worktree that cannot see it.",
+      "guards_split": "commands/start-multi.md -> reference/start-multi-serial.md",
+      "artifact": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/start-multi.md. You are running it with `--serial` on three units. Step 2 has provisioned all three worktrees (TV1-1900 at /tmp/run/wt/TV1-1900 and so on) and each has its .work/lane.yaml. You are about to run unit TV1-1900's pipeline. Walk through concretely how you run its five steps, where you keep the run state while you are inside its worktree and when that state reaches run.yaml, what you do about .work/learnings.md before leaving, and what happens when /build reports slices=2/5.",
+      "must_open": [
+        "reference/start-multi-serial.md"
+      ],
+      "must_state": [
+        [
+          "EnterWorktree"
+        ],
+        [
+          "state-mirror",
+          "mirror"
+        ],
+        [
+          "ExitWorktree"
+        ],
+        [
+          "learnings.md"
+        ],
+        [
+          "re-invoke",
+          "again",
+          "resumes",
+          "dispatch /build again",
+          "run /build again"
+        ]
+      ],
+      "must_not_state": [
+        "dispatch a unit-lane",
+        "dispatch the unit-lane"
+      ]
+    },
+    {
+      "id": "design-map-fleet-reached",
+      "why": "design-map's SKILL.md keeps the attended verbs and points every fleet reader (render --stack, project, decisions, apply-answers, select) at FLEET.md, opened under /design-multi or as a design-lane. The stacking order and the cross-map answer rule (`otherMap=`) exist only behind that pointer; a session that improvises them renders subjects in argument order and folds a sibling map's answer into the wrong fork.",
+      "guards_split": "skills/design-map/SKILL.md -> skills/design-map/FLEET.md",
+      "artifact": "plugins/bett3r-ai-workflow/skills/design-map/SKILL.md",
+      "prompt": "Read plugins/bett3r-ai-workflow/skills/design-map/SKILL.md. You are the /design-multi orchestrator in a Phase B sitting with three subject maps on disk: units/S1.map.json (4 forks, 1 open), units/S2.map.json (6 forks, 3 open), units/S3.map.json (2 forks, 2 open). Give the exact command that puts all three on one page, say in what order the page shows them and why, and say what apply-answers does with a readback answer whose `map` field names S2 when you fold answers into S1.",
+      "must_open": [
+        "skills/design-map/FLEET.md"
+      ],
+      "must_state": [
+        [
+          "render --stack"
+        ],
+        [
+          "open forks first",
+          "most `open` forks first",
+          "most open forks",
+          "open forks",
+          "S2"
+        ],
+        [
+          "otherMap"
+        ]
+      ],
+      "must_not_state": []
+    },
+    {
+      "id": "adr-format-reached",
+      "why": "domain-modeling's SKILL.md says when an ADR is owed and points at ADR-FORMAT.md for how it is written. The format's one strong claim \u2014 an ADR can be a single 1-3 sentence paragraph, with Status / Considered Options / Consequences optional and usually absent \u2014 is the opposite of the template-heavy ADR a model writes from its priors, so a session that skipped the pointer produces a five-section document and reads as thorough.",
+      "guards_split": "skills/domain-modeling/SKILL.md -> skills/domain-modeling/ADR-FORMAT.md",
+      "artifact": "plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md",
+      "prompt": "Read plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md. During a grill the user settled that the Ordering context will communicate with Billing only through domain events, never synchronous HTTP, because Billing's availability must not gate order placement; the team seriously considered an HTTP call and rejected it. All three ADR tests hold. Write the ADR exactly as this skill's format requires, and say which optional sections you include and which you leave out, and why.",
+      "must_open": [
+        "ADR-FORMAT.md"
+      ],
+      "must_state": [
+        [
+          "1-3 sentences",
+          "1\u20133 sentences",
+          "one to three sentences",
+          "single paragraph",
+          "one paragraph",
+          "a paragraph"
+        ],
+        [
+          "Considered Options",
+          "Consequences",
+          "Status"
+        ],
+        [
+          "optional",
+          "leave out",
+          "omit",
+          "only when",
+          "skip"
+        ]
+      ],
+      "must_not_state": []
+    },
+    {
+      "id": "skill-mechanics-reached",
+      "why": "writing-for-agents keeps the universal writing rules and points at SKILL-MECHANICS.md for what changes when the document is a skill. The invocation choice lives only there: `disable-model-invocation: true` strips the description from the agent's reach, so no other skill can fire it and the description becomes human-facing. /evolve and /capture-learnings open with this skill, and a session that reads past the pointer writes a trigger-laden description on a skill nothing but a human can invoke.",
+      "guards_split": "skills/writing-for-agents/SKILL.md -> skills/writing-for-agents/SKILL-MECHANICS.md",
+      "artifact": "plugins/bett3r-ai-workflow/skills/writing-for-agents/SKILL.md",
+      "prompt": "Read plugins/bett3r-ai-workflow/skills/writing-for-agents/SKILL.md. You are /evolve, writing a new skill that only a human will ever type by name; it must never fire on its own and no other skill needs to reach it. State the exact frontmatter you write for the invocation choice, what its description should now contain, and whether another skill could invoke it afterwards.",
+      "must_open": [
+        "SKILL-MECHANICS.md"
+      ],
+      "must_state": [
+        [
+          "disable-model-invocation"
+        ],
+        [
+          "user-invoked",
+          "user invoked"
+        ],
+        [
+          "no other skill",
+          "cannot",
+          "can't",
+          "nothing but the human",
+          "only the human"
+        ]
+      ],
+      "must_not_state": []
+    },
+    {
+      "id": "tick-boundary-reached",
+      "why": "A wave boundary is where /start-multi ends its context. All five preconditions fail SILENTLY if skipped: an unpushed wave is commits on one machine, a leaked lock costs every later tick the full reclaim wait, and an unstamped agents.yaml row is addressable by no tick. The command file now states the five as a list and delegates the rules; if that pointer is read past, the orchestrator ends a context and the run loses the wave.",
+      "guards_split": "commands/start-multi.md -> reference/start-multi-tick-boundary.md",
+      "artifact": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/start-multi.md. You are running it as a fleet orchestrator. Every unit of the wave you dispatched has just reached a terminal status: two passed, one is gate-red and not terminal, and one escalated into the current batch. There are later waves still unstarted. You are about to end your context. List concretely and specifically every action you take before you stop, in order. Name actual commands and actual filenames, and say for each worktree whether you remove it and why.",
+      "must_open": [
+        "reference/start-multi-tick-boundary.md"
+      ],
+      "must_state": [
+        [
+          "push"
+        ],
+        [
+          "terminal"
+        ],
+        [
+          "tick"
+        ]
+      ],
+      "must_not_state": [],
+      "_calibration": "UNVALIDATED: added in the same pass as the split, per ADR-012's rule, but no session has been run against it. `terminal` is the load-bearing assertion \u2014 the companion's precondition 1 is the only artifact stating that the wave-wide push makes step 7's removal condition true for every lane, so a gate-red lane's worktree must still be kept. That rule exists nowhere else, so the model cannot satisfy it from priors."
+    },
+    {
+      "id": "fleet-sizing-reached",
+      "why": "--max-parallel is chosen once per wave and its second axis is spend, not memory. Under load a gate fails falsely, and a red base the orchestrator produced is indistinguishable from one it inherited \u2014 so a certification gate must run with nothing else in flight. The command file keeps only the cliff and the cost record; the protocol is behind the pointer.",
+      "guards_split": "commands/start-multi.md -> reference/start-multi-sizing.md",
+      "artifact": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/start-multi.md. You are running it. You are at step 5 and the host repo's gate has just come back RED on the integration branch you authored, while four lanes are mid-build in the same fleet. State concretely and specifically what you do before you treat that red as real. Name actual commands.",
+      "must_open": [
+        "reference/start-multi-sizing.md"
+      ],
+      "must_state": [
+        [
+          "uptime",
+          "swapusage"
+        ],
+        [
+          "alone",
+          "nothing else",
+          "in flight"
+        ]
+      ],
+      "must_not_state": [],
+      "_calibration": "UNVALIDATED: added in the same pass as the split; no session has been run. The `uptime` / `sysctl vm.swapusage` pair is recorded only in the companion, so reciting it is evidence the file was opened. The prompt deliberately describes the false-red situation rather than asking how to size a fleet, because that is the situation the reference is the answer to."
+    },
+    {
+      "id": "phase-boundary-reached",
+      "why": "/design-multi ends its context twice, and each phase opens cold against the run dir. A resumed Phase B that trusts a remembered grouping, or reads a half-answered sitting from session state instead of read_db over the artifact db, silently loses the owner's answers \u2014 the one thing in the run a human produced.",
+      "guards_split": "commands/design-multi.md -> reference/design-multi-phase-boundary.md",
+      "artifact": "plugins/bett3r-ai-workflow/commands/design-multi.md",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/design-multi.md. You are running it. A previous context ended at the A/B boundary and the owner has since answered about half the forks on the rendered page and walked away. You are a fresh Phase B context with no memory of the run. List concretely and specifically how you reconstruct the sitting and where every input comes from. Name actual commands and actual filenames.",
+      "must_open": [
+        "reference/design-multi-phase-boundary.md"
+      ],
+      "must_state": [
+        [
+          "read_db"
+        ],
+        [
+          "design-multi-subjects",
+          "subjectsFingerprint"
+        ]
+      ],
+      "must_not_state": [],
+      "_calibration": "UNVALIDATED: added in the same pass as the split; no session has been run. `read_db` and the re-grouping rule live only in the companion. A model could plausibly guess 'read the run dir' from priors, which is why the assertion is the specific command and the fingerprint, not the general idea."
     }
   ]
 }

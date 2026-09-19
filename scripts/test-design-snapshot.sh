@@ -215,19 +215,28 @@ rogue_writers(){
     | grep -v 'design-map'
 }
 
+# `reference/` holds the companions a command opens on a branch (build-record,
+# build-pool, start-multi-serial); a writer planted there is read by the same
+# agent, so the scan covers it as it covers the entrypoints.
 PLUGIN="$ROOT/plugins/bett3r-ai-workflow"
-for d in commands agents skills; do
+for d in commands agents skills reference; do
   check "the single-writer scan covers $d/" "$( [ -d "$PLUGIN/$d" ] && echo yes )" yes
 done
-check 'no command, agent or skill writes map.json/map.html other than via design-map' \
-  "$( rogue_writers "$PLUGIN/commands" "$PLUGIN/agents" "$PLUGIN/skills" )x" x \
-  "$( rogue_writers "$PLUGIN/commands" "$PLUGIN/agents" "$PLUGIN/skills" )"
+check 'no command, agent, skill or reference companion writes map.json/map.html other than via design-map' \
+  "$( rogue_writers "$PLUGIN/commands" "$PLUGIN/agents" "$PLUGIN/skills" "$PLUGIN/reference" )x" x \
+  "$( rogue_writers "$PLUGIN/commands" "$PLUGIN/agents" "$PLUGIN/skills" "$PLUGIN/reference" )"
 
 # Positive control, nested so the recursive traversal is pinned too.
 mkdir -p "$TMP/plant/skills/deep/er"
 printf 'Then save it: `cat draft > docs/prs/X/map.json`.\n' > "$TMP/plant/skills/deep/er/SKILL.md"
 check 'positive control: a planted `> docs/prs/X/map.json`, two dirs deep, is caught' \
   "$( rogue_writers "$TMP/plant/skills" | grep -c 'docs/prs/X/map.json' )" 1
+# The same plant under a companion directory, so the widened scan is proven to
+# read it rather than assumed to.
+mkdir -p "$TMP/plant/reference"
+printf 'Write the snapshot: `tee <path>/map.json < draft.json`.\n' > "$TMP/plant/reference/build-record.md"
+check 'positive control: a planted tee into map.json under reference/ is caught' \
+  "$( rogue_writers "$TMP/plant/reference" | grep -c 'map.json' )" 1
 printf 'cp draft.json docs/prs/X/map.html\n' > "$TMP/plant/skills/cp.md"
 check 'positive control: a planted cp into map.html is caught' \
   "$( rogue_writers "$TMP/plant/skills/cp.md" | grep -c 'map.html' )" 1

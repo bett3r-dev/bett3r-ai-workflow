@@ -1,46 +1,37 @@
 ---
-description: Stage and commit the working tree as well-formed, logically-grouped commits following the repo's conventions. For ad-hoc changes outside the slice loop (/build commits each slice itself).
+description: Stage and commit the working tree as well-formed, logically grouped commits in the repo's conventions. For ad-hoc changes outside the slice loop.
+disable-model-invocation: true
 ---
 
-# /commit — smart commit
+# /commit
 
-Stage and commit the working tree as one or more **well-formed, logically-grouped** commits that follow the repo's conventions.
-
-> In the slice flow, `/build` already commits each slice as it passes the dual gate. Use `/commit` for **ad-hoc** changes outside that loop — a quick fix, a doc change, leftover work — or wherever you're not driving slices.
+`/build` commits each slice itself; this is for ad-hoc changes outside that loop: a quick fix, a doc change, leftover work.
 
 ## Argument: $ARGUMENTS
+
 Optional guidance for the commit message(s).
 
 ## Step 1 — Analyze
-- `git status`, `git diff`, `git diff --cached`.
-- **Derive the ticket id from the branch name** (e.g. `TV1-1594-delete-items` → `TV1-1594`), or from `.work/slices.yaml` `ticket:` if present.
-- Learn the repo's conventions: `git log --oneline -15` for the message style (type/scope, prefix, trailer/sign-off), and `${CLAUDE_PROJECT_DIR}/.claude/rules` for any commit/grouping rules.
 
-## Step 2 — Group into logical commits
-Split into as many commits as needed — **each commit one complete, self-contained unit; never bundle unrelated concerns.** Group by logical concern, following the repo's conventions (a project may group by layer/module — read its rules). Unrelated modules in the same concern → separate commits. Order by dependency (foundational first).
+`git status`, `git diff`, `git diff --cached`. Derive the ticket id from the branch (`TV1-1594-delete-items` → `TV1-1594`) or from `.work/slices.yaml` `ticket:`. Read the repo's conventions: `git log --oneline -15` for message style (type/scope, prefix, trailer or sign-off) and `${CLAUDE_PROJECT_DIR}/.claude/rules` for commit or grouping rules. Done when the ticket id and the convention are named.
 
-**Never stage:** `.env` / `.env.*`, `*credentials*`, `*secret*`, `*.log`, `node_modules/`, build output.
+## Step 2 — Group
+
+One complete, self-contained unit per commit, grouped by logical concern the way the repo's rules say (some group by layer or module); unrelated modules in one concern are separate commits; dependency order, foundational first. Left unstaged: `.env` and `.env.*`, anything named `credentials` or `secret`, `*.log`, `node_modules/`, build output. Done when every changed path belongs to exactly one group.
 
 ## Step 3 — Messages
-Follow the repo's observed convention; default to `type(scope): summary` (conventional commits):
-- **type** — feat / fix / docs / test / refactor / chore (per repo norm).
-- **scope** — the module or area affected.
-- **summary** — imperative, lowercase, no trailing period; favor *why* over *what*.
-- Reference the ticket (from the branch) in the body if the repo does so, and include the repo's trailer/sign-off convention (detect it — don't hardcode).
-- **A GitHub closing keyword binds to exactly one issue — repeat it per issue.** `Closes #12, closes #13`, never a bare list: `Closes #12 #13` closes `#12` and leaves the rest as ordinary mentions, and a comma does not change that. The mistake is silent in every direction — the commit is well-formed, the merge succeeds, nothing warns — so the message is the last place it can be caught cheaply.
 
-Use `$ARGUMENTS` as guidance if provided.
+The repo's observed convention, defaulting to `type(scope): summary`: type from feat / fix / docs / test / refactor / chore, scope the module affected, summary imperative and lowercase with no trailing period, favouring why over what. Reference the ticket in the body where the repo does, and add its trailer or sign-off. A closing keyword binds to one issue, so repeat it per issue, `Closes #12, closes #13` (the rule's home is `/verify-build` Step 6). Use `$ARGUMENTS` as guidance when given.
 
-## Step 4 — Present & confirm
-Show the full plan (N commits: message + files for each). Ask: **proceed / edit / cancel.** On "edit", adjust groupings or messages, then proceed.
+## Step 4 — Present and confirm
 
-## Step 5 — Execute in order
-For each group in dependency order: stage its specific files, create the commit (HEREDOC for proper formatting), and `git log --oneline -1` to confirm before the next. After all: `git log --oneline -N` for the full set.
+Show the plan: N commits, each with its message and files. Ask: proceed, edit, or cancel. On edit, adjust and show again. Done when the user has said proceed.
 
-## Working-tree safety
-Stage **explicit paths** — never `git add -A` blindly over an unreviewed tree. Never use `git reset --hard`, `git checkout -- <path>`, `git restore <path>`, or `git stash` to "clean up" first — the stash stack is repo-global and shared across worktrees.
+## Step 5 — Execute
 
-## Principles
-- One self-contained unit per commit; unrelated concerns never share a commit.
-- Detect the repo's conventions; don't impose new ones.
-- Confirm the plan before committing.
+For each group in order: stage its files by explicit path, commit with a HEREDOC body, `git log --oneline -1` to confirm. After all: `git log --oneline -N`. Done when N commits show.
+
+## Boundaries
+
+- Stage explicit paths, never `git add -A` over an unreviewed tree: a reviewed path list is the whole point of Step 4.
+- The working tree stays as it is; to inspect or snapshot uncommitted changes use `git stash create` and `git diff <object>`, which touch nothing.
