@@ -1,4 +1,5 @@
 ticket: ESAS-9
+review: unattended
 slices:
   - id: 1
     name: "slice one"
@@ -8,5 +9,3 @@ slices:
       - scenario: the owner picks A
         given: the fork is decided for A
         when: the plan is cut
-        then: A is applied
-review: unattended

@@ -182,13 +182,30 @@ diff two runs by eye). A fork is skipped and counted, never printed, when:
 
   skipped-open        status.kind is "open" (the owner has not reached it)
   skipped-moot         status.kind is "moot" (never named in the output)
-  skipped-nowalk        decided, but the chosen option carries no walk
+  skipped-nowalk        always 0 — see the two refusals below. The key stays on
+                        the verdict line because /plan parses that line, and its
+                        zero is the proof the refusal fired rather than a fork
+                        being quietly dropped from the census.
   skipped-untestable    the fork carries `testable: false` (a process-rule
                         card the design lane marks unoracled, ESAS-164)
 
+Two refusals, both outcome=fail (exit 1 — a fixable map, not a broken tool),
+because a walk IS the oracle a slice is built from and this verb is the last
+moment it can be fixed cheaply:
+
+  decided-nowalk        decided, and the chosen option carries no walk at all:
+                        a choice somebody made that nobody can test
+  walk-unstructured     decided, and a walk of the chosen option is prose —
+                        no given/when/then, and not `kind: structural`.
+                        Reported as walk=<index>, never the scenario text:
+                        every attribute on a verdict line is space-free by
+                        contract, and a refusal nobody can parse reads
+                        downstream as no refusal at all.
+
 A fork that is both decided with a zero-walk option AND `testable: false` is
 counted only under skipped-untestable: untestable is checked first, so it
-wins the tie (ESAS-165 D1/AC3 leaves the precedence to this build). A
+wins the tie (ESAS-165 D1/AC3 leaves the precedence to this build) — and it
+short-circuits both refusals above for the same reason. A
 card-less decided fork cannot reach `candidates` at all: `validate` already
 refuses it as `decided-title-only`.
 
@@ -600,6 +617,25 @@ def check_semantics(payload):
                 options.add(option["id"])
             if card["recommendation"]["option"] not in options:
                 raise Refusal("unknown-option", id=fid, at=pointer(("forks", i, "card", "recommendation", "option")))
+            for j, option in enumerate(card["options"]):
+                for k, walk in enumerate(option["walks"]):
+                    at = ("forks", i, "card", "options", j, "walks", k)
+                    gwt = [f for f in ("given", "when", "then") if f in walk]
+                    # Partial is the shape to refuse loudest. A walk carrying a
+                    # `given` and a `when` and no `then` reads, at a glance and
+                    # in the rendered card, exactly like one structured on
+                    # purpose — and it is the half-written one, which is how an
+                    # oracle ends up asserting a setup rather than an outcome.
+                    if gwt and len(gwt) != 3:
+                        raise Refusal("walk-partial-gwt", id=fid, option=option["id"],
+                                      at=pointer(at), have=",".join(sorted(gwt)))
+                    # A structural walk asserts a census over source ("every X
+                    # does Y, and nothing outside Z does Y"). Given/When/Then
+                    # has no room for the negative half, so carrying both means
+                    # one of the two is decoration and nobody can tell which.
+                    if walk.get("kind") == "structural" and gwt:
+                        raise Refusal("walk-structural-gwt", id=fid, option=option["id"],
+                                      at=pointer(at))
         if "option" in status:
             if card is None:
                 raise Refusal("decided-title-only", id=fid)
@@ -1233,12 +1269,33 @@ def fork_candidates(fork):
         return [], "untestable"
     option = next(o for o in fork["card"]["options"] if o["id"] == status["option"])
     if not option["walks"]:
-        return [], "nowalk"
-    lines = [
-        {"fork": fork["id"], "option": status["option"], "scenario": walk["scenario"],
-         "source": status["source"], "example": walk["text"]}
-        for walk in option["walks"]
-    ]
+        # Was a silent counter. A decided fork is a choice somebody made, and a
+        # choice with no walk is a choice nobody can test — the slice built from
+        # it gets an oracle invented downstream from prose, which is the single
+        # largest measured cause of rework. Refusing here is the whole point of
+        # the verb: it is the last moment the map can still be fixed cheaply.
+        raise Refusal("decided-nowalk", outcome="fail", id=fork["id"], option=status["option"])
+    lines = []
+    for index, walk in enumerate(option["walks"]):
+        if walk.get("kind") != "structural" and not all(f in walk for f in ("given", "when", "then")):
+            # check_semantics already refused a PARTIAL triple, so this walk
+            # carries none of it: prose, the form an executor reads and writes
+            # its own rule from. It may be perfectly good prose. It is refused
+            # anyway, because "good enough to read" is exactly the judgement
+            # that produced 41% oracle-wrong, and the fix is two minutes in the
+            # map against a fresh executor context downstream.
+            #
+            # `walk=<index>`, never the scenario text: every attribute on a
+            # verdict line is space-free by contract (the oracle's own matcher
+            # is `( [A-Za-z_-]+=[^ ]*)*$`, and /plan reads the line the same
+            # way), so free text here would not merely look untidy — it makes
+            # the whole line unparseable, and a refusal nobody can parse reads
+            # downstream as no refusal at all.
+            raise Refusal("walk-unstructured", outcome="fail", id=fork["id"],
+                          option=status["option"], walk=index)
+        lines.append(
+            {"fork": fork["id"], "option": status["option"], "scenario": walk["scenario"],
+             "source": status["source"], "example": walk["text"]})
     return lines, None
 
 
@@ -1301,15 +1358,88 @@ def check_plan(positional, flags):
     if not isinstance(raw_slices, list):
         raise Refusal("plan-unparseable")
     for sl in raw_slices:
-        oracle = sl.get("oracle") if isinstance(sl, dict) else None
-        if not isinstance(oracle, str):
+        if not isinstance(sl, dict):
             continue
-        for example in examples:
-            if example in oracle:
-                slice_id = sl.get("id")
-                raise Refusal("candidate-in-oracle", outcome="fail",
-                              slice="unknown" if slice_id is None else slice_id)
-    return dict(review=review if review else "none", candidates=len(raw_candidates))
+        # `scenarios:` is searched alongside `oracle:`, not instead of it. The
+        # ESAS-165 contract is about a candidate reaching the executor without a
+        # human, and a Given/When/Then triple reaches it harder than the prose
+        # ever did — so introducing the field without this loop would have left
+        # a rename as the whole of the bypass.
+        haystacks = [sl.get("oracle")]
+        for sc in sl.get("scenarios") or []:
+            if isinstance(sc, dict):
+                haystacks += [sc.get(f) for f in ("scenario", "text", "given", "when", "then")]
+        for haystack in haystacks:
+            if not isinstance(haystack, str):
+                continue
+            for example in examples:
+                if example in haystack:
+                    slice_id = sl.get("id")
+                    raise Refusal("candidate-in-oracle", outcome="fail",
+                                  slice="unknown" if slice_id is None else slice_id)
+    scened = check_scenarios(raw_slices)
+    return dict(review=review if review else "none", candidates=len(raw_candidates),
+                scenarios=scened)
+
+
+def check_scenarios(raw_slices):
+    """Every slice carries at least one structured scenario. Returns the count.
+
+    This is the half of the contract that reaches a unit with **no map at all**,
+    which is the one that mattered: both measured zero-first-pass-green runs were
+    `review: unattended` with no map.json, so the candidate pipeline — the only
+    thing binding an oracle to a decided choice — emitted nothing and every
+    oracle in fifteen slices was written freehand from prose. Enforcing the walk
+    contract only inside `candidates` would have left those runs untouched.
+
+    `oracle:` stays a free-text string and keeps its meaning: the narrative of
+    the test. `scenarios:` is what the executor must make true, in a form that
+    cannot be quietly re-interpreted.
+    """
+    count = 0
+    for i, sl in enumerate(raw_slices):
+        if not isinstance(sl, dict):
+            raise Refusal("plan-unparseable")
+        slice_id = sl.get("id")
+        where = "unknown" if slice_id is None else slice_id
+        scenarios = sl.get("scenarios")
+        if scenarios is None or (isinstance(scenarios, list) and not scenarios):
+            raise Refusal("slice-unscened", outcome="fail", slice=where)
+        if not isinstance(scenarios, list):
+            raise Refusal("plan-unparseable")
+        for sc in scenarios:
+            if not isinstance(sc, dict):
+                raise Refusal("scenario-unstructured", outcome="fail", slice=where,
+                              why="not-a-mapping")
+            def text(field):
+                value = sc.get(field)
+                return isinstance(value, str) and value.strip()
+            if not text("scenario"):
+                raise Refusal("scenario-unstructured", outcome="fail", slice=where,
+                              why="no-scenario")
+            kind = sc.get("kind", "behavioral")
+            if kind not in ("behavioral", "structural"):
+                raise Refusal("scenario-unstructured", outcome="fail", slice=where,
+                              why="unknown-kind")
+            if kind == "structural":
+                # A census assertion, not a walk: "every appender does X, and no
+                # module outside <owner> does X". `/plan` already mandates this
+                # form for "every X must do Y" rules, and Given/When/Then cannot
+                # hold the negative half, so it keeps prose — but it must say so
+                # deliberately rather than by omission.
+                if not text("text"):
+                    raise Refusal("scenario-unstructured", outcome="fail", slice=where,
+                                  why="no-text")
+                if any(f in sc for f in ("given", "when", "then")):
+                    raise Refusal("scenario-unstructured", outcome="fail", slice=where,
+                                  why="structural-gwt")
+            else:
+                missing = [f for f in ("given", "when", "then") if not text(f)]
+                if missing:
+                    raise Refusal("scenario-unstructured", outcome="fail", slice=where,
+                                  why="missing-" + ",".join(missing))
+            count += 1
+    return count
 
 
 PROJECT_OK = TOKEN + " outcome=ok verb=project "

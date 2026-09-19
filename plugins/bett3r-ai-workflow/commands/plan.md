@@ -58,7 +58,27 @@ Present the proposed slices as a numbered list. For each: **title**, **blocked-b
 
 ## Step 5 — Write `.work/slices.yaml`
 
-Write the approved slices (the `vertical-slicing` skill's schema): `id`, `name`, `passes: false`, `depends_on`, `behavior`, `oracle` (the test that proves it), `gates` (the project invariants the verifier must confirm), `designs` (the design node ids it delivers, when the unit has a design layer). Record the ADR path and branch. Lead each slice with behavior; `touches` (files) is an optional hint only. Add `surface` (Step 3) to every slice, and **before writing, check each one against the cap**: a slice over it without `surface.atomic:` is refused — split it, then write.
+Write the approved slices (the `vertical-slicing` skill's schema): `id`, `name`, `passes: false`, `depends_on`, `behavior`, `oracle` (the test that proves it), `scenarios` (below — **every slice, no exceptions**), `gates` (the project invariants the verifier must confirm), `designs` (the design node ids it delivers, when the unit has a design layer). Record the ADR path and branch. Lead each slice with behavior; `touches` (files) is an optional hint only. Add `surface` (Step 3) to every slice, and **before writing, check each one against the cap**: a slice over it without `surface.atomic:` is refused — split it, then write.
+
+**Every slice carries `scenarios:` — at least one, and `check-plan` refuses the plan without it.** `oracle:` keeps its job: the narrative of the test, in prose. `scenarios:` is the same thing in the form the executor cannot re-interpret, and it is what an owner reads to confirm the slice is aimed at the right behaviour before a line is written.
+
+```yaml
+    scenarios:
+      - scenario: an epic with two designed children is admitted as one run
+        given: an epic dragged to Ready For Implementation with two designed children
+        when: the trigger runs
+        then: one epic_runs row exists, and each child has a held runs row carrying epic_run_id
+      - scenario: nothing outside the ledger inserts a run
+        kind: structural
+        text: >
+          every INSERT into runs is in src/ledger/runs.ts, and no module outside it inserts —
+          asserted by walking the package, with the negative form and the census both checked
+```
+
+- **Behavioural is the default and needs all three halves.** A `given` and a `when` with no `then` is refused (`why=missing-then`): it reads exactly like a finished scenario and yields an oracle asserting a setup rather than an outcome.
+- **`kind: structural` keeps prose on purpose**, for the "every X must do Y" rules Step 3 above already mandates a structural oracle for. Given/When/Then has no room for the negative half — *"and no module outside `<owner>`…"* — and that negative half is what caught the worst defect in the corpus: a composition root whose two wiring lines could both be deleted with `tsc` clean and 738 tests green. A structural scenario carrying Given/When/Then as well is refused; one of the two is decoration and nobody can tell which.
+- **Where a candidate was confirmed, its walk *is* the scenario** — the promotion copies it. Where there is no `map.json`, write the scenarios yourself: that is the case this rule exists for. Both zero-first-pass-green runs on record were `review: unattended` with no map, so every oracle in fifteen slices was written freehand and 41% of all fix rounds since have been `oracle-wrong`.
+- **A scenario is checked against HEAD like every other code-describing field** (Step 3's rule about obligations, not derived facts). A `then:` asserting a specific count or literal is exactly the claim an executor will not re-check.
 
 **After `slices:`, always write a top-level `review: human|unattended`.** When Step 1 found a `<path>/map.json`, also write a top-level `candidateOracles:` — a list of `{fork, option, scenario, source, example, slice, status}`, one entry per candidate, `slice` set when attached and `status` one of `confirmed`, `rejected`, `unconfirmed`. Omit `candidateOracles:` entirely when there was no map.json. Both keys go **after** `slices:`, since `worktree-pool`'s `parse_slices` stops at the first indent-0 line following it.
 

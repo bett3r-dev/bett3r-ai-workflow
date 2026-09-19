@@ -126,6 +126,7 @@
         "id": { "$ref": "#/$defs/id" },
         "label": { "$ref": "#/$defs/text" },
         "walks": {
+          "$comment": "scenario+text is the wire shape esas renders and is unchanged. given/when/then and kind are ADDITIVE and optional here on purpose: esas types MapOptionWalk structurally with no runtime validator, so extra keys pass through a board untouched, and every map written before this change still validates. The obligation they carry is enforced at the promotion boundary instead — `candidates` refuses to turn an unstructured walk into a slice oracle — because that is the only moment a walk becomes a test somebody writes.",
           "type": "array",
           "items": {
             "type": "object",
@@ -133,7 +134,11 @@
             "additionalProperties": false,
             "properties": {
               "scenario": { "$ref": "#/$defs/text" },
-              "text": { "$ref": "#/$defs/text" }
+              "text": { "$ref": "#/$defs/text" },
+              "kind": { "enum": ["behavioral", "structural"] },
+              "given": { "$ref": "#/$defs/text" },
+              "when": { "$ref": "#/$defs/text" },
+              "then": { "$ref": "#/$defs/text" }
             }
           }
         },

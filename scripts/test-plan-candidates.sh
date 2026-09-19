@@ -94,16 +94,47 @@ printf 'AC1/AC3: candidates offers only decided, testable, walked choices\n'
 # ---------------------------------------------------------------------------
 run "$DM" candidates "$MAP"
 check 'candidates: verdict ok, exit 0' "$( attr "$LINE" outcome ) exit=$rc" 'ok exit=0' "$( cat "$OUT" )"
-check 'candidates: forks=7 candidates=4' \
-      "forks=$( attr "$LINE" forks ) candidates=$( attr "$LINE" candidates )" 'forks=7 candidates=4' "$LINE"
-check 'candidates: one skipped each for moot, open, nowalk, untestable' \
+check 'candidates: forks=7 candidates=5' \
+      "forks=$( attr "$LINE" forks ) candidates=$( attr "$LINE" candidates )" 'forks=7 candidates=5' "$LINE"
+# `nowalk` is now 0 and can only ever be 0 on an `outcome=ok` line: a decided
+# fork carrying no walk is a refusal (below), not a counter. The key stays on
+# the verdict — it is a machine contract `/plan` reads — and its zero is the
+# proof that the refusal fired everywhere it applies rather than the census
+# quietly dropping a fork.
+check 'candidates: one skipped each for moot, open, untestable; nowalk can no longer happen' \
       "moot=$( attr "$LINE" skipped-moot ) open=$( attr "$LINE" skipped-open ) nowalk=$( attr "$LINE" skipped-nowalk ) untestable=$( attr "$LINE" skipped-untestable )" \
-      'moot=1 open=1 nowalk=1 untestable=1' "$LINE"
+      'moot=1 open=1 nowalk=0 untestable=1' "$LINE"
 grep '^{' "$OUT" > "$TMP/cands"
-check 'candidates: exactly 4 JSON lines print' "$( wc -l < "$TMP/cands" | tr -d ' ' )" 4 "$( cat "$OUT" )"
-check 'candidates: the lines come from the owner (2), recommendation (1) and code (1) forks' \
+check 'candidates: exactly 5 JSON lines print' "$( wc -l < "$TMP/cands" | tr -d ' ' )" 5 "$( cat "$OUT" )"
+check 'candidates: the lines come from the owner (2), recommendation (1), code (1) and F6 (1) forks' \
       "$( sed -n 's/.*"fork":"\([^"]*\)".*"source":"\([^"]*\)".*/\1:\2/p' "$TMP/cands" | tr '\n' ' ' )" \
-      'ESAS-165-F3:owner ESAS-165-F3:owner ESAS-165-F4:recommendation ESAS-165-F5:code ' "$( cat "$TMP/cands" )"
+      'ESAS-165-F3:owner ESAS-165-F3:owner ESAS-165-F4:recommendation ESAS-165-F5:code ESAS-165-F6:owner ' "$( cat "$TMP/cands" )"
+
+# ---------------------------------------------------------------------------
+printf 'The walk contract: a decided choice must arrive as a testable scenario\n'
+# ---------------------------------------------------------------------------
+# The measured defect this closes: 41%% of all classified fix rounds were
+# `oracle-wrong` — the test encoded the wrong rule and went green anyway, caught
+# only by the verifier, each catch re-paying a fresh executor context. The walk
+# is where an oracle is born, and until now it could be born as prose.
+run "$DM" candidates "$FIX/prose-walk.map.json"
+check 'a decided option whose walk is prose is refused, naming fork, option and walk index' \
+      "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" id ) $( attr "$LINE" option ) walk=$( attr "$LINE" walk ) exit=$rc" \
+      'fail walk-unstructured ESAS-165-F6 A walk=0 exit=1' "$( cat "$OUT" )"
+
+run "$DM" candidates "$FIX/decided-nowalk.map.json"
+check 'a decided option carrying no walk at all is refused, not silently skipped' \
+      "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" id ) exit=$rc" \
+      'fail decided-nowalk ESAS-165-F6 exit=1' "$( cat "$OUT" )"
+
+# The contract binds a DECIDED fork only. An open fork is the state the whole
+# design-map exists to sit in — the owner has not chosen yet, so there is
+# nothing to write a scenario against, and refusing here would make the map
+# unusable for its actual purpose. The fixture's F2 is open and carries prose
+# walks; the happy-path run above must have passed with it present.
+check 'control: the open fork F2 is in the fixture and carries a prose walk' \
+      "$( python3 -c 'import json,sys;m=json.load(open(sys.argv[1]));f=[x for x in m["forks"] if x["id"]=="ESAS-165-F2"][0];w=f["card"]["options"][0]["walks"][0];print(f["status"]["kind"], "given" in w)' "$MAP" )" \
+      'open False' "$MAP"
 # The moot id must be present in the map for its absence here to mean anything.
 check 'control: the moot fork id is in the map fixture' "$( grep -c '"ESAS-165-F1"' "$MAP" )" 1
 check 'candidates: no line names the moot fork' "$( grep -c 'ESAS-165-F1"' "$TMP/cands" )" 0 "$( cat "$TMP/cands" )"
@@ -122,6 +153,42 @@ check "an unconfirmed candidate's example inside an oracle: fail, exit 1" \
 run "$DM" check-plan "$PLANS/conforming.yaml"
 check 'a conforming unattended plan: ok, exit 0' \
       "$( attr "$LINE" outcome ) review=$( attr "$LINE" review ) exit=$rc" 'ok review=unattended exit=0' "$( cat "$OUT" )"
+
+# ---------------------------------------------------------------------------
+printf 'Every slice arrives with a scenario, map or no map\n'
+# ---------------------------------------------------------------------------
+# The hole this closes is the one that was actually costing: both measured
+# zero-first-pass-green runs were `review: unattended` with NO map.json, so the
+# candidate pipeline above emitted nothing at all and every oracle was written
+# freehand from prose. A contract enforced only inside `candidates` would have
+# left exactly those runs untouched.
+run "$DM" check-plan "$PLANS/slice-unscened.yaml"
+check 'a slice carrying no scenarios at all is refused, naming the slice' \
+      "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" slice ) exit=$rc" \
+      'fail slice-unscened 1 exit=1' "$( cat "$OUT" )"
+
+run "$DM" check-plan "$PLANS/scenario-partial.yaml"
+check 'a scenario missing its `then` is refused, naming which half is absent' \
+      "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" why ) exit=$rc" \
+      'fail scenario-unstructured missing-then exit=1' "$( cat "$OUT" )"
+
+# Given/When/Then cannot hold the negative half of a census ("...and no module
+# outside X does Y"), which is the form `/plan` already mandates for an
+# "every X must do Y" rule and the form that caught the worst defect in the
+# corpus. `kind: structural` keeps prose deliberately, rather than by omission.
+run "$DM" check-plan "$PLANS/scenario-structural.yaml"
+check 'a structural scenario keeps prose and passes, counted like any other' \
+      "$( attr "$LINE" outcome ) scenarios=$( attr "$LINE" scenarios ) exit=$rc" \
+      'ok scenarios=1 exit=0' "$( cat "$OUT" )"
+
+# Introducing `scenarios:` without this row would have made a rename the whole
+# of the bypass: the unattended-never-promotes contract is about a candidate
+# reaching the executor unconfirmed, and a GWT triple reaches it harder than
+# the prose did.
+run "$DM" check-plan "$PLANS/candidate-in-scenario.yaml"
+check 'an unconfirmed candidate copied into a SCENARIO is refused, like one in an oracle' \
+      "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" slice ) exit=$rc" \
+      'fail candidate-in-oracle 1 exit=1' "$( cat "$OUT" )"
 
 # ---------------------------------------------------------------------------
 printf 'AC5: the trailing review/candidateOracles block does not change pool width\n'

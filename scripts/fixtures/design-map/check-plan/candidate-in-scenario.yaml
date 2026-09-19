@@ -1,5 +1,5 @@
 ticket: ESAS-9
-review: human
+review: unattended
 candidateOracles:
   - fork: ESAS-9-F1
     option: A
@@ -12,7 +12,7 @@ slices:
   - id: 1
     name: "slice one"
     oracle: |
-      the fixture asserts A is applied after the change
+      an oracle naming nothing in particular
     scenarios:
       - scenario: the owner picks A
         given: the fork is decided for A

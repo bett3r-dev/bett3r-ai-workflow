@@ -70,6 +70,15 @@ slices:
     depends_on: []
     behavior: "<the one observable behavior, end to end, in the ubiquitous language>"
     oracle: "<the test that proves it — what it asserts>"
+    scenarios:                     # REQUIRED, >=1. check-plan refuses the plan without it.
+      - scenario: "<what this case is called>"
+        given: "<the state the case starts in>"
+        when: "<the one thing that happens>"
+        then: "<what must be observably true — the assertion, not the setup>"
+      - scenario: "<a census, where the rule is 'every X must do Y'>"
+        kind: structural           # keeps prose: Given/When/Then has no room for the
+        text: >                    #   negative half, and the negative half is the point
+          every <writer> does <Y>, and no module outside <owner> does <Y>
     gates: ["<project invariant the verifier must confirm>", ...]
     surface: { files: 4, sites: 60 }  # counted at the base; over 10 files or 200 sites → split,
                                    #   unless `atomic: <why it cannot compile half-done>`
@@ -85,6 +94,8 @@ review: human                      # human | unattended — set by /plan Step 5,
 candidateOracles:                  # OPTIONAL. Only when a <path>/map.json existed at Step 1;
                                     #   [{fork, option, scenario, source, example, slice, status}]
 ```
+
+`scenarios` is the slice's oracle in a form nobody can quietly re-read. `oracle:` stays the narrative; `scenarios:` is what must be made true. It is required on every slice because the measured failure is not that slices are too big — across 966 classified fix rounds `ripple`, the only cause slice size controls, is **6%**, while `oracle-wrong` (the test encoded the wrong rule, went green, and was caught only by the verifier) is **41%**. Where a design map's fork was decided and its walk confirmed, that walk *is* the scenario; where there is no map, write them here — the two runs on record with 0% first-pass green had no map at all.
 
 `passes` flags + git commits **are** the build progress. There is no separate progress doc. `touches: [paths]` may be added as a hint, but lead with `behavior`. `model:` routes the slice's executor — set it only where the implementation is genuinely mechanical, and never on the tracer bullet, which is by construction the slice whose seam nobody has proven yet. `designs:` names the design-layer node ids the slice delivers, so `/build` can scaffold this slice's artifacts and not the whole design's; leave it out when the unit has no design layer, and never guess an id — a wrong one scaffolds the wrong artifact, while an absent one just means "nothing designed here".
 

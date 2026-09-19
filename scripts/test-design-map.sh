@@ -801,17 +801,20 @@ dm candidates "$CAND"
 check 'candidates: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
 check 'candidates: verb=candidates' "$( attr "$LINE" verb )" candidates "$LINE"
 check 'candidates: forks=8' "$( attr "$LINE" forks )" 8 "$LINE"
-check 'candidates: candidates=4' "$( attr "$LINE" candidates )" 4 "$LINE"
+check 'candidates: candidates=5' "$( attr "$LINE" candidates )" 5 "$LINE"
 check 'candidates: skipped-open=1' "$( attr "$LINE" skipped-open )" 1 "$LINE"
 check 'candidates: skipped-moot=1' "$( attr "$LINE" skipped-moot )" 1 "$LINE"
-check 'candidates: skipped-nowalk=1' "$( attr "$LINE" skipped-nowalk )" 1 "$LINE"
+# Always 0 on an ok line now: a decided fork with no walk is a refusal, not a
+# counter. The key stays because /plan parses this line, and its zero is the
+# proof the refusal fired rather than a fork being quietly dropped.
+check 'candidates: skipped-nowalk=0 — a decided fork with no walk now refuses' "$( attr "$LINE" skipped-nowalk )" 0 "$LINE"
 check 'candidates: skipped-untestable=2 (zero-walk + testable:false counts as untestable)' "$( attr "$LINE" skipped-untestable )" 2 "$LINE"
 check 'candidates: exit 0' "$rc" 0
 
 # The candidate lines themselves: everything but the last (verdict) line.
 CANDLINES="$TMP/candlines"
 sed '$d' "$OUT" > "$CANDLINES"
-check 'candidates: 4 candidate lines printed' "$( wc -l < "$CANDLINES" | tr -d ' ' )" 4
+check 'candidates: 5 candidate lines printed' "$( wc -l < "$CANDLINES" | tr -d ' ' )" 5
 
 if grep -q '"fork":"ESAS-1-F1"' "$CANDLINES"; then
   fail 'candidates: no line names the moot fork'
@@ -827,6 +830,28 @@ check 'candidates: the code-decided fork carries source "code"' \
   "$( grep -c '"fork":"ESAS-1-F5".*"source":"code"' "$CANDLINES" | tr -d ' ' )" 1
 check 'candidates: two candidates for the two-walk owner fork' \
   "$( grep -c '"fork":"ESAS-1-F3"' "$CANDLINES" | tr -d ' ' )" 2
+
+# The walk contract. A walk is where an oracle is born, and until now it could
+# be born as prose the executor re-interpreted into its own rule — the measured
+# cause of 41% of all classified fix rounds, every one caught by the verifier
+# rather than by a test, each catch re-paying a fresh executor context.
+dm candidates "$FIX/prose-walk.map.json"
+check 'candidates: a decided option whose walk is prose is refused' \
+  "$( attr "$LINE" outcome ):$( attr "$LINE" reason )" fail:walk-unstructured "$LINE"
+check 'candidates: the prose refusal names the option and which walk, so the fix is obvious' \
+  "$( attr "$LINE" option ):walk=$( attr "$LINE" walk )" A:walk=0 "$LINE"
+check 'candidates: a prose walk refuses with exit 1, not 2 — a fixable plan, not a broken tool' "$rc" 1
+
+dm candidates "$FIX/decided-nowalk.map.json"
+check 'candidates: a decided option carrying no walk is refused, not skipped' \
+  "$( attr "$LINE" outcome ):$( attr "$LINE" reason )" fail:decided-nowalk "$LINE"
+
+# The contract binds a DECIDED fork only. An open fork is the state the map
+# exists to hold — nothing has been chosen, so there is no scenario to write,
+# and refusing there would break the tool for its actual purpose. F2 is open
+# and carries prose; the happy path above passed with it present.
+check 'control: the open fork F2 carries a walk with no given/when/then' \
+  "$( python3 -c 'import json,sys;m=json.load(open(sys.argv[1]));f=[x for x in m["forks"] if x["id"]=="ESAS-1-F2"][0];print("given" in f["card"]["options"][0]["walks"][0])' "$CAND" )" False "$CAND"
 if grep -q 'must never appear' "$CANDLINES"; then
   fail 'candidates: no candidate comes from a rejected option'
 else
