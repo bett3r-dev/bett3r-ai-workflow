@@ -46,7 +46,7 @@ ROOT=$( CDPATH= cd -- "$( dirname -- "$0" )/.." && pwd )
 SCRIPT="$ROOT/scripts/validate-plugins.py"
 
 # The corpus census, and the agents recorded as not yet carrying an allowlist.
-EXPECTED_AGENTS=10
+EXPECTED_AGENTS=11
 OFFENDERS=""
 
 [ -f "$SCRIPT" ] || { printf 'test-validate-plugins: missing %s\n' "$SCRIPT" >&2; exit 2; }

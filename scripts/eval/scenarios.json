@@ -738,6 +738,51 @@
         ]
       ],
       "must_not_state": []
+    },
+    {
+      "id": "codebase-design-deepening-reached",
+      "why": "codebase-design's dependency categories decide how a deepened module is tested across its seam; they live only in DEEPENING.md. A session that answers a deepening question from SKILL.md alone will merge modules without classifying what they depend on.",
+      "guards_split": "skills/codebase-design/SKILL.md -> skills/codebase-design/DEEPENING.md",
+      "artifact": "plugins/bett3r-ai-workflow/skills/codebase-design/SKILL.md",
+      "prompt": "Read plugins/bett3r-ai-workflow/skills/codebase-design/SKILL.md. The user has picked a cluster of three shallow modules to deepen: one is pure in-memory computation, one wraps a Postgres query, one calls a third-party HTTP API. Say, per module, how the deepened module will be tested across its seam and whether an adapter is needed, using the skill's own categories.",
+      "must_open": [
+        "skills/codebase-design/DEEPENING.md"
+      ],
+      "must_state": [
+        [
+          "in-process",
+          "in process",
+          "in-memory"
+        ],
+        [
+          "adapter"
+        ]
+      ],
+      "must_not_state": [],
+      "_calibration": "Written with the split (ADR-012 adopted Matt Pocock's codebase-design verbatim). The three dependency categories and the replace-don't-layer testing rule exist only in DEEPENING.md; SKILL.md names the file and the topic but not the categories, so must_open is the load-bearing assertion. Not yet run."
+    },
+    {
+      "id": "codebase-design-design-it-twice-reached",
+      "why": "The alternative-interfaces exploration is a parallel sub-agent pattern with a fixed process (frame the problem space first, then several radically different designs, then compare on depth, locality and seam placement). Only DESIGN-IT-TWICE.md carries the process; a session that skips it will produce one design and call it explored.",
+      "guards_split": "skills/codebase-design/SKILL.md -> skills/codebase-design/DESIGN-IT-TWICE.md",
+      "artifact": "plugins/bett3r-ai-workflow/skills/codebase-design/SKILL.md",
+      "prompt": "Read plugins/bett3r-ai-workflow/skills/codebase-design/SKILL.md. The user has chosen a deepening candidate (a billing-adjustments module) and asks you to explore alternative interfaces for it before committing to one. List concretely the steps you take, in order, and what you write before any design work starts.",
+      "must_open": [
+        "skills/codebase-design/DESIGN-IT-TWICE.md"
+      ],
+      "must_state": [
+        [
+          "sub-agent",
+          "subagent",
+          "sub agents",
+          "subagents"
+        ],
+        [
+          "problem space"
+        ]
+      ],
+      "must_not_state": [],
+      "_calibration": "Written with the split. The 'frame the problem space before spawning sub-agents' step and the compare criteria live only in DESIGN-IT-TWICE.md. Not yet run."
     }
   ]
 }

@@ -37,7 +37,7 @@ Record the report block verbatim, `GATE-MODE:` line included, for the PR body. A
 
 **Resolve the base.** When the diff's file count is several times the union of `touches:` in `.work/slices.yaml`, `git branch -r --contains <first-branch-commit>` names the parent and `git merge-base <candidate> HEAD` is `<resolved-base>` for every later step.
 
-**Review.** `Call the Skill tool with "code-review"` over `git diff <resolved-base>...HEAD`: fixed point `<resolved-base>`, spec source `<path>/design.md`, standards sources `${CLAUDE_PROJECT_DIR}/.claude/rules/`. Its issue-tracker lookup and setup pointer do not apply here: when it asks for either, run its two axes over that diff with those sources, ask nothing, and route both sub-agents to `sonnet`. Then the cross-slice questions: do the slices compose, is one undone by a later one, does the whole deliver the resolved design, deviations recorded.
+**Review.** Two read-only sub-agents in one message, both `sonnet`, each briefed in under 400 words with the diff *command* (`git diff <resolved-base>...HEAD`), never the diff itself, and asked for findings only, each naming file, line and the rule or requirement it breaks. *Standards*: judged against `${CLAUDE_PROJECT_DIR}/.claude/rules/` and the repo's own conventions; the repo overrides general taste, and anything a linter or type checker already enforces is skipped. *Spec*: judged against the committed `<path>/design.md`: every resolved decision and scenario implemented, nothing outside the design shipped, deviations recorded in `decisions.md`. Aggregate verbatim under two headings, never re-ranked across axes. Then the cross-slice questions are yours: do the slices compose, is one undone by a later one, does the whole deliver the resolved design. The `code-review` skill runs the same two axes for an attended session; a lane never calls it.
 
 **Ripple sweeps.** A mechanical third pass, run rather than eyeballed, against `HEAD` even after `/build`'s own ripple check. When a diff redefines a value's semantics, sweep its readers. Dispatch the sweeps as read-only subagents routed as `/build`'s table does, one row each; where the work carries a safety-direction invariant (may only widen, must never lose), each brief asks the invariant's question. Adjudicate rather than re-run. A clean verdict is a claim too ([EVIDENCE.md](../EVIDENCE.md) §3).
 
@@ -72,12 +72,10 @@ One lean list of what a human confirms by hand because the slice tests cannot (U
 
 Every decision the resolved design owes an ADR is written now; deferring is an escalation. `Call the Skill tool with "domain-modeling"` for the format and the numbering.
 
-- Re-measure the design's figures against the built code; quote the command and result.
-- Re-resolve every path and symbol the ADR cites before committing.
+- Re-measure the design's figures against the built code, quoting command and result, and re-resolve every path and symbol the ADR cites before committing.
 - A deferral naming a sibling unit (`deferred to <UNIT>`, a grep over your resolved block) is done only once tracked where the sibling reads.
-- A composition finding that traces to text the design or an ADR also asserts amends that text in the same fix.
-- A rule true beyond this ticket goes into the ADR's Principle section or, for the flow, through `/capture-learnings`.
-- A PR that adds an enforcement mechanism states which commit is its first live proof, or why none is: a gate that never fired is indistinguishable from a gate that cannot fire. A worked example the suite does not consume becomes a fixture, or says at its top that it is unexecutable.
+- A composition finding that traces to text the design or an ADR asserts amends that text in the same fix; a rule true beyond this ticket goes into the ADR's Principle section or, for the flow, through `/capture-learnings`.
+- A PR that adds an enforcement mechanism names the commit that is its first live proof, or says why none exists: a gate that never fired is indistinguishable from a gate that cannot fire. A worked example the suite does not consume becomes a fixture or says at its top that it is unexecutable.
 
 Done when every owed ADR is committed and each citation resolves.
 

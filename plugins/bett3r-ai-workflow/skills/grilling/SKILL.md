@@ -1,12 +1,13 @@
 ---
 name: grilling
-description: Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases.
+description: The interview primitive under this flow's `grill` skill, reached by `Call the Skill tool with "grilling"`. For a design interview here, use `grill`, which layers the fork shape on it.
 metadata:
   credits:
     author: Matt Pocock
     source: https://github.com/mattpocock/skills
     license: MIT
     notice: ../../THIRD-PARTY-LICENSES.md
+    modified: description only (trigger phrases moved to the grill skill); body verbatim
 ---
 
 Interview the user relentlessly until you reach a shared understanding. Map this as a **design tree**: every decision branches into the decisions that hang off it.

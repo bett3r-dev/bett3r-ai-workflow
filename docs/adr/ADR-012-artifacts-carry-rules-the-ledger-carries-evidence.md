@@ -88,6 +88,19 @@ five files repeated at `c75ba88` (`executor`, `provisioner`, `scope-check`, `/co
 `inline-fix`); each now carries one sentence naming the sanctioned alternative, `git stash create`
 followed by `git diff <object>`.
 
+Two more moves followed the first fleet-cost review. The skill listing (about 10.5k tokens in
+every context that holds the Skill tool, most of it the host's other plugins) is paid by a
+step-lane on every turn only so that it can load its one command. `/start` and `/build` call no
+skill, so they now run in `step-lane-file`, a variant with no `Skill` or `SlashCommand` tool that
+reads `commands/<step>.md` through the `bin/` directory on `PATH` and follows it; `/design`, `/plan`
+and `/verify-build`, whose bodies call skills, stay in `step-lane`. And `/verify-build` no longer
+calls the adopted `code-review` skill inside a lane: that skill stops to ask for a tracker
+document and a setup command that do not exist in a fleet host, and a prose override of a stop
+is the variance shape this whole decision removes. The two-axis review it describes is stated
+inline in the command instead, and the skill stays shipped for attended sessions. `grilling`
+keeps his body but carries this plugin's description, so a user's "grill me" reaches `grill`,
+the layer with the flow's fork shape, rather than the primitive under it.
+
 ## Companions
 
 Reference that only some runs reach leaves the command or skill body and becomes a companion file,
@@ -117,14 +130,14 @@ carries a one-line reason in the PR that moved it. Counted with `wc -w`, frontma
 | `commands/plan.md` | 1,500 | 2,300 |
 | `commands/build.md` | 3,000 | 4,600 |
 | `reference/build-pool.md` / `build-record.md` | 800 / 900 | 800 / 900 |
-| `commands/verify-build.md` | 2,500 | 3,700 |
+| `commands/verify-build.md` | 2,500 | 3,800 (raised from 3,700 when the whole-PR review moved inline; it replaces a 1,064-word skill load) |
 | `commands/start-multi.md` (+ `reference/start-multi-serial.md` ≤ 600) | 2,500 | 3,300 |
 | `commands/design-multi.md` | 2,500 | 3,700 |
 | `commands/merge-multi.md` | 1,800 | 2,300 |
 | `commands/capture-learnings.md`, `evolve.md` | 800, 900 | 1,200 |
 | `commands/commit.md`, `run-report.md` | 350, 700 | 500, 900 |
 | `agents/unit-lane.md` | 1,500 | 2,800 |
-| `agents/step-lane.md` | 450 | 900 |
+| `agents/step-lane.md`, `step-lane-file.md` | 450, 550 | 900 each |
 | `agents/provisioner.md`, `pool-provisioner.md` | 1,200, 400 | 1,900, 900 |
 | `agents/executor.md` | 1,500 | 2,300 |
 | `agents/verifier.md` | 1,800 | 2,300 |
@@ -144,7 +157,7 @@ Pocock's adopted files carry no budget of ours; they are his as shipped.
 
 ## Third-party skills
 
-`grilling`, `tdd`, `code-review`, `writing-for-agents` and `domain-modeling` are Matt Pocock's
+`grilling`, `tdd`, `code-review`, `writing-for-agents`, `codebase-design` and `domain-modeling` are Matt Pocock's
 files (github.com/mattpocock/skills, MIT), copied verbatim with the notice in
 `THIRD-PARTY-LICENSES.md` and a `CREDITS.md` beside each. In-house material that layers on them
 is a separate skill (`grill`) or a trailing section (`domain-modeling` § In this flow), never an

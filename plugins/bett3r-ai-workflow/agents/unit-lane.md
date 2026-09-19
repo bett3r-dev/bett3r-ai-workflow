@@ -41,7 +41,7 @@ Read as an example: `LANE-STEP:v1 step=build outcome=success slices=3/3 commits=
 
 Each step finds its own inputs in `.work/lane.yaml` and ends by printing its own `LANE-STEP:` line, so **you invoke it bare** — the command name and nothing else, neither the brief nor a pointer to it. A step that learns a fact from you is a step a scheduler running the same five commands one at a time cannot run.
 
-You dispatch a step rather than running it. Each of the five is one fresh [`step-lane`](step-lane.md) agent, dispatched with the worktree path, the branch and the single bare command. It tees the step's output to `.work/steps/<step>.log` in the worktree and returns the step's `LANE-STEP:` line as the last line of its report. You read the verdict from the **file**, through `lane-step`:
+You dispatch a step rather than running it. Each of the five is one fresh lane agent, dispatched with the worktree path, the branch and the single bare command: [`step-lane`](step-lane.md) for `/design`, `/plan` and `/verify-build`, whose commands call skills, and [`step-lane-file`](step-lane-file.md) for `/start` and `/build`, which reads the command from its file and holds no Skill tool, so the skill listing never rides in the two longest lanes. It tees the step's output to `.work/steps/<step>.log` in the worktree and returns the step's `LANE-STEP:` line as the last line of its report. You read the verdict from the **file**, through `lane-step`:
 
     lane-step .work/steps/<step>.log
 
@@ -63,7 +63,7 @@ A step is done when its log parses to an `outcome`, the outcome is in your state
 
 `/build` yields at a slice boundary once it has committed its `sliceBudget` with slices remaining, reporting real counts: `LANE-STEP:v1 step=build outcome=success slices=3/8 commits=3`. That is a `success` that hands you the decision:
 
-- `outcome=success` with `slices=k/N`, k < N → dispatch a **fresh** `step-lane` for `/build`; it resumes from `passes: true` in `.work/slices.yaml` on an empty context. Repeat until k = N.
+- `outcome=success` with `slices=k/N`, k < N → dispatch a **fresh** `step-lane-file` for `/build`; it resumes from `passes: true` in `.work/slices.yaml` on an empty context. Repeat until k = N.
 - k did not advance between two consecutive dispatches → stop and report `blocked-on=build-no-progress` with both lines; a yield that resumes onto the same slice forever is the one way this loop costs more than it saves.
 - anything else → the table's rule; no re-dispatch.
 

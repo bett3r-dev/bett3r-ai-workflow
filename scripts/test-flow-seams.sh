@@ -2764,6 +2764,64 @@ else
   done
 fi
 
+# The file-reading lane variant carries the two skill-free steps (/start, /build)
+# without the Skill tool, so the skill listing never rides in the longest lanes.
+# Same parser as above, run on step-lane-file.md; the unit-lane must link both
+# variants and route /build's re-dispatch to the file variant.
+STEP_LANE_FILE_MD="$PLUGIN/agents/step-lane-file.md"
+if [ -f "$STEP_LANE_FILE_MD" ]; then
+  pass 'agents/step-lane-file.md exists (the skill-free lane for /start and /build)'
+  "$MARKER_PY" - "$STEP_LANE_FILE_MD" > "$TMP/slf-tools" 2>"$TMP/err" <<'PYT'
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+m = re.match(r"\A---\r?\n(.*?)\r?\n---\r?\n", text, re.S)
+if not m:
+    sys.exit("no frontmatter block in step-lane-file.md")
+lines = m.group(1).splitlines()
+tools = []
+for i, line in enumerate(lines):
+    key, sep, value = line.partition(":")
+    if line.startswith((" ", "\t", "-", "#")) or not sep or key.strip() != "tools":
+        continue
+    value = value.split(" #", 1)[0].strip()
+    if value:
+        tools += [t.strip() for t in value.strip("[]").split(",") if t.strip()]
+        break
+    for nxt in lines[i + 1:]:
+        if not nxt.strip() or nxt.lstrip().startswith("#"):
+            continue
+        if not nxt.startswith((" ", "\t", "-")):
+            break
+        tools.append(nxt.lstrip(" \t-").split(" #", 1)[0].strip())
+    break
+if not tools:
+    sys.exit("no tools: allowlist in step-lane-file.md's frontmatter")
+print("\n".join(tools))
+PYT
+  if [ $? -ne 0 ]; then
+    fail 'step-lane-file declares a tools: allowlist' "$( cat "$TMP/err" )"
+  else
+    if grep -qx 'Agent' "$TMP/slf-tools"; then
+      pass 'step-lane-file holds Agent (/build dispatches its gate agents from inside it)'
+    else
+      fail 'step-lane-file holds Agent (/build dispatches its gate agents from inside it)' "tools: $( tr '\n' ' ' < "$TMP/slf-tools" )"
+    fi
+    for forbidden in Skill SlashCommand; do
+      if grep -qx "$forbidden" "$TMP/slf-tools"; then
+        fail "step-lane-file pays no skill listing: no $forbidden in tools:" "tools: $( tr '\n' ' ' < "$TMP/slf-tools" )"
+      else
+        pass "step-lane-file pays no skill listing: no $forbidden in tools:"
+      fi
+    done
+  fi
+  present "$STEP_LANE_FILE_MD" 'command -v lane-step' 'step-lane-file locates the command file through the bin/ directory on PATH'
+  present "$STEP_LANE_FILE_MD" 'commands/<step>.md' 'step-lane-file reads commands/<step>.md and follows it as the command'
+  present "$UNIT_LANE_MD" '](step-lane-file.md)' 'unit-lane links the file variant beside step-lane'
+  present "$UNIT_LANE_MD" 'dispatch a **fresh** `step-lane-file` for `/build`' 'unit-lane re-dispatches a yielded /build to the file variant'
+else
+  fail 'agents/step-lane-file.md exists (the skill-free lane for /start and /build)' 'missing'
+fi
+
 # One routing table, in /build. The `verifier` row is the pin — the one dispatch
 # that is never downgraded — no other artifact carries a routing row, and every
 # caller that routes points at /build's table by name instead of restating it.
