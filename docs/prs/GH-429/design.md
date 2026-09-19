@@ -43,7 +43,9 @@ it against the branch corrected three claims and produced one decision the issue
 - **The stated reason for rejecting a reused `LANE-STEP` names the wrong mechanism.** `verdict.ts:156`
   compares `step` against `expectedStep` — the step the scheduler *leased* — and holds no enum at
   all. `lane-step-parse.py` enforces no enum either; what it does pin is the marker token itself
-  (`TOKEN = re.compile(r"LANE-STEP:v(\d+)…")`, `lane-step-parse.py:64`). So "its regex is already
+  (at the design's base, `git show d04a3cd:plugins/bett3r-ai-workflow/scripts/lane-step-parse.py` line 64,
+  `TOKEN = re.compile(r"LANE-STEP:v(\d+)…")` — slice 1 replaced that literal with an interpolated
+  `--marker`, so no `TOKEN` symbol exists at HEAD). So "its regex is already
   generic" is half true: the attribute grammar accepts `waves=k/N` unchanged, the marker name does not.
 - **The wave boundary is not new.** `start-multi.md:52` already defines a **cost stop** there, and
   states the safety half the proposal omitted: "`git push` every started lane's branch first and keep
@@ -51,9 +53,10 @@ it against the branch corrected three claims and produced one decision the issue
 - **New fork (F4).** `waveBudget`, `wavesDone` and `phase` are not one decision. `units[].wave` plus
   `step`/`status` already determine wave progress (`start-multi.md:114`), and `/design-multi`'s
   `units[].step` (`pending|drafting|critiqued|resolved|written|done`, `design-multi.md:126`) *is* the
-  phase. The command itself names the hazard of storing them anyway — `start-multi.md:73`: "Git is the
+  phase. The command itself names the hazard of storing them anyway — `start-multi.md:73` at the base,
+  now `start-multi.md:112`: "Git is the
   primary signal and the state file a hint", with "a state file that says `step: plan` while the
-  branch carries three slices" called the orchestrator's commonest misread.
+  branch carries three slices" called the orchestrator's commonest misread (its canonical home is `agents/unit-lane.md:74`).
 
 ## Resolved decision tree
 

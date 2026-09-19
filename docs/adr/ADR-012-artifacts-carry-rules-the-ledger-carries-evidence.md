@@ -133,8 +133,8 @@ carries a one-line reason in the PR that moved it. Counted with `wc -w`, frontma
 | `commands/build.md` | 3,000 | 4,600 |
 | `reference/build-pool.md` / `build-record.md` | 800 / 900 | 800 / 900 |
 | `commands/verify-build.md` | 2,500 | 3,800 (raised from 3,700 when the whole-PR review moved inline; it replaces a 1,064-word skill load) |
-| `commands/start-multi.md` (+ `reference/start-multi-serial.md` ≤ 600) | 2,500 | 3,300 |
-| `commands/design-multi.md` | 2,500 | 3,700 |
+| `commands/start-multi.md` (+ `reference/start-multi-serial.md` ≤ 600) | 2,500 | 4,400 (raised from 3,300 in GH-429, when the tick boundary's five silently-failing preconditions moved in; measured 4,270 with `wc -w`) |
+| `commands/design-multi.md` | 2,500 | 3,900 (raised from 3,700 in GH-429, for the A/B and B/C phase boundaries; measured 3,805) |
 | `commands/merge-multi.md` | 1,800 | 2,300 |
 | `commands/capture-learnings.md`, `evolve.md` | 800, 900 | 1,200 |
 | `commands/commit.md`, `run-report.md` | 350, 700 | 500, 900 |

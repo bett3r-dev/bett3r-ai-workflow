@@ -305,3 +305,19 @@ sources: [code:../remote-ai-agents/src/ledger/runs.ts:12]
 rejected: writing "five" to match the phrasing used elsewhere in this ticket's prose — `RunStep` is six values (start|plan|build|verify-build|merge|lane)
 supersedes: —
 The count was removed from the ADR instead. The verifier swept the branch: no surviving artifact says "five leased steps", and every remaining "five steps" refers to the PIPELINE's five, which is accurate — `lane` is the wrapper, not a pipeline step.
+
+## D39 — ADR-012's ceilings for the two orchestrator bodies are raised, not the prose trimmed
+kind: deviation
+step: verify-build · decidedBy: agent
+sources: [code:docs/adr/ADR-012-artifacts-carry-rules-the-ledger-carries-evidence.md:136,138, code:plugins/bett3r-ai-workflow/commands/start-multi.md, code:plugins/bett3r-ai-workflow/commands/design-multi.md]
+rejected: shipping over the ceiling with a one-line reason — ADR-012 says in its own words that "a file over its ceiling is a defect", so an unamended table would have made the ADR assert something the branch falsifies; also rejected: trimming ~1,000 words out of start-multi.md at verify-build, which would rewrite freshly-pinned prose outside any slice's touches and is the owner's call, not this step's
+supersedes: —
+Measured at HEAD with `wc -w`, the count ADR-012 specifies: `commands/start-multi.md` 3,283 → 4,270
+against a 3,300 ceiling, and `commands/design-multi.md` 3,261 → 3,805 against 3,700. Both were sized
+at their ceiling before this branch, so the yield's own text is what broke them. The raise rests on
+the same footing ADR-012 already uses for `build.md` (4,600) and for `verify-build.md` (raised when
+the whole-PR review moved inline): an orchestrator's command body IS its whole prefix — it loads no
+agent brief for itself — so it is not bound by the step-lane figure the smaller ceilings derive from.
+The uncomfortable half, stated rather than hidden: this is a budget relaxed to fit what was written,
+and nothing in the gate enforces the table either way, so the owner may reasonably reverse it and
+require the trim instead. `commands/run-report.md` is untouched at exactly 900/900.

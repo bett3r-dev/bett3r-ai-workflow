@@ -94,7 +94,7 @@ Done when every orchestrator-authored base has a recorded gate verdict and every
 
 **6 — PRs.** Per passed unit, `/verify-build` opens the PR **ready for review** against `int/<run-id>`, or the parent branch when stacked. The default branch is `/merge-multi`'s target: a unit PR there carries sibling noise and resolves conflicts a second time. Done when every passed unit has `prUrl` and its `mergeable` state in `run.yaml`.
 
-**7 — Teardown.** First merge the per-unit `<run>/units/<id>.learnings.md` files into `<run>/learnings.md`, tagged by unit, plus your own dispatch-time friction. Then remove only worktrees this run created whose unit is `terminal: true` in `run.yaml` — branch pushed and passed, or terminally `failed` and acknowledged — each as its own Bash call:
+**7 — Teardown.** First merge the per-unit `<run>/units/<id>.learnings.md` files into `<run>/learnings.md`, tagged by unit, plus your own dispatch-time friction. Then remove only worktrees this run created whose unit is `terminal: true` in `run.yaml` — branch pushed and passed, or terminally `failed` or `blocked` and acknowledged — each as its own Bash call:
 
     git worktree remove <path>
 
