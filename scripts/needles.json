@@ -1083,28 +1083,28 @@
     {
       "needle": "walk-unstructured",
       "issue": null,
-      "commit": "fc7a541",
+      "commit": "a3b4cc5",
       "was_in": "plugins/bett3r-ai-workflow/skills/design-map/SKILL.md",
       "note": "The promotion boundary. A decided fork's walk becomes a slice oracle, so a prose walk is refused there rather than downstream: `oracle-wrong` was 41% of 966 classified fix rounds, every itemised one caught by the verifier and none by a red test, and RED -> GREEN structurally cannot catch it — a test built from prose goes red before the code exists and green after, and is still wrong."
     },
     {
       "needle": "decided-nowalk",
       "issue": null,
-      "commit": "fc7a541",
+      "commit": "a3b4cc5",
       "was_in": "plugins/bett3r-ai-workflow/skills/design-map/SKILL.md",
       "note": "A decided fork whose chosen option carries no walk was a silent counter (`skipped-nowalk`). It is a choice somebody made that nobody can test, and its slice gets an oracle invented downstream from prose."
     },
     {
       "needle": "slice-unscened",
       "issue": null,
-      "commit": "fc7a541",
+      "commit": "a3b4cc5",
       "was_in": "plugins/bett3r-ai-workflow/skills/design-map/SKILL.md",
       "note": "The half of the walk contract that reaches a unit with NO map.json — which is what both measured 0%-first-pass-green runs were (`review: unattended`, no map), so the candidate pipeline emitted nothing and fifteen slices' oracles were written freehand."
     },
     {
       "needle": "kind: structural",
       "issue": null,
-      "commit": "fc7a541",
+      "commit": "a3b4cc5",
       "was_in": "plugins/bett3r-ai-workflow/skills/vertical-slicing/SKILL.md",
       "note": "Given/When/Then has no room for a census's negative half (\"and no module outside <owner> does Y\"), and that half is what catches the writer added next week — it caught a composition root whose two wiring lines could both be deleted with tsc clean and 738 tests green."
     }
