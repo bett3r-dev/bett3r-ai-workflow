@@ -129,3 +129,59 @@ sources: [code:plugins/bett3r-ai-workflow/scripts/fleet-loop.py:90-91,168-173, c
 rejected: landing it as-is — a driver that refuses 100% of real runs is the reader-only contract the plan's own contract note forbids, and no gate can see it (the suite's `new_run` helper synthesizes a `pluginVersion:` line no in-repo producer writes)
 supersedes: —
 The control flow is sound and mutation-proven (tick/stop/no-progress all red under their own mutations, none hanging). Two defects defeat risk 4's NAMED MITIGATION, so it cannot ship as a follow-up. (1) `pluginVersion` has no writer anywhere in the repo, and the plan's contract note does not list this contract, so no slice is assigned to write it — while slice 3's scope sentence actively forbids adding it. (2) `fleet-loop.py:90-91` claims the manifest it reads is "the version `claude -p` will actually run, not the branch's", but `PLUGIN_ROOT` derives from `__file__` with no symlink resolution, so invoked by absolute path — the only invocation anything exercises — it reports the BRANCH's version. The dangerous direction is a false pass: run.yaml recording the branch version while `claude -p` loads an older cached roster gives `resolved == recorded` and the driver proceeds on the wrong roster every tick. The owner must rule on who writes the key and what is compared; that lands in slice 3's file, so it is a cross-slice seam, not an executor fix. The verifier's recommendation: the orchestrator writes `pluginVersion` from its own loaded manifest and the driver compares tick-to-tick recorded values, which removes the need for the PATH claim entirely; interim, absent ⇒ warn-and-proceed (with its own scenario), mismatch ⇒ refuse. Slice 2's work is preserved uncommitted in the pool worktree named in build-summary.md.
+
+## D17 — /design-multi's A/B boundary emits a verdict line the design never specified
+kind: silent-seam
+step: build · slice: 4 · decidedBy: executor
+sources: [adr:ADR-004, code:plugins/bett3r-ai-workflow/scripts/lane-step-parse.py, design:GH-429-F5, code:scripts/test-flow-seams.sh (Seam I's outcome census)]
+rejected: prose alone — "the human opens Phase B" stated as a request is something a driver can ignore, and enforcement is what F5 asks for
+supersedes: —
+`FLEET-STEP:v1 outcome=blocked-on blockedOn=awaiting-owner-sitting phases=k/N units=t/u`. The verifier ruled this NOT scope creep but the correct enforcement: by ADR-004 a context that ends must print a line, `blocked-on` is one of the three sanctioned outcomes and reads as a stop, and slice 1's parameterisation is what makes it readable at all. Both the parse claim and the census acceptance were re-verified independently against the current parser.
+
+## D18 — The new attribute is spelled `phases=`, not `phase=` and not `waves=`
+kind: silent-seam
+step: build · slice: 4 · decidedBy: executor
+sources: [code:plugins/bett3r-ai-workflow/scripts/lane-step-parse.py (the attribute grammar), design:GH-429-F4]
+rejected: `phase=` — one character from the forbidden `phase:` state key, and confusable with it. `waves=` — false, because phases are not waves
+supersedes: —
+Unnamed by the design. ADR-013 (slice 5) will need to carry `phases=` alongside `waves=`.
+
+## D19 — The B/C boundary is the same KIND of end as A/B, but a plain `success`, so a driver may reopen Phase C
+kind: silent-seam
+step: build · slice: 4 · decidedBy: executor
+sources: [design:GH-429-F5 option A ("Phase C is tracker-writer waves … the part that most resembles a wave loop and least needs the sitting's context")]
+rejected: making Phase C human-only too — it would contradict the design's own reason for splitting B/C off
+supersedes: —
+The design decides who opens Phase B (the human, never a driver) and is silent on Phase C. The verifier found the choice better-grounded than the executor claimed: `success phases=2/3` short of the total reads as tick-again under F3's own idiom, while A/B's `blocked-on` reads as a stop.
+
+## D20 — `--serial` never yields, and that question is now recorded as DECIDED
+kind: silent-seam
+step: build · slice: 4 · decidedBy: executor
+sources: [code:plugins/bett3r-ai-workflow/reference/start-multi-serial.md, code:commands/start-multi.md:117, design:Unspecified seams ("must either yield … or say in its own words that it never yields. Which of the two is not decided here.")]
+rejected: inheriting the wave yield silently — the design explicitly delegated the choice and required the answer be stated in the artifact's own words
+supersedes: —
+The reason is serial's own mechanics: it holds a worktree open across every step, so there is no point at which it holds nothing. Slice 3 had landed a sentence calling the question undecided; fix round 1 corrected that one clause, so the branch no longer asserts both sides. Serial also now stamps every agents.yaml row `tick: 1`, closing slice 3's Low carry-forward.
+
+## D21 — The sitting must write terminal answers as `<run>/answers/` rows BEFORE the B/C context ends
+kind: silent-seam
+step: build · slice: 4 · decidedBy: executor
+sources: [code:commands/design-multi.md:83 (Step 5.2, inside Step 5 — Phase C at :78), design:GH-429-F5]
+rejected: leaving Step 5.2 as the only writer — it sits inside Phase C, so without this obligation a terminal answer exists only in the ended sitting and "Phase C restarts from `<run>/answers/`" is false for exactly those answers
+supersedes: —
+The slice's one behavioural addition beyond wording. Verified correct and in scope by the verifier — which also found it UNPINNED (deletable with 522 green); fix round 1 gave it its own assertion, mutation-proved to red alone.
+
+## D22 — A pin was accepted as brittle-but-fail-closed rather than loosened
+kind: overruled
+step: build · slice: 4 · decidedBy: verifier
+sources: [code:scripts/test-flow-seams.sh:3190-3191]
+rejected: a looser plain-prose needle — it would risk staying green while the obligation is weakened, which is the dangerous direction
+supersedes: —
+D21's needle spans both load-bearing halves (the `map: <S>` shape and the `**before** this context ends` deadline) and so is sensitive to cosmetic re-punctuation. Ruled a noise risk, not a correctness risk: it fails closed, and the author re-syncs.
+
+## D23 — No census guards against a future artifact re-opening the `--serial` question
+kind: shipped-finding
+step: build · slice: 4 · decidedBy: verifier
+sources: [code:docs/prs/GH-429/design.md:184, code:plugins/bett3r-ai-workflow/reference/start-multi-serial.md]
+rejected: an absence census over "not decided"/"undecided"/"open question" near `serial` — it would flag design.md:184, the very sentence that GRANTS the decision, so the guard would redden on correct files
+supersedes: —
+The verifier confirmed the reason is real rather than convenient and swept the corpus: no rival open-question claim about `--serial` exists today. Residual and named: a future third file re-opening it is uncaught. Not a mitigation the design leans on.
