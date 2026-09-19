@@ -185,3 +185,59 @@ sources: [code:docs/prs/GH-429/design.md:184, code:plugins/bett3r-ai-workflow/re
 rejected: an absence census over "not decided"/"undecided"/"open question" near `serial` — it would flag design.md:184, the very sentence that GRANTS the decision, so the guard would redden on correct files
 supersedes: —
 The verifier confirmed the reason is real rather than convenient and swept the corpus: no rival open-question claim about `--serial` exists today. Residual and named: a future third file re-opening it is uncaught. Not a mitigation the design leans on.
+
+## D24 — The orchestrator writes `pluginVersion`, and the driver's check moves to after tick 1
+kind: silent-seam
+step: build · slice: 2 · decidedBy: human
+sources: [code:plugins/bett3r-ai-workflow/commands/start-multi.md:29, code:plugins/bett3r-ai-workflow/scripts/fleet-loop.py, design:risk 4, human]
+rejected: the driver resolving the loaded version itself — it structurally cannot. `PLUGIN_ROOT` derives from `__file__` with no symlink resolution, so a by-path invocation reports the BRANCH's version, and nothing has loaded the plugin at t0 anyway; also rejected: papering the gap over with `realpath`
+supersedes: —
+The escalation that stopped this slice. Design risk 4 asked the driver to refuse on a version mismatch before the first tick, but on a fresh run `run.yaml` does not exist yet — the orchestrator creates it in step 0, during tick 1 — so the pre-tick check refused 100% of real runs, and a missing `run.yaml` returned USAGE, which meant the driver could not start a fresh run at all. Only the orchestrator can observe which plugin `claude -p` loaded, because it IS the loaded plugin. The owner ruled: the orchestrator is the writer, and the comparison happens after each tick — `recorded` against the driver's `resolved`, and `recorded` tick-to-tick.
+
+## D25 — Slice 2 edits slice 3's `commands/start-multi.md`, by the owner's explicit ruling
+kind: deviation
+step: build · slice: 2 · decidedBy: human
+sources: [code:plugins/bett3r-ai-workflow/commands/start-multi.md:29,127, human]
+rejected: a sixth slice for the writer — it would land the guard (slice 2) before the producer it reads, leaving a shipped refusal arm with nothing writing the field
+supersedes: —
+A deliberate cross-slice seam, not scope creep: the guard and its producer must land in one commit or the `absent after tick 1 ⇒ refuse` arm is live against a field no artifact writes. The write is UNCONDITIONAL — every tick, resume path included — because a create-only write would brick every pre-existing run, and the pin is deliberately on the unconditional half rather than the key's name (mutation M8: weakening it to "when you create it" reddens 1 of 527 alone).
+
+## D26 — `pluginVersion` is NOT backfilled into existing run.yaml files, and no migration is added
+kind: deviation
+step: build · slice: 2 · decidedBy: human
+sources: [code:plugins/bett3r-ai-workflow/scripts/fleet-loop.py, human]
+rejected: backfilling the branch's version into existing runs — a guessed value makes `resolved == recorded` and converts the guard into a false pass, which is worse than no guard because it reads as evidence
+supersedes: —
+Absent-then-self-heal is the chosen behaviour: one honestly-unguarded tick, then the orchestrator's own write makes the guard live. The driver opens `run.yaml` read-only.
+
+## D27 — The version check runs before the verdict is parsed, so a terminal tick cannot bypass it
+kind: deviation
+step: build · slice: 2 · decidedBy: executor
+sources: [code:plugins/bett3r-ai-workflow/scripts/fleet-loop.py:214-216, design:risk 4]
+rejected: checking after the verdict is read — a `waves=N/N` terminal tick would then exit 0 unchecked
+supersedes: —
+The ruling said "after each tick" without ordering the check against the verdict parse. Cost, accepted: a run whose LAST tick has a mismatched version exits 1 instead of 0. Verifier adjudicated it as the conservative reading — a terminal verdict produced by the wrong plugin copy is not this run's to act on.
+
+## D28 — The `recorded changed tick-to-tick` arm is a diagnosis refinement, not extra stopping power
+kind: shipped-finding
+step: build · slice: 2 · decidedBy: verifier
+sources: [code:plugins/bett3r-ai-workflow/scripts/fleet-loop.py, code:scripts/test-fleet-loop.sh]
+rejected: dropping the arm as redundant — it is the only arm that can be true when BOTH values differ from `resolved`, and it is the more specific diagnosis
+supersedes: —
+If `recorded` changes between ticks, at least one value also differs from `resolved`, so the mismatch arm would fire anyway. The `changed` arm is therefore checked FIRST and pinned on the driver's own words (`pluginVersion changed mid-run`, `previous tick recorded=…`) rather than on the fact of stopping. Named and residual: mutation M4 reddens 2 message pins and no tick count, and M2 (removing the `still absent after tick 1` arm) reddens exactly 1 message pin — the driver still stops, only its diagnosis degrades. A tick-count pin is impossible for these two arms by construction, not by omission.
+
+## D29 — A literally-false docstring claim about PyYAML was corrected rather than shipped
+kind: overruled
+step: build · slice: 2 · decidedBy: verifier
+sources: [code:plugins/bett3r-ai-workflow/scripts/fleet-loop.py:83-86, code:plugins/bett3r-ai-workflow/scripts/design-map.py:1377]
+rejected: shipping "PyYAML is not a dependency of this plugin's scripts" — `design-map.py` imports it, lazily, so the sentence is false in its literal half
+supersedes: —
+Reworded to "not an unconditional dependency", naming the one lazy importer. The load-bearing half was already true and verified (`.claude/gate.sh` treats a missing PyYAML as INCONCLUSIVE rather than installing it). Corrected because this slice's whole ruling was about deleting a false claim from a docstring rather than papering over it; shipping a second one in the same file would be incoherent.
+
+## D30 — A `STUB_VERSION` ordering fragility in the new suite is accepted and named
+kind: shipped-finding
+step: build · slice: 2 · decidedBy: verifier
+sources: [code:scripts/test-fleet-loop.sh:268-276]
+rejected: adding a per-case guard against inherited stub state — judged not worth the harness complexity for a 50-case single-file suite
+supersedes: —
+`stub-trailing-prose.sh` does not call `arm` and inherits the previous case's exported `STUB_VERSION`. Verified correct today (run-c2's `arm` resets it to the real manifest version immediately before), but order-fragile if cases are reordered. Follow-up named, not taken: have the trailing-prose stub read `$VERSION` directly.
