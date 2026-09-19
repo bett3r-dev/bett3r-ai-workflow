@@ -89,6 +89,14 @@ jobs:
       # clean tree in a clean tree's voice.
       - name: Check issue-closing syntax (commit messages + examples)
         run: python3 scripts/check-closes-syntax.py "origin/${{ github.base_ref || 'master' }}"
+      # The owner's rule: every gate a flow runs is SCOPED to that flow's own diff.
+      # The whole-repo run (--full / --all) happens once, here in CI or when the
+      # owner asks for it by name — never off a flow step's own judgement, which
+      # would spend tens of minutes of laptop time per unit re-proving an
+      # untouched tree. This guard fails on any gate INVOCATION in a command,
+      # agent or skill carrying that flag; prose forbidding it is allowed.
+      - name: No flow artifact runs the gate whole-repo
+        run: python3 scripts/check-no-full-gate.py
       # The shipped UserPromptSubmit hook runs on every prompt in every repo
       # where the plugin is enabled, and a non-zero exit blocks the prompt.
       # Run it under dash too — `sh` is dash on Debian/Ubuntu, bash on macOS.

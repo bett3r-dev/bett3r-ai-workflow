@@ -50,8 +50,8 @@
             "id": "A",
             "label": "Option A",
             "walks": [
-              { "scenario": "the owner picks A, case 1", "text": "A applies case 1" },
-              { "scenario": "the owner picks A, case 2", "text": "A applies case 2" }
+              { "scenario": "the owner picks A, case 1", "text": "A applies case 1", "given": "case 1 is live", "when": "A is applied", "then": "case 1 is handled A's way" },
+              { "scenario": "the owner picks A, case 2", "text": "A applies case 2", "given": "case 2 is live", "when": "A is applied", "then": "case 2 is handled A's way" }
             ]
           },
           {
@@ -79,7 +79,7 @@
           {
             "id": "A",
             "label": "Option A",
-            "walks": [ { "scenario": "the recommendation applies", "text": "A is applied by default" } ]
+            "walks": [ { "scenario": "the recommendation applies", "text": "A is applied by default", "given": "nobody overrode the recommendation", "when": "the plan is cut", "then": "A is applied by default" } ]
           },
           {
             "id": "B",
@@ -104,7 +104,7 @@
           {
             "id": "A",
             "label": "Option A",
-            "walks": [ { "scenario": "the code takes option A", "text": "A is applied by the code" } ]
+            "walks": [ { "scenario": "the code takes option A", "text": "A is applied by the code", "given": "the code already takes A", "when": "the plan is cut", "then": "A is applied by the code" } ]
           },
           {
             "id": "B",
@@ -119,14 +119,14 @@
     },
     {
       "id": "ESAS-1-F6",
-      "title": "Fork 6: decided, chosen option has zero walks",
+      "title": "Fork 6: decided, chosen option walked",
       "tickets": ["ESAS-1"],
       "restsOn": [],
       "card": {
         "problem": "Problem statement for fork 6.",
         "useCases": ["An owner answers fork 6 but the chosen option carries no walk."],
         "options": [
-          { "id": "A", "label": "Option A", "walks": [] },
+          { "id": "A", "label": "Option A", "walks": [ { "scenario": "the owner picks A", "text": "A applies", "given": "the fork is decided for A", "when": "the plan is cut", "then": "A applies" } ] },
           {
             "id": "B",
             "label": "Option B (rejected — must never be offered)",

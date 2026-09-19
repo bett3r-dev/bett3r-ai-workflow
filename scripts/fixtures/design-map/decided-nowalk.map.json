@@ -1,0 +1,50 @@
+{
+  "structureVersion": 2,
+  "shape": "decision",
+  "grounded": true,
+  "mapId": "ESAS-165-PLAN-CANDIDATES",
+  "nodes": [],
+  "forks": [
+    {
+      "id": "ESAS-165-F6",
+      "title": "Fork 6: decided, chosen option has zero walks",
+      "tickets": [
+        "ESAS-165"
+      ],
+      "restsOn": [],
+      "card": {
+        "problem": "Problem statement for fork 6.",
+        "useCases": [
+          "An owner answers fork 6 but the chosen option carries no walk."
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Option A",
+            "walks": []
+          },
+          {
+            "id": "B",
+            "label": "Option B (rejected — must never be offered)",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B applies — must never appear"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "A",
+          "why": "A is what the owner chose."
+        },
+        "ifOverturned": "B replaces A."
+      },
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "A"
+      }
+    }
+  ]
+}

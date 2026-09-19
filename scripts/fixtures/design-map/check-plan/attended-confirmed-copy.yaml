@@ -13,3 +13,8 @@ slices:
     name: "slice one"
     oracle: |
       the fixture asserts A is applied after the change
+    scenarios:
+      - scenario: the owner picks A
+        given: the fork is decided for A
+        when: the plan is cut
+        then: A is applied

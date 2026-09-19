@@ -1,6 +1,6 @@
 ---
 name: full-gate
-description: Discover and run the host repo's full validation gate (`.claude/gate.sh`) and read its verdict correctly. Use when a flow step needs to certify a branch — /verify-build's per-unit gate, /merge-multi's integration gate — or when deciding which commands constitute "the tests" in an unfamiliar repo.
+description: Discover and run the host repo's validation gate (`.claude/gate.mjs`, else `.claude/gate.sh`) and read its verdict correctly. Use when a flow step needs to certify a branch — /verify-build's per-unit gate, /merge-multi's integration gate — or when deciding which commands constitute "the tests" in an unfamiliar repo. The flow always runs it SCOPED to the branch's own diff; `--full` is CI's job, or the human's on request, and no flow step ever selects it.
 ---
 
 # Full gate — the host repo declares what "green" means
@@ -15,12 +15,15 @@ So the host repo declares its own gate, and the flow discovers it.
 
 | Invocation | Contains | Who runs it |
 |---|---|---|
-| `node .claude/gate.mjs --fast` | The cheap structural checks — typically `build` + `typecheck`. Seconds-to-a-minute. | Every `/verify-build`, per unit. |
-| `node .claude/gate.mjs --full` | Everything the repo wants run before code lands: tests, integration tests, codegen drift, lint, plus everything `--fast` covers. | Once per landing — `/verify-build` outside a fleet, `/merge-multi` on the integration branch. |
+| `node .claude/gate.mjs --fast` | The cheap structural checks — typically `build` + `typecheck`. Seconds-to-a-minute. | Every `/verify-build` inside a fleet lane. |
+| `node .claude/gate.mjs` (no argument — **`--scoped`**) | The whole-repo structural checks, then only the suites, drift checks and guards whose surface **this branch's own diff** touches. | **Every landing the flow performs** — `/verify-build` outside a fleet, `/merge-multi` on the integration branch, `/start-multi`'s base check. |
+| `node .claude/gate.mjs --full` | Everything, unconditionally: every suite, every drift check, every guard, whether or not the diff goes near it. | **CI, or the human on request. Never a flow step.** |
 
-`--full` is a superset of `--fast`. A repo with nothing worth splitting may ignore the argument and run the same thing either way; say so in a comment at the top of the file.
+`--full` is a superset of `--scoped`, which is a superset of `--fast`. A repo with nothing worth splitting may ignore the argument and run the same thing either way; say so in a comment at the top of the file. A repo that declares no scoped mode is run with **`--fast`** by the flow, never `--full` — and that is a gap to close in the repo's gate script, not in the flow.
 
-**A repo may declare a third, middle mode** — conventionally the *no-argument* default, `--scoped` — that runs the whole-repo structural checks and then only the suites, drift checks and guards whose surface the branch's diff actually touches. It exists for the human inner loop, where `--full` is too slow to run as often as it is needed and `--fast` proves too little. **The flow never selects it**: a flow step certifies a branch, and a scoped verdict is a claim about a diff and its importers, not about the tree. `/verify-build` still runs `--fast`, `/merge-multi` still runs `--full`. If you invoke a gate with no argument and its output carries a `GATE-MODE:` line naming a scoped run, say so wherever you report it — that verdict does not certify a landing.
+**No flow step ever runs `--full` or `--all`, and none may be made to.** The rule is the user's, and it is unconditional: a whole-repo run is minutes-to-tens-of-minutes of laptop time paid on every unit of every run, to re-prove a tree nobody changed. The full run happens **once**, elsewhere — in the CI pipeline, or when the user asks for it by name. If you believe a step genuinely needs `--full`, **stop and ask**; do not decide it yourself, and do not "just this once" it because the scoped verdict felt thin.
+
+**So say what a scoped verdict is, every time you report one.** It certifies *this branch's diff and its importers*, not the tree. Quote the `GATE-MODE:` line, and never write a sentence that reads as whole-repo certification. Two blind spots are structural and belong in the report by name whenever the diff could reach them: **tests that count the tree** (census and ratchet guards glob the filesystem and import nothing, so no diff-scoped selection has an edge to them — a change that adds or removes a file of a kind something counts runs those guards explicitly), and **behavioural ripple a typecheck cannot see**. That residue is exactly what the CI / on-request `--full` exists to cover, and naming it is how the two halves add up.
 
 **Node, not bash, and the reason is a contributor, not a preference.** This is the one flow artifact each host repo authors itself and each contributor runs directly, and a `.sh` makes a working Git Bash or WSL a precondition for running the repo's own gate on Windows. Node is already present in any repo this flow runs in, and `spawnSync(..., { shell: true })` resolves `yarn` → `yarn.cmd` for free. A `.claude/gate.sh` is still accepted (see discovery) — a repo that already has one need not rewrite it — but a **new** one is `.mjs`.
 
@@ -102,7 +105,7 @@ When you fall back, also **offer to write `.claude/gate.mjs`** — one round-tri
 Everything below is [EVIDENCE.md](../../EVIDENCE.md) §1 — *a verdict is evidence only about what it actually executed* — applied to this one instrument.
 
 - **Never read a pass from a piped exit code**, yours or the script's — nor from a **wrapper's**: `cmd > log; echo EXIT=$?` reports the `echo`, and `nohup sh -c "gate > log; echo EXIT=$? >> log; echo done"` reports `done`. The sentinel must be the **last** command in the wrapper. And a runner that fans out to sub-processes may not propagate child failure at all — `test:integration` in four shards once exited 0 with two shards `FAIL`; read the runner's own per-unit summary and treat any sharded/parallel wrapper's exit code as unverified. Parse the `GATE-STEP:` lines; if there are none, you are looking at output from something that is not a conforming gate, and the run is inconclusive.
-- **A full gate outlives the Bash tool's 600 s ceiling — run it detached and poll a sentinel it writes itself.** `nohup sh -c "<gate> > <log> 2>&1; echo GATE_EXIT=$? >> <log>" &`, then poll the log from foreground calls until `GATE_EXIT` appears. A plain or backgrounded invocation is killed partway, and for a **generator** that is worse than a lost verdict: an interrupted `generate-all` once left 177 corrupted files that read as real drift. A generator that fails **fast** (config validation, before the writing stage) leaves a clean tree; one interrupted mid-run leaves a tree to restore, never to diff for meaning.
+- **A whole-repo gate outlives the Bash tool's 600 s ceiling — run it detached and poll a sentinel it writes itself.** `nohup sh -c "<gate> > <log> 2>&1; echo GATE_EXIT=$? >> <log>" &`, then poll the log from foreground calls until `GATE_EXIT` appears. A plain or backgrounded invocation is killed partway, and for a **generator** that is worse than a lost verdict: an interrupted `generate-all` once left 177 corrupted files that read as real drift. A generator that fails **fast** (config validation, before the writing stage) leaves a clean tree; one interrupted mid-run leaves a tree to restore, never to diff for meaning.
 - **A silent, fast, exit-0 typecheck is undecidable, and deleting `tsbuildinfo` does not decide it** — a genuinely clean run is also fast and empty. When the verdict is load-bearing, use a **positive control**: plant a deliberate type error, confirm exit 1, remove it. The control must live **inside a workspace the runner visits** — under `workspaces foreach`, a repo-root file belongs to no project and is skipped silently, so the control itself false-passes. Same principle for any gate: a negative result is evidence only once the instrument has been seen to produce a positive one. (`yarn build` under swc is transpile-only and passed a real type error the typecheck caught.)
 - **A run that executed nothing reports green.** `Tests: 0 total` and an all-skipped tier both exit 0, and jest prints `PASS` for the latter. The counts in `<detail>` are the only thing that distinguishes them from a real pass — which is why the contract requires them.
 - **A green *partial* inventory reads as full coverage**, and is harder to spot than zero because the run looks substantial. `find` the repo's test files by its naming convention and compare against the count the runner reported; a material gap means the `include` globs are wrong or a tier is opt-in. (A root glob that predated a monorepo move silently excluded **33 of 57 suites**; every prior "green" on that branch was vacuous for them.)
@@ -111,14 +114,14 @@ Everything below is [EVIDENCE.md](../../EVIDENCE.md) §1 — *a verdict is evide
 - **"All green" is the wrong bar when the base is already red.** The sound verdict is a **baseline diff**: capture the failing-suite *set* on the base and on `HEAD`, and diff the **names**. `PASS→FAIL` is a regression; already-red-on-base is pre-existing — name it and move on. Compare **by file, not by total**; totals hide an equal-and-opposite swap. `.work/known-baseline-failures.md` is where that base-side set is written. It normally arrives holding only the base sha and *"not captured — capture on demand"*: `/start` and the `provisioner` deliberately do **not** run a suite to fill it, because the base side is only needed on a red `HEAD`. When you need it, capture it yourself — for the **red suites by name**, on a freshly-built tree — and append it there for whoever comes next. An empty baseline file is the absence of a claim about the base, never a claim that the base is green.
 - **A run on a venue without the repo's secrets cannot fully certify a branch** — its verdict is **partial by construction**, however green, and the landing gate runs where the secrets are. Say which steps were `INCONCLUSIVE` for that reason and why, rather than reporting a clean gate. And where making one step runnable **disables another**, the two runs' verdicts are **not additive**: name the pair that traded in the PR body, because reporting each run's own honest verdict and letting the union imply coverage is a claim neither run made.
 - **When HEAD is fully green with parsed counts, skip the base-side run entirely** — zero flips are possible, so the worktree + install is pure cost. Only a red HEAD needs the base set.
-- **A gate's verdict names its blind spot in the same breath.** Any step reported `SKIP` or `INCONCLUSIVE`, and any tier the repo excludes from `--full` on purpose, goes into the PR body by name. Silence there reads as coverage.
+- **A gate's verdict names its blind spot in the same breath.** Any step reported `SKIP` or `INCONCLUSIVE`, any tier the repo excludes from its widest run on purpose, and — on every scoped run — the fact that unrelated suites and tree-counting guards were **not selected**, goes into the PR body by name. Silence there reads as coverage.
 
 ## Reporting
 
 Whatever consumes this skill records, verbatim:
 
 ```
-node .claude/gate.mjs --full on <branch> @ <sha>
+node .claude/gate.mjs (--scoped) on <branch> @ <sha>
   build            PASS
   typecheck        PASS
   test             PASS  Test Suites: 57 passed, 57 total · Tests: 812 passed, 812 total
@@ -126,7 +129,9 @@ node .claude/gate.mjs --full on <branch> @ <sha>
   generate-drift   PASS
   lint             PASS
 Baseline diff vs <base>: no PASS→FAIL flips.
-Not covered: <tiers this repo excludes, by name — or "none declared">
+Scope: scoped to this branch's diff — certifies the diff and its importers, not the tree.
+Not covered: <suites/guards not selected by the scoping, plus tiers this repo
+             excludes on purpose, by name — the whole-repo run is CI's, or the user's on request>
 ```
 
 Two facts make that block worth its length: the step names let the next run diff against it, and the counts are the only defence against a green that ran nothing.

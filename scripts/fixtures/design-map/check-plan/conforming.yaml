@@ -20,3 +20,8 @@ slices:
     name: "slice one"
     oracle: |
       the launcher prints outcome=ok and exits 0
+    scenarios:
+      - scenario: the launcher runs over a conforming plan
+        given: a plan whose candidates are all unconfirmed
+        when: check-plan runs
+        then: the launcher prints outcome=ok and exits 0

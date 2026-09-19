@@ -1,0 +1,12 @@
+ticket: ESAS-9
+review: unattended
+slices:
+  - id: 1
+    name: "slice one"
+    oracle: |
+      the launcher prints outcome=ok and exits 0
+    scenarios:
+      - scenario: no module outside the ledger appends
+        kind: structural
+        text: >
+          every append is in src/ledger, and no module outside it appends

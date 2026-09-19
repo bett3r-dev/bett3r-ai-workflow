@@ -297,6 +297,46 @@ assert_gate "$repo" refuse \
   'a plugin file whose name is not ASCII still counts as a touch — git C-quotes it' \
   'plugins/alpha' '1.0.0'
 
+# 9. The hole case 2 left open. The gate was written around one question — did
+#    the version string change — and a downgrade answers it correctly while being
+#    the same defect: 0.83.0 cut from a branch that predates master's 0.84.0 is a
+#    different string, so the gate passed it, and it points at a cache key users
+#    may already hold from the earlier release. Same shape as case 1 from the
+#    user's side: a green PR and bytes that never move.
+new_repo downgraded
+printf 'A changed body.\n' >>"$repo/plugins/alpha/skills/demo/SKILL.md"
+set_version "$repo" alpha 0.9.0
+commit_all "$repo" 'change a skill, move the version backwards'
+assert_gate "$repo" refuse \
+  'a version that moved backwards is refused, naming both versions' \
+  'plugins/alpha' 'backwards' '1.0.0' '0.9.0'
+
+# 10. The compare is per-field, not lexical. `0.9.0 → 0.10.0` is a real bump that
+#     sorts backwards as a string, and a gate that refused it would be refusing
+#     every tenth minor release in a repo that has already shipped past 0.80.
+new_repo two-digit-minor
+set_version "$repo" alpha 0.9.0
+commit_all "$repo" 'base the plugin at 0.9.0'
+git -C "$repo" branch -f master HEAD >/dev/null 2>&1
+printf 'A changed body.\n' >>"$repo/plugins/alpha/skills/demo/SKILL.md"
+set_version "$repo" alpha 0.10.0
+commit_all "$repo" 'bump the minor past a single digit'
+assert_gate "$repo" allow \
+  '0.9.0 → 0.10.0 is a bump, not a downgrade — the compare is numeric per field' \
+  'plugins/alpha: 0.9.0 → 0.10.0'
+
+# 11. A version neither side can read as three integers is allowed through on the
+#     difference alone. The cache copies on *any* change to the string, so an
+#     unreadable spelling is not evidence that nothing ships, and refusing here
+#     would block a release over a format the runtime never parses.
+new_repo non-semver
+printf 'A changed body.\n' >>"$repo/plugins/alpha/skills/demo/SKILL.md"
+set_version "$repo" alpha 2024-06-01
+commit_all "$repo" 'change a skill, ship a date-shaped version'
+assert_gate "$repo" allow \
+  'a version this gate cannot parse is allowed on the difference alone' \
+  'plugins/alpha: 1.0.0 → 2024-06-01'
+
 # ── The fleet-lane deferral ───────────────────────────────────────────────────
 #
 # D2/A1/A3: a missing bump in a `gateDeferred: true` lane is a SKIP, not a

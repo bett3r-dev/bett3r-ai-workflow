@@ -22,8 +22,10 @@ Read `.work/slices.yaml` and the committed design — `<path>/design.md`, `path=
 
 Which mode you run depends on whether this unit is landing on its own:
 
-- **`.work/lane.yaml` exists and carries `gateDeferred: true`** (the lane brief, written by the `provisioner`; this unit is one lane of a `/start-multi` fleet) → run **`--fast`** only. The full gate is hoisted to `/merge-multi`, which runs it once on the run's integration branch — the only tree where cross-unit breakage exists at all. Record in the PR body: *"Full gate deferred to the fleet gate, run `<runId>`."* That line is load-bearing: without it the PR reads as fully certified.
-- **No brief, or one that does not defer** (a single `/start` flow) → run **`--full`**, baseline-diffed. Its report block goes into the PR body under **Verification**, verbatim, counts included.
+- **`.work/lane.yaml` exists and carries `gateDeferred: true`** (the lane brief, written by the `provisioner`; this unit is one lane of a `/start-multi` fleet) → run **`--fast`** only. The branch-wide check is hoisted to `/merge-multi`, which runs it once on the run's integration branch — the only tree where cross-unit breakage exists at all. Record in the PR body: *"Gate deferred to the fleet gate, run `<runId>`."* That line is load-bearing: without it the PR reads as fully certified.
+- **No brief, or one that does not defer** (a single `/start` flow) → run the repo's **scoped** mode — `node .claude/gate.mjs` with **no argument** — baseline-diffed. Its report block goes into the PR body under **Verification**, verbatim, counts included, including the `GATE-MODE:` line and the sentence that it certifies this branch's diff and its importers, not the tree. Where the repo declares no scoped mode, run **`--fast`** and say so.
+
+**Never `--full`, never `--all`, under any condition — not for a big diff, not for a risky one, not "just to be sure".** The whole-repo run belongs to the CI pipeline, or to the user asking for it by name; a flow step that helps itself to one spends tens of minutes of the user's laptop re-proving a tree the unit did not touch. If you think this unit needs one, **say so in the PR body and stop** — the decision is the user's.
 
 In a `gateDeferred` lane the host gate's version-bump step is expected to report `SKIP reason=deferred-to-merge-multi` for every plugin the unit touched — the fleet does one bump per plugin on the integration branch, so a lane never bumps `plugin.json` (N lanes bumping guarantee manifest conflicts and a version meaningless on int). Name it in the PR body: *"Version bump deferred to the fleet merge, run `<runId>`."* A version-bump `FAIL` in a lane is still a `FAIL` (e.g. an unreadable manifest is never deferred), and outside a `gateDeferred` lane a missing bump `FAIL`s as always.
 
@@ -81,7 +83,7 @@ The sweeps assume you can trust the word "green." How to read a gate's verdict �
 
 Two things that verdict does **not** cover, and that stay here:
 
-- **Tiers the repo excludes from `--full` on purpose.** A slice's `passes:` flag records the default run, which skipped them. Where the plan names such a tier — env-gated integration suites, e2e, anything needing testcontainers — either run it explicitly, or state in the PR body that it was not run and why.
+- **Tiers the repo excludes from its widest run on purpose, and anything the scoped run did not select.** A slice's `passes:` flag records the default run, which skipped them. Where the plan names such a tier — env-gated integration suites, e2e, anything needing testcontainers — either run it explicitly, or state in the PR body that it was not run and why.
 - **The composition question.** The gate proves the assembled tree is green; it says nothing about *why*, and a green tree with a silent-drop window in it is exactly the case the composition row above exists to catch.
 
 Apply the `critique` skill's tone throughout: substance over compliments, no hedging, every finding specific and actionable with a concrete fix. For an assembled feature that crosses a non-trivial architectural seam, run a focused `critique --lens arch,ops` pass over the diff and fold its verdict into the findings below.

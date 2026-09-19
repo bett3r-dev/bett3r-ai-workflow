@@ -38,9 +38,10 @@ The shape, in brief:
 - status: `{kind: open}`, `{kind: decided, source, option}` or
   `{kind: moot, reason}` — `option` names an option id of the fork's card;
 - card: `{problem, useCases[], options[], recommendation: {option, why},
-  ifOverturned}`; option: `{id, label, walks: [{scenario, text}],
-  rejectedBecause?, evidence?[]}`. **A fork with no card is title-only** (a
-  locked, dependent fork): it is drawn by its title and cannot be picked.
+  ifOverturned}`; option: `{id, label, walks: [{scenario, text, kind?, given?,
+  when?, then?}], rejectedBecause?, evidence?[]}`. **A fork with no card is
+  title-only** (a locked, dependent fork): it is drawn by its title and cannot
+  be picked.
 
 Node, fork and option ids and `mapId` match `^[A-Za-z0-9-]+$`; fork ids are unique, node ids are unique, option
 ids are unique per fork, and every `anchor`, `parents`, `restsOn` and link
@@ -201,6 +202,45 @@ card.recommendation.option}`. `--final` refuses `reason=title-only-open`
 its card first. A `moot`
 fork is never deleted by either pass.
 
+## The walk contract — a decided choice arrives as a testable scenario
+
+A walk is where an oracle is born. `scenario` names it and `text` is what the
+board renders; `given`/`when`/`then` are what a test can be written from without
+re-deciding anything.
+
+**The measured reason this is a rule and not a suggestion.** Across 966
+classified fix rounds, `oracle-wrong` — the test encoded the wrong rule — is
+**41%**, the largest single cause, and in the runs where it was itemised *every*
+round came from a verifier finding and *none* from a red test. A test built from
+prose goes red before the code exists and green after, and is still wrong: RED →
+GREEN is an anti-tautology gate, and it cannot tell whether the rule asserted is
+the rule that was decided. The only cause slice size controls, `ripple`, is 6%.
+
+- **A behavioural walk carries all three of `given`, `when`, `then`.** Partial is
+  refused at `validate` (`walk-partial-gwt`, naming what it has): a walk with a
+  `given` and a `when` and no `then` renders exactly like a deliberate one, and
+  it is the half-written one that yields an oracle asserting a setup instead of
+  an outcome.
+- **`kind: structural` keeps prose, deliberately.** A census assertion — *"every
+  appender declares it, and no module outside `<owner>` appends"* — has a
+  negative half that Given/When/Then has no room for. `/plan` already mandates
+  that form for an "every X must do Y" rule, and it is the form that caught the
+  worst defect in the corpus (a composition root whose two wiring lines could be
+  deleted with 738 tests still green). Carrying both is refused
+  (`walk-structural-gwt`): one of them is then decoration and nobody can tell
+  which.
+- **The contract binds a *decided* fork only.** An open fork is the state this
+  whole tool exists to hold: nothing is chosen, so there is nothing to write a
+  scenario against, and `candidates` skips it as it always did. The obligation
+  lands the moment the fork resolves and its walk is about to become somebody's
+  test — which is also the last moment it is cheap to fix.
+- **Enforced at the promotion boundary, not in the schema.** `given`/`when`/
+  `then`/`kind` are additive and optional in `map-structure.schema.json` so that
+  every map written before this change still validates and still renders: esas
+  types `MapOptionWalk` structurally with no runtime validator, so extra keys
+  pass a board untouched. `candidates` is what refuses, because that is the one
+  moment a walk becomes a test somebody writes.
+
 ## Plan candidates and the unattended-never-promotes contract (ESAS-165)
 
 ```
@@ -222,10 +262,22 @@ skipped and counted, never printed:
 
 - `skipped-open` — still `open`
 - `skipped-moot` — `moot` (its id is never named in the output)
-- `skipped-nowalk` — decided, but the chosen option carries no walk
+- `skipped-nowalk` — **can no longer happen**, and is kept on the verdict line
+  at `0` because `/plan` parses that line and its zero is the proof the refusal
+  fired rather than a fork being quietly dropped. A decided fork whose chosen
+  option carries no walk is now `outcome=fail reason=decided-nowalk`: a choice
+  somebody made that nobody can test, whose slice gets an oracle invented
+  downstream from prose
 - `skipped-untestable` — the fork carries `testable: false` (a process-rule
   card the design lane marks unoracled, ESAS-164); when both zero-walk and
   `testable: false` hold, `skipped-untestable` wins
+
+Two refusals, both `outcome=fail` (exit 1 — a fixable map, not a broken tool):
+`reason=decided-nowalk id=<fork> option=<id>`, and `reason=walk-unstructured
+id=<fork> option=<id> walk=<index>` when a chosen option's walk is prose. The
+walk's **index**, never its scenario text: every attribute on a verdict line is
+space-free by contract, and a refusal nobody can parse reads downstream as no
+refusal at all.
 
 The verdict: `outcome=ok verb=candidates forks=<n> candidates=<n>
 skipped-open=<n> skipped-moot=<n> skipped-nowalk=<n> skipped-untestable=<n>`.
@@ -244,7 +296,25 @@ a human:
   (`slice=unknown` when that slice has no id). A `confirmed` candidate's
   example copied into an oracle is the attended promotion (ESAS-165 D4) and
   passes.
-- else `outcome=ok review=<human|unattended|none> candidates=<n>` (exit 0).
+- `outcome=fail reason=slice-unscened slice=<id>` (exit 1) — a slice carries no
+  `scenarios:` at all.
+- `outcome=fail reason=scenario-unstructured slice=<id> why=<detail>` (exit 1) —
+  a scenario is not a mapping, has no `scenario:`, names an unknown `kind:`, is
+  behavioural and missing a half (`why=missing-then`), or is `kind: structural`
+  and either carries no `text:` or carries Given/When/Then as well.
+- else `outcome=ok review=<human|unattended|none> candidates=<n> scenarios=<n>`
+  (exit 0).
+
+**`scenarios:` is the half of the contract that reaches a unit with no map at
+all**, and that is the half that was costing: both measured 0%-first-pass-green
+runs were `review: unattended` with no `map.json`, so this whole candidate
+pipeline emitted nothing and every oracle in fifteen slices was written freehand
+from prose. A walk contract enforced only inside `candidates` would have left
+exactly those runs untouched. `oracle:` keeps its meaning — the narrative of the
+test; `scenarios:` is what the executor must make true, in a form it cannot
+quietly re-interpret. The `candidate-in-oracle` search covers a slice's
+`scenarios:` as well as its `oracle:`, or renaming the field would have been the
+whole of the bypass.
 
 `outcome=fail` (exit 1) is distinct from `outcome=error` (exit 2, e.g.
 `plan-unreadable`, `plan-unparseable`, `missing-plan`): a plan `check-plan`
