@@ -154,6 +154,10 @@ step() {
 step validate-plugins fast <<'EOF'
 python3 scripts/validate-plugins.py
 EOF
+step validate-plugins-tools-allowlist full <<'EOF'
+sh scripts/test-validate-plugins.sh
+VP_PY=python3 sh scripts/test-validate-plugins.sh
+EOF
 step artifact-links fast <<'EOF'
 python3 scripts/check-artifact-links.py
 EOF
