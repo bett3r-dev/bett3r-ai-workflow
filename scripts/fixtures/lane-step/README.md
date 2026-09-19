@@ -1,8 +1,9 @@
 # `LANE-STEP:` decoy corpora
 
-Five transcripts and one commit message for the parse rule in `agents/unit-lane.md`: **take the last
+Seven transcripts and one commit message for the parse rule in `agents/unit-lane.md`: **take the last
 match, require it to start the line, require it to end the line, require it to
-be the final line, and require its attribute values to be values.**
+be the final line, and require its attribute values to be values** — for whichever
+**marker word** the reader is asked for.
 
 They are executed against the parse rule's **one** implementation,
 `plugins/bett3r-ai-workflow/scripts/lane-step-parse.py`, through the `lane-step`
@@ -38,7 +39,7 @@ claim below is executed as an assertion in `scripts/test-flow-seams.sh` (Seam C)
   the **final** line. It satisfies last-match and final-line, so only the
   column-0 requirement rejects it, and the rule yields **no verdict**. This
   kills **anchoring**, which is why the parser anchors in exactly one place
-  (`TOKEN.match()`, no redundant `^` — a redundant anchor survives either
+  (`token(marker).match()`, no redundant `^` — a redundant anchor survives either
   mutation alone and so is held by nothing). The embedded marker says
   `outcome=gate-red`, so a rule that accepts it does not merely return different
   text: it reports the wrong verdict for a step that passed no gate.
@@ -73,6 +74,19 @@ claim below is executed as an assertion in `scripts/test-flow-seams.sh` (Seam C)
   trailing `\s*$` reddens it too — a trailing full stop is structurally also an
   aside after the attributes — so the clause it uniquely pins is the grammar,
   and `same-line-prose-transcript.txt` is what uniquely pins `\s*$`.
+
+* `fleet-yield-transcript.txt` — a well-formed `FLEET-STEP:v1 outcome=success
+  waves=1/3 units=2/7` line at column 0, on the final line. Read with
+  `lane-step --marker FLEET-STEP`, it returns those three attributes in the order
+  carried. It kills no clause; it pins that the marker word is a **parameter** and
+  not a literal, so an orchestrator's wave yield needs no second parser (GH-429).
+  The three-outcome vocabulary is unchanged — a short `waves=` is how a yield is
+  spelled, not a fourth outcome word.
+
+* `fleet-trailing-prose-transcript.txt` — the same line with the model carrying on
+  afterwards, the `trailing-prose` shape under the new marker. **No verdict**, so
+  absence still reads as `infra`. It is the half that catches a parameterisation
+  that reads the happy line while losing a clause for every marker but the default.
 
 * `attribution-after-marker-commit.txt` — not a transcript but a **commit
   message**, the branch sink's transport (ADR-004, *Amended*): the marker, then

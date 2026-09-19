@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Read a step's transcript and print its `LANE-STEP:v1` verdict, or nothing.
+"""Read a step's transcript and print its `<MARKER>:v1` verdict, or nothing.
+
+The marker word is a **parameter**, defaulting to `LANE-STEP`. An orchestrator's
+wave yield (`FLEET-STEP:v1 outcome=success waves=1/3 units=2/7`) is the same line
+grammar under a different word, and the only alternative to a parameter is a
+second parser — which is exactly the drift the module-level note below, and the
+uniqueness guard in `scripts/test-flow-seams.sh`, exist to prevent. Everything
+after the marker word is shared verbatim: the column-0 anchor, the last-line-only
+rule, the attribute grammar and exit `3` for no verdict.
 
 This is **the** implementation of the parse rule specified in
 `agents/unit-lane.md` — there is no second copy. The rule was written twice
@@ -44,7 +52,9 @@ recorded under "what a `v1` reader does with a `vN` line" in
 it here would decide it silently and it cannot be decided without knowing
 whether callers and steps are deployed together.
 
-Usage:  lane-step <transcript-file>        (or `-`/omitted for stdin)
+Usage:  lane-step [--marker NAME] <transcript-file>   (or `-`/omitted for stdin)
+`--marker` defaults to `LANE-STEP`, so every caller that passes only a path —
+which is every caller shipped today — reads exactly what it read before.
 Prints one `key=value` per attribute, in the order the marker carried them.
 Exit 0 = verdict printed. Exit 3 = no verdict. Exit 2 = bad invocation.
 """
@@ -59,15 +69,26 @@ NO_VERDICT = 3
 # why this is not `\S+`.
 VALUE = r"[A-Za-z0-9]+(?:[/._-][A-Za-z0-9]+)*"
 
+DEFAULT_MARKER = "LANE-STEP"
+
 # The marker. `match()` supplies the column-0 anchor; `\s*$` is the only
-# end-of-line clause. Neither is repeated.
-TOKEN = re.compile(r"LANE-STEP:v(\d+)((?:\s+[A-Za-z_][A-Za-z0-9_]*=" + VALUE + r")+)\s*$")
+# end-of-line clause. Neither is repeated. The marker WORD is interpolated and
+# escaped; every clause around it is written once, here, for every marker.
+
+
+def token(marker: str) -> "re.Pattern[str]":
+    """The verdict-line regex for `marker`. The one implementation of the rule."""
+    return re.compile(
+        re.escape(marker) + r":v(\d+)((?:\s+[A-Za-z_][A-Za-z0-9_]*=" + VALUE + r")+)\s*$"
+    )
+
 
 ATTRIBUTE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)=(" + VALUE + r")")
 
 
-def parse(text: str) -> "list[tuple[str, str]] | None":
+def parse(text: str, marker: str = DEFAULT_MARKER) -> "list[tuple[str, str]] | None":
     """Return the verdict's attributes, or None for NO VERDICT."""
+    pattern = token(marker)
     lines = text.split("\n")
     # Trailing blank lines are tolerated, following the `design-multi` marker's
     # own rule (`commands/design-multi.md`: readers "tolerate any whitespace
@@ -76,26 +97,34 @@ def parse(text: str) -> "list[tuple[str, str]] | None":
     # speaking again.
     while lines and not lines[-1].strip():
         lines.pop()
-    hits = [i for i, line in enumerate(lines) if TOKEN.match(line)]
+    hits = [i for i, line in enumerate(lines) if pattern.match(line)]
     if not hits:
         return None
     last = hits[-1]
     if last != len(lines) - 1:
         return None
-    attributes = TOKEN.match(lines[last]).group(2)
+    attributes = pattern.match(lines[last]).group(2)
     return [(m.group(1), m.group(2)) for m in ATTRIBUTE.finditer(attributes)]
 
 
 def main(argv: "list[str]") -> int:
-    if len(argv) > 2:
-        sys.stderr.write("usage: lane-step [transcript-file]\n")
+    args = argv[1:]
+    marker = DEFAULT_MARKER
+    if len(args) >= 2 and args[0] == "--marker":
+        marker = args[1]
+        args = args[2:]
+    # A lone `--marker` with no value is a bad invocation, not a path: treating
+    # it as one opens a file named `--marker` and dies in a traceback, which a
+    # caller reads as `infra` rather than as its own mistake.
+    if len(args) > 1 or marker == "" or args[:1] == ["--marker"]:
+        sys.stderr.write("usage: lane-step [--marker NAME] [transcript-file]\n")
         return 2
-    if len(argv) == 2 and argv[1] != "-":
-        with open(argv[1], encoding="utf-8") as handle:
+    if args and args[0] != "-":
+        with open(args[0], encoding="utf-8") as handle:
             text = handle.read()
     else:
         text = sys.stdin.read()
-    verdict = parse(text)
+    verdict = parse(text, marker)
     if verdict is None:
         return NO_VERDICT
     for key, value in verdict:

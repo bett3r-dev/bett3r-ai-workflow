@@ -593,6 +593,62 @@ else
   fi
 fi
 
+# The marker is a PARAMETER, not a literal (GH-429). An orchestrator's wave yield
+# is a second marker word on the same grammar, and the alternative to a parameter
+# is a second parser — which is the drift the uniqueness guard below exists to
+# stop. So `lane-step --marker FLEET-STEP` reads a `FLEET-STEP:v1` line with the
+# SAME column-0 anchor, last-line-only rule, attribute grammar and exit 3; the
+# three-outcome vocabulary is untouched and no fourth outcome word appears
+# (GH-429-F3). Two fixtures, because a parameterisation that reads the happy line
+# while quietly losing a clause for the new marker is the failure worth catching:
+# one asserts the attributes come back in the carried order, the other that
+# absence still reads as `infra` for the new marker too.
+lane_fleet="$LANE_STEP_FIXTURES/fleet-yield-transcript.txt"
+if [ ! -f "$lane_fleet" ]; then
+  fail 'the FLEET-STEP yield transcript fixture exists' "no such file: $lane_fleet"
+else
+  got=$( "$LANE_STEP" --marker FLEET-STEP "$lane_fleet" 2>"$TMP/err" )
+  want=$( printf 'outcome=success\nwaves=1/3\nunits=2/7' )
+  if [ "$got" = "$want" ]; then
+    pass 'the same parse rule reads a FLEET-STEP:v1 yield line when asked for that marker'
+  else
+    fail 'the same parse rule reads a FLEET-STEP:v1 yield line when asked for that marker' \
+         "got:  $( printf '%s' "${got:-<no verdict>}" | tr '\n' ' ' )" \
+         "want: $( printf '%s' "$want" | tr '\n' ' ' )" \
+         'a marker hard-coded as a literal forces a second parser for the orchestrator'\''s yield.'
+  fi
+fi
+
+lane_fleet_trailing="$LANE_STEP_FIXTURES/fleet-trailing-prose-transcript.txt"
+if [ ! -f "$lane_fleet_trailing" ]; then
+  fail 'the FLEET-STEP trailing-prose transcript fixture exists' "no such file: $lane_fleet_trailing"
+else
+  got=$( "$LANE_STEP" --marker FLEET-STEP "$lane_fleet_trailing" 2>"$TMP/err" )
+  rc=$?
+  if [ "$rc" -eq 3 ] && [ -z "$got" ]; then
+    pass 'a FLEET-STEP marker followed by more prose is NO VERDICT, so absence still means infra'
+  else
+    fail 'a FLEET-STEP marker followed by more prose is NO VERDICT, so absence still means infra' \
+         "rc=$rc got: $( printf '%s' "${got:-<none>}" | tr '\n' ' ' )" \
+         'the final-line clause has to hold for the parameterised marker, not just the default one.'
+  fi
+fi
+
+# Backward compatibility: every caller shipped today passes a path and nothing
+# else, and must go on reading LANE-STEP. Asserted on a fixture whose verdict is
+# known (the decoy's), so a default silently changed to the new marker reads as
+# NO VERDICT here rather than as a pass.
+if [ -f "$lane_decoy" ]; then
+  got=$( "$LANE_STEP" "$lane_decoy" 2>"$TMP/err" )
+  if [ "$got" = "$( printf 'step=build\noutcome=success\nslices=3/3\ncommits=3' )" ]; then
+    pass 'with no marker argument the reader still reads LANE-STEP, as every shipped caller invokes it'
+  else
+    fail 'with no marker argument the reader still reads LANE-STEP, as every shipped caller invokes it' \
+         "got: $( printf '%s' "${got:-<no verdict>}" | tr '\n' ' ' )" \
+         'the marker is a parameter DEFAULTING to LANE-STEP; five commands pass only a path.'
+  fi
+fi
+
 # ---------------------------------------------------------------------------
 printf '\nSeam C2 — the verdict on the branch head (#326)\n\n'
 # ---------------------------------------------------------------------------
@@ -965,10 +1021,22 @@ present "$UNIT_LANE_MD" 'through `lane-step`' \
 # consumed the line; this slice makes `unit-lane` the reader, and a reference
 # copy left standing beside the production one is drift nothing can see —
 # nobody runs both, so the fixtures would go on certifying a rule production had
-# stopped using. Pinned on the regex SOURCE shape — the marker token followed
-# immediately by a capture-group open-paren — which a transcript's literal
-# marker (`LANE-STEP:v1 step=...`) never contains, so a fixture is never
-# mistaken for an implementation.
+# stopped using. Pinned on the regex SOURCE shape — the version group followed
+# immediately by the attribute-list group — which a transcript's literal marker
+# (`LANE-STEP:v1 step=...`) never contains, so a fixture is never mistaken for
+# an implementation.
+#
+# The needle is the MARKER-INDEPENDENT half of the regex, not the marker literal
+# (GH-429). It was the literal while the marker was one, and the marker is now a
+# parameter: a needle carrying `LANE-STEP` would miss a second parser written for
+# `FLEET-STEP` — the exact copy this slice's parameterisation exists instead of —
+# while matching prose that merely QUOTES the old regex, which is what a design
+# document does. So the pin moved onto the ATTRIBUTE clause every marker of this
+# family shares -- specifically its key grammar, which `resolved-marker-lint.py`'s
+# looser `[^\s=]+` keys do not match: that file parses a DIFFERENT marker family
+# under a different grammar and is not a copy of this rule. A positive
+# control is asserted first, because a needle that matches nothing turns a guard
+# over a population into a guard over the empty set, and both read as a pass.
 #
 # The needle is assembled at runtime and never written as one literal, because
 # a guard searching for its own search string finds itself: written whole, this
@@ -983,8 +1051,15 @@ present "$UNIT_LANE_MD" 'through `lane-step`' \
 # whose binary-ness grep implementations disagree about. `-F` so the paren is a
 # character and not the start of a group.
 LANE_PARSER="$PLUGIN/scripts/lane-step-parse.py"
-lane_token_needle='LANE-STEP:v'
-lane_token_needle="$lane_token_needle("
+lane_token_needle='((?:\s+[A-Za-z_]'
+lane_token_needle="$lane_token_needle[A-Za-z0-9_]*="
+if grep -qaF "$lane_token_needle" "$LANE_PARSER"; then
+  pass 'the token-regex needle matches the production parser (positive control)'
+else
+  fail 'the token-regex needle matches the production parser (positive control)' \
+       "the needle no longer occurs in $( printf '%s' "$LANE_PARSER" | sed "s#^$ROOT/##" )" \
+       'a needle that matches nothing makes the uniqueness guard below a guard over the empty set.'
+fi
 # `__pycache__` is excluded, and this is a NARROWING rather than an exemption:
 # a `.pyc` there is not loadable without its source (sourceless import requires
 # the file to sit AT the source path -- byte-compile a module, delete the .py,

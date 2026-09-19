@@ -1,0 +1,8 @@
+Dispatching wave 1 of 3 across the fleet.
+
+Two units finished this wave, so I yield to the orchestrator rather than
+dispatching wave 2 myself. The caller reads my final line, not this prose.
+
+Wave 1 is done: GH-401 and GH-402 both reached verify-build green.
+
+FLEET-STEP:v1 outcome=success waves=1/3 units=2/7
