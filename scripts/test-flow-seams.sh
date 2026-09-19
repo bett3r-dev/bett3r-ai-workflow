@@ -2999,6 +2999,18 @@ present "$START_MULTI_MD" 'Wave progress is `units[].wave` plus `step`/`status`,
 present "$START_MULTI_MD" 'a wave short of the total is a `success` whose `waves=` is short' \
   '/start-multi spells a yield as a short success, not a fourth outcome (GH-429-F3)'
 
+# The orchestrator is the WRITER of pluginVersion (GH-429 design risk 4), because
+# it is the only reader that can observe which plugin copy `claude -p` loaded —
+# it is that copy. The pin is on the UNCONDITIONAL half of the rule, not on the
+# key's name: `bin/fleet-loop` refuses when the value is absent after a tick, so
+# a step 0 that writes it only when run.yaml is created reads as contract drift
+# on every resumed run and stops the fleet on its second tick. "Writes
+# pluginVersion" would stay green on exactly that state.
+present "$START_MULTI_MD" 'Record `pluginVersion` in `run.yaml` on every tick, resume included' \
+  '/start-multi records pluginVersion on every tick, resume path included (GH-429 risk 4)'
+present "$START_MULTI_MD" 'your own loaded manifest' \
+  '/start-multi takes pluginVersion from the manifest IT loaded, not the branch checkout'\''s'
+
 # --- executed: the run.yaml block gains waveBudget and a spend addend, and
 # NOTHING else. The fenced block under `## run.yaml` is the only specification of
 # the file any tick writes, so it is extracted and read as text: the two additive
@@ -3027,6 +3039,13 @@ else
     fail 'run.yaml carries the cumulative spend addend (design risk 5)' \
          "block keys: $( grep -o '^[a-zA-Z]*:' "$TMP/start-multi-runyaml.txt" | tr '\n' ' ' )" \
          'spend is an accumulator, not a projection of units[]: after the yield nothing else can notice the ceiling.'
+  fi
+  if grep -q '^pluginVersion:' "$TMP/start-multi-runyaml.txt"; then
+    pass 'run.yaml carries pluginVersion — the key bin/fleet-loop'\''s version guard reads (GH-429 risk 4)'
+  else
+    fail 'run.yaml carries pluginVersion — the key bin/fleet-loop'\''s version guard reads (GH-429 risk 4)' \
+         "block keys: $( grep -o '^[a-zA-Z]*:' "$TMP/start-multi-runyaml.txt" | tr '\n' ' ' )" \
+         'the schema block is the only specification of the file: a key step 0 writes but the block omits is a key the next writer drops.'
   fi
   stored=$( grep -n 'wavesDone:\|phase:' "$TMP/start-multi-runyaml.txt" || true )
   if [ -z "$stored" ]; then

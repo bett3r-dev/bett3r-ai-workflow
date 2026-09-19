@@ -155,6 +155,19 @@ jobs:
           sh scripts/test-worktree-pool.sh
           POOL_SH=dash dash scripts/test-worktree-pool.sh
           POOL_SH=bash bash scripts/test-worktree-pool.sh
+      # A fleet orchestrator ends its context at a wave boundary and reports
+      # `FLEET-STEP:v1 … waves=k/N` (GH-429); `bin/fleet-loop` is the driver that
+      # decides whether to start another one. That decision is control flow in a
+      # script, so no prose seam can execute it: tick-again on k < N, end on
+      # k = N, and stop with blocked-on=fleet-no-progress when k does not advance
+      # — a driver that keeps re-dispatching a stuck run is the one way this loop
+      # costs more than it saves. FLEET_SH varies the launcher's interpreter with
+      # the suite's.
+      - name: Test the fleet-loop driver (stub orchestrator ticks)
+        run: |
+          sh scripts/test-fleet-loop.sh
+          FLEET_SH=dash dash scripts/test-fleet-loop.sh
+          FLEET_SH=bash bash scripts/test-fleet-loop.sh
       # Every command that reads or writes a work item's committed design reaches
       # its folder through `bin/work-docs-path` (root from the repo's
       # `.claude/bett3r-ai-workflow.json` `workDocsRoot`, else `docs/prs`; the id
