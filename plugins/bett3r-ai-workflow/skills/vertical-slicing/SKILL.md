@@ -1,60 +1,53 @@
 ---
 name: vertical-slicing
-description: Cut a design into vertical slices (tracer bullet first, prefactor first) instead of horizontal layers, so each unit is independently verifiable and committable. Use when planning/decomposing a feature into execution units, or when a plan looks layer-by-layer.
+description: Cut a design into vertical slices (tracer bullet first, prefactor first), each verifiable alone and sized to one executor context. Use when decomposing a feature or when a plan looks layer-by-layer.
 ---
 
 # Vertical slicing
 
-## The principle
+A **slice** is the smallest independently observable behaviour, cut top to bottom through every layer it needs, with a test that drives it end to end. Only a vertical slice has its own green signal; a horizontal layer ("all the schemas", "all the read models") has no standalone oracle, so the per-slice dual gate and commit-per-slice loop cannot run on it.
 
-A **slice** is the smallest independently-**observable, verifiable behavior**, cut top-to-bottom through *all* the layers it needs (schema → domain logic → projection/read side → the one endpoint/UI that exercises it → a test that drives it end-to-end).
+## Rules of a slice
 
-A slice is **not** a horizontal layer ("build all the schemas", "build the readmodels"). Horizontal layers are the default trap and they are wrong for an automated flow, for one concrete reason:
-
-> Only a vertical slice has its own **green signal** (a test that passes when the slice works). A horizontal layer has no standalone oracle — "the schema layer" can't be verified until other layers exist. No oracle → the loop can't verify or commit it independently → you're forced back into a manual, serialized, prose-tracked build.
-
-So vertical slicing is the upstream precondition that makes the rest of the flow (per-slice dual gate, commit-per-slice, deterministic drive) possible at all.
+- Each slice cuts a narrow but complete path through every layer it touches: vertical, not a horizontal slice of one layer.
+- A completed slice is demoable or verifiable on its own. It declares the test that proves it (its **oracle**) and is done when that test is green and the verifier confirms the repo's invariants; then it is committed, one slice per commit.
+- A slice fits one fresh executor context. One that cannot (by its surface, its scenario count, or how many layers it opens at once) is split.
+- Prefactoring comes first. "Make the change easy, then make the easy change": reshaping existing code so the feature drops in cleanly (extract a seam, rename to the ubiquitous language, pull a shared helper) is the earliest slice.
+- Invariants are complete the moment their aggregate appears; no later slice finishes an invariant.
+- Named in the ubiquitous language (the area's `CONTEXT.md`), respecting the ADRs there; described as behaviour, not file paths or snippets. Exception: a decision-rich prototype snippet (a state machine, reducer, schema or type shape), trimmed to the decision.
 
 ## Tracer bullet first
 
-Order slices so the **first** one is the thinnest end-to-end path through the **riskiest, gate-less seam** — the part of the architecture that *nothing* automatically catches if it's wrong (a generated-artifact / deployment seam, a new integration boundary, a cross-aggregate contract). A tracer bullet is real, kept code — just thin. Prove the seam holds before fleshing anything out; later slices build on a validated skeleton. A tracer bullet is not a prototype; you keep it.
+Slice 1 is the thinnest end-to-end path through the riskiest gate-less seam: the part nothing automatically catches when it is wrong (a generated-artifact or deployment seam, a new integration boundary, a cross-aggregate contract). It is kept code, not a prototype, and it proves the seam holds before anything is built on it. A genuinely shared foundation (a schema five slices depend on, a migration) is what prefactoring and the tracer bullet establish: just enough skeleton, then vertical.
 
-## Prefactor first
+## Wide refactors: expand–contract
 
-"Make the change easy, then make the easy change." Before the feature slices, look for **prefactoring** — reshaping existing code so the feature drops in cleanly (extract a seam, rename to the ubiquitous language, pull a shared helper). When it exists, prefactoring is the **earliest slice(s)**, done before any feature slice. A clean prefactor slice is often the easiest first commit and de-risks everything after it.
+One mechanical change whose blast radius fans across the codebase (rename a column, retype a shared symbol) cannot land green as a tracer bullet. Sequence it: expand (add the new form beside the old), migrate in batches sized by blast radius (per package, per directory), each batch its own slice blocked by the expand, then contract (delete the old form) in a slice blocked by every batch. When even the batches cannot stay green alone, they share an integration branch and a final integrate-and-verify slice is where green is promised. A sweep over 10 files or 200 sites is split the same way; the cap exists for the fix round, because one finding anywhere in a sweep re-opens the whole sweep.
 
-## Self-referential enforcement — order it so it proves itself
+## A mechanism that governs the repo's own changes
 
-When a slice introduces a mechanism that governs the repo's **own** changes (a CI gate, a lint rule, a schema check, a pre-commit hook), order the slices so a **later slice in the same PR is its first live subject**. Put the mechanism in a slice that does not trigger itself, and let the next slice be what it governs. The PR then *demonstrates* the rule instead of asserting it.
+A CI gate, a lint rule, a schema check: order the slices so a later slice in the same PR is its first live subject. Mechanism-last ships it asserted but unproven, and a gate that never fired is indistinguishable from a gate that cannot fire; both-in-one-slice turns the introducing commit red and invites weakening the gate.
 
-Both other orderings fail. Mechanism-last means it is never exercised by its own PR and ships asserted-but-unproven — and for an enforcement mechanism that is the whole risk: **a gate that never fired is indistinguishable from a gate that cannot fire.** Both-in-one-slice turns CI red on the introducing commit, and the natural fix under pressure is to weaken or exempt the gate. This is the class where "the tests pass" is weakest evidence, because the fixture was written by whoever wrote the rule; a live proof inside the same PR is much stronger and is free if the slices are ordered for it.
+## Seams: named before oracles, fewest, highest, existing
 
-## What a good slice looks like (event-sourced / DDD)
+A **seam** is the boundary the unit tests at. Write the unit's seams down as the top-level `seams:` block before any oracle, and let every slice's `seam:` point at one. Prefer an existing seam to a new one, and the highest one that can still observe the claim, so the oracle lands where the behaviour is composed rather than where a unit is convenient. The ideal count is one: the first seam is free, and every seam after it and every `kind: new` one owes a one-line `why:` the already-named seams cannot hold the claim (`check-plan` refuses `seam-unstructured why=extra-unjustified|new-unjustified`). Each seam records `at:`, the `file:line` it resolves to at the base. Left unpressured, eight slices invent eight oracle locations, each a separate chance to assert below the level the claim lives at.
 
-The canonical slice is **one command, end-to-end**:
+## An oracle can be green, at the right seam, and prove nothing
 
-> command → event → aggregate **with its invariants whole** → projection/read model → the one endpoint or UI that exercises it → an integration test that drives the real command.
+RED→GREEN rules out a vacuous test and sees none of these three; each is red before the code exists and green after.
 
-Do **not** defer invariants to "a later slice" — every invariant belongs on its aggregate, complete, the moment the aggregate appears. Framework scaffolders (e.g. `create-aggregate`, `create-readmodel`) are **tools used inside a slice**, not units of planning.
+- **Tautology.** The assertion recomputes the expected value the way the code does, so it passes by construction and cannot disagree with the code. Every behavioural scenario says where its value comes from, `expected_from: literal | worked-example | spec | existing-behaviour`, and cites it in `expected_source:` for everything but a hand-checked literal. The citation is the check.
+- **Reachability.** `probe:` is the one production line whose deletion must turn the oracle red, named at plan time so it cannot be invented afterwards to match what was built. A probe naming a test line is not a probe.
+- **Discrimination.** The oracle fails by assertion, with values, not by hang, timeout, crash, import error, empty collection or skipped suite. This is a property of the RED the executor watches and is enforced there, not as a YAML field.
 
-(For non-DDD work the same shape holds: one user-observable behavior, through every layer it touches, with a test.)
+Two shapes with no natural behavioural oracle:
 
-## Name and describe slices well
+- **"Every X must do Y"** over a set of call sites ("all N call sites", "every appender", "no module outside X") needs a **structural oracle**: a test that enumerates the sites from source, asserts the census, and asserts the negative half ("no module outside `<owner>` performs `<operation>`"), excluding comments so prose cannot trip it. Its scenario is `kind: structural` with prose `text:`, because Given/When/Then has no room for the negative half, and that half is what catches the writer added next week.
+- **A write-side guarantee** (convergence, idempotency, exactly-once, ordering, dedup) is asserted on its own artifact, the event stream, count or version, not on a read-model row, whose own upsert dedups independently. A declaration-only slice (vocabulary, a type) pins existing behaviour instead: round-trip the inputs the live producer supplies today.
 
-- **Name in the ubiquitous language.** Use the bounded context's `CONTEXT.md` vocabulary, and respect ADRs in the area. A slice title should read as a domain behavior, not an implementation task.
-- **Describe behavior, not implementation.** Say what the slice does end-to-end; avoid file paths and code snippets — they go stale. *Exception:* a decision-rich snippet from a prototype (a state machine, reducer, schema, or type shape) that encodes a decision more precisely than prose — inline just the decision-bearing bits, noted as from a prototype.
+## Both sides of a contract
 
-## Each slice carries its own oracle — at the layer where its claim lives
-
-Every slice declares the **test** that proves it (its oracle) and a `passes` flag. The slice is "done" only when that test is green **and** the verifier confirms the project's invariants — the dual gate. Then it is committed (one slice commit per slice).
-
-**An oracle for a write-side guarantee asserts that guarantee's own artifact.** Where the behavior names convergence, idempotency, exactly-once, ordering or dedup, the assertion is on the event stream, the event count or the version — never on a read-model row or a query result, because the projection's own `upsert` dedups independently and passes a non-convergent implementation green. "The same message twice yields ONE row" was satisfied by an implementation that wrote a fresh random stream per delivery; asserting the **stream set across the whole eventstore** caught two wrong mechanisms before implementation, one of them a silent cross-tenant collapse. A thin complete path still asserts at the layer its claim lives.
-
-**A declaration-only slice needs a named oracle too.** A purely additive vocabulary or type slice compiles, breaks nothing, and passes every gate vacuously; the answer to *"what test fails if this slice is wrong?"* is a test pinned to **existing** behavior — round-trip the inputs the only live producer supplies today — which is falsifiable without changing anything.
-
-## Review the breakdown before building
-
-`/plan` step 4 owns the review — numbered list, granularity, dependencies, merge/split — and its unattended branch. The slice boundaries are the highest-leverage decision in the build.
+For every contract the unit introduces (producer and consumer, writer and reader, caller and callee), name the slice that builds each side, or state which side is out of scope and why. A unit that ships one side is green by construction: the tests can only exercise the half that exists. The check is one question over the slice list, and no single slice's gate can ask it.
 
 ## `.work/slices.yaml`
 
@@ -95,39 +88,30 @@ slices:
     gates: ["<project invariant the verifier must confirm>", ...]
     surface: { files: 4, sites: 60 }  # counted at the base; over 10 files or 200 sites → split,
                                    #   unless `atomic: <why it cannot compile half-done>`
+    touches: [paths]               # OPTIONAL hint; lead with behavior
     model: sonnet                  # OPTIONAL. Present only on mechanical slices; absent means opus.
     designs: [subdomain_pol_slug]  # OPTIONAL. Design node ids this slice delivers, when the
                                    #   unit has an .esas/design.json. Scopes /build's scaffold.
+    origin: plan                   # plan (default, may be omitted) | verify-build (a fix slice)
     jira: TICKET-NNN               # only when published as a sub-task (--publish)
+    commit: <sha>                  # written by /build at the land, pool slices only
   - id: 2
     name: "..."
     passes: false
     depends_on: []                 # independent of slice 1 → can run in parallel
-review: human                      # human | unattended — set by /plan Step 5, always
-candidateOracles:                  # OPTIONAL. Only when a <path>/map.json existed at Step 1;
+review: human                      # human | unattended — set by /plan, always
+candidateOracles:                  # OPTIONAL. Only when a <path>/map.json existed at /plan Step 1;
                                     #   [{fork, option, scenario, source, example, slice, status}]
 ```
 
-`scenarios` is the slice's oracle in a form nobody can quietly re-read. `oracle:` stays the narrative; `scenarios:` is what must be made true. It is required on every slice because the measured failure is not that slices are too big — across 966 classified fix rounds `ripple`, the only cause slice size controls, is **6%**, while `oracle-wrong` (the test encoded the wrong rule, went green, and was caught only by the verifier) is **41%**. Where a design map's fork was decided and its walk confirmed, that walk *is* the scenario; where there is no map, write them here — the two runs on record with 0% first-pass green had no map at all.
-
-`seams:` is the unit's answer to *"where do we test this"*, written once and inherited by every oracle. Prefer an **existing** seam to a new one and the **highest** one that can still observe the claim, and keep the count down — the ideal is one. Left unpressured, eight slices invent eight oracle locations, and each is an independent chance to assert below the level the claim lives at: the worst defect on record is that shape — the oracle sat at the unit, not the composition root, so both wiring lines could be deleted with `tsc` clean and 738 tests green. *Highest* is a judgement and stays one; what is mechanical is that the seam is **named, located and defended** — `check-plan` refuses `plan-unseamed`, `slice-unseamed`, `unnamed-seam` and an undefended extra or new seam. A `why:` is the entire cost of a second seam, deliberately: a cap would be wrong (some units need two) and silence was what was wrong before.
-
-## An oracle can be green, at the right seam, and still prove nothing
-
-Three adequacy rules, and **RED→GREEN sees none of them** — each is genuinely red before the code exists and green after, which is all the evidence that gate collects.
-
-- **Tautology** — the assertion recomputes the expected value the way the code does, so it passes by construction and can never disagree with the code. The expected value must come from an independent source: a known-good literal, a worked example, the spec. `expected_from:` names which, and `expected_source:` cites it for everything but a literal. The citation is the check.
-- **Reachability** — `probe:` is the one production line whose deletion must turn the oracle red, named at plan time so it cannot be invented afterwards to match what was built. An erasure suite that composed its own subject stayed 8/8 green with the production harness spread removed, and PII shipped unencrypted with every gate green.
-- **Discrimination** — the oracle fails by **assertion, with values**: never a hang, timeout, crash, import error, empty collection or skipped suite. This one is not a plan field, deliberately — it is a property of the RED the executor watches, so it is enforced there and in `/build`'s fix-round causes rather than asserted in YAML.
-
-`passes` flags + git commits **are** the build progress. There is no separate progress doc. `touches: [paths]` may be added as a hint, but lead with `behavior`. `model:` routes the slice's executor — set it only where the implementation is genuinely mechanical, and never on the tracer bullet, which is by construction the slice whose seam nobody has proven yet. `designs:` names the design-layer node ids the slice delivers, so `/build` can scaffold this slice's artifacts and not the whole design's; leave it out when the unit has no design layer, and never guess an id — a wrong one scaffolds the wrong artifact, while an absent one just means "nothing designed here".
+`scenarios:` is the oracle in the form nobody can quietly re-read; `oracle:` stays the narrative. Where a design map's fork was decided and its walk confirmed, that walk is the scenario. `passes` flags and the slice commits are the build's progress. `review:` and `candidateOracles:` trail `slices:` because `worktree-pool`'s parser stops at the first indent-0 line after it. `design-map check-plan` refuses a plan missing any REQUIRED field above. An env-gated oracle (one the default run excludes behind a flag or a service) names its exact invocation, flag and services, in `oracle:`, so `/verify-build` can re-run it; such a slice is certified by that invocation, not by its `passes:` flag. `model: sonnet` marks a mechanical slice: a scaffold from a framework skill, config or wiring, a test-only or guard-only slice, a mechanical prefactor; the tracer bullet, a seam and anything touching an invariant leave it absent, which `/build` routes as `opus`, and so does doubt.
 
 ## Anti-patterns
 
-- **Slicing by component/layer** (one ticket per schema/aggregate/readmodel) — the trap *The principle* opens on, usually a sign the plan was shaped to fit specialized tooling. Re-cut by behavior.
-- **Over-slicing below an observable behavior.** The floor is "smallest *observable behavior*", not "smallest *change*". Below that you pay loop/setup overhead for sub-behaviors. **The ceiling belongs to the fix round**: a sweep over 10 files or 200 sites is split (`/plan` Step 3), because one finding anywhere in it re-opens the whole sweep.
-- **An oracle nobody said how to break.** Every slice green, every scenario asserted, and no statement anywhere of what would have to change for any of it to go red. It is the cheapest thing to write and the one that ships a suite that cannot fail.
-- **A seam per slice.** Every slice picking its own oracle location, one at a time, with nothing comparing them. It never looks wrong slice by slice — each oracle is green and each is about the right behaviour — and the unit still ends with no test anywhere that would notice the composition being unwired. Name the seams first, then cut.
-- **Deferring invariants** to a later slice — produces half-formed aggregates that pass tests and ship defects.
-- **Slicing only one side of a contract.** When a unit introduces a contract between two parties — a producer and a consumer, a writer and a reader, a caller and a callee — name the slice that builds **each** side, or state which side is out of scope and why. A unit that ships one side is **green by construction**: the tests can only exercise the half that exists, and the specified degrade path is indistinguishable from the system working. One unit sliced the *reading* of a step contract three ways — spec, parser, reader, plus a uniqueness guard — shipped 41→77 tests, both gates green on every slice, and the marker was emitted by nothing. This is not the tracer bullet rule: every slice there was genuinely vertical and individually complete; the gap is **between** slices, in the set, which is why it belongs to `/plan` and no single slice's gate can see it. The check is one question over the slice list: *for every contract this unit introduces, which slice writes it and which slice reads it?*
-- **Pure-vertical-from-line-one** when a genuinely shared foundation (a schema five slices depend on, a migration) is needed first. That is exactly what prefactoring + the tracer bullet establish — just-enough shared skeleton, once, then go vertical.
+- **By component or layer** (one slice per schema, aggregate or read model): re-cut by behaviour.
+- **Below an observable behaviour**: the floor is the smallest observable behaviour, not the smallest change.
+- **An oracle nobody said how to break**: every scenario asserted and no statement of what would turn any of it red.
+- **A seam per slice**: each oracle green and about the right behaviour, and nothing that would notice the composition unwired.
+- **Deferring invariants**: half-formed aggregates that pass tests and ship defects.
+- **One side of a contract** (above).
+- **Horizontal test-first**: all tests, then all implementation, verifying imagined behaviour. One test, one implementation, repeat, each a tracer bullet that responds to what the last cycle taught.

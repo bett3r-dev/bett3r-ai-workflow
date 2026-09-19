@@ -315,6 +315,20 @@ run "$d"
 if [ "$rc" -eq 0 ]; then ok "a flat agents/ directory does not trip the nesting rule"
 else fail "a flat agents/ directory does not trip the nesting rule — expected 0, got $rc"; fi
 
+# --- 7d. a reference/ companion is neither an agent nor an entrypoint -----
+# ADR-012 homes branch-only reference for the commands under `reference/`, as
+# plain markdown with no frontmatter (a command opens it through a link). The
+# rule reaches `agents/*.md` and the entrypoint globs, so a companion there is
+# neither refused for lacking frontmatter nor counted as an agent — asserted,
+# not assumed, because a glob widened to `**/*.md` would turn every companion
+# into a rejected artifact, and one narrowed to nothing would fail open.
+d=$( mktree reference_companion ); add_agent "$d" scribe 'tools: Read'
+mkdir -p "$d/plugins/alpha/reference"
+printf '# A companion\n\nRead from a command when its condition holds.\n' > "$d/plugins/alpha/reference/companion.md"
+run "$d"
+if [ "$rc" -eq 0 ]; then ok "a frontmatter-less reference/ companion is accepted — a support doc, not an agent or an entrypoint"
+else fail "a frontmatter-less reference/ companion is accepted — expected 0, got $rc"; fi
+
 # --- 8. the pre-existing checks still fire --------------------------------
 # The new rule must not displace what the script already refused. An agent
 # WITH an allowlist and no description is still a failure, and the ✓ summary
@@ -453,6 +467,17 @@ PY
 )
 count=$( printf '%s\n' "$census" | sed -n 1p )
 observed=$( printf '%s\n' "$census" | sed -n 2p )
+
+# The census glob is `plugins/*/agents/*.md`; the companions under
+# `plugins/*/reference/` exist (ADR-012 created three) and none of them is
+# counted above. A census that read them would report more than EXPECTED_AGENTS
+# and fail; this row makes the exclusion visible rather than incidental.
+ref_count=$( find "$ROOT"/plugins/*/reference -name '*.md' 2>/dev/null | wc -l | tr -d ' ' )
+if [ "$ref_count" -ge 1 ]; then
+  ok "the corpus holds $ref_count reference/ companion(s), outside the agent census"
+else
+  fail "the corpus holds reference/ companions outside the agent census — found $ref_count"
+fi
 
 if [ "$count" = "$EXPECTED_AGENTS" ]; then
   ok "the corpus holds $EXPECTED_AGENTS agent entrypoints"

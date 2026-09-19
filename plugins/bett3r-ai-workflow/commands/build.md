@@ -1,311 +1,136 @@
 ---
-description: Drive each vertical slice to green through the dual gate (executor → test → verifier) and commit it. The deterministic implementation loop.
+description: Drive each slice in .work/slices.yaml to green through the dual gate (executor → test-runner → scope-check ∥ verifier) and commit it: the implementation loop of the pipeline.
 ---
 
 # /build — drive the slices
 
-Execute the slices in `.work/slices.yaml` — one at a time in the main tree, or, when Step 2 finds more than one ready at once, concurrently in a worktree pool — each through the **dual gate**, committing each as it passes (and, in the pool, landing it on the task branch). You are the orchestrator: you **dispatch agents and commit** — you do not implement code yourself.
+This is the `build` step; its verdict is `LANE-STEP:v1 step=build outcome=<success|gate-red|blocked-on> slices=k/N commits=n`. You are the orchestrator: you dispatch agents, read their reports and commit. You write no code yourself.
 
-## Argument: $ARGUMENTS
-Optional slice id(s) to run (e.g. `2` or `2,3`). Default: all `passes: false` slices. `--max-parallel N` caps how many slices run at once (Step 2); absent, only the plan's width and the brief's `worktreePoolMax` do.
+**Argument** `$ARGUMENTS`: optional slice ids (`2` or `2,3`); the default is every `passes: false` slice. `--max-parallel N` caps how many slices run concurrently (Step 2).
 
----
+## Step protocol
 
-## Step 0 — Read your brief, if there is one
+**Brief.** If `.work/lane.yaml` exists you are an unattended lane: take every input (`work_item`, `branch`, `worktree`, `runDir`, `gateDeferred`, `sliceBudget`, `mapProvenance`, `preconditions`, the rest) from it and ask no one anything. A fact it hands down is a claim to verify against the tree before you build on it. Without the file you run attended: inputs come from the user and the working tree.
 
-**If `.work/lane.yaml` exists, read it before anything else.** It is this unit's whole brief — written into the worktree from the outside — and it is where your inputs come from, not the caller. Take from it: `runners` (the host repo's runner/glob map — which command runs which test paths, so the mechanical gate resolves the slice's artifact to a runner that actually collects it), `preconditions` (the host repo's build/test preconditions), `modelRouting`, `adrAllocations`, `sliceBudget` (Step 3, *Yield at a slice boundary*; default 3), and `worktreePoolMax` (the venue's cap on the worktree pool, Step 2 — read only; the venue writes it). Its **absence is a valid state** (a single `/start` flow has no brief), so say which of the two you ran under rather than defaulting silently: a missing brief and a unit that legitimately has none are indistinguishable, and that is exactly how a lane runs on the wrong defaults with nothing red.
+**Mode marker.** Rewrite `.work/mode.yaml` whole: `mode: <this step>`, `work_item:` and `branch:` carried forward exactly as `/start` recorded them, `updated:` now. The file is replaced, not merged or appended; only `/start` clears it.
 
-Never accept these facts at the invocation instead. A step that learns a fact from whoever called it is a step **the other caller cannot run** — the per-step surface exists so that a step invoked on its own, by a caller it never spoke to, behaves identically.
+**Verdict.** Your last line is `LANE-STEP:v1 step=<this step> outcome=<success|gate-red|blocked-on>` with this step's attributes, at column 0 with nothing after it. Run `lane-step-record '<the identical line>'` immediately before printing it (it records the verdict on the branch when the brief opts in). Printing the line ends the run: take no turn after it.
 
 ## Step 1 — Load state
 
-**Record the mode first.** Overwrite `.work/mode.yaml` with `mode: build` and the current work item (`work_item:` carried forward exactly as `/start` recorded it — read it from the existing `.work/mode.yaml` before the rewrite; never re-dated or re-derived from the branch) before reading anything else — full rewrite, never an append, so the marker names the command running now instead of the one that ran last on this branch.
+1. Mark the mode: `.work/mode.yaml` reads `mode: build` (*Step protocol*).
+2. Read `.work/slices.yaml`. Absent: say "No slices found. Run `/plan` first." and end `blocked-on`. A slice already `passes: true` is skipped; say "resuming" when any is.
+3. Resolve the record folder: `work-docs-path --item <work_item>`, the `work_item` taken from `.work/mode.yaml` untouched; read its last line, not its exit code (ADR-004). `outcome=ok` names `path=`, where `decisions.md` and `build-summary.md` live beside the committed `design.md`. `outcome=error`: report its `reason=` and end `blocked-on` before any slice runs. The folder is the script's answer; a record written anywhere else is one no reader finds.
+4. From the brief, when there is one: `runners` (which command collects which test paths), `preconditions` (the install and build commands), `modelRouting`, `adrAllocations`, `sliceBudget` and `worktreePoolMax`. Say which of the two states you run under, briefed or attended.
 
-Read `.work/slices.yaml`. If it doesn't exist: "No slices found. Run `/plan` first."
+Done when the mode marker is written and the slice list and record path are in hand, or the run has ended `blocked-on`.
 
-The `passes` flags + the git history **are** the progress — there is no separate progress file. Skip any slice already `passes: true` (report "resuming").
+## Step 2 — Order the slices and size the pool
 
-**Resolve the record's folder before dispatching anything**, the way `/design` Step 4 does: `work-docs-path --item <work_item>`, passing the `work_item` from `.work/mode.yaml` untouched, and reading its last line, not its exit code (ADR-004). `outcome=ok` names the folder as `path=`; `decisions.md` and `build-summary.md` live there, beside the committed `design.md` (see *The committed record*, below). `outcome=error` stops the run before any slice: say its `reason=` and end `blocked-on` (Step 6). **Never fall back** to a default root or a copy under `.work/` — a record written anywhere the script did not name is a record no reader finds.
+Order by `depends_on`, topologically; the tracer bullet runs first. Then size the pool:
 
-## Step 2 — Order the slices, and size the worktree pool
+```
+worktree-pool size .work/slices.yaml [--only <ids>] [--max-parallel N] [--pool-max N]
+```
 
-Order by `depends_on` (topological). The **tracer-bullet slice runs first**. Slices ready at the same moment — every `depends_on` already landed — run concurrently, **each in its own worktree from a reusable pool**, and never side by side in one tree: one tree shares whole-repo build output, half-written files another slice's typecheck reads, generators, the lockfile and the git index. Everything else runs sequentially **in the main tree**, as it always has — and each such slice records which branch of this step put it there (`modeReason:`, *The committed record*): a plan the pool sized at width 4 once ran every slice sequentially with nothing saying why.
+Pass `--only` with the ids from `$ARGUMENTS` on a targeted run; `--pool-max` only with the brief's `worktreePoolMax` (the venue writes it, you read it; no key means no cap); `--max-parallel` only when this invocation was given one. Redirect the output to a file and read its `WORKTREE-POOL:v1` line; the exit code is not the verdict.
 
-**The git mechanics are `worktree-pool`'s; the decisions are yours.** It sizes, provisions, resets, lands and tears down, and ends every call with one `WORKTREE-POOL:v1 cmd=… outcome=…` line. Redirect its output to a file and **read that line** — never the exit code alone (ADR-004). What is ready, which commit lands first, and what a refusal means are decided here, not by the script.
+- `outcome=ok pool=0`: every slice runs sequentially in the main tree, and each records why under `modeReason:` (`pool=0`, or `ready-alone` when it was the only slice ready at its moment).
+- `outcome=ok pool>0`: slices ready at the same moment run concurrently, each in its own pool worktree. Follow [build-pool.md](../reference/build-pool.md) for provision, reset, land and teardown; each slice still runs the whole of Step 3, inside its worktree.
+- `outcome=error`: stop before dispatching anything and report `reason=`. `dependency-cycle`, `unknown-dependency` and `unreadable-plan` are `/plan` defects; `unmet-dependency-outside-only` means a targeted slice's parent is neither passed nor targeted, so ask for the parent to be included.
+- no `WORKTREE-POOL:v1` line: the call died before concluding, which is not a pass and is not reconstructed from git state; run every slice sequentially in the main tree (`modeReason: no-verdict-line`).
 
-A call that prints **no verdict line** died before concluding. That is never a pass and never an outcome to reconstruct from git state: stop using the pool, check `git status` in the main checkout (a land may have died mid-cherry-pick), report it, and finish the remaining slices sequentially in the main tree.
+Done when every slice to run has an order and a mode, `sequential` or `worktree`.
 
-1. **Size it.** `worktree-pool size .work/slices.yaml [--only <ids>] [--max-parallel N] [--pool-max N]`. Pass `--only` with the slice ids from `$ARGUMENTS` when this run is targeted, so the pool is sized for the slices that will actually run, not the whole plan. Pass `--pool-max` only with the brief's `worktreePoolMax` (a venue's disk cap — read it from `.work/lane.yaml`, never write it; a brief without the key means no cap), and `--max-parallel` only when this invocation was given one. The width is the largest set of those slices that can be ready at once. **`pool=0` means no pool** — width 1, or a cap below 2: run every slice sequentially in the main tree, provision nothing, and skip the rest of this step. **`outcome=error` → stop before dispatching anything** and report the `reason=`: `dependency-cycle`, `unknown-dependency` and `unreadable-plan` are `/plan` defects; `unmet-dependency-outside-only` means a targeted slice's parent is neither passed nor targeted — ask for the parent to be included rather than building the child on a branch without it.
-2. **Provision once, serially, before any slice runs.** Resolve the host repo's install and build commands (the brief's `preconditions`, else its CLAUDE.md and `.claude/rules/`; say which, and pass `''` for one the repo does not have). Run `worktree-pool provision <pool>` and require `outcome=provisioned`. Then dispatch the **`pool-provisioner`** agent for each listed worktree **one at a time**, and never while any gate of yours is running: concurrent cold builds contend for the same cores, and a gate under load fails falsely. `outcome=refused` (a path in the way that is not a worktree — never delete it; or `reason=reused-worktree-holds-work`, a previous run's worktree still holding an escalated slice's files or an unlanded commit — name its `path=` in the report as held work for a human, and never reset or remove it) or `outcome=failed` → no pool this run: `worktree-pool teardown` whatever it added, run the slices sequentially in the main tree, and report the reason. That costs speed, never correctness. **A `pool-provisioner` that reports `BLOCKED` takes that same exit** — it is a cheap agent whose contract is deliberately narrow, so `BLOCKED` means *"this is outside what I may decide"*, never *"this worktree is broken"*. Do not re-dispatch it, do not hand the worktree to the `provisioner` instead, and do not provision it yourself: drop the pool and run sequentially, naming what it reported.
-3. **Reset before every take, unconditionally.** Before a worktree takes a slice — its first included — run `worktree-pool reset <worktree> <task-branch> --install '<cmd>' --build '<cmd>'` and require `outcome=reset`. Its install and build run **whether or not anything changed**, and that is the point: a reused tree inherits stale `.tsbuildinfo` and stray compiled `.js` shadowing sources, and a warm tree must cost time, never correctness (`remote-ai-agents` D6). Never skip it because the lockfile did not move. `outcome=failed step=install|build` → retry that reset once (an install is the likeliest thing here to be environmental), then retire the worktree. `outcome=refused reason=unlanded|dirty` → the worktree holds work: retire it. A retired worktree's slice goes to another worktree, or to the main tree once none is left.
-   **A worktree whose slice did not land takes no further slice until teardown** — whether the slice escalated at the gate, exhausted its fix rounds, or conflicted at the land. Its reset would switch and `git clean -fd` the slice's work away, and a slice that escalated at the gate has **no commit** to protect it: a new-files-only slice is nothing but untracked files, which the reset's dirty check deliberately does not count. So it is retired, never reset, and teardown's refusal is what keeps that work on disk for a human.
-4. **Dispatch into the worktree.** Each ready slice runs its full Step 3 dual gate there — executor, test-runner, scope-check and verifier are all handed the worktree path as the project directory — and its Step 4 commit is made in that worktree. A dependent slice becomes ready only after its parent's commit **landed**: its reset takes the task-branch tip, so a parent still sitting in a worktree does not exist for it.
-5. **Land in dependency order, parents first.** For each green slice, `worktree-pool land <worktree> <sha> --base <reset tip>`, where `<reset tip>` is the `tip=` of that worktree's last reset verdict — only a sha strictly after it can be this slice's commit. Read by outcome:
-   - `outcome=landed` → Step 4's `passes: true` happens now, recording the verdict's `sha=` — the **landed** sha, never the worker's — in `.work/slices.yaml`. **`already=true` reads the same way**: the change was already on the branch (a resumed run re-landing after a crash between the land and the record), and `sha=` names the commit carrying it. Record it; do not re-run the slice.
-   - `outcome=conflict` → the task branch is untouched: ESCALATE that slice with the verdict's `paths=`, do not resolve it by hand, and do not dispatch its dependants. Its worktree keeps the commit and is retired (step 3).
-   - `outcome=refused reason=main-checkout-dirty` → your own main tree has tracked modifications, which is Step 4's contamination: stop landing and surface them — never commit or discard them to make a land go through. Untracked files in the main checkout do not refuse a land.
-   - `outcome=refused reason=sha-not-in-worktree` → the worker reported a sha its worktree does not hold. Read that worktree's `git log` yourself: if exactly one commit is in `<reset tip>..HEAD` of that worktree, land it; otherwise ESCALATE. Never land a sha from another worktree.
-   - `outcome=refused reason=sha-not-after-base` → the sha is the reset tip or older, so the worker made no commit for this slice: it is not built. Never set `passes: true`; read it as a gate failure: re-dispatch the executor into the same worktree within the fix-round budget (its uncommitted work stays where it is, as a main-tree fix round's would), and once the fix rounds are spent, ESCALATE and retire the worktree (step 3).
-   - `outcome=failed step=cherry-pick` → git refused before any conflict (an untracked main-tree file the commit would overwrite, or an empty pick with no equivalent on the branch). The branch is untouched: ESCALATE the slice with the output.
-   - `outcome=error` → a usage defect, or `reason=tip-moved-after-abort`: stop all landing and inspect the task branch before anything else.
-6. **Workers never write the record.** A worker reports facts in its result — its commit sha, gate verdicts, the deviations it flagged — and you alone write `.work/slices.yaml`, in the main tree, after the land. One writer, so a resumed run reads one file that cannot disagree with itself.
-7. **Tear down once every slice landed.** `worktree-pool teardown`; `outcome=removed` ends the pool. `outcome=refused reason=unlanded|dirty` names worktrees still holding work — a commit on no branch, or the uncommitted files of a slice that escalated at the gate. Leave them, name them in the Step 5 report, and never remove them by hand. `outcome=failed step=worktree-remove` → report the path; never retry with force.
+## Step 3 — Per slice: the dual gate, then the commit
 
-## Model routing — every dispatch names its model
+A slice's first pass runs in a fresh agent context; its fix rounds continue it (below).
 
-An agent that names no model inherits the session's, which is the most expensive one you have. **Name the model on every dispatch**, from this policy — the roles differ by more than an order of magnitude in what judgment they actually need:
+0. **Scaffold**, only when the slice has `designs:` and the host's `.esas.config.json` declares `designTooling.scaffold`. Run that command from the checkout root with the slice's ids as `--nodes`, dry-run first, then write; when `designTooling.scaffoldSkill` names a skill, follow it for reading the output. In a lane the scaffolder reads the `provisioner`'s `.work/design-snapshot/` through `--design`/`--graph`. When the step cannot run, skip it and say which reason: no `designs:`, no `designTooling.scaffold` declared, no design layer or snapshot, or a snapshot whose `manifest.yaml` `sourceSha` is not this tree's base. Exit 3 is a block, and a block is a design finding (a node with no home, a policy issuing into two modules, a handler that does not exist yet): surface it to the user, or reorder the slices when it is an ordering defect; the refusal is the only signal that a decision is missing, so hand-writing past it discards it. Pass the scaffold report to the executor verbatim, its fragments and `STILL OWED` items included. Generated files are stubs, in scope for the slice; the oracle still goes RED first.
 
-| Dispatch | Model | Why |
-|---|---|---|
-| `executor` | the slice's `model:` field; **`opus` when absent** | `/plan` marks the mechanical slices (scaffold from a framework skill, config, a test-only slice) `sonnet`. Anything it left unmarked — the tracer bullet, a seam, anything touching an invariant — stays `opus`. |
-| `test-runner` | `haiku` (its own frontmatter) | Runs a command, parses a summary line. No judgment. |
-| `scope-check` | `sonnet` (its own frontmatter) | `git status`, greps, a diff read. Mechanical by construction. |
-| `verifier` | `opus` — **never downgrade this one** | It is the only gate positioned to catch a confidently-wrong oracle, and cheapening it is the corner that ships defects. It is also ~11% of a run's cost, so there is nothing to win here. |
-| read-only sweeps (`Explore`, `general-purpose`) | `sonnet` | Grep-shaped, disjoint, and adjudicated by you afterwards. |
+1. **Implement.** Dispatch the `executor` on the model *Model routing* names, with: the slice (`behavior`, `oracle`, `scenarios` verbatim with every field of every one, `seam` with its entry from the plan's top-level `seams:`, `probe`, `gates`, intended files), the ticket and the project directory. Its gate is RED → GREEN: the oracle fails by assertion before the code exists, then passes; the executor reports the RED evidence, the `probe:` result and the runner's own summary lines. A slice whose deliverable is a test or a guard has no RED, and the executor reports a mutation table in its place ([EVIDENCE.md](../EVIDENCE.md) §2). A slice whose premise proves false is reported as false with file, line and commit; the gate the premise protected then ships without the body where it still holds (a test, a ratchet, a census), and the slice claims only the gates it met.
 
-**Every dispatch description names `slice <id>`** — executor, test-runner, scope-check and verifier alike, fix rounds included (e.g. `slice 3 executor fix round 1`). `run-metrics` attributes a dispatch to its slice by a regex over that description and nothing else (`d.match(/slice\s*(\d+)/i)` in `fixRoundLedger`, `scripts/run-metrics.mjs`); a description that does not name the slice is counted `unattributed`, and its tokens and passes belong to no slice. A continued agent (Step 3, *Fix rounds*) keeps the description it was dispatched with and each resume counts as one more pass, so **a continued agent never takes another slice**: its whole transcript stays attributed to the first — one verifier resumed across ten slices billed all ten to slice 1.
+2. **Mechanical gate.** Dispatch the `test-runner` on the slice's oracle; a fix round reads the executor's pasted summary instead. Pass is read from the runner's own summary line, as `full-gate` reads a verdict; a run with no `Tests:` line is inconclusive. Each of these is a fail, and the re-dispatch fixes the oracle, not the code:
+   - non-runnable: the oracle does not compile or collect;
+   - unasserted scenario: a `then:` from `scenarios:` is nowhere in the test; a `kind: structural` scenario stays unasserted until its negative half is asserted;
+   - oracle below the seam: the test lives somewhere other than the slice's `seam:`; a seam that genuinely cannot observe the claim is escalated to the plan, not quietly lowered;
+   - probe not red: the `probe:` mutation left the oracle green, was not run, or was reported without the line, the assertion that fired and the values;
+   - undiscriminating: the RED was a hang, timeout, crash, import or compile error, empty collection or skipped suite;
+   - recomputed expectation: the expected value is derived the way the implementation derives it instead of read from `expected_from:`/`expected_source:`;
+   - always-green: no credible RED before implementing;
+   - red after implementing.
 
-Effort is **not** settable per dispatch — it is inherited from the session (`/effort`), so it is a decision you make once before running, not per agent. `/build` is the mechanical phase and does not need the session's design-grade effort; `xhigh` here buys little and is where the token bill concentrates.
+3. **Judgment gate.** Dispatch `scope-check` and the `verifier` concurrently, in one message. Feed the executor's flagged deviations into the verifier's prompt verbatim, as a named section to adjudicate item by item; feed `scope-check`'s report in when it lands first, otherwise adjudicate it yourself against the verdict. A `CONTAMINATED` scope guard blocks the commit whatever the verifier returned. When the slice changes a wire contract (an exported signature, an event or trigger name, a deleted symbol, route or field), have the executor grep callers across the whole repo, suites outside the default run included, and report each affected suite as run or un-run; the verifier checks that list. A slice that adds an artifact kind (a plugin, a hook, a script directory) is resolved to the runner that collects it, and wires the runner in the same slice when none does; a slice that adds or removes a file a census or ratchet guard counts moves that census in the same commit.
 
-## Step 3 — Per slice: the dual gate
+4. **Resolve.**
+   - Test green and verifier `PASS`: commit (item 5).
+   - `RETRY` or test red: a fix round, at most 2, then `ESCALATE`. Classify every fix round in one line before dispatching it, from the closed set `oracle-wrong` (the test encoded the wrong rule) · `design-silent` (the executor had to guess a seam the design left open) · `ripple` (something outside the slice's surface broke) · `invariant` (a repo rule was not followed) · `mis-routed` (too cheap a model) · `flake` (timing or load: green idle, untouched by the diff). Carry the tally into the record and the verdict; a cause that keeps recurring is owed a disposition through `/capture-learnings`.
+   - Not the slice's defect: an environment gap (an unbuilt sibling package, a missing credential, a sandbox refusal) is the verifier's `environment-gap: <cause>`; the slice may `PASS` on the evidence that ran, the gap recorded as `kind: shipped-finding`, and never when the gap is the slice's own oracle. A failure red on the base too (the `full-gate` baseline diff) is out of scope for the slice.
+   - `ESCALATE`: stop this slice and surface it to the user; committed slices stay committed.
 
-For each slice, in order — its first pass in a **fresh agent context**, its fix rounds under *Fix rounds* below:
+   **Fix rounds** hand the findings back instead of re-paying the gate. Snapshot the reviewed tree before the verifier's first dispatch and before each re-check, untracked files included, without touching the index:
+   ```
+   i="${TMPDIR:-/tmp}/slice-<id>.idx"; GIT_INDEX_FILE="$i" git read-tree HEAD && GIT_INDEX_FILE="$i" git add -A && GIT_INDEX_FILE="$i" git write-tree
+   ```
+   `git diff <previous> <new>` is the round's diff.
+   - Executor: `SendMessage` the findings to the one that built the slice when you are the top-level session and the model does not change; otherwise dispatch a fresh one with the slice, the findings verbatim, the round's diff and its own previous report. Record `continued` or `fresh`.
+   - Test gate: the executor's pasted summary; re-dispatch the `test-runner` only when the round edited the oracle or the report carries no `Tests:` line.
+   - `scope-check`: only when `git diff --name-only <previous> <new>` names a file outside the slice's intended files, or any test file.
+   - Verifier: [re-check mode](../agents/verifier.md), continued under the executor's conditions, else fresh; either way with its previous findings, the round's diff and the executor's per-finding response. It stays `opus`.
 
-0. **Scaffold what the design already fixed** — *only when the slice has a `designs:` list, a
-   readable design layer is reachable (this checkout's own `.esas/`, or — in a fleet lane — the
-   snapshot below), and the host repo declares a design scaffolder*: `designTooling.scaffold` in
-   its `.esas.config.json`. Run that command from the checkout root with the slice's ids as
-   `--nodes`. When `designTooling.scaffoldSkill` names a skill, follow it for reading the output.
-   **No declaration ⇒ skip the step and say so.** Do not go looking for a framework's tool by
-   name: the declaration is how this flow stays framework-agnostic.
-
-   **In a fleet lane, read the snapshot instead.** A worktree has no `.esas/` — that layer is
-   scoped to one unit of work while a run spans N, and a lane must never write it — so the
-   `provisioner` copies `design.json` + `graph.json` into `.work/design-snapshot/` and the
-   scaffolder is pointed at them (`--design` / `--graph`). Emitted paths still resolve against the
-   worktree. **Never create a `.esas/` in a worktree to enable this.**
-
-   **In a pool worktree, read the main checkout's design layer, never a copy.** The worktree was
-   reset from the task branch the main checkout has checked out, so its `.esas/design.json` and
-   `.esas/graph.json` are this slice's design layer: run the scaffolder from the worktree with
-   `--design` / `--graph` pointed at those two files, so emitted paths resolve against the worktree,
-   and never create a `.esas/` there. Trust it only while the worktree's reset tip is still the main
-   checkout's `HEAD`; once a sibling has landed since, skip the step and say *snapshot sha ≠ this
-   worktree's base*.
-
-   **Re-check the snapshot's sha before trusting it.** `manifest.yaml` records the sha its
-   `graph.json` was extracted from; if that is not this worktree's base commit, the graph is wrong
-   about what exists — it will call artifacts already real that this tree does not have, or anchor
-   a fragment in a file that is not here, and neither shows up in the output. On a mismatch, skip
-   the step and say so. The provisioner checks this at cut time; you check it again because a lane
-   can outlive the tree it was cut from.
-
-   **When the step cannot run, skip it and say which reason** — in the slice's summary, not
-   silently. Most repos have no design layer and that is not a gap in them, but the absences mean
-   different things and a silent skip makes them indistinguishable:
-   - *no `designs:`* — this slice delivers nothing designed, **or** the plan predates the field;
-   - *no design layer and no snapshot* — the run had none to carry, or the provisioner refused to
-     carry a stale one. The slice's artifacts are hand-written through the `create-*` skills; that
-     is a correct outcome, not a setup failure to repair;
-   - *snapshot sha ≠ this worktree's base* — a lying snapshot; hand-write, and report it, because
-     it means the fleet was cut from a moving tree;
-   - *no scaffolder* — the repo's framework has none.
-
-   Run it **scoped to this slice's `designs:` ids**, never un-scoped: an un-scoped run writes the
-   whole design's stubs into whichever slice happens to run first, which buries the tracer bullet
-   in unreachable code and defeats the point of slicing. Dry-run first, then write.
-
-   **You** run it, not the executor, for two reasons. A blocked item is a *design* question — a
-   new subdomain with no home, a policy issuing into two modules, a command whose handler does not
-   exist yet — and those are surfaced to the user or taken to the board, which an executor in a
-   fresh context is not positioned to do. And the scaffold report is context the executor needs:
-   pass it in verbatim, including the fragments it must place and the `STILL OWED` items, so it
-   starts from what exists rather than rediscovering it.
-
-   **A block is not a reason to hand-write the artifact.** The refusal *is* the finding — a
-   scaffolder that declines to guess a location has told you something the graph could not answer.
-   Overriding it by hand discards the only signal that a decision is missing. If the block is that
-   a handler does not exist yet, that is a slice-ordering defect: say so, and either reorder or
-   ESCALATE.
-
-   Generated files are **not** the slice's deliverable. They compile to stubs; the oracle still
-   has to go RED first (step 1). A slice that is green immediately after scaffolding has an oracle
-   asserting the stub.
-
-1. **Implement** — dispatch the `executor` agent **on the model this slice routes to** (above) with: the slice (`behavior`, `oracle`, **`scenarios`**, **`seam`**, **`probe`** — and that seam's entry from the plan's top-level `seams:`, so the executor is told *where* it tests and not only that it must — `gates`, intended files), the ticket, and the host project directory. **Pass `scenarios` verbatim — every field of every one.** It is the slice's oracle in the one form that cannot be quietly re-read, and paraphrasing it here re-opens the exact gap it closes: `oracle-wrong` is 41% of all classified fix rounds, and each one costs a fresh executor context. The executor reads the repo's own rules/skills. Instruct it to work **RED → GREEN**: write the oracle test first, **run it and confirm it FAILS** for the right reason (the behavior is genuinely absent — not a typo, missing import, or compile error), *then* implement the minimal code to make it pass. It must report the RED evidence (the failure it saw before implementing), and paste the oracle's own summary lines from its last run — a fix round's test gate is read from them.
-
-   **If the slice's deliverable is a test or a guard** (no new production behavior, so no natural RED is available): **mutation-test it instead**, to [EVIDENCE.md](../EVIDENCE.md) §2's rules — one mutation per clause, each naming the assertion that caught it; controls and a pinned traversal for an absence guard. Report the mutation table where RED evidence would go. This is not optional rigor: RED→GREEN is the anti-tautology gate, and for this slice type it is **structurally unavailable** — which is exactly the type whose entire value is "does this assertion actually bite?"
-
-   Cheaper version, worth running on *any* new case: **apply the smallest mutation the case claims to catch and watch the suite stay green.** If it does, the fixture abbreviated away the thing under test.
-
-   **When the slice's gate is "behaviour is unchanged" / "the dispatched set is identical", a green pin or golden is a FLOOR, not equivalence.** Name what the corpus does *not* contain before trusting it (a one-case happy-path pin against a fallback-chain rewrite is a floor of zero), and require an **old-vs-new differential harness** — both implementations, one corpus, diffed outputs — whose corpus is **derived from the change**: enumerate the disagreement set of every predicate the rewrite alters (`||` → `??`, falsy → nullish, presence → truthiness) across *every* field, and vary the axes the migration changed the mechanism on. Pins stayed green through four live divergences in one fleet, two of which would have shipped a garbage ERP element and an infinite retry.
-
-   **A slice whose premise proves false is not a no-op lane.** Report the premise as false with file, line and commit — never adapt the slice until it fits, which is how a plausible-but-wrong rewrite ships. Then ask what remains true: the slice's **gate** usually survives its body's falsification and is often *more* valuable once the body is deferred (it is what makes the deferred change safe later). Ship the gate without the body, or a **ratchet** — a test, an exported predicate, a census — that stops the thing the slice worried about from recurring; and say in the PR body which gates are met, which are not, and which were already true before the diff. Never let a partial slice claim its unmet gates.
-
-   **When the accept criterion is a measured delta over a fixed corpus** (a pinned repo, a golden file, a benchmark set), the slice must state *which shapes relevant to this change the corpus does not contain* before the delta is read as a pass. Any shape named there is covered by a fixture, or the delta is recorded as **silent about it**. A zero delta over a corpus lacking the shape reads as the strongest possible evidence and is, in the limit, none — and it is most dangerous precisely where it is most attractive, on a change whose risk register names a forbidden direction.
-
-2. **Mechanical gate** — dispatch the `test-runner` agent to run the slice's **oracle test** (a fix round reads the executor's pasted summary instead, under *Fix rounds*). It must pass — where "pass" is read from jest's own summary line, **never from a piped command's exit code** (`… | tail` reports `tail`'s status, not jest's, so a red run surfaces as exit 0). A run with no parsed `Tests:` summary is **inconclusive** — treat it as non-runnable, not a pass. Three ways this gate fails, all surfaced not swallowed:
-   - **non-runnable** oracle (won't compile/collect) is not a pass;
-   - **unasserted scenario** — the oracle passes, but a `then:` from the slice's `scenarios` is nowhere in the test. This is the failure the mechanical gate is *otherwise blind to*, and the one that dominates: the suite is green, the code matches the test, and the test asserts something other than what was decided. Read each scenario against the test the executor wrote and treat an unasserted one as a fail, re-dispatching to fix the **oracle**, not the code. A `kind: structural` scenario is unasserted unless its **negative** half is asserted too;
-   - **oracle below the seam** — the test is green and asserts the right `then:`, but it lives somewhere other than the slice's `seam:`. The plan named the unit's seams once, and an assertion that drops a layer to be easier to write is green about a behaviour nothing composes: it is how a composition root's two wiring lines were both deleted with `tsc` clean and 738 tests green. Treat as a fail and re-dispatch to move the oracle, or — if the seam genuinely cannot observe it — escalate the seam choice to the plan, never quietly accept the lower one;
-   - **probe not red** — the slice's `probe:` was applied and the oracle stayed green, or the executor did not run it. The oracle is green about a path it does not reach; re-dispatch to move the assertion to where the probe bites, and never to soften the probe. A probe reported as run but not described (which line, which assertion fired, what values) has not been run;
-   - **undiscriminating** oracle — the RED was a hang, timeout, crash before the assertion, import or compile error, an empty collection the assertion never ran over, or a skipped suite. It is indistinguishable from a broken harness, so it is no evidence that the test can tell right from wrong; re-dispatch for a RED that prints expected vs actual;
-   - **recomputed expectation** — the assertion derives its expected value the way the implementation does, rather than from the scenario's `expected_from:`/`expected_source:`. It passes by construction and can never disagree with the code;
-   - **always-green** oracle — the executor reported no credible RED before implementing (or claims it was red but the failure reads as a missing import / wrong path rather than absent behavior). A test that never failed proves nothing; treat as a fail and re-dispatch the executor to fix the oracle, not the code;
-   - **red after implementing** — the obvious fail.
-
-3. **Judgment gate** — dispatch the `scope-check` agent and the `verifier` agent **concurrently**, in one message. `scope-check` (sonnet) runs the mechanical half — scope guard, escape-hatch grep, test-deletion diff — and returns a findings list. The `verifier` (opus) reads `${CLAUDE_PROJECT_DIR}/.claude/rules`, checks the slice's `gates` + the repo's invariants, does the falsification pass, and returns PASS / RETRY / ESCALATE. On a fix round both run narrower, under *Fix rounds*.
-
-   **Feed `scope-check`'s report into the verifier's prompt when it lands first; otherwise adjudicate it yourself against the verdict.** The split exists because those checks are grep-shaped and need no judgment — but a `scope-check` finding the verifier never saw is not resolved by having been produced. A CONTAMINATED scope guard blocks the commit on its own, whatever the verifier returned.
-
-   **Route the executor's self-flagged deviations verbatim into the verifier's prompt**, as a named section: *"the executor flagged these as judgment calls it was unsure about — adjudicate each explicitly."* Require a per-item verdict; a flagged item the verifier does not mention is an incomplete verification, not an implicit pass. The rationale is worth stating because it is not obvious: **a green oracle is evidence that the code matches the test, never that the test matches the design.** RED→GREEN rules out a *vacuous* test; it does not rule out a *wrong* one, and a wrong-but-discriminating test is the most expensive artifact a slice can produce — it entrenches the defect behind a `describe` block the next reader treats as settled. The executor has already done the hard part by noticing; the signal is free, and is otherwise discarded at this exact step boundary.
-
-   Where the design was **silent** on a seam the executor had to fill, that is a deviation too — the adjacent stated rule is what gets reused there, and adjacent seams frequently want opposite answers.
-
-   **Resolve the slice's artifact to the runner that collects it — the prior question to "does the oracle pass?" is "does anything see the subject?"** Two ways the answer is no, and neither goes red:
-
-   - **Nothing collects it.** When a slice adds a new artifact *kind* — a new plugin, a new hook, a new script directory — check the runner's actual glob or hardcoded path list, not "there is a test suite for this kind of thing". If nothing collects it the slice is **not done**: ship the oracle and wire it into CI in the same PR. From inside a slice a green gate table looks exactly like coverage ([EVIDENCE.md](../EVIDENCE.md) §1, *it never ran*) — one new plugin with two hooks passed all nine of a repo's gates without a single line of it executing.
-   - **Something counts it and is blind to the slice.** Composition roots, operations, grants, deployment units, registry nodes — the tests that pin those counts glob the tree and import nothing, so the slice's own tests and any related-tests sweep are blind to them by construction, and a slice lands **red at HEAD** for the next slice (or a sibling lane) to discover. The ratchet moves **in the same commit** as the counted surface.
-
-   **Out-of-oracle ripple check (mandatory when the slice changes a wire contract).** The per-slice oracle only covers the slice's own path — it structurally cannot see a suite that lives outside the default test run. When a slice changes an **exported artifact's signature**, an **event/trigger name**, or **deletes a symbol / route / field**, the executor (and verifier) must `grep` callers across the **whole repo including `*.integration.test.ts`, `*.e2e.*`, and fixture files that are excluded from the default `yarn test` run** (they need `jest.integration.config.js` / testcontainers, so they never go red locally). Then either **run the affected suites** via the integration config, or **explicitly flag them as un-run** in the slice summary — never imply "green" for suites the gate structurally cannot see. (Real miss: TV1-1969 changed a dispatcher's trigger event; three pre-existing integration suites still encoded the old topology and were red at HEAD, but none were in `yarn test`, so the dual gate never saw them.)
-
-   **To undo an edit you made for a probe, keep a copy first — `cp <file> "$TMPDIR/keep"`, then `cp` it back. Never `git checkout`/`restore` a path.** The slice is **uncommitted for this entire window** — executor, test, scope-check, verifier and every fix round — so `git checkout <path>` does not undo your one-line mutation; it makes the file identical to HEAD, and an uncommitted slice is precisely that difference. The prohibition in Step 4 is read *after* the gates; the temptation occurs *here*, mid-gate, cleaning up a probe, where the command reads as scoped and surgical. It has fired: a suite went 77 → 68 and was recovered only from a verifier's scratch rsync copy, by luck. Concurrent sessions in one checkout are the sibling case — before acting, check whose tree this is (`git status`, `git branch --show-current`), because another session cutting branches across it destroys untracked work with no warning of any kind.
-
-4. **Resolve:**
-   - **test green AND verifier PASS** → **commit the slice** (Step 4).
-   - **RETRY or test fail** → a **fix round**: the findings go back to be fixed, under *Fix rounds* below. **Max 2**, then ESCALATE. Move the executor to `opus` if the first pass ran on `sonnet` — a fix round is the evidence that slice was mis-routed.
-   - **Every fix round is classified, in one line, before it is dispatched.** A fix round is the single most expensive event in this loop, so the rate is worth driving down, and it cannot be driven down without knowing which of these it was: `oracle-wrong` (the test encoded the wrong rule) · `design-silent` (the slice under-specified a seam the executor had to guess) · `ripple` (something outside the slice's surface broke) · `invariant` (the repo rule was not followed) · `mis-routed` (too cheap a model) · `flake` (timing or load — green idle, untouched by the diff) · `environment` (a test that cannot collect or run for a reason outside the slice). Carry the tally into the Step 5 summary and the PR body. **Fix-round *rate* is already measured** — `/run-report` prints first-pass green per `/build` invocation — but the rate alone names no fix; the classification is what turns 43%-not-green into a change to `/plan` or to a slice's `gates`. **And a cause that keeps recurring is owed a disposition, not another mention in a retro:** classify it — mechanical (a fixed syntactic pattern, a banned API, an import shape, a file-location rule) gets a **deterministic check, full stop**; only a genuine judgement call gets prose, and then it goes where the *verifier* reads, never into the executor's brief, because the executor is under the most context pressure at exactly the moment it would have to remember. `/capture-learnings` step 1b owns this; a host repo that keeps a disposition ledger (this plugin's own repo keeps `docs/causes.md`, gated by `scripts/check-repeat-causes.py`) makes it red-until-done rather than remembered.
-   - **Not the slice's defect → name it, never fix it, never ESCALATE on it.** Two shapes. An **environment gap** — a test that cannot collect or run because of an unbuilt sibling package, a missing credential, a sandbox refusal to touch shared state: the verifier reports it as `environment-gap` with its exact cause, and the slice may PASS on the evidence that did run, the gap written to `decisions.md` (`kind: shipped-finding`) and `build-summary.md`. Never for the slice's own oracle — an oracle that cannot run is a red mechanical gate. A **pre-existing failure** — red on the base too, by the `full-gate` skill's baseline diff: out of scope for the slice and for `/verify-build`, because the unit delivers its ticket, not unrelated repairs. ESCALATE is for the slice's own work.
-   - **ESCALATE** → stop this slice and surface it to the user (do not silently proceed). Independent already-committed slices stay committed. **In a pool, read "committed" as *landed*:** a slice committed in its worktree but not landed is on no branch, and an escalated slice's worktree takes no further slice until teardown (Step 2).
-
-   **Fix rounds — hand the findings back; don't re-pay the gate.** On TV2-21 all 10 fix rounds came from verifier findings and none from a red test, yet each re-paid a fresh executor, a test re-run, a scope-check and an opus verifier re-reading every rule — 9 h 30 m for 6 of 8 slices. Before the verifier's first dispatch, snapshot the tree it reviews (in the slice's worktree, in a pool) — untracked files included, without touching the index or the stash stack — and again before each re-check; `git diff <previous> <new>` is the round's diff:
-
-       i="${TMPDIR:-/tmp}/slice-<id>.idx"; GIT_INDEX_FILE="$i" git read-tree HEAD && GIT_INDEX_FILE="$i" git add -A && GIT_INDEX_FILE="$i" git write-tree
-
-   - **Executor — continue it.** `SendMessage` the findings to the executor that built the slice when you are the top-level session (a subagent's resumes notify the top-level session, never it — `unit-lane`, *Dispatching your own children*), the model does not change, and the agent resumes. Otherwise dispatch a fresh one with a **fix-round brief**: the slice, the findings verbatim, the round's diff and its own previous report. Record `continued` or `fresh` for the round.
-   - **Test gate — read the executor's pasted summary**, by step 2's rules. Dispatch the `test-runner` again only when the round edited the oracle, or the report carries no `Tests:` line.
-   - **Scope-check — only when `git diff --name-only <previous> <new>` names a file outside the slice's intended files, or any test file.**
-   - **Verifier — re-check mode.** Continue it under the executor's conditions, else dispatch it fresh; either way pass its previous findings, the round's diff and the executor's per-finding response, and ask for [re-check mode](../agents/verifier.md). It stays `opus`, and it widens to a full pass on its own triggers.
-
-## Step 4 — Commit the slice
-
-When a slice passes both gates:
-
-1. **Scope check** — `git status --short`; the changed/deleted tracked files must match the slice's intended outputs (+ expected generated artifacts, including anything step 0's scaffold wrote — those are in scope for this slice by construction, and a scaffolded file left *unfilled* is the finding, not a scope violation). Any out-of-scope change → stop and surface it (do **not** commit through contamination). Never use `git stash`/`reset --hard`/`checkout --`/`restore`/`clean` to "clean up" — the stash stack is repo-global.
-2. **Commit** only the slice's files. Compose the message following the **host repo's commit convention** — use its `/commit` command's format if it has one (typically `type(scope): summary` in the imperative, plus the ticket reference and any required trailer/sign-off). Identify the slice so the per-slice history stays legible, e.g.:
+5. **Commit.** `git status --short`: the changed and deleted tracked files match the slice's intended outputs plus expected generated artifacts (a scaffolded file left unfilled is a finding, not contamination); anything else stops the commit and is surfaced. Commit only the slice's files, in the host repo's convention, with the slice line in the body:
    ```
    feat(<scope>): <slice behavior, imperative, lowercase>
 
    Slice <id> of <work_item> — <slice name>. Oracle: <the test>.
    <ticket line + trailer per the repo's convention>
    ```
-   One slice = **one commit** — do not re-group across slices the way a bulk `/commit` would.
-3. **Set `passes: true` for that slice in `.work/slices.yaml`, in the same turn as the commit** — and, when running under a fleet, append the commit sha to the unit's state file in the same breath. **The flag is the resume point.** A resumed agent decides what to redo from it, so a committed slice left `passes: false` gets **re-executed** — including the subtle reversals that cost the most to get right the first time. This is not bookkeeping and it is not hypothetical: a transport error has killed four lanes in the same second, and one lane sat on six committed slices with a state file reading `slicesDone: 1`.
+   One slice, one commit. In the same turn set `passes: true` in `.work/slices.yaml` (a fleet lane also appends the sha to its state file) and re-read the file; the flag is the resume point. A `passes: true` on a slice whose oracle is excluded from the default run records the run that skipped it; that slice is certified by re-running the invocation its `oracle:` names, not by the flag. Then `git push`, every slice as it lands; a failed push is one line of prose and the slice stays green. The last commit of the whole step stays unpushed until the verdict is recorded (normally `build-summary.md`'s, so do not push before it): `lane-step-record` writes the verdict into it and pushes, and when the brief carries no `verdictOnBranch` you push it yourself after the line. Then append the slice's decisions ([build-record.md](../reference/build-record.md)) and commit them separately, in the same turn.
 
-   **In a pool, this happens at the land, with the landed sha** — never at the worker's commit, which is on no branch yet: set `passes: true` when `worktree-pool land` reads `outcome=landed` (Step 2), and append the verdict's `sha=`, not the worker's, to a fleet's state file.
+   **Yield.** Count the slices you committed in this invocation. When it reaches `sliceBudget` (the brief's value; no key means 3; `0` means no budget) or your own turn count passes ~100, whichever first, while slices remain: stop at this boundary, write the record (Step 4) and report `outcome=success` with the real counts. Yield between slices only, on committed slices only: a slice mid fix round is finished or escalated first, and a red slice is `gate-red`, a verdict rather than a budget stop. The caller dispatches `/build` again on a fresh context and it resumes from `passes: true`.
 
-   Then **re-read the file.** Do not infer the edit's effect from the edit's own success output — a fix-up regex that matched nothing on an indentation mismatch still printed success.
+Done when the slice is committed with its flag set, or escalated, or its fix-round cap is spent.
 
-   **Then push the branch.** `git push` right after the flag is set — every slice, not once at the end. Until `/verify-build` step 6 the branch exists in **one local worktree and nowhere else**, so a lane stopped for cost, killed by a rate limit, or running in a worktree that gets reclaimed loses every green slice it already paid for. A slice costs minutes to earn and a push costs seconds, and the fleet's teardown guard (`/start-multi` step 7, *only a worktree whose branch is pushed*) is only protective because the branch **is** pushed by then.
+## Step 4 — Write the record
 
-   Three things about it. **A failed push is one line in your prose and never a red slice** — no remote, no credentials and a rejected non-fast-forward are all conditions about the venue, not about the work, and a slice that passed both gates passed them. **In a pool, push after the land**, with the landed sha, for the same reason step 3 sets the flag there. And **the last commit of the whole step stays unpushed until the verdict is recorded**, because `lane-step-record` amends the verdict into exactly that commit and pushes it (*Report the outcome*) — so push each slice as it lands, and let `build-summary.md`'s be the one still unpushed when you get there. When the brief carries no `verdictOnBranch`, `lane-step-record` does nothing and pushes nothing: **push that last commit yourself, after it**, or the step ends with its own summary stranded locally — which is the failure this whole rule exists to prevent, arriving on the one commit that documents the run.
+Follow [build-record.md](../reference/build-record.md): `decisions.md` entries were appended as Step 3 went; `build-summary.md` is written and committed now, green or partial, unless the run stopped before any slice ran.
 
-4. **Yield at a slice boundary once you have spent your budget.** Count the slices **you** committed in *this* invocation. When that count reaches `sliceBudget` (`.work/lane.yaml`, default 3; a brief without the key means 3, and `0` means no budget) and slices remain, **stop here**: write `build-summary.md` for what you did, and report `outcome=success` with your real counts (*Report the outcome*). Do not start the next slice.
+Done when `build-summary.md` carries an entry for every slice in `.work/slices.yaml` and is committed.
 
-   **This is not a failure and you have not been interrupted.** Your caller dispatches `/build` again on an empty context, and it resumes from `passes: true` — the resume point step 3 just set. The measurement it exists for: a lane that drove nine slices in one context cost **66.72M weighted tokens, 89% of it cache read**, while the same work restarted on a fresh context at a slice boundary cost **3.26M against 35M**. Every slice you add to this context is re-read by every turn that follows it, so the slice *after* your budget is the most expensive one you could run, not the cheapest.
+## Step 5 — Verdict
 
-   Two things not to get wrong. **Yield only between slices, never inside one** — a slice mid-fix-round is not a resume point, so finish or escalate it first. And **yield on committed slices, not attempted ones**: a slice that went red is `gate-red`, which is a verdict, not a budget stop.
+Report: slices completed with the commit per slice, the model each ran on, the fix-round tally by cause and how many rounds were continued, the design elements the scaffolder blocked on (open design questions that outlive the run), escalated items, and every suite the ripple check named as un-run. Verify each file the carry-forward note names against `HEAD` before writing it; `/verify-build`'s ripple sweep builds on it.
 
-   **`sliceBudget` counts slices; the bill is context — so honour whichever binds first.** A slice is a poor proxy for what a slice costs: one that lands first-pass and one that takes five fix rounds both count as `1`, and they differ by an order of magnitude. The gap this leaves is not hypothetical and not rare — it is the ordinary case for a **short unit**, where the budget is unreachable by construction: a measured 2-slice lane carrying `sliceBudget: 3` could never yield, and ran its context to **410k tokens and 167.9M cache reads** without once crossing a rule. Three is not too high there; it is simply never met.
-
-   So carry a **context bound** beside the slice count, and yield at a slice boundary on **either**. At roughly **150k tokens of context, stop at the next boundary** even with budget left — that is where re-read cost starts dominating everything else you do, and measured fleet spend concentrates there: lanes that stayed under it cost **$0.67 each**, lanes that crossed it cost **$43**. You cannot read your own context size directly, so treat these as the observable that stands in for it, and trust the first one that trips: your own turn count past **~100**, a slice that has taken **three or more fix rounds**, or any point where re-reading your history feels like most of what a turn does. **Yield early on suspicion, not late on proof** — a fresh context costs one dispatch, while a wrong guess in the other direction is paid on every remaining turn of the run.
-4. **Append the slice's decisions to `decisions.md` and commit them, in the same turn** — see *The committed record*. A slice with none appends nothing and makes no record commit.
-
-One slice commit per slice (the record's `docs(record)` commits are separate). Git is the record — per-slice commits are **crash insurance**, not tidiness, and batching three slices before committing turns any transport blip into total-progress loss. Of the signals a resumed run reads, the commits are the only one that cannot go stale, because writing them *is* the work.
-
-## The committed record — `decisions.md` and `build-summary.md`
-
-`/build` leaves two committed files in the folder Step 1 resolved with `work-docs-path --item <work_item>`: `<path>/decisions.md`, the post-design decisions, and `<path>/build-summary.md`, the run's telemetry. `.work/slices.yaml` stays working state — the plan and its `passes` flags, gitignored and never committed.
-
-**The orchestrator is the single writer of `decisions.md` and `build-summary.md`** — Step 2's *Workers never write the record* rule, extended from `slices.yaml` to both files. Executors, verifiers and pool workers never write `decisions.md` or `build-summary.md`: they **report** each decision and fact in their result, and you write it in the main tree. In a pool this is not style — every worker appending to one file would make every cherry-pick conflict.
-
-**`decisions.md` — every decision made after the design.** A deviation from the design, a seam the design was silent on that someone had to fill, a premise that proved false, a finding knowingly shipped, a verifier or gate finding overruled, a waiver: each is one entry. Take them from the executor's flagged deviations, the verifier's per-item verdicts and carried findings, your own fix-round classifications (`design-silent` names a filled seam) and every human decision on an ESCALATE. The header is fixed, so entries can be counted by `kind` across work items:
-
-```markdown
-## D1 — <one-line decision>
-kind: silent-seam        # false-premise | silent-seam | deviation | shipped-finding | overruled | waiver
-step: build · slice: 2 · decidedBy: executor    # executor | verifier | orchestrator | lane | human
-sources: [code:<symbol> (<file>), adr:ADR-NNN, design:<section>, xp:<atom-id>, human]
-rejected: <option> — <why not>
-supersedes: —            # set when this overturns an earlier entry
-<prose: why>
-```
-
-- **`sources` records what was consulted** to decide — code, ADRs, design sections, experience atoms, a human. There is **no confidence field**, and none is to be added: a self-rated confidence is uncalibrated and not comparable across models. How good a decision was is measured by outcome — a later entry that `supersedes` it.
-- `slice:` is the slice id, or `—` for a decision about the plan as a whole. `rejected:` names the options not taken, or `—` when there were none. `supersedes:` is `—`, or the earlier id(s) this entry overturns (`D3` or `D3, D5`). The log is **append-only**: an overturned entry is never edited or deleted.
-- **You allocate the ids**: the next id is one more than the highest in the file, read from the file at the moment you append — so a resumed run continues the sequence instead of restarting it.
-- **When**: append a slice's entries right after its Step 4 commit — in a pool, right after its land — and commit `decisions.md` on its own (`docs(record): …`, not folded into the slice's commit), in the same turn. An ESCALATE's human decision is appended when the human decides. The record commit comes before the next land, because a tracked modification in the main checkout refuses a land (`reason=main-checkout-dirty`).
-
-**`build-summary.md`** — written when `/build` ends, green **or partial**. Before Step 6's line, on every outcome — `success`, `gate-red`, and a `blocked-on` that comes after any slice ran — write its frontmatter and a short prose section, and commit it. The frontmatter keys are spelled `work_item:`, not `workItem:`, as `.work/mode.yaml` and the design's ownership header spell them:
-
-```markdown
----
-work_item: <work_item, as .work/mode.yaml records it>
-plugin: bett3r-ai-workflow@<version>+<sha>
-base: <sha the task branch was cut from>
-slices:
-  - id: 1
-    name: <slice name>
-    origin: plan                     # plan | verify-build (fix slice)
-    mode: sequential                 # sequential | worktree | null
-    modeReason: pool=0               # sequential only — the Step 2 branch: pool=0 | provision-refused | provision-failed | no-verdict-line | ready-alone | worktrees-retired; null otherwise
-    commit: <landed sha>             # null when it did not land, or when its landed sha cannot be proven
-    passed: true
-    attempts: 1                      # executor passes; 0 = never started; 1 = first-pass green; null = passed in an earlier session with no record of it
-    fixRounds: []                    # one per fix round: { cause: <Step 3 class>, executor: continued | fresh }; null = passed in an earlier session with no record of it
-    verifier: pass                   # the final verdict: pass | retry | escalate; null = no verifier ran
-    redBeforeGreen: true             # true | mutation | null
-    postDesignDecisions: [D1]        # ids into decisions.md; [] = explicitly none
----
-## What shipped
-<short prose: outcome, measured root causes, what a future agent should know>
-```
-
-- **Zero decisions for a slice is written `postDesignDecisions: []`**, never an absent key — a missing key cannot be told apart from a slice nobody recorded.
-- **Every slice in `.work/slices.yaml` gets an entry**, in plan order: a slice missing from the list reads the same as a slice that was never planned. A slice no run has started is `mode: null`, `modeReason: null`, `commit: null`, `passed: false`, `attempts: 0`, `fixRounds: []`, `verifier: null`, `redBeforeGreen: null`, and `postDesignDecisions:` the ids `decisions.md` records for that slice — usually `[]` (a plan-step entry can carry a slice id).
-- **In every entry, `id` and `name` come from `.work/slices.yaml` and are never `null`; `origin` is the slice's own `origin:` field in `.work/slices.yaml`, else `plan`** — a slice is in that file because `/plan` or a fix step put it there, so its origin is never unknown.
-- **Read the existing `build-summary.md` before writing.** A slice this run did not run keeps its existing entry from `build-summary.md` verbatim only when that entry's `passed` matches the slice's `passes:` flag in `.work/slices.yaml`. An entry that disagrees with the flag is stale — a later session landed the slice and died before Step 6, or a human landed it after an ESCALATE — and is rewritten from the flag: a `passes: true` slice as below, a `passes: false` one keeps its entry with `passed: false` and `commit: null`. Only a slice this run ran gets a new entry from this run's own dispatches. An entry written before the rename carries `retries:` where `fixRounds:` now stands — read it as `fixRounds:` and write it back under the new key. A slice an earlier session passed, with no prior entry or a stale one, gets `commit:`, `passed: true` and `postDesignDecisions:` from `decisions.md`, besides `id`, `name` and `origin`; `mode`, `modeReason`, `attempts`, `fixRounds`, `verifier` and `redBeforeGreen` are `null` — never a guessed value.
-- **Finding that slice's `commit:`.** Take the landed sha `.work/slices.yaml` records for it (Step 2, for a pool slice); else the one commit that `git log --format=%H -E --grep '^Slice <id> of <work_item> ' <base>..HEAD` finds (`<base>` is the frontmatter's `base:`) — Step 4's message line, anchored at the line start and ended by a space so `XL-2` never matches `XL-27`, ranged so no other work item's history is searched, and never carried by a `docs(record)` commit. If neither yields exactly one commit, write `commit: null` and name the slice and the reason in `## What shipped`; never pick one. So `passed: true` with `commit: null` is legal: the flag says the slice landed, and the record says its commit could not be proven.
-- `commit:` is the **landed** sha (Step 2). A slice this run ran that did not land is `passed: false`, `commit: null`, with its last verifier verdict.
-- `mode:` is `worktree` for a slice run in the pool, `sequential` for one run in the main tree; `modeReason:` names which Step 2 branch sent a `sequential` slice there — `ready-alone` when it was the only slice ready at its moment.
-- **The `usage` blocks and the `verifyBuild` block are not written here** — they are generated later by `/verify-build`, from `run-metrics`, because an agent cannot see its own usage. When `/build` runs again on a branch whose `build-summary.md` already has them, rewrite only the keys above and leave those blocks untouched.
-
-## Step 5 — Done
-
-When all targeted slices are `passes: true` and committed, report: slices completed, the commit per slice, the **model each slice ran on**, the **fix-round tally by cause** and how many were continued, any **design elements the scaffolder blocked on** (these are open design questions, not build noise — they outlive the run), and any ESCALATEd items, **plus any out-of-`yarn test` suites flagged as un-run** (from the ripple check in Step 3).
-
-**Verify the carry-forward against HEAD before handing it to `/verify-build` — do not assert it from memory.** The summary's carry-forward note (which file rippled, which suite went red) is what `/verify-build`'s signature-ripple sweep builds on; a wrong file named there can hide real breakages. Re-check every named file against `HEAD` (it is actually the red/affected one) before writing it. (Real miss: TV1-1969's summary named only one of three broken suites and mis-attributed it — the real recovery-semantics break was in a different file.) Then:
-
-> Run `/verify-build` for the whole-PR coherence review and to open the PR.
-
-## Step 6 — Report the outcome
-
-**First write and commit `build-summary.md`** (*The committed record*), whatever the outcome, unless the run stopped before any slice ran (a Step 1 `work-docs-path` error, a Step 2 `size` error).
-
-End your output with this line, at column 0, as the **final** line — nothing after it, not even a closing remark, and no trailing punctuation (`success.` is a value in no vocabulary, and a step that punctuates its marker reports no verdict at all):
+Then the verdict line (*Step protocol*):
 
     LANE-STEP:v1 step=build outcome=<success|gate-red|blocked-on> slices=<done>/<total> commits=<n>
 
-`success` when every targeted slice is `passes: true` **and** committed — **or** when you stopped on your slice budget with everything you attempted committed and green (Step 3, *Yield at a slice boundary*): a budget yield is a `success` whose `slices=` is short of its total, and it deliberately needs no new outcome value, because `slices=` already carries the counts and the caller already decides from them. `gate-red` when a slice exhausted its fix rounds or a gate stayed red — `2/3` committed is a **partial lane, not a failed one**, so report the counts and let the caller decide. `blocked-on` for an ESCALATE that needs a human. Take `slices=` and `commits=` from the committed shas, not from memory; `commits=` counts slice commits, not the record's `docs(record)` commits. **Immediately before printing it**, run `lane-step-record '<the identical line>'`: it writes the verdict onto your branch when `.work/lane.yaml` carries `verdictOnBranch: true` and does nothing otherwise — into the message of your last unpushed commit, normally `build-summary.md`'s, so do not push before it — that rule is about **this** commit only, and it is compatible with pushing each slice as it lands (Step 3), which is what leaves `build-summary.md`'s the last unpushed one; a non-zero exit is reported in your prose, never by changing the line. Never emit `infra` — its signal is the line's absence. The format contract is stated once in [unit-lane](../agents/unit-lane.md); do not restate it here.
+`success`: every targeted slice is `passes: true` and committed, or you yielded with everything attempted committed and green (a yield is a `success` whose `slices=` is short of its total). `gate-red`: a slice exhausted its fix rounds or a gate stayed red; `2/3` is a partial lane, reported with its counts for the caller to decide on. `blocked-on`: an `ESCALATE` awaiting a human. Take `slices=` and `commits=` from the committed shas; `commits=` counts slice commits, not `docs(record)` commits. In a pool, committed means landed. `infra` is not a value you print; its signal is the line's absence.
 
-## Principles
+> Run `/verify-build` for the whole-PR coherence review and to open the PR.
 
-- Dispatch to agents; don't implement. A slice's first pass gets a fresh context; its fix rounds continue it where the harness allows (Step 3). **Name a model on every dispatch** — an unnamed one is the session's, the most expensive available.
-- **Generate what is derivable; reserve judgment for what isn't.** Where a design graph fixes an artifact's identity, wiring and placement, deriving them mechanically is not a shortcut — it is what makes the design *converge*, because a hand-written artifact that drifts by one word in a label reads back as a different element and the board reports a phantom forever. What a graph cannot carry — payloads, invariants, handler bodies — is never guessed at.
-- **Context length is the bill, not thinking depth.** On a measured fleet run, cache reads were **97% of raw tokens** and 68% of the cost-weighted total; output was 11%. What makes a run expensive is how much context each turn re-sends, so the levers that matter are: keep command output out of agent contexts (redirect + `tail`), keep each agent to one slice, and hand findings back instead of re-paying a context for them. Speeding up the repo's own commands is *not* one of them — build/test/typecheck/generate/lint together were 12% of agent active time.
-- **Both gates, every slice; RED before GREEN.** Never commit on the test alone, never drop the verifier to save tokens, and **where no RED is available, mutation is the substitute, not an exemption.**
-- **Never end a turn awaiting a gate.** A backgrounded Bash job's completion re-invokes the main loop, never a subagent, so a unit agent that ends its turn awaiting one deadlocks permanently. A gate that can approach the 600 s ceiling runs **detached with a sentinel and is polled from foreground calls** (`full-gate` → *Reading the verdict*); never pipe a gate, and never read a wrapper's exit code as its verdict.
-- **An env-gated oracle records its exact invocation** (flag + services) in the slice, so `/verify-build` can re-run it without archaeology. A slice whose oracle is excluded from the default run cannot be certified by its `passes:` flag — that flag records the run that skipped it.
-- The tracer bullet goes first — if its seam doesn't hold, stop before building on it.
-- The facts these gates rest on are stated once in [EVIDENCE.md](../EVIDENCE.md).
-- The commits and the `passes` flags are the progress — there is no `build-progress.md`. `decisions.md` and `build-summary.md` are the committed record, written by the orchestrator alone. `.work/slices.yaml` stays working state in `.work/`.
+## Model routing
+
+Name a model on every dispatch; an unnamed one inherits the session's, the most expensive available. This table is the routing's single home: `unit-lane`, `/plan` and `/verify-build` route as it does.
+
+| Dispatch | Model |
+|---|---|
+| `executor` | the slice's `model:`; absent means `opus`. `/plan` marks mechanical slices `sonnet`; the tracer bullet, a seam and anything touching an invariant stay `opus`. |
+| `test-runner` | `haiku` (its own frontmatter) |
+| `scope-check` | `sonnet` (its own frontmatter) |
+| `verifier` | `opus`, and never downgrade this one: it is the only gate positioned to catch a confidently wrong oracle |
+| read-only sweeps (`Explore`, `general-purpose`) | `sonnet` |
+| a fix round after a `sonnet` executor | `opus`: the fix round is the evidence the slice was mis-routed |
+
+Every dispatch description names `slice <id>` (`slice 3 executor fix round 1`): `run-metrics` attributes a dispatch to its slice by that phrase alone. A continued agent keeps the description it was dispatched with, so a continued agent never takes another slice. Effort is a host setting, not a plugin rule.
+
+**Waiting.** Wait in one blocking call: `Monitor` on the file or transcript the work writes, or a bounded `until <condition>; do sleep 10; done` inside a single foreground Bash call. A background `sleep` or a re-issued timer is a whole extra turn at full context. Printing your verdict line ends the run: take no turn after it.
+
+## Boundaries
+
+- You dispatch and commit; the executor writes the code. A slice you implement yourself has passed neither gate.
+- Both gates, every slice. A commit on the test alone, or a verifier dropped to save cost, is how a green suite ships a wrong rule; where no RED exists, mutation is the substitute, not an exemption.
+- A tool's verdict is its last line, read as `full-gate` reads a verdict, from the file you redirected it to.
+- Undo a probe edit from a copy you kept (`cp <file> "$TMPDIR/keep"`, then `cp` it back). `git checkout`/`restore` on a path makes it identical to `HEAD`, and the uncommitted slice is exactly that difference; compare against a baseline with `git stash create` + `git diff <object>`, since a hook blocks the destructive forms in a lane.
+- The record has one writer, you ([build-record.md](../reference/build-record.md)).
+- The tracer bullet goes first, and a seam that does not hold stops the run before anything is built on it.

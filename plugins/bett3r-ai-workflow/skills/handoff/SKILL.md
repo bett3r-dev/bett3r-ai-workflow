@@ -1,38 +1,52 @@
 ---
 name: handoff
-description: "Use when context must be compressed for another session, a context compaction, or an AFK agent: capture certainties, open questions, the next move, a skill runbook, and references — without duplicating existing `.work/` artifacts. Carries the flow's inter-step link (start → design → plan → build → verify-build) so a resumed session knows where it sits in the pipeline."
+description: "Use when context must be compressed for another session, a compaction or an AFK agent: certainties, open questions, the next move, a skill runbook, references, and the flow's inter-step link."
 ---
 
-Mine the session for consolidated context. Do not restate artifacts that already exist — the committed design (cite `<path>/design.md` as `work-docs-path` prints it, so a resumed session opens it without re-deriving the folder), `.work/slices.yaml`, the per-slice commits, ADRs, the PR — reference them by path / id / sha.
+Write `.work/handoff/<slug>.md`, the slug from the ticket id or a short description; in a `/start-multi` fleet, `.work/multi/<run-id>/handoff/<unit>.md`. Create the directory if missing; `.work/` is gitignored.
 
-A handoff is usually the baton for the immediate next move in the flow. The flow is itself the forward projection: `/plan` **rises** the upcoming work as slices and each command hands off to the next, but those forecasts are re-earned — `/build` re-checks each slice, the flow is idempotent and resumable. Do not mine work that has not happened.
+## Four rules
 
-1. **Congeal**, into two regions — this split is the format's contract, not a naming convention, because content otherwise lands wherever the writer is looking (in practice, a catch-all "Housekeeping" heading at the end):
-  - **`## Durable`** — invariants still true, decisions and accepted tradeoffs (with the rejected options), findings a future session would otherwise re-discover, open questions nobody has taken, known gaps/blind spots. This is exactly the material to fold into ADRs / the PR body before the branch dies — everything in this region must be phrased so it survives that promotion (no "next move" phrasing, no run-local state).
-  - **Everything else is ephemeral by default**: next move, dispatch state, slice counts, snapshots, `agentId`s, frontmatter. Capture *known-unknowns* here too — open empirical questions and what execution-time work must close them (a slice's oracle, an unresolved grill branch, a verifier ESCALATE) — unless the question itself is durable (route it to `## Durable` instead).
-2. **Route.** Name the next move as a command, a flow step to resume, or a reference into an artifact. Include only runbook entries a future model should actually follow.
+1. **Reference, never duplicate.** The committed design (`<path>/design.md`, the path as `work-docs-path` prints it), `.work/slices.yaml`, the slice commits, ADRs and the PR are cited by path, id, sha or URL.
+2. **Redact** secrets, tokens and personal data.
+3. **Tailor** to the argument: what the next session will do decides what goes in.
+4. **Mine only what happened.** The flow is its own forward projection and re-earns every forecast (`/build` re-checks each slice), so a projected step is a forecast, not a record.
 
-  **Emit plugin-qualified command names** — `/bett3r-ai-workflow:verify-build`, not `/verify-build` — in `status`, `flow.prev`, `flow.next` and every `skill-runbook` key. A bare slash name resolves against the **host repo's** namespace, which this plugin cannot see or control, and any repo mid-migration from local commands to the plugin has real files with these exact names still sitting in `.claude/commands/`. The collision is silent: both are invocable, and picking the wrong one runs different instructions. It degrades the handoff as a human artifact too — a reader cannot tell which command produced it. Qualifying costs nothing where there is no collision. (`flow.step` values stay bare; they name pipeline *positions*, not invocable commands.)
+## Two regions
 
-  **Anything measured is a snapshot — stamp it and say what invalidates it.** A handoff is at its most confident precisely when it is most stale: computed once, in bulk, by an agent with full context, and read as authoritative by the session that inherits it. Two shapes recur:
-  - **A conflict inventory expires on the next sibling merge.** Scope it to the master SHA it was computed against and mark it as expiring — not as a property of the branches. Content on an *unmerged* sibling is invisible to the analysis, so a "zero hand-authored conflicts" generalisation is true only of the branches actually measured; never carry a negative generalisation beyond that set. (One inventory predicted one conflict and the merge produced four, two of them the only ones needing real judgement — and a session planning around the inventory would have handed exactly those to a mechanical resolver.)
-  - **A `.work/` occupancy or collision warning is a measurement too, and it reads as a structural fact.** Write it with its **liveness test** — the tickets it names and what would prove them done (`git log --all --grep=<ID>` merged commits, `passes: true` across the referenced `slices.yaml`, the blocker's commit) — and list separately what in `.work/` is genuinely **unrecoverable** (an unprocessed `record.md` / `learnings.md` buffer) from what merged commits already preserve. One warning described a lane as in-flight that had finished before the warning was written, and never mentioned the one thing worth protecting.
-  - **Recorded `agentId`s are session-scoped.** "Resume the warm agent, it has the context" fails with `No transcript found` from any new session — which is precisely the situation a handoff exists to serve. Record the same-session precondition alongside any agent map, and **carry the context needed to re-dispatch fresh** (worktree, branch, tip SHA, procedure, invariants). If resuming is merely an optimisation the handoff survives its failure; if it is load-bearing, the handoff is broken by construction.
-3. **Stamp.**
-  ```yaml
-  ---
-  readonly: true
-  origin: "<`{skill}` | conversation> (<session-id>)"
-  status: "<the next move, in your words: a command to run (`/plan`, `/build`), a flow step to resume (`/build` at slice N), or @<artifact ref: slice id / commit / design section>>"
-  flow: # only mid-pipeline; links this handoff into the sequence
-    step: "<start | design | plan | build | verify-build | capture-learnings>"
-    prev: "<prior step or handoff slug, or ~>"
-    next: "<next projected step, or ~>"
-  skill-runbook:
-    - `{skill}`: "<condition>"   # e.g. grill / critique / domain-modeling / vertical-slicing / record
-  ---
-  ```
-  The `flow` block must let a resumed session resolve its place in the pipeline: the step it is at, the prior steps whose `.work/` state and commits are preserved for it, and the projected next step. The sequence is soft and resumable: the flow re-checks (slices already `passes: true` are skipped), so re-entering may add, drop, or reorder the remaining work.
-4. **Finish.** Persist `.work/handoff/<slug>.md` (create `.work/handoff/` if missing — `.work/` is gitignored and ephemeral). Derive `<slug>` from the ticket id or a concise description. In a `/start-multi` fleet run, nest it under the unit: `.work/multi/<run-id>/handoff/<unit>.md`.
+- **`## Durable`**: invariants still true, decisions with their rejected options, findings a future session would otherwise re-discover, open questions nobody has taken, known gaps. Phrase every line so it survives promotion into an ADR or the PR body: no next-move phrasing, no run-local state.
+- Everything else is ephemeral: the next move, dispatch state, slice counts, snapshots, agent ids, and known-unknowns with the execution-time work that closes them (a slice's oracle, an unresolved fork, a verifier `ESCALATE`).
 
-Like the `record` buffer, a handoff lives in disposable `.work/`: consume it with `/handon` before `/start` replaces `.work/`, or fold its `## Durable` region into ADRs / the PR body first — `/handon` should prompt on an undrained `## Durable` region the same way the flow already shouts about an undrained `.work/learnings.md`. Git is the system of record — the commits and the work item's committed record beside the code, which the PR links; the handoff is only the baton.
+## Route
+
+Name the next move as a command, a flow step to resume, or a reference into an artifact, and list only the runbook entries a future model should follow. Command names are plugin-qualified, `/bett3r-ai-workflow:verify-build`, in `status`, `flow.prev`, `flow.next` and every `skill-runbook` key: a bare `/verify-build` resolves against the host repo's namespace, where a same-named local command may exist. `flow.step` values stay bare; they name pipeline positions.
+
+## Expiry-stamp every measured fact
+
+A handoff is most confident exactly when it is most stale. Every measurement carries the sha, ref or moment it was computed against and what invalidates it:
+
+- A conflict inventory expires on the next sibling merge and says nothing about unmerged siblings; a negative generalisation covers only the branches measured.
+- A `.work/` occupancy or collision warning carries its liveness test (`git log --all --grep=<ID>` for merged commits, `passes: true` across the referenced `slices.yaml`) and lists separately what is unrecoverable (an undrained `learnings.md`) from what merged commits already preserve.
+- A recorded `agentId` dies with its session; any other session gets `No transcript found`. Carry what re-dispatching fresh needs: worktree, branch, tip sha, procedure, invariants.
+
+## Frontmatter
+
+```yaml
+---
+readonly: true
+origin: "<`{skill}` | conversation> (<session-id>)"
+status: "<the next move: a command (`/bett3r-ai-workflow:plan`), a flow step to resume (`/bett3r-ai-workflow:build` at slice N), or @<artifact ref>>"
+flow: # only mid-pipeline; links this handoff into the sequence
+  step: "<start | design | plan | build | verify-build | capture-learnings>"
+  prev: "<prior step or handoff slug, or ~>"
+  next: "<next projected step, or ~>"
+skill-runbook:
+  - `{skill}`: "<condition>"
+---
+```
+
+The `flow` block lets a resumed session place itself: the step it is at, the prior steps whose commits and `.work/` state are preserved, and the projected next step, which the next command reconciles rather than assumes.
+
+## Finish
+
+A handoff lives in disposable `.work/`: it is consumed with `/handon` before `/start` replaces `.work/`, or its `## Durable` region is folded into ADRs or the PR body first. Git is the record; the handoff is the baton. Done when the file exists with the frontmatter above and a `## Durable` heading.

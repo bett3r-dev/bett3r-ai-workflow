@@ -44,7 +44,11 @@
 ROOT=$( CDPATH= cd -- "$( dirname -- "$0" )/.." && pwd )
 PLUGIN="$ROOT/plugins/bett3r-ai-workflow"
 RUN_METRICS=${RM_SCRIPT:-"$PLUGIN/scripts/run-metrics.mjs"}
-BUILD_MD="$PLUGIN/commands/build.md"
+# The build-summary grammar /build writes is the companion reference/build-record.md
+# (build.md points at it); commands/build.md is read only to assert it carries no
+# second copy of the block.
+BUILD_MD="$PLUGIN/reference/build-record.md"
+COMMAND_BUILD_MD="$PLUGIN/commands/build.md"
 VERIFY_BUILD_MD="$PLUGIN/commands/verify-build.md"
 FIXTURE="$ROOT/scripts/fixtures/run-metrics"
 RM_NODE=${RM_NODE:-node}
@@ -123,11 +127,11 @@ fi
 
 # Everything numeric is judged in one python pass that recomputes the expected
 # values from the fixture rows and compares; it prints `ok|bad<TAB>label<TAB>detail`.
-"$RM_PY" - "$FIXTURE/projects" "$TMP/fragment.yaml" "$BUILD_MD" "$VERIFY_BUILD_MD" "$BRANCH" > "$TMP/judged" 2> "$TMP/judged.err" <<'PY'
+"$RM_PY" - "$FIXTURE/projects" "$TMP/fragment.yaml" "$BUILD_MD" "$VERIFY_BUILD_MD" "$BRANCH" "$COMMAND_BUILD_MD" > "$TMP/judged" 2> "$TMP/judged.err" <<'PY'
 import json, os, re, sys, glob
 import yaml
 
-projects, frag_path, build_md, vb_md, BRANCH = sys.argv[1:6]
+projects, frag_path, build_md, vb_md, BRANCH, command_build_md = sys.argv[1:7]
 STALL = 180000
 out = []
 def check(label, ok, detail=""):
@@ -331,18 +335,23 @@ check("R7: a detached-HEAD worker (slice 3) is not attributed, and the verdict c
       "slices %s, verdict %s" % (sorted(slices), verdict_line))
 
 # --- one contract, two readers: key names vs the commands' blocks -----------
+# The grammar has one home, reference/build-record.md; commands/build.md points
+# at it and must not carry a second copy that could drift from the first.
+def summary_blocks(text):
+    return [b for b in re.findall(r"```markdown\n(.*?)```", text, re.S) if re.search(r"^slices:", b, re.M)]
 bm = open(build_md).read()
-blocks = re.findall(r"```markdown\n(.*?)```", bm, re.S)
-summary = [b for b in blocks if re.search(r"^slices:", b, re.M)]
+summary = summary_blocks(bm)
+check("commands/build.md carries no build-summary block of its own (one home: reference/build-record.md)",
+      len(summary_blocks(open(command_build_md).read())) == 0, "")
 if len(summary) != 1:
-    check("build.md carries one build-summary frontmatter block", False, "found %d" % len(summary))
+    check("build-record.md carries one build-summary frontmatter block", False, "found %d" % len(summary))
 else:
     b = summary[0]
     top = re.findall(r"^([A-Za-z_]+):", b, re.M)
     item = re.findall(r"^  - ([A-Za-z_]+):", b, re.M)
-    check("build.md's block spells work_item (never workItem) and lists slices by id",
+    check("build-record.md's block spells work_item (never workItem) and lists slices by id",
           "work_item" in top and "slices" in top and item[:1] == ["id"] and "workItem" not in b, "top %s item %s" % (top, item))
-    check("build.md names the usage and verifyBuild blocks it leaves to /verify-build",
+    check("build-record.md names the usage and verifyBuild blocks it leaves to /verify-build",
           "The `usage` blocks and the `verifyBuild` block" in bm, "")
     check("the fragment's top keys are build-summary's slices and verifyBuild, plus unattributed",
           set(frag) == {"slices", "verifyBuild", "unattributed"} and "workItem" not in json.dumps(frag), sorted(frag))
@@ -359,7 +368,7 @@ else:
     fields = [re.findall(r"([A-Za-z]+):", body) for body in re.findall(r"\{([^}]*)\}", v)]
     check("verify-build.md's usage block roles are executor, verifier, testRunner",
           roles == ["executor", "verifier", "testRunner"], roles)
-    check("verify-build.md's usage block keys the slices by build.md's `slices` / `id`",
+    check("verify-build.md's usage block keys the slices by build-record.md's `slices` / `id`",
           re.search(r"^slices:", v, re.M) is not None and re.search(r"^  - id:", v, re.M) is not None, v[:60])
     want_fields = fields[0] if fields else []
     check("every usage cell in verify-build.md's block has the same fields",

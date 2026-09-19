@@ -1,12 +1,6 @@
 # ESAS board preflight (used by /design)
 
-The capability half of the board-mode gate: what is actually on disk in this
-checkout. It reports facts and decides nothing. Run it from the repo root, then
-read the verdict table below. `/design` owns the relevance half.
-
-### Gate 2 — capability: what is actually on disk
-
-Run the preflight from the repo root. It reports facts and decides nothing:
+The capability half of the board-mode gate: what is on disk in this checkout. Run it from the repo root. It reports facts and decides nothing; the table under it decides. `/design` owns the relevance half.
 
 ```sh
 # --- esas preflight ---
@@ -103,21 +97,20 @@ fi
 # --- end esas preflight ---
 ```
 
-### What each verdict means
+## What each verdict means
 
-| report | what it means | what you do |
+| report | meaning | what you do |
 |---|---|---|
-| `plugin: loaded` | A version-keyed cache directory for this plugin is on `PATH`, and the `version:` line under it is the build **this session** is running. That is a different question from which source tree you are editing: the cache is copied afresh only when the version string changes, so an edited plugin whose version stayed put is still being served from the old copy. | Nothing, in the ordinary case — read it and carry on. It earns its place on one path: if you have just changed this plugin and the number here is the previous release, **the change is not loaded**, and nothing you are reading in this session is what is running. Say so before acting on any of it; the fix is a version bump and a fresh session, not another edit to a file nobody is executing. |
-| `plugin: unknown` | No cache directory for this plugin on `PATH` — the session is running the plugin from source, or it was never installed from the marketplace at all. | **Not an error, and not a thing to fix.** It means this one line cannot answer the question, so carry on exactly as normal. If the answer turns out to matter — a command behaving like a version you do not recognise — read `~/.claude/plugins/installed_plugins.json` instead. |
-| `esas_dir: absent` | No design layer here — a fleet worktree, or a repo the extractor has never run in. | **Board mode off.** Run Steps 1–4 exactly as written. Never create `.esas/` to switch it on; the directory is the marker of "this checkout designs". |
-| `esas_dir: present`, `graph: absent` | `.esas/` exists but the extractor has not produced a graph. | Board mode off until it has. Ask the user to run the repo's extractor — the command its `.esas.config.json` declares as `designTooling.extract` (`yarn esas` in teselly) — then re-run the preflight. Proposals against a graph that isn't there have nothing to attach to. |
-| `esas_dir: present`, `graph: present` | Reality is on disk. | Board mode is possible — continue down this table. |
-| `design: absent`, `ops: absent` | No design session has started here. | The normal, clean start. There is nothing to create — BOARD-SETUP.md §*Seeding*. |
-| `design: present` or `ops: present` | A design layer is already on disk. | It is either the unit of work you are resuming or the residue of one that shipped. **Ask whose session it is** — BOARD-SETUP.md §*Seeding*. |
-| `mcp: registered` | The entry is in `.mcp.json`. That is not the same as the server running. | Call the `status` tool now — BOARD-SETUP.md §*Registering* for the three ways this answers. |
-| `mcp: unregistered` / `mcp: absent` | This repo's `.mcp.json` does not register the server. That is all the preflight can see — it reads the project file only. | Write the entry, then **stop** — BOARD-SETUP.md §*Registering* — **unless the `mcp__esas__*` tools are already available in this session**, which means it is registered elsewhere (a user-scoped `~/.claude.json`). Then skip the write: it would cost a needless restart and put a duplicate entry in a git-tracked file. |
-| `board: off` | Nothing is serving this repo on :3727. | The normal state before the user launches it. **Carry on** — the offer comes later, when the first batch of questions is ready, not here; BOARD-SETUP.md §*The board*. |
-| `board: serving` | A board is up on this checkout. The `status:` line under it is the board's whole answer, including `sessions` — how many sessions are holding the summon channel (`/api/esas/ws`) open. | Compare its `lastSeq` with the `status` tool's. Same number ⇒ the link is live. Then read `sessions`: **`"sessions":0` means nobody would hear the *Ask Claude* button** — open the channel (`esas-design` skill, §*The summon*). A number ≥ 1 is not a guarantee anyone is listening (there is no heartbeat, so a half-open socket still counts), so never use it to decide *not* to open one; and an older board omits the field entirely, which is unknown, never zero. |
-| `board: other-repo` | Something holds :3727 serving a *different* checkout, and the `status:` line under the verdict says which. | **Name the repo that holds it** — the `repoPath` in the `status:` line is the project root that board serves — and say so before the first proposal: until it is closed this repo's board cannot claim the port (`strictPort` never drifts), and the screen the user is watching will never move. Naming it is the difference between a thing the user can close and a board they may not remember starting. Then carry on. |
-| `board: unknown` | No `curl` here, so the board was not probed at all. | Say it was not verified rather than reporting it down, and carry on. |
-
+| `plugin: loaded` | A version-keyed cache directory for this plugin is on `PATH`; the `version:` line under it is the build this session runs, which is a different question from which source tree you are editing. | Nothing, ordinarily. If you have just changed this plugin and the number is the previous release, the change is not loaded: say so before acting on anything you read here; the fix is a version bump and a fresh session. |
+| `plugin: unknown` | No cache directory for this plugin on `PATH`: it runs from source, or was never installed from the marketplace. | Not an error. Carry on; if the version matters, read `~/.claude/plugins/installed_plugins.json`. |
+| `esas_dir: absent` | No design layer here: a fleet worktree, or a repo the extractor never ran in. | Board mode off. Run Steps 1–4 as written and leave the directory absent; it is the marker of "this checkout designs". |
+| `esas_dir: present`, `graph: absent` | `.esas/` exists but the extractor has produced no graph. | Board mode off until it has: ask the user to run the extractor `.esas.config.json` declares as `designTooling.extract`, then re-run the preflight. |
+| `esas_dir: present`, `graph: present` | Reality is on disk. | Board mode is possible; continue down the table. |
+| `design: absent`, `ops: absent` | No design session has started here. | The clean start. There is nothing to create: BOARD-SETUP.md §3. |
+| `design: present` or `ops: present` | A design layer is already on disk. | The unit you are resuming, or the residue of one that shipped. Ask whose session it is: BOARD-SETUP.md §3. |
+| `mcp: registered` | The entry is in `.mcp.json`; that is not the same as the server running. | Call the `status` tool now: BOARD-SETUP.md §1. |
+| `mcp: unregistered` / `mcp: absent` | This repo's `.mcp.json` does not register the server (the preflight reads the project file only). | Write the entry, then stop: BOARD-SETUP.md §2. Skip the write when the `mcp__esas__*` tools are already in this session (a user-scoped `~/.claude.json`); it would cost a needless restart and a duplicate entry in a git-tracked file. |
+| `board: off` | Nothing is serving this repo on :3727. | The normal state before the user launches it. Carry on; the offer comes when the first batch of questions is ready: BOARD-SETUP.md §4. |
+| `board: serving` | A board is up on this checkout. The `status:` line under it is the board's whole answer, including `sessions`: how many sessions hold the summon channel (`/api/esas/ws`) open. | Compare its `lastSeq` with the `status` tool's; the same number means the link is live. `"sessions":0` means nobody would hear the *Ask Claude* button: open the channel (`esas-design`, the summon). A count of one or more is not proof anyone is listening (no heartbeat, so a half-open socket counts) and never decides against opening one; an older board omits the field, which is unknown, never zero. |
+| `board: other-repo` | Something holds :3727 serving a different checkout, and the `status:` line says which. | **Name the repo that holds it** (the `repoPath` in the `status:` line is the project root that board serves) before the first proposal: until it is closed this repo's board cannot claim the port, and the screen the user is watching will never move. Then carry on. |
+| `board: unknown` | No `curl` here, so the board was not probed. | Say it was not verified rather than reporting it down, and carry on. |

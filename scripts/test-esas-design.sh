@@ -894,6 +894,17 @@ else
   assert_in_description 'so is mark_synced, which is the half that gets dropped' 'mark_synced'
   assert_in_description 'so is the do-not-assert rule (the slice gate)' 'sync first'
   assert_in_description 'so is the whole-batch retry after a refused write' 'CONFLICT_PENDING_SYNC'
+  # The listing pays for every character of every description on every turn, so
+  # the five triggers above have to fit inside the 200-char cap rather than earn
+  # an exemption from it. Measured on the value alone (prefix and quotes off).
+  desc_len=$( printf '%s\n' "$description" | head -n 1 \
+    | sed 's/^description:[[:space:]]*//; s/^"//; s/"$//' \
+    | { python3 -c 'import sys; print(len(sys.stdin.read().rstrip("\n")))' 2>/dev/null || wc -m | tr -d ' '; } )
+  if [ -n "$desc_len" ] && [ "$desc_len" -le 200 ]; then
+    pass "and the whole description stays within the 200-char listing cap ($desc_len)"
+  else
+    fail 'and the whole description stays within the 200-char listing cap' "length: ${desc_len:-unmeasured}"
+  fi
 fi
 
 # The withdrawal gesture. Pinned needle by needle because the failure it exists
@@ -1099,28 +1110,37 @@ refute_md "$GRILL_MD" 'and the old sentence, where map meant the terminal list, 
 # Green the moment it is written, and asserted anyway. The map is a numbered
 # list, which is the exact shape that tempts a picker, and the standing
 # preference has no carve-out — so the one edit that would quietly undo it is an
-# edit that adds the map and reaches for `AskUserQuestion` to render it.
+# edit that adds the map and reaches for `AskUserQuestion` to render it. The
+# rule is stated as what to do (a numbered list the user answers free-form), so
+# the pin is the tool's name plus the clause that rules it out, not a `Never`.
 assert_md "$GRILL_MD" 'the standing rule survives the map: no picker, ever' \
-  'Never use `AskUserQuestion`'
+  '`AskUserQuestion` has no place in this flow'
 
 # ── skills/grill — where a map is live (ESAS-164 D4) ─────────────────────────
 #
-# A map is a separate surface from the tree: posted only once grounded, dependent
-# forks as a title with no card, a fork re-posted only when its words change.
-# grill keys off `outcome=ok` alone and never names the target selectors.
+# A map is a separate surface from the tree. What grill itself decides is pinned
+# here: the subsection exists, a dependent fork reaches the map as a title with
+# what it waits on, and the tree stays unconditional with or without a map. What
+# is posted and when (grounding first, the fold, `--final`) is the design-map
+# skill's, so the subsection points at it by name and restates none of it — the
+# pointer is the pin, and the rules are asserted in scripts/test-design-map.sh
+# against their home, where `render` refusing an ungrounded map is executed
+# rather than worded. grill keys off `outcome=ok` alone and never names the
+# target selectors.
 
 printf '\nskills/grill — where a map is live\n'
 
 assert_md "$GRILL_MD" 'the subsection exists beside the board one' '### Where a map is live'
-assert_md "$GRILL_MD" 'a decision tree posts nothing before grounding' \
-  'No fork card is posted before grounding'
-assert_md "$GRILL_MD" 'the impact-map exception: why/who go up first, as a confirm question' \
-  'why/who are posted before grounding as a confirm question'
-assert_md "$GRILL_MD" 'a dependent fork is a title with what it waits on, no card' \
+map_live=$( awk '/^### Where a map is live/{f=1; next} /^#/{f=0} f' "$GRILL_MD" )
+assert_in_map_live(){
+  if printf '%s' "$map_live" | grep -qF -- "$2"; then pass "$1"; else fail "$1" "not in grill's ### Where a map is live: $2"; fi
+}
+assert_in_map_live 'the subsection hands posting to design-map by name, as a Skill call' \
+  'Call the Skill tool with "design-map"'
+assert_in_map_live 'a dependent fork is a title with what it waits on, no card' \
   'title and what it waits on'
-assert_md "$GRILL_MD" 'a fork returns to the map only on a change of words' \
-  'returns to the map only when its words change'
-assert_md "$GRILL_MD" 'process-rule forks are authored untestable' 'testable:false'
+assert_in_map_live 'the tree is unconditional; the map is not — stated inside the subsection' \
+  'The tree is unconditional; the map is not'
 for word in verbFamilies start_map_session capabilities; do
   refute_md "$GRILL_MD" "grill never names $word" "$word"
 done

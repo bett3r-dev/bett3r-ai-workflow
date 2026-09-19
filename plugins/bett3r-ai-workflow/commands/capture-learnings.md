@@ -1,91 +1,46 @@
 ---
-description: Capture what this session taught, routed to the repo that owns the artifact — with a raised filing bar, so the backlog stays a to-do list instead of a sediment layer.
+description: Capture what this session taught and route each learning to the repo that owns the artifact, filed with its filters and expiry. Most sessions file nothing.
 ---
 
-# /capture-learnings — origin-aware learning capture
+# /capture-learnings
 
-Turn what this session taught into durable records, each routed to where its source-of-truth lives. A learning about a shared skill, discovered here, becomes an issue in that skill's plugin repo, so every project that installs it benefits on the next update.
-
-**The bar is high on purpose.** Filing anything merely "non-obvious and reusable" makes the artifacts it feeds grow monotonically. Three filters stand between a session and an issue, and **most sessions should file few issues or none.** A session that files nothing is a normal outcome, not a failure to notice.
+`Call the Skill tool with "writing-for-agents"`. Its pruning section is the filing bar: a candidate that fails the no-op test, duplicates a rule that already has a home, or cannot name what retires it is not a learning. A session that files nothing is a normal outcome.
 
 ## Step 1 — Gather
 
-Read **`.work/learnings.md`** first — the in-flight `record` buffer, the primary input. Then review the session for anything not yet recorded.
+Read `.work/learnings.md`, the `record` buffer, and in a fleet run `<run>/learnings.md`, the merged file (the per-unit `<run>/units/*.learnings.md` when the merge has not run); then review the session for anything not yet recorded. Done when every candidate is listed with where it came from.
 
-## Step 1b — Classify before you filter: mechanical, or judgement?
+## Step 2 — Classify: mechanical or judgement
 
-**Ask of every candidate, first: is the thing it guards against MECHANICAL?** A fixed syntactic pattern, a banned API, an import shape, a file-location rule, a census over call sites, a required field, an artifact that must exist. If it is, **it gets a deterministic check, full stop — building the check is the default disposition, and writing the rule is the fallback.** A rule that a future agent has to *remember* is not a control; it competes for attention with every other rule in the same artifact and loses quietly, and the same defect ships again with every gate green.
+Ask of each candidate whether the thing it guards against is mechanical: a fixed syntactic pattern, a banned API, an import shape, a file-location rule, a census over call sites, a required field, an artifact that must exist. If so it gets a deterministic check, full stop: a script in the plugin's `scripts/` (or its gate) or a hook, and writing a rule is the fallback, because a rule a future agent has to remember competes with every other rule for attention and the same defect ships again with every gate green. What remains is judgement, where no pattern separates the good case from the bad one; it becomes prose where the **verifier** reads, never a line in the executor's brief, since the implementer is under the most context pressure at exactly the moment it would have to remember.
 
-Reserve prose for **genuine judgement calls** — where the right answer depends on the situation and no pattern separates the good case from the bad one. Say which you chose and why; "we wrote it down" is not a disposition for a mechanical cause.
+A fix-round cause that `build-summary.md` records again and again is the strongest input here and is already measured: `/build` classifies every fix round from its closed cause set, and a cause recorded three times owes a disposition in `docs/causes.md` (`scripts/check-repeat-causes.py` stays red until it names the check that now fires or the judgement no check can make). Done when every candidate carries `mechanical` or `judgement` and the kind of destination that follows.
 
-**A REPEATING fix-round cause is the strongest possible input here, and it is already measured.** `/build` classifies every fix round before dispatching it (`oracle-wrong` · `design-silent` · `ripple` · `invariant` · `mis-routed` · `flake`) and `build-summary.md` records it. A cause that keeps recurring is the flow telling you the same thing every run: classify it by this rule, and record what was *done* — this repo keeps that in `docs/causes.md`, with `scripts/check-repeat-causes.py` red until a thrice-recorded cause has an entry naming either the check that now fires or the judgement that no check can. A tally nobody disposes of is a statistic, not a learning.
+## Step 3 — Filter
 
-**Where the rule lands matters as much as whether it is written.** A standard is imposed by the **review** agent, not the implementation agent: the implementation agent is under the most context pressure at exactly the moment it would have to remember. So a mechanical disposition goes in `scripts/` and the gate; a judgement one goes where the **verifier** reads — never as one more line in the executor's brief.
+Run each candidate through writing-for-agents' pruning tests and keep the three answers the issue body asks for: why a competent model gets this wrong with no guidance (a fact about this system, or a failure whose signature is absence, passes; an exhortation fails); whether it is true everywhere rather than here and now (a workaround for one machine, token or tool version is a bug report about that machine, and if it must be recorded it records why and what expires it); and which existing rule it sharpens (an edit quoting the current text is the preferred outcome; a second instance of a stated rule means the rule is not landing, so make it fire instead of restating it). Done when every dropped candidate names the test that killed it.
 
-## Step 2 — The three filters
+## Step 4 — Route by ownership
 
-Every candidate passes all three, in this order. **Say which filter killed the ones that die** — that report is how you and the user calibrate the bar.
-
-### Filter 1 — the model-default test
-
-**Would a competent model, with no guidance at all, get this wrong?**
-
-If the answer is no, it is not a learning; it is a description of the model doing its job. Guidance that restates a default costs attention in every future session and buys nothing, and this is the filter that keeps the shared artifacts from filling with instructions to be careful.
-
-Two things pass it easily and should be looked for first:
-
-- **A fact about *this* system that no amount of competence supplies** — the port is claimed strictly, the round-trip strips comment nodes, the caser splits internal capitals, `find -newermt` matches nothing on BSD.
-- **A failure whose signature is *absence*** — a green gate that collected nothing, a closing keyword that bound to one issue, a skill that never loaded. Nothing goes red, so no amount of care catches it.
-
-What usually fails it: exhortations ("verify before asserting", "read the whole file"), restatements of a rule already stated in the same artifact, and a defence against a specific mistake made once in one session.
-
-**When it is a real trap but caution alone cannot avoid it, prefer a gate to a paragraph.** A reviewer who has to *remember* to look is not a control — that is why `scripts/` exists.
-
-### Filter 2 — the locality test
-
-**Is this true everywhere, or only here and now?**
-
-A workaround for a local or transient condition — a token missing a scope, a stale tool version, a temporarily-broken command — is **not a learning. It is a bug report about your machine. Fix the machine.** Filing it propagates one machine's misconfiguration to every repo that installs the plugin, where it becomes a permanent detour that outlives its cause, because the workaround *works* and nothing prompts a re-check.
-
-**Stale guidance is worse than no guidance:** absent guidance makes an agent think; wrong-but-plausible guidance makes it confidently take the wrong path. (Real miss: a `gh api -X PATCH` detour written into `/verify-build` and distributed everywhere, solely because one machine's token lacked `read:org`. The token was fixable in a minute; the guidance would have misled every reader forever.)
-
-If a workaround genuinely must be recorded, record **why** it was needed and **the condition under which it expires**.
-
-### Filter 3 — amend, don't append
-
-**Find the rule this belongs to before proposing a new one.** Search the owning artifact for what already covers this ground. Then choose, and say which you chose:
-
-- **Sharpens an existing rule** → propose an *edit* to that rule, quoting the current text. This is the preferred outcome and should be the most common one.
-- **A second instance of a rule already stated** → the rule is not landing. The right proposal is to make the existing rule *fire* — move it to where the decision is made, or gate it — never to state it a second time somewhere else.
-- **Genuinely new ground** → a new rule, and then it must name **what it replaces or what it sits next to**, so the next reader can see it belongs to a frame rather than being bullet N+1.
-
-An artifact that gains a bullet per session eventually reads as N unrelated rules, and every one of them competes for the same finite attention. That is the failure this filter exists to prevent.
-
-## Step 3 — Route the survivors
-
-Routing key: **where does this learning's source-of-truth live?**
-
-| If the learning is about… | Owner | Destination |
+| The learning is about… | Owner | Destination |
 |---|---|---|
-| The flow — a workflow command/skill/agent | `bett3r-ai-workflow` | GitHub issue in that repo |
-| A PV3 / DDD framework pattern or skill | `bett3r-pv3-ai-skills` | GitHub issue in that repo |
-| A CDSE frontend pattern or skill | `bett3r-cdse-ai-skills` | GitHub issue in that repo |
-| This repo's own domain / conventions | host repo | `.claude/rules` / `CONTEXT.md` / an ADR, here |
-| Cross-session context for the assistant | local | memory |
+| the flow: a command, skill or agent of this plugin | `bett3r-ai-workflow` | GitHub issue in that repo |
+| a PV3 / DDD framework pattern or skill | `bett3r-pv3-ai-skills` | GitHub issue in that repo |
+| a CDSE frontend pattern or skill | `bett3r-cdse-ai-skills` | GitHub issue in that repo |
+| this repo's own domain or conventions | host repo | `.claude/rules` / `CONTEXT.md` / an ADR, here |
+| cross-session context for the assistant | local | memory |
 
-Propose the target; the user can redirect. **Default to local/memory when ambiguous** — a wrong-repo issue is worse than a local note. A learning may have two homes.
+Propose the target; the user can redirect; default to local when ambiguous, since a wrong-repo issue is worse than a local note. Before writing to `.claude/rules/<x>.md` or `.claude/skills/<x>/`, run `check-skill-shadows` (on `PATH` from this plugin's `bin/`): a local file named after an installed plugin skill, command or agent is a shadow, and a learning written there strands in one repo while both copies load. File it in the owning plugin instead. Done when each survivor has one destination (two when it genuinely has two homes).
 
-**Before writing to `.claude/rules/<x>.md` or `.claude/skills/<x>/`, check whether `<x>` is the name of an installed plugin skill** (it appears in the skills list as `<plugin>:<x>`). If it is, the concept is plugin-owned and the local file is a **shadow** — usually a pre-extraction copy that has kept growing (887 lines beside the plugin's 132) and therefore *looks* more authoritative than the thing that owns it. Writing there succeeds, commits cleanly, and strands the learning in one repo: propagation is dead and nothing later notices. File the issue in the owning plugin instead. The check has to be performed, not assumed: in one host repo `ddd-patterns` collides and `code-style` genuinely is host-owned — **run `check-skill-shadows`** (on `PATH` from this plugin's `bin/`), which answers it for the whole repo at once against the plugins *actually installed*, and also catches the two surfaces this paragraph does not: a local **command** or **agent** colliding by name, and a `.claude/rules/<x>.md` shadowing a plugin *skill* by path auto-load. That rule stops you creating a new shadow; the detector is the only thing that finds the ones already there, since both copies parse, both load, and neither errors.
+## Step 5 — File plugin-owned learnings
 
-## Step 4 — File plugin-owned learnings
-
-Resolve the repo from the plugin's `plugin.json` `repository` (else `origin`). **Dedupe first** — `gh issue list --label ai-learning --search "<keywords>"`; comment on a near-duplicate rather than re-filing. Then auto-compose and create — **one confirm, no form to fill**:
+Resolve the repo from the plugin's `plugin.json` `repository` (else `origin`). Dedupe first with `gh issue list --label ai-learning --search "<keywords>"` and comment on a near-duplicate rather than re-filing. Then compose and create, one confirm:
 
 ```
-# Write the body to a file first. `--body "<markdown>"` is a shell string: backticked paths, flags
-# and symbols are command-substituted away, `gh` exits 0, and the loss is silent and partial.
 gh issue create -R <owner>/<repo> --label ai-learning --title "<concise>" --body-file <path>
 ```
+
+Write the body to a file: `--body "<markdown>"` is a shell string, so backticked paths are command-substituted away while `gh` exits 0. The body:
 
 ```
 ## Observed
@@ -95,13 +50,12 @@ What happened, in context (link the session / PR if useful).
 The cost of leaving it / the value of fixing it.
 
 ## Proposed change
-The concrete edit — which artifact, and preferably **which existing rule to
+The concrete edit: which artifact, and preferably **which existing rule to
 amend**, quoting its current text. Behavior, not a full diff.
 
 ## Expiry
-How we would know this has stopped being true — the version, tool, model
-behaviour or repo shape it depends on. Write "structural" only if it genuinely
-cannot expire.
+How we would know this has stopped being true: the version, tool, model
+behaviour or repo shape it depends on. "structural" only if it cannot expire.
 
 ## Filters
 Model-default: <why a competent model gets this wrong with no guidance>
@@ -109,23 +63,14 @@ Locality: <why this is true everywhere, not just here and now>
 Amend-or-add: <the rule this sharpens, or why it is new ground>
 ```
 
-The **Expiry** field is what makes this backlog prunable later: without it, every rule is permanent by default and `/evolve` has nothing to test a stale one against.
+`Expiry` is what lets `/evolve` prune later. Done when every plugin-owned survivor is an issue or a comment on one.
 
-## Step 5 — Apply local learnings, drain, report
+## Step 6 — Ledger the evidence
 
-Local facts → `.claude/rules` / `CONTEXT.md` / an ADR. Assistant context → memory. **Clear the processed entries from `.work/learnings.md`.**
+An incident, a measurement or a war story is evidence for a rule, not a rule. In the owning plugin it goes to the ledger, the file `LEDGER.md` at the root of the plugin's payload next to its `README.md`, as one entry with five fields: the rule it supports, the source it came from, the evidence verbatim, when it was recorded, and what retires it. The artifact gets only the rule, with at most one clause of reason. In an issue, the story sits under `Observed` and the rule under `Proposed change`, so `/evolve` can split them the same way. Done when no proposed edit carries a date, a figure or a "once" story as instruction text.
 
-Report: each learning filed with its destination, **each candidate dropped with the filter that killed it**, and the raw → filed count. Then:
+## Step 7 — Apply, drain, report
+
+Local facts go to `.claude/rules`, `CONTEXT.md` or an ADR; assistant context to memory. Clear the processed entries from `.work/learnings.md`. Report each learning filed with its destination, each candidate dropped with the test that killed it, and the raw → filed count. Then:
 
 > Run `/evolve` inside a plugin repo to turn its `ai-learning` issues into reviewed PRs.
-
-## Principles
-- **The bar is the feature.** Filing less is the point; a session that files nothing is a normal outcome.
-- **Route by ownership** — don't dump everything locally; that's how propagation dies. A host-repo `.claude/rules` file named after a plugin skill is a shadow, not the source of truth.
-- **Amend before you append.** A bullet per session is how a coherent artifact becomes a list.
-- **True everywhere, or only here and now?** A local workaround is a bug report about your machine.
-- **A failure whose signature is absence needs a gate, not a paragraph.**
-- **Mechanical → a deterministic check, full stop.** Prose is for judgement calls, and a repeating fix-round cause is a disposition owed, not a number to quote.
-- **The reviewer imposes standards, not the implementer** — the implementer has the most context pressure exactly where it would have to remember.
-- **Every rule carries an expiry**, or it is permanent by default.
-- Issues are *actionable changes to shared artifacts*; memory is *assistant context*.
