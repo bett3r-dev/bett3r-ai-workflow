@@ -1,0 +1,35 @@
+# The control for the row above: two seams are legal when the second says why
+# the first cannot hold the claim — the rule is a justification, not a cap.
+seams:
+  - name: the launcher's verdict line
+    at: plugins/bett3r-ai-workflow/bin/design-map:1
+    kind: existing
+  - name: check_seams unit
+    at: plugins/bett3r-ai-workflow/scripts/design-map.py:1
+    kind: existing
+    why: >
+      the launcher seam cannot observe a refusal's attribute set, only the
+      verdict it prints; the per-refusal why= values are asserted here
+ticket: ESAS-9
+review: unattended
+slices:
+  - id: 1
+    seam: the launcher's verdict line
+    name: "slice one"
+    oracle: |
+      the launcher prints outcome=ok and exits 0
+    scenarios:
+      - scenario: a justified second seam passes
+        given: a plan declaring two seams, the second justified
+        when: check-plan runs
+        then: the launcher prints outcome=ok with seams=2
+  - id: 2
+    seam: check_seams unit
+    name: "slice two"
+    oracle: |
+      each refusal names its own why=
+    scenarios:
+      - scenario: the second slice tests at the second seam
+        given: a plan whose slices name different declared seams
+        when: check-plan runs
+        then: both are accepted

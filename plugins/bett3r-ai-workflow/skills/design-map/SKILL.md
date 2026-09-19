@@ -302,8 +302,19 @@ a human:
   a scenario is not a mapping, has no `scenario:`, names an unknown `kind:`, is
   behavioural and missing a half (`why=missing-then`), or is `kind: structural`
   and either carries no `text:` or carries Given/When/Then as well.
-- else `outcome=ok review=<human|unattended|none> candidates=<n> scenarios=<n>`
-  (exit 0).
+- `outcome=fail reason=plan-unseamed` (exit 1) — the plan declares no `seams:`.
+- `outcome=fail reason=seam-unstructured seam=<name> why=<detail>` (exit 1) — a
+  declared seam has no `name:` (`seam=<index>`) or no `at:`, repeats a name,
+  names an unknown `kind:`, or is a seam after the first / a `kind: new` one
+  with no `why:` (`why=extra-unjustified|new-unjustified`). The name is emitted
+  with its whitespace squashed to `_`, since a verdict is space-separated
+  `key=value` and a prose name would otherwise be read truncated.
+- `outcome=fail reason=slice-unseamed slice=<id>` (exit 1) — a slice names no
+  `seam:`.
+- `outcome=fail reason=unnamed-seam slice=<id> seam=<name>` (exit 1) — a slice's
+  `seam:` is not one the plan declared: it tests somewhere nobody agreed to.
+- else `outcome=ok review=<human|unattended|none> candidates=<n> scenarios=<n>
+  seams=<n>` (exit 0).
 
 **`scenarios:` is the half of the contract that reaches a unit with no map at
 all**, and that is the half that was costing: both measured 0%-first-pass-green
@@ -315,6 +326,17 @@ test; `scenarios:` is what the executor must make true, in a form it cannot
 quietly re-interpret. The `candidate-in-oracle` search covers a slice's
 `scenarios:` as well as its `oracle:`, or renaming the field would have been the
 whole of the bypass.
+
+**The seams are named once per unit, before the oracles.** Fewest, highest,
+existing over new — the ideal number is one. Unpressured, eight slices invent
+eight oracle locations, and each is an independent chance to assert below the
+level the claim lives at; that is the shape of the worst defect in the corpus,
+where the oracle sat at the unit rather than the composition root and both
+wiring lines could be deleted with `tsc` clean and 738 tests green. *Highest* is
+a judgement and stays one — what is checkable is that the seam is named,
+located (`at:`) and defended, so the first seam is free and every one after it
+owes a line saying why the named ones cannot hold the claim. A cap would be
+wrong: some units genuinely need two. Silence was what was wrong.
 
 `outcome=fail` (exit 1) is distinct from `outcome=error` (exit 2, e.g.
 `plan-unreadable`, `plan-unparseable`, `missing-plan`): a plan `check-plan`

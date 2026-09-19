@@ -1,6 +1,11 @@
+seams:
+  - name: the launcher's verdict line
+    at: plugins/bett3r-ai-workflow/bin/design-map:1
+    kind: existing
 ticket: ESAS-9
 slices:
   - id: 1
+    seam: the launcher's verdict line
     name: "slice one"
     oracle: |
       the launcher prints outcome=ok and exits 0

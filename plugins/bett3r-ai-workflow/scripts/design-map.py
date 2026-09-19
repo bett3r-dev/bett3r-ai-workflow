@@ -7,9 +7,15 @@
     DESIGN-MAP:v1 outcome=ok verb=render maps=<n> forks=<n> expected=<n> page=<path>   (--stack)
     DESIGN-MAP:v1 outcome=ok verb=apply-answers final=<bool> open=<n> owner=<n> recommendation=<n> code=<n> moot=<n> otherMap=<n> commented=<ids|none> map=<path>
     DESIGN-MAP:v1 outcome=ok verb=candidates forks=<n> candidates=<n> skipped-open=<n> skipped-moot=<n> skipped-nowalk=<n> skipped-untestable=<n>
-    DESIGN-MAP:v1 outcome=ok verb=check-plan review=<human|unattended|none> candidates=<n>
+    DESIGN-MAP:v1 outcome=ok verb=check-plan review=<human|unattended|none> candidates=<n> scenarios=<n> seams=<n>
     DESIGN-MAP:v1 outcome=fail verb=check-plan reason=unattended-confirmed
     DESIGN-MAP:v1 outcome=fail verb=check-plan reason=candidate-in-oracle slice=<id>
+    DESIGN-MAP:v1 outcome=fail verb=check-plan reason=slice-unscened slice=<id>
+    DESIGN-MAP:v1 outcome=fail verb=check-plan reason=scenario-unstructured slice=<id> why=<w>
+    DESIGN-MAP:v1 outcome=fail verb=check-plan reason=plan-unseamed
+    DESIGN-MAP:v1 outcome=fail verb=check-plan reason=seam-unstructured seam=<name|index> why=<w>
+    DESIGN-MAP:v1 outcome=fail verb=check-plan reason=slice-unseamed slice=<id>
+    DESIGN-MAP:v1 outcome=fail verb=check-plan reason=unnamed-seam slice=<id> seam=<name>
     DESIGN-MAP:v1 outcome=ok verb=project ticket=<K> forks=<n> nodes=<n>
     DESIGN-MAP:v1 outcome=ok verb=decisions open=<n> owner=<n> recommendation=<n> code=<n> moot=<n>
     DESIGN-MAP:v1 outcome=ok verb=record forks=<n> payloads=<n> owner=<n> recommendation=<n> code=<n> unresolved=<n> nocard=<n> already=<n> sidecar=<path>
@@ -230,8 +236,27 @@ not read):
                                  named as slice=, or slice=unknown when that
                                  slice carries no id)
 
+and, over the slices themselves:
+
+  reason=slice-unscened         a slice carries no `scenarios:` at all
+  reason=scenario-unstructured  a scenario is not a Given/When/Then triple
+                                 (`why=missing-<fields>`), or a
+                                 `kind: structural` one carries GWT / no text
+  reason=plan-unseamed          the plan declares no `seams:`
+  reason=seam-unstructured      a declared seam has no `name`/`at`, repeats a
+                                 name, has an unknown `kind`, or is a second
+                                 (or `kind: new`) seam with no `why:`
+  reason=slice-unseamed         a slice names no `seam:`
+  reason=unnamed-seam           a slice's `seam:` is not one the plan declared
+                                 — it tests somewhere nobody agreed to
+
+The seam block is the unit's answer to "where do we test this", written once:
+fewest, highest, existing over new. `at:` records where it is; `why:` is owed
+by every seam after the first and by every new one, so adding a seam costs a
+justification and the ideal number stays one.
+
 else `outcome=ok review=<the top-level review, or "none"> candidates=<the
-length of candidateOracles, 0 if the key is absent>`. Other reasons, all
+length of candidateOracles, 0 if the key is absent> scenarios=<n> seams=<n>`. Other reasons, all
 `outcome=error`: `missing-plan` (no argument), `plan-unreadable` (the file
 cannot be opened as UTF-8), `plan-unparseable` (invalid YAML, or the
 document / its `candidateOracles` / its `slices` is not the shape this reads
@@ -1378,8 +1403,98 @@ def check_plan(positional, flags):
                     raise Refusal("candidate-in-oracle", outcome="fail",
                                   slice="unknown" if slice_id is None else slice_id)
     scened = check_scenarios(raw_slices)
+    seams = check_seams(doc, raw_slices)
     return dict(review=review if review else "none", candidates=len(raw_candidates),
-                scenarios=scened)
+                scenarios=scened, seams=seams)
+
+
+def seam_attr(name):
+    """A seam name for a verdict line: whitespace collapsed to `_`.
+
+    A verdict is space-separated `key=value` (ADR-004), and a seam is named in
+    prose — "the launcher's verdict line". Emitted raw, the value would end at
+    its first space and every parser downstream would read a truncated name as
+    if it were the whole one. The truncation is the failure the rest of this
+    verb exists to prevent, so it is squashed here rather than hoped about.
+    """
+    return "_".join(str(name).split()) or "unnamed"
+
+
+def check_seams(doc, raw_slices):
+    """The unit names its seams once, and every slice tests at a named one.
+
+    Pocock's `to-spec` puts this before any test exists: *"Sketch out the seams
+    at which you're going to test the feature. Existing seams should be
+    preferred to new ones. Use the highest seam possible. The fewer seams
+    across the codebase, the better - the ideal number is one."* Our `/plan`
+    wrote a per-slice `oracle:` under no pressure toward a shared seam, so
+    eight slices invented eight oracle locations and each one was an
+    independent chance to test below the level the claim lives at. That is the
+    shape of the worst defect in the corpus: the oracle sat at the unit, not at
+    the composition root, so both wiring lines could be deleted with `tsc`
+    clean and 738 tests green.
+
+    His gate is a human confirm. Fleet lanes are unattended by construction
+    (`plan.md:57`), so the content transfers and the gate does not: the seam
+    must be *named, justified and recorded*, and checked mechanically.
+
+    Three things are checkable, and only these three:
+
+      * a plan declares `seams:` at all - at least one;
+      * every slice names one, and it is one of the declared ones
+        (`unnamed-seam`: the slice tests somewhere nobody agreed to);
+      * FEWEST is pressure, not a cap. The first seam needs no defence; every
+        seam after it, and every `kind: new` seam, carries `why:` - one line
+        saying why the already-named seams cannot hold this slice's claim.
+        A number cannot be legislated (some units genuinely need two), but an
+        unjustified second seam can be refused, and that is the whole of the
+        cost of adding one.
+
+    HIGHEST is a judgement and stays one: `at:` records where the seam is so a
+    reviewer and the verifier can see it, and the justification is what they
+    read. This refuses the *absence* of that record, never the choice.
+    """
+    raw_seams = doc.get("seams")
+    if raw_seams is None or (isinstance(raw_seams, list) and not raw_seams):
+        raise Refusal("plan-unseamed", outcome="fail")
+    if not isinstance(raw_seams, list):
+        raise Refusal("plan-unparseable")
+    names = []
+    for i, sm in enumerate(raw_seams):
+        if not isinstance(sm, dict):
+            raise Refusal("plan-unparseable")
+        def text(field, where=sm):
+            value = where.get(field)
+            return isinstance(value, str) and value.strip()
+        name = text("name")
+        if not name:
+            raise Refusal("seam-unstructured", outcome="fail", seam=i, why="no-name")
+        if name in names:
+            raise Refusal("seam-unstructured", outcome="fail", seam=seam_attr(name), why="duplicate-name")
+        if not text("at"):
+            # Where the seam IS, checked at HEAD when written - the same rule
+            # `/plan` Step 3 already applies to every code-describing field: a
+            # gate carries the obligation and the file:line it was checked at,
+            # never a remembered one.
+            raise Refusal("seam-unstructured", outcome="fail", seam=seam_attr(name), why="no-at")
+        kind = sm.get("kind", "existing")
+        if kind not in ("existing", "new"):
+            raise Refusal("seam-unstructured", outcome="fail", seam=seam_attr(name), why="unknown-kind")
+        if (names or kind == "new") and not text("why"):
+            raise Refusal("seam-unstructured", outcome="fail", seam=seam_attr(name),
+                          why="new-unjustified" if kind == "new" else "extra-unjustified")
+        names.append(name)
+    for sl in raw_slices:
+        if not isinstance(sl, dict):
+            raise Refusal("plan-unparseable")
+        slice_id = sl.get("id")
+        where = "unknown" if slice_id is None else slice_id
+        seam = sl.get("seam")
+        if not (isinstance(seam, str) and seam.strip()):
+            raise Refusal("slice-unseamed", outcome="fail", slice=where)
+        if seam.strip() not in names:
+            raise Refusal("unnamed-seam", outcome="fail", slice=where, seam=seam_attr(seam))
+    return len(names)
 
 
 def check_scenarios(raw_slices):

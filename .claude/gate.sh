@@ -154,7 +154,12 @@ step() {
 step validate-plugins fast <<'EOF'
 python3 scripts/validate-plugins.py
 EOF
-step validate-plugins-tools-allowlist full <<'EOF'
+# Surface: the suite drives the rule two ways, and both are covered here. The shape
+# cases run over synthesized trees, so only the rule and its own suite can change them;
+# the CENSUS reads the REAL corpus and asserts the exact agent count plus the negative
+# form (no agent lacks `tools:`), so every agent entrypoint is in the surface too. A
+# new agent under any plugin matches 'plugins/*/agents/*' and re-runs the census.
+step validate-plugins-tools-allowlist full 'plugins/*/agents/*' 'scripts/validate-plugins.py' 'scripts/test-validate-plugins.sh' <<'EOF'
 sh scripts/test-validate-plugins.sh
 VP_PY=python3 sh scripts/test-validate-plugins.sh
 EOF

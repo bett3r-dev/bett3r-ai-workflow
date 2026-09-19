@@ -1,3 +1,4 @@
+# The unit named its seam; this slice does not say it tests there.
 seams:
   - name: the launcher's verdict line
     at: plugins/bett3r-ai-workflow/bin/design-map:1
@@ -6,12 +7,11 @@ ticket: ESAS-9
 review: unattended
 slices:
   - id: 1
-    seam: the launcher's verdict line
     name: "slice one"
     oracle: |
       the launcher prints outcome=ok and exits 0
     scenarios:
-      - scenario: no module outside the ledger appends
-        kind: structural
-        text: >
-          every append is in src/ledger, and no module outside it appends
+      - scenario: a slice names no seam
+        given: a plan whose seams block is present
+        when: a slice carries no seam key
+        then: the launcher refuses it, naming the slice
