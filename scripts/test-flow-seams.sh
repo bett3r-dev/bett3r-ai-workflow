@@ -2935,6 +2935,218 @@ for f in agents/executor.md agents/scope-check.md agents/provisioner.md commands
   present "$PLUGIN/$f" 'git stash create' "$f names the sanctioned alternative to the blocked git forms (git stash create)"
 done
 
+printf '\nSeam I — /start-multi is a TICK: it yields at the wave boundary\n\n'
+# ---------------------------------------------------------------------------
+#
+# GH-429-F1/F3/F4. The orchestrator was one context for a whole run; it is now a
+# re-dispatchable tick that ends at wave completion and is dispatched again on a
+# fresh context. A presence oracle, for this file's header reason: the yield is
+# prose a model reads, and the failure it exists to prevent is a DELETION of one
+# of its preconditions. That matters more here than anywhere else in this file,
+# because EVERY precondition fails silently:
+#
+#   - the push dropped: a gate-red lane's commits live only in a worktree, so the
+#     next tick (possibly on another machine) resumes from a branch that never saw
+#     them, and a recycled worktree loses them outright;
+#   - the lock precondition dropped: the heartbeat refresher dies with the
+#     context, so a lock left held is reclaimable only after the full
+#     `5 x interval` wait — paid by every later tick, looking like slowness;
+#   - the tick stamp dropped: tick 2 resolves a `SendMessage` recipient from tick
+#     1's rows and messages corpses, and a message that goes nowhere is
+#     indistinguishable from a lane not answering.
+#
+# None of the three turns anything red on its own. Hence one assertion each,
+# never one over the paragraph: losing a single precondition is the failure, and
+# a needle over the whole block would stay green while two of the three went.
+START_MULTI_MD="$PLUGIN/commands/start-multi.md"
+
+present "$START_MULTI_MD" 'FLEET-STEP:v1 outcome=success waves=<k>/<N> units=<t>/<u>' \
+  '/start-multi emits the FLEET-STEP:v1 wave verdict (GH-429-F3)'
+present "$START_MULTI_MD" 'at column 0 with nothing after it, and take no turn after it' \
+  '/start-multi'\''s verdict is the final line and ends the tick (ADR-004)'
+
+# The push precondition, in the YIELD's own words. Deliberately NOT the wording of
+# the step 2 cost stop (`keep its worktree, because a lane that has not reached
+# /verify-build has pushed nothing`): two needles over one sentence make each
+# other unkillable, and the cost stop's sentence is about whether to dispatch,
+# while this one is about whether ending is safe. Deleting the yield's sentence
+# must redden this and leave the cost stop's pin alone — that is the slice's probe.
+present "$START_MULTI_MD" '`git push` every started lane'\''s branch and keep every worktree this tick touched' \
+  '/start-multi pushes every started branch and keeps the worktrees before it yields (GH-429-F1)'
+present "$START_MULTI_MD" 'Hold no lock directory and leave no background `heartbeat` refresher alive' \
+  '/start-multi holds no lock and leaves no heartbeat refresher alive when it yields (design risk 3)'
+
+# The tick stamp, and BOTH readers. One needle over the stamp alone would be
+# green on the state that costs the run its addressing: rows stamped, and tick 2
+# still messaging every row it finds. So the addressing lifetime and the
+# attribution lifetime are separately pinned (design risk 2 — two readers, two
+# lifetimes); losing either one is silent.
+present "$START_MULTI_MD" 'Stamp every `agents.yaml` row you wrote with `tick: <n>`' \
+  '/start-multi stamps agents.yaml rows with the tick that wrote them (design risk 2)'
+present "$START_MULTI_MD" 'recipient **only** from rows stamped with the current tick' \
+  '/start-multi addresses only the current tick'\''s rows'
+present "$START_MULTI_MD" 'attribution (`/run-report --fleet`) reads **every** tick'\''s rows' \
+  '/start-multi keeps attribution reading every tick'\''s rows'
+
+# F4's positive half: the resume point is DERIVED. Pinned on the derivation
+# sentence rather than on the word "derive", because "derived from the state
+# file" is the exact misread the command itself calls its commonest (git is the
+# primary signal).
+present "$START_MULTI_MD" 'Wave progress is `units[].wave` plus `step`/`status`, cross-checked against `git log' \
+  '/start-multi derives wave progress from units[] cross-checked against git (GH-429-F4)'
+# F3's positive half, in the command's own words: a yield is a short success, not
+# a fourth outcome word.
+present "$START_MULTI_MD" 'a wave short of the total is a `success` whose `waves=` is short' \
+  '/start-multi spells a yield as a short success, not a fourth outcome (GH-429-F3)'
+
+# --- executed: the run.yaml block gains waveBudget and a spend addend, and
+# NOTHING else. The fenced block under `## run.yaml` is the only specification of
+# the file any tick writes, so it is extracted and read as text: the two additive
+# keys must be there, and `wavesDone:` / `phase:` must not, because a stored wave
+# pointer is a second and staler answer to a question `units[]` already answers
+# (GH-429-F4) and the command names that misread as its commonest. Extraction is
+# positive-controlled first: an empty block would make both halves pass.
+awk '/^## run.yaml/{f=1} f&&/^```/{n++; if(n==1){next} if(n==2){exit}} f&&n==1{print}' \
+  "$START_MULTI_MD" > "$TMP/start-multi-runyaml.txt"
+if [ ! -s "$TMP/start-multi-runyaml.txt" ] || ! grep -q 'runId:' "$TMP/start-multi-runyaml.txt"; then
+  fail 'the run.yaml block is extractable from start-multi.md (positive control)' \
+       'no fenced YAML block carrying runId: under the `## run.yaml` heading' \
+       'an empty extraction makes every assertion over the block pass, in both directions.'
+else
+  pass 'the run.yaml block is extractable from start-multi.md (positive control)'
+  if grep -q '^waveBudget:' "$TMP/start-multi-runyaml.txt"; then
+    pass 'run.yaml carries waveBudget — the one policy input no unit determines (GH-429-F4)'
+  else
+    fail 'run.yaml carries waveBudget — the one policy input no unit determines (GH-429-F4)' \
+         "block keys: $( grep -o '^[a-zA-Z]*:' "$TMP/start-multi-runyaml.txt" | tr '\n' ' ' )" \
+         'without it a resumed tick invents its own wave ceiling, which is the cost stop with no trigger.'
+  fi
+  if grep -q '^spendToDate:' "$TMP/start-multi-runyaml.txt"; then
+    pass 'run.yaml carries the cumulative spend addend (design risk 5)'
+  else
+    fail 'run.yaml carries the cumulative spend addend (design risk 5)' \
+         "block keys: $( grep -o '^[a-zA-Z]*:' "$TMP/start-multi-runyaml.txt" | tr '\n' ' ' )" \
+         'spend is an accumulator, not a projection of units[]: after the yield nothing else can notice the ceiling.'
+  fi
+  stored=$( grep -n 'wavesDone:\|phase:' "$TMP/start-multi-runyaml.txt" || true )
+  if [ -z "$stored" ]; then
+    pass 'run.yaml stores no wavesDone or phase key — both are projections of units[] (GH-429-F4)'
+  else
+    fail 'run.yaml stores no wavesDone or phase key — both are projections of units[] (GH-429-F4)' \
+         "stored in the run.yaml block: $stored" \
+         'a state file that says step: plan while the branch carries three slices is the commonest misread.'
+  fi
+fi
+
+# --- executed: no FOURTH outcome word enters the vocabulary (GH-429-F3).
+# Two halves, because either alone reads as a pass. The positive half is a
+# census: every `FLEET-STEP:v1 outcome=<word>` written anywhere in the corpus —
+# plugin, docs and the parser's fixtures — must spell one of the three, and the
+# census must have found something, or it is a guard over the empty set.
+fleet_words=$( grep -rhao 'FLEET-STEP:v1 outcome=[A-Za-z-]*' "$PLUGIN" "$ROOT/docs" "$ROOT/scripts/fixtures" 2>/dev/null \
+               | sed 's/.*outcome=//' | sort -u )
+if [ -z "$fleet_words" ]; then
+  fail 'the FLEET-STEP outcome census found verdict lines to check (positive control)' \
+       'no `FLEET-STEP:v1 outcome=` occurrence anywhere under plugins/, docs/ or scripts/fixtures/' \
+       'a vocabulary census over zero verdict lines passes whatever the vocabulary is.'
+else
+  pass 'the FLEET-STEP outcome census found verdict lines to check (positive control)'
+  bad_words=
+  for w in $fleet_words; do
+    case $w in success|gate-red|blocked-on) ;; *) bad_words="$bad_words $w" ;; esac
+  done
+  if [ -z "$bad_words" ]; then
+    pass 'every FLEET-STEP verdict spells success / gate-red / blocked-on and nothing else (GH-429-F3)'
+  else
+    fail 'every FLEET-STEP verdict spells success / gate-red / blocked-on and nothing else (GH-429-F3)' \
+         "outcome word(s) outside the three:$bad_words" \
+         'the reader of the line (verdict.ts OUTCOMES) is a three-value table; a fourth word is `infra unknown-outcome`.'
+  fi
+fi
+# The negative half: the rejected word appears NOWHERE outside the design that
+# rejected it. Positive-controlled against that design first — a needle that
+# matches nothing would make this a guard over the empty set too, and the word
+# genuinely does occur there (the F3 rejected option and its evidence line).
+# `docs/prs/GH-429/` is excluded as a whole rather than design.md alone: the
+# design's map.json / map.html are one generated artifact set with it, carrying
+# the same rejected-option label, and no tick reads any of the three.
+if grep -qF 'outcome=yield' "$ROOT/docs/prs/GH-429/design.md"; then
+  pass 'the rejected outcome word is spelled in the design that rejected it (positive control)'
+else
+  fail 'the rejected outcome word is spelled in the design that rejected it (positive control)' \
+       'no `outcome=yield` in docs/prs/GH-429/design.md' \
+       'if the needle matches nothing, the census below is a guard over the empty set.'
+fi
+yield_word=$( grep -ralF 'outcome=yield' "$PLUGIN" "$ROOT/docs" 2>/dev/null \
+              | grep -v '^'"$ROOT"'/docs/prs/GH-429/' || true )
+if [ -z "$yield_word" ]; then
+  pass 'no artifact outside the design that rejected it spells outcome=yield (GH-429-F3)'
+else
+  fail 'no artifact outside the design that rejected it spells outcome=yield (GH-429-F3)' \
+       'the fourth outcome word is spelled in:' \
+       $( printf '%s\n' "$yield_word" | sed "s#^$ROOT/##" ) \
+       'a fourth outcome word is a vocabulary the three-value reader of the line knows nothing about.'
+fi
+
+# --- executed: teardown is gated on `terminal: true`, not on a pushed branch.
+# The yield's precondition 1 pushes EVERY started lane's branch, including a
+# gate-red lane that is not terminal. If step 7 removes a worktree on "branch is
+# pushed" alone, the same tick destroys the tree precondition 1 exists to
+# preserve — and the loss is silent, because the branch really is pushed and the
+# removal really did succeed. So step 7's own paragraph is extracted and read:
+# the removal condition must name `terminal: true`, and the literal Bash call
+# must still be there (a condition pinned onto a paragraph that no longer issues
+# the command is a guard over nothing). Extraction is positive-controlled first,
+# and narrowed to the REMOVAL CONDITION's own sentence rather than the whole
+# paragraph: step 7's Done line also spells `terminal: true`, so a needle over
+# the paragraph stays green while the condition itself reverts to pushed-alone —
+# measured, not supposed: that probe produced zero reds before this narrowing.
+awk '/^\*\*7 — Teardown\./{f=1} /^\*\*8 —/{f=0} f' "$START_MULTI_MD" > "$TMP/start-multi-step7.txt"
+grep -F 'remove only worktrees' "$TMP/start-multi-step7.txt" > "$TMP/start-multi-step7-cond.txt"
+if [ ! -s "$TMP/start-multi-step7.txt" ] || ! grep -qF 'git worktree remove <path>' "$TMP/start-multi-step7.txt" \
+   || [ ! -s "$TMP/start-multi-step7-cond.txt" ]; then
+  fail 'step 7 is extractable and still issues the literal worktree removal (positive control)' \
+       'no `**7 — Teardown.**` section carrying both a `remove only worktrees …` condition and `git worktree remove <path>`' \
+       'an empty extraction makes the terminal-condition assertion below pass whatever step 7 says.'
+else
+  pass 'step 7 is extractable and still issues the literal worktree removal (positive control)'
+  if grep -qF 'terminal: true' "$TMP/start-multi-step7-cond.txt"; then
+    pass 'step 7 removes a worktree only for a unit at `terminal: true` (GH-429 precondition 1)'
+  else
+    fail 'step 7 removes a worktree only for a unit at `terminal: true` (GH-429 precondition 1)' \
+         "step 7's removal condition reads: $( cat "$TMP/start-multi-step7-cond.txt" )" \
+         'expected the condition to require `terminal: true`; a pushed-branch-alone condition tears down the' \
+         'gate-red lane the yield just pushed, which is the tree the next tick resumes from.'
+  fi
+fi
+# The tick boundary must say the same thing step 7 now says, in the place a
+# reader of the yield looks. Two opposite claims about one mechanism in one file
+# is what this pins against.
+present "$START_MULTI_MD" 'keeps its worktree even though its branch is now pushed' \
+  '/start-multi keeps a non-terminal lane'\''s worktree after the yield pushes its branch (GH-429-F1)'
+
+# --- executed: the spend accumulator carries its UNIT, and the ceiling it is
+# measured against carries the same one. `spendToDate` is written as an addend by
+# a tick that cannot see the previous tick's reasoning (design risk 5, a named
+# mitigation): an unlabelled addend lets tick 1 write dollars and tick 2 tokens,
+# and the sum is silently meaningless — which is the accumulator failure the risk
+# names. Guarded on the extracted run.yaml block, reusing the positive control
+# above ($TMP/start-multi-runyaml.txt is non-empty or that control already failed).
+if grep -q '^spendToDate:.*USD' "$TMP/start-multi-runyaml.txt" 2>/dev/null; then
+  pass 'run.yaml names the unit of the spend addend (USD) (design risk 5)'
+else
+  fail 'run.yaml names the unit of the spend addend (USD) (design risk 5)' \
+       "spendToDate reads: $( grep '^spendToDate:' "$TMP/start-multi-runyaml.txt" 2>/dev/null )" \
+       'an addend with no unit sums dollars onto tokens across ticks and reads as a number.'
+fi
+if grep -q '^waveBudget:.*ceiling:.*USD' "$TMP/start-multi-runyaml.txt" 2>/dev/null; then
+  pass 'run.yaml states the spend ceiling in the same unit as the addend (USD) (design risk 5)'
+else
+  fail 'run.yaml states the spend ceiling in the same unit as the addend (USD) (design risk 5)' \
+       "waveBudget reads: $( grep '^waveBudget:' "$TMP/start-multi-runyaml.txt" 2>/dev/null )" \
+       'the cost stop compares spendToDate against this ceiling; two units make the comparison a coin flip.'
+fi
+
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"
   exit 0

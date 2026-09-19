@@ -62,7 +62,7 @@ Waves in order; within a wave, launch `unit-lane` agents up to `--max-parallel`;
 
 The brief states only what you MEASURED, ALLOCATED or OBSERVED: drift, the runner/glob map, allocations, the baseline, environment probes, sibling provenance, the parent delta. Where it needs a block decision it quotes verbatim or cites the section, because a summary reads more usable than a quote and is where a false fact enters with zero drift and no gate to catch it. Every brief carries the precedence line: *"Where this brief and `ticket-block.md` disagree, the block wins and the brief is wrong — report the divergence."*
 
-- Write `<run>/agents.yaml` (`unitId`, `agentId`, `worktree`, `dispatchedAt`) as each lane launches, resolve the recipient from it before every `SendMessage`, and lead with `TO: <TICKET-ID>`; the harness addresses opaque ids and you reason in ticket ids.
+- Write `<run>/agents.yaml` (`unitId`, `agentId`, `worktree`, `dispatchedAt`, `tick`) as each lane launches, resolve the recipient from it before every `SendMessage`, and lead with `TO: <TICKET-ID>`; the harness addresses opaque ids and you reason in ticket ids. The tick stamp is what makes a row addressable and is specified under **The tick boundary** below.
 - A relayed sibling fact carries a branch or sha and its label, `PRESENT ON YOUR BASE` or `ON A SIBLING BRANCH ONLY — code to the seam, do not import`, and is addressed as `git show <sha>:<path>`, since a worktree path is invalid the moment the worktree is recycled.
 - Allocate every monotonically-numbered artifact up front, ADR numbers above all, and on request mid-run, requiring claimed / released back; the `domain-modeling` skill states the numbering rule. An `adr=` attribute on a resolved marker is the number that was free when the block was written, not a reservation: re-derive it against BASE plus every sibling branch and rewrite the marker if it moved (`git ls-tree <BASE> --name-only <adr-dir> | grep -q "ADR-$n" && echo "COLLIDED: $n"`).
 - Effort is a pre-flight decision, inherited from the session that launched the fleet and chosen once for every lane; model routing is stated per dispatch, and the brief's `modelRouting` carries it.
@@ -80,7 +80,7 @@ You await many agents at once, so your waiting rule differs from a lane's. **A s
 
 Aggregate into `run.yaml`. Resume any `in_progress` (dead agent) or escalated unit from its next incomplete step; committed slices are skipped. Escalations reach the human as one numbered list in your own reply, recommendation first and one line of why each, and the answers arrive in the next message. A design-heavy unit stops after `design` for review; a design-resolved unit flows straight to `plan`, escalating only where code drift re-opens a fork.
 
-Done when every unit is `passed`, `failed`, `blocked`, or listed in the current escalation batch.
+Done when every unit in the wave you dispatched is `passed`, `failed`, `blocked`, or listed in the current escalation batch — which is a wave boundary, and a wave boundary ends this context (**The tick boundary**, below).
 
 **5 — Base gate and stacked children.** You own a **diamond base**: a two-parent merge is yours, not the child's, because a base that does not compile surfaces deep inside the child. Generated files: `git checkout --theirs`, then re-run the generator. Hand-authored additive files: splice complete units. Check for `*.orig` residue before committing. Run the host repo's gate on `int/<run-id>` once (step 0), on every diamond base, and on any other orchestrator-authored commit lanes build on, before cutting a child from it: the `full-gate` skill, in the repo's scoped mode (or `--fast` where the host has no scoped mode, and say which ran). The whole-repo modes `--full` and `--all` are never a flow step's; that run is CI's, or the owner's on request. Where your base commit adds or removes a file of a kind a census or ratchet guard counts, run those guards by name on top and record them as named steps, since they glob the tree and no diff-scoped selection reaches them. Record the verdict as `baseGate` in `run.yaml`; it is also the integration-tier baseline the provisioner hands each lane.
 
@@ -92,13 +92,29 @@ Done when every orchestrator-authored base has a recorded gate verdict and every
 
 **6 — PRs.** Per passed unit, `/verify-build` opens the PR **ready for review** against `int/<run-id>`, or the parent branch when stacked. The default branch is `/merge-multi`'s target: a unit PR there carries sibling noise and resolves conflicts a second time. Done when every passed unit has `prUrl` and its `mergeable` state in `run.yaml`.
 
-**7 — Teardown.** First merge the per-unit `<run>/units/<id>.learnings.md` files into `<run>/learnings.md`, tagged by unit, plus your own dispatch-time friction. Then remove only worktrees this run created whose branch is pushed, or whose unit is terminally `failed` and acknowledged, each as its own Bash call:
+**7 — Teardown.** First merge the per-unit `<run>/units/<id>.learnings.md` files into `<run>/learnings.md`, tagged by unit, plus your own dispatch-time friction. Then remove only worktrees this run created whose unit is `terminal: true` in `run.yaml` — branch pushed and passed, or terminally `failed` and acknowledged — each as its own Bash call:
 
     git worktree remove <path>
 
-A pre-existing or dirty worktree stays. Skip with `--keep-worktrees`. Done when `<run>/learnings.md` exists and every removed worktree's unit shows a pushed branch.
+A pre-existing or dirty worktree stays. Skip with `--keep-worktrees`. Done when `<run>/learnings.md` exists and every removed worktree's unit shows `terminal: true` and a pushed branch.
 
 **8 — Report and capture.** Per unit: branch (with base or stack parent), step reached, PR URL and `mergeable` state, unresolved decisions, and its `owesSiblings` entries; then the stack topology and merge order. Verify the sibling overlap step 1 assumed, now that both diffs exist: `comm -12` the file lists, `git merge-tree` their merge base. For every pinned counter more than one lane touched, report each lane's delta and the base it took it from, because the merged pin is `base + Σ deltas`, a number on no branch, and `/merge-multi` needs the addends. Collapse follow-ups across units (the same finding from two lanes, items a sibling resolved in flight), separate *needs a decision* from *needs work*, and report raw → collapsed. Run `/capture-learnings` once over `<run>/learnings.md`. End by naming the next gesture: review the N PRs, then `/merge-multi <run-id>` in a **fresh session**, because this session is the largest context in the run and a mechanical merge needs none of it. Done when the report names every unit, every collapsed follow-up, and the next gesture.
+
+## The tick boundary
+
+**You are a tick, not a session.** When every unit of the wave you dispatched is terminal (`passed`, `failed`, `blocked`) or in the current escalation batch, you stop dispatching, finish steps 5-8 for what this wave produced, and **end your context**. A later wave belongs to the **next** tick, dispatched on a fresh context against the same `run.yaml`: resume is unchanged — `run.yaml` present and no `--fresh` means resume — and per-tick cost is bounded by one wave instead of by the fleet. Ending is only safe because of the five preconditions below, and each one fails **silently** if it is dropped, so none of them is optional.
+
+1. **`git push` every started lane's branch and keep every worktree this tick touched.** A lane that has not reached `/verify-build` has pushed nothing, so an unpushed wave is commits that exist in one directory on one machine: the next tick resumes from a branch that never saw them, and a recycled worktree loses them outright. This is why step 7 removes a worktree only for a unit already `terminal: true`: the push you just made satisfies "branch is pushed" for every lane in the wave, so a lane this tick left non-terminal — gate-red, escalated, resumable — keeps its worktree even though its branch is now pushed, and its teardown belongs to whichever later tick finds it terminal.
+2. **Hold no lock directory and leave no background `heartbeat` refresher alive.** Release every lock you took — `rm -rf` the whole directory, as step 2 requires — and stop your refresher yourself before you print anything. The refresher dies with this context, so a lock left held is reclaimable only after the full `now − mtime > 5 × interval` wait on two reads, paid by every later tick before any lane can run, and it reads as slowness rather than as a leak.
+3. **Stamp every `agents.yaml` row you wrote with `tick: <n>`**, where `n` is `1 +` the highest `tick` already in `agents.yaml` (no rows, or rows from a run that predates the stamp, means tick 1). The file has two readers with two lifetimes. Addressing resolves a `SendMessage` recipient **only** from rows stamped with the current tick, because an `agentId` does not survive the session that spawned it and a message to a dead agent is indistinguishable from a lane not answering; attribution (`/run-report --fleet`) reads **every** tick's rows, because N sessions are still one run. An unstamped row is addressable by no tick.
+4. **Derive where the run got to; store only what no unit determines.** Wave progress is `units[].wave` plus `step`/`status`, cross-checked against `git log origin/<default>..<each unit's branch>` as step 4 requires — git is the primary signal and the state file a hint. `run.yaml` gains exactly two keys for the yield, `waveBudget` and `spendToDate`: the first is a policy input no unit can compute, the second an accumulator nothing can project from `units[]`, written as an addend at each boundary because after the yield no context is long enough to notice its own growth. A `wavesDone:` or `phase:` key is a second, staler answer to a question the units already answer, and "a state file that says `step: plan` while the branch carries three slices" is the orchestrator's commonest misread, as [`unit-lane`](../agents/unit-lane.md) records it.
+5. **Print the verdict as your last act**, at column 0 with nothing after it, and take no turn after it:
+
+        FLEET-STEP:v1 outcome=success waves=<k>/<N> units=<t>/<u>
+
+    `k` is the number of waves now complete and `N` the wave count step 1's sort produced; `t` is the units at a terminal status (`passed`, `failed`, `blocked`) and `u` every unit in `run.yaml`. The outcome vocabulary is `success`, `gate-red` and `blocked-on` and there is no fourth word: a wave short of the total is a `success` whose `waves=` is short, exactly as `/build` spells its own yield one level down. `gate-red` is a red gate you own (step 5's base gate), `blocked-on=<what>` a tick that could not proceed at all, and `waves=<N>/<N>` a run that has finished — the driver stops on that and on a `k` that did not advance. An absent line is `infra`, and `infra` is retried.
+
+`--serial` (`reference/start-multi-serial.md`) is untouched here: whether a serialised run yields on this boundary is not decided, so it keeps running as it does today.
 
 ## run.yaml (ephemeral, gitignored)
 
@@ -110,6 +126,8 @@ baseGate: { ref: <sha>, mode: <as GATE-MODE printed it>, verdict: PASS|FAIL, nam
 landedAt: null          # /merge-multi writes this
 integrationPr: null     # /merge-multi writes this
 flags: { gateDesign: false, noPr: false, serial: false, maxParallel: 2, keepWorktrees: false }
+waveBudget: { waves: <max waves one tick may dispatch>, ceiling: <the spend ceiling step 2 records, in USD> }
+spendToDate: <cumulative spend in USD: an addend written at each wave boundary, never re-derived>
 deps: [ { child: B, parent: A } ]
 units:
   - { id: A, wave: 0, worktree: <path>, worktreeCreated: false, branch: A-slug,
