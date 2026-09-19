@@ -1,6 +1,6 @@
 # Third-party licenses
 
-The skills under `skills/grilling/`, `skills/tdd/`, `skills/code-review/`, `skills/writing-for-agents/`, `skills/domain-modeling/` and `skills/codebase-design/` in this plugin are copied from Matt Pocock's skills repository at https://github.com/mattpocock/skills (commit `c55ee46073ed923f86ce59a5eb3b6d895095d1b7`), which is distributed under the MIT License reproduced below. Each of those skill directories carries a `CREDITS.md` that points back here, and each `SKILL.md` declares the same attribution under `metadata.credits` in its frontmatter.
+The skills under `skills/grilling/`, `skills/writing-for-agents/` and `skills/domain-modeling/` in this plugin are copied from Matt Pocock's skills repository at https://github.com/mattpocock/skills (commit `c55ee46073ed923f86ce59a5eb3b6d895095d1b7`), which is distributed under the MIT License reproduced below. Each of those skill directories carries a `CREDITS.md` that points back here, and each `SKILL.md` declares the same attribution under `metadata.credits` in its frontmatter.
 
 ## MIT License (github.com/mattpocock/skills)
 

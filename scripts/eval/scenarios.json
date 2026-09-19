@@ -646,73 +646,6 @@
       "must_not_state": []
     },
     {
-      "id": "tdd-tests-reached",
-      "why": "tdd's SKILL.md names the anti-patterns in one line each and points at tests.md for what a good test looks like. The red flags that exist only there — asserting on call counts or order, a test name that describes HOW rather than WHAT, one logical assertion per test — are the ones a reviewer applies by example, and an executor that never opened the examples rewrites an implementation-coupled test into a slightly different implementation-coupled test.",
-      "guards_split": "skills/tdd/SKILL.md -> skills/tdd/tests.md",
-      "artifact": "plugins/bett3r-ai-workflow/skills/tdd/SKILL.md",
-      "prompt": "Read plugins/bett3r-ai-workflow/skills/tdd/SKILL.md. An executor proposes this as the RED test for a checkout slice: `test(\"checkout calls paymentService.process\", async () => { const mockPayment = jest.mock(paymentService); await checkout(cart, payment); expect(mockPayment.process).toHaveBeenCalledWith(cart.total); })`. Judge it against this skill, name every red flag it shows, and rewrite it as the test this skill would accept.",
-      "must_open": [
-        "tests.md"
-      ],
-      "must_state": [
-        [
-          "call count",
-          "toHaveBeenCalled",
-          "asserting on call",
-          "how many times it was called"
-        ],
-        [
-          "HOW",
-          "how not what",
-          "describes how",
-          "test name"
-        ],
-        [
-          "public",
-          "interface",
-          "observable",
-          "behavior",
-          "behaviour"
-        ]
-      ],
-      "must_not_state": []
-    },
-    {
-      "id": "tdd-mocking-reached",
-      "why": "tdd's SKILL.md says mock at boundaries and points at mocking.md for the rest. The two design moves that exist only there — inject the external client instead of constructing it inside the function, and prefer SDK-style per-operation functions over one generic fetcher — decide whether a boundary can be mocked without conditional logic inside the mock, which is where flaky test doubles come from.",
-      "guards_split": "skills/tdd/SKILL.md -> skills/tdd/mocking.md",
-      "artifact": "plugins/bett3r-ai-workflow/skills/tdd/SKILL.md",
-      "prompt": "Read plugins/bett3r-ai-workflow/skills/tdd/SKILL.md. You are about to TDD `processPayment(order)`, which today does `const client = new StripeClient(process.env.STRIPE_KEY); return client.charge(order.total);` and which the codebase reaches through a single `api.fetch(endpoint, options)` helper. Say exactly what you mock and what you refuse to mock, and what you change about the code's shape before writing the first test, so that the mock needs no conditional logic.",
-      "must_open": [
-        "mocking.md"
-      ],
-      "must_state": [
-        [
-          "boundary",
-          "boundaries",
-          "external"
-        ],
-        [
-          "dependency injection",
-          "inject",
-          "pass the client",
-          "passed in"
-        ],
-        [
-          "SDK-style",
-          "specific function",
-          "per-operation",
-          "one function per",
-          "generic fetcher",
-          "generic fetch"
-        ]
-      ],
-      "must_not_state": [
-        "mock the order",
-        "mock your own"
-      ]
-    },
-    {
       "id": "skill-mechanics-reached",
       "why": "writing-for-agents keeps the universal writing rules and points at SKILL-MECHANICS.md for what changes when the document is a skill. The invocation choice lives only there: `disable-model-invocation: true` strips the description from the agent's reach, so no other skill can fire it and the description becomes human-facing. /evolve and /capture-learnings open with this skill, and a session that reads past the pointer writes a trigger-laden description on a skill nothing but a human can invoke.",
       "guards_split": "skills/writing-for-agents/SKILL.md -> skills/writing-for-agents/SKILL-MECHANICS.md",
@@ -738,51 +671,6 @@
         ]
       ],
       "must_not_state": []
-    },
-    {
-      "id": "codebase-design-deepening-reached",
-      "why": "codebase-design's dependency categories decide how a deepened module is tested across its seam; they live only in DEEPENING.md. A session that answers a deepening question from SKILL.md alone will merge modules without classifying what they depend on.",
-      "guards_split": "skills/codebase-design/SKILL.md -> skills/codebase-design/DEEPENING.md",
-      "artifact": "plugins/bett3r-ai-workflow/skills/codebase-design/SKILL.md",
-      "prompt": "Read plugins/bett3r-ai-workflow/skills/codebase-design/SKILL.md. The user has picked a cluster of three shallow modules to deepen: one is pure in-memory computation, one wraps a Postgres query, one calls a third-party HTTP API. Say, per module, how the deepened module will be tested across its seam and whether an adapter is needed, using the skill's own categories.",
-      "must_open": [
-        "skills/codebase-design/DEEPENING.md"
-      ],
-      "must_state": [
-        [
-          "in-process",
-          "in process",
-          "in-memory"
-        ],
-        [
-          "adapter"
-        ]
-      ],
-      "must_not_state": [],
-      "_calibration": "Written with the split (ADR-012 adopted Matt Pocock's codebase-design verbatim). The three dependency categories and the replace-don't-layer testing rule exist only in DEEPENING.md; SKILL.md names the file and the topic but not the categories, so must_open is the load-bearing assertion. Not yet run."
-    },
-    {
-      "id": "codebase-design-design-it-twice-reached",
-      "why": "The alternative-interfaces exploration is a parallel sub-agent pattern with a fixed process (frame the problem space first, then several radically different designs, then compare on depth, locality and seam placement). Only DESIGN-IT-TWICE.md carries the process; a session that skips it will produce one design and call it explored.",
-      "guards_split": "skills/codebase-design/SKILL.md -> skills/codebase-design/DESIGN-IT-TWICE.md",
-      "artifact": "plugins/bett3r-ai-workflow/skills/codebase-design/SKILL.md",
-      "prompt": "Read plugins/bett3r-ai-workflow/skills/codebase-design/SKILL.md. The user has chosen a deepening candidate (a billing-adjustments module) and asks you to explore alternative interfaces for it before committing to one. List concretely the steps you take, in order, and what you write before any design work starts.",
-      "must_open": [
-        "skills/codebase-design/DESIGN-IT-TWICE.md"
-      ],
-      "must_state": [
-        [
-          "sub-agent",
-          "subagent",
-          "sub agents",
-          "subagents"
-        ],
-        [
-          "problem space"
-        ]
-      ],
-      "must_not_state": [],
-      "_calibration": "Written with the split. The 'frame the problem space before spawning sub-agents' step and the compare criteria live only in DESIGN-IT-TWICE.md. Not yet run."
     }
   ]
 }

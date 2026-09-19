@@ -93,11 +93,13 @@ every context that holds the Skill tool, most of it the host's other plugins) is
 step-lane on every turn only so that it can load its one command. `/start` and `/build` call no
 skill, so they now run in `step-lane-file`, a variant with no `Skill` or `SlashCommand` tool that
 reads `commands/<step>.md` through the `bin/` directory on `PATH` and follows it; `/design`, `/plan`
-and `/verify-build`, whose bodies call skills, stay in `step-lane`. And `/verify-build` no longer
-calls the adopted `code-review` skill inside a lane: that skill stops to ask for a tracker
-document and a setup command that do not exist in a fleet host, and a prose override of a stop
-is the variance shape this whole decision removes. The two-axis review it describes is stated
-inline in the command instead, and the skill stays shipped for attended sessions. `grilling`
+and `/verify-build`, whose bodies call skills, stay in `step-lane`. And `/verify-build` states its
+two-axis review inline rather than calling Pocock's `code-review`: that skill stops to ask for a
+tracker document and a setup command that do not exist in a fleet host, and a prose override of
+a stop is the variance shape this whole decision removes. His `code-review`, `tdd` and
+`codebase-design` were adopted and then dropped again the same day: nothing in the flow calls
+them (the executor cannot follow a pointer, so it carries its own RED→GREEN rules), the owner runs
+no attended TDD sessions, and an unreferenced skill is pure listing cost. `grilling`
 keeps his body but carries this plugin's description, so a user's "grill me" reaches `grill`,
 the layer with the flow's fork shape, rather than the primitive under it.
 
@@ -157,7 +159,7 @@ Pocock's adopted files carry no budget of ours; they are his as shipped.
 
 ## Third-party skills
 
-`grilling`, `tdd`, `code-review`, `writing-for-agents`, `codebase-design` and `domain-modeling` are Matt Pocock's
+`grilling`, `writing-for-agents` and `domain-modeling` are Matt Pocock's
 files (github.com/mattpocock/skills, MIT), copied verbatim with the notice in
 `THIRD-PARTY-LICENSES.md` and a `CREDITS.md` beside each. In-house material that layers on them
 is a separate skill (`grill`) or a trailing section (`domain-modeling` § In this flow), never an
