@@ -108,7 +108,9 @@ the layer with the flow's fork shape, rather than the primitive under it.
 Reference that only some runs reach leaves the command or skill body and becomes a companion file,
 reached by a pointer that names the condition under which to open it: `reference/build-pool.md`
 (a worktree pool is in use), `reference/build-record.md` (writing the committed record),
-`reference/start-multi-serial.md` (`--serial`), `skills/design-map/FLEET.md` (a `/design-multi`
+`reference/start-multi-serial.md` (`--serial`), `reference/start-multi-tick-boundary.md` (ending a
+tick) and `reference/start-multi-sizing.md` (choosing `--max-parallel`),
+`reference/design-multi-phase-boundary.md` (ending a phase), `skills/design-map/FLEET.md` (a `/design-multi`
 sitting, a `design-lane`, or a live board), beside the existing `esas-design/BOARD-SETUP.md` and
 `PREFLIGHT.md`. Command companions live under `reference/`, not `commands/`: `validate-plugins.py`
 treats every `commands/*.md` as a loadable command and refuses one without frontmatter, and
@@ -132,9 +134,11 @@ carries a one-line reason in the PR that moved it. Counted with `wc -w`, frontma
 | `commands/plan.md` | 1,500 | 2,300 |
 | `commands/build.md` | 3,000 | 4,600 |
 | `reference/build-pool.md` / `build-record.md` | 800 / 900 | 800 / 900 |
+| `reference/start-multi-serial.md` / `start-multi-tick-boundary.md` / `start-multi-sizing.md` | 600 / 800 / 350 | 600 / 800 / 350 |
+| `reference/design-multi-phase-boundary.md` | 600 | 700 (measured 682) |
 | `commands/verify-build.md` | 2,500 | 3,800 (raised from 3,700 when the whole-PR review moved inline; it replaces a 1,064-word skill load) |
-| `commands/start-multi.md` (+ `reference/start-multi-serial.md` ≤ 600) | 2,500 | 4,400 (raised from 3,300 in GH-429, when the tick boundary's five silently-failing preconditions moved in; measured 4,270 with `wc -w`) |
-| `commands/design-multi.md` | 2,500 | 3,900 (raised from 3,700 in GH-429, for the A/B and B/C phase boundaries; measured 3,805) |
+| `commands/start-multi.md` (+ companions below) | 2,500 | 3,400 (raised from 3,300 in GH-429; measured 3,383 with `wc -w` after the tick boundary and fleet sizing moved to `reference/`. Inline compression was tried first and is exhausted: 28 edits over five passes recovered ~55 words, because this file has been compressed twice before) |
+| `commands/design-multi.md` (+ `reference/design-multi-phase-boundary.md`) | 2,500 | 3,700 (unchanged — GH-429 briefly exceeded it at 3,805 and the phase boundary moved to `reference/` instead of the ceiling moving; measured 3,284) |
 | `commands/merge-multi.md` | 1,800 | 2,300 |
 | `commands/capture-learnings.md`, `evolve.md` | 800, 900 | 1,200 |
 | `commands/commit.md`, `run-report.md` | 350, 700 | 500, 900 |

@@ -46,6 +46,7 @@ PROVISIONER_MD="$PLUGIN/agents/provisioner.md"
 RUN_REPORT_MD="$PLUGIN/commands/run-report.md"
 VERIFY_BUILD_MD="$PLUGIN/commands/verify-build.md"
 DESIGN_MULTI_MD="$PLUGIN/commands/design-multi.md"
+PHASE_MD="$PLUGIN/reference/design-multi-phase-boundary.md"
 DESIGN_LANE_MD="$PLUGIN/agents/design-lane.md"
 ADR_006_MD="$ROOT/docs/adr/ADR-006-one-program-writes-map-json.md"
 ADR_013_MD="$ROOT/docs/adr/ADR-013-a-fleet-orchestrator-is-a-tick-not-a-session.md"
@@ -2787,6 +2788,8 @@ pointer_names "$BUILD_MD" '../reference/build-record.md' 'build-summary.md' \
   '/build opens the record companion when it writes build-summary.md, and says so on the pointer line'
 pointer_names "$PLUGIN/commands/start-multi.md" '../reference/start-multi-serial.md' '--serial' \
   '/start-multi opens the serial companion on --serial, and says so on the pointer line'
+pointer_names "$PLUGIN/commands/start-multi.md" '../reference/start-multi-tick-boundary.md' 'normative' \
+  '/start-multi opens the tick-boundary companion and calls it normative on the pointer line (the five preconditions live there; a pointer that reads as optional is how a silently-failing precondition gets skipped)'
 pointer_names "$PLUGIN/skills/design-map/SKILL.md" './FLEET.md' '/design-multi' \
   'design-map opens its fleet companion under /design-multi (test-design-map.sh pins the same edge from the map side)'
 
@@ -2960,10 +2963,11 @@ printf '\nSeam I — /start-multi is a TICK: it yields at the wave boundary\n\n'
 # never one over the paragraph: losing a single precondition is the failure, and
 # a needle over the whole block would stay green while two of the three went.
 START_MULTI_MD="$PLUGIN/commands/start-multi.md"
+TICK_MD="$PLUGIN/reference/start-multi-tick-boundary.md"
 
-present "$START_MULTI_MD" 'FLEET-STEP:v1 outcome=success waves=<k>/<N> units=<t>/<u>' \
+present "$TICK_MD" 'FLEET-STEP:v1 outcome=success waves=<k>/<N> units=<t>/<u>' \
   '/start-multi emits the FLEET-STEP:v1 wave verdict (GH-429-F3)'
-present "$START_MULTI_MD" 'at column 0 with nothing after it, and take no turn after it' \
+present "$TICK_MD" 'at column 0 with nothing after it, and take no turn after it' \
   '/start-multi'\''s verdict is the final line and ends the tick (ADR-004)'
 
 # The push precondition, in the YIELD's own words. Deliberately NOT the wording of
@@ -2972,9 +2976,9 @@ present "$START_MULTI_MD" 'at column 0 with nothing after it, and take no turn a
 # other unkillable, and the cost stop's sentence is about whether to dispatch,
 # while this one is about whether ending is safe. Deleting the yield's sentence
 # must redden this and leave the cost stop's pin alone — that is the slice's probe.
-present "$START_MULTI_MD" '`git push` every started lane'\''s branch and keep every worktree this tick touched' \
+present "$TICK_MD" '`git push` every started lane'\''s branch and keep every worktree this tick touched' \
   '/start-multi pushes every started branch and keeps the worktrees before it yields (GH-429-F1)'
-present "$START_MULTI_MD" 'Hold no lock directory and leave no background `heartbeat` refresher alive' \
+present "$TICK_MD" 'Hold no lock directory and leave no background `heartbeat` refresher alive' \
   '/start-multi holds no lock and leaves no heartbeat refresher alive when it yields (design risk 3)'
 
 # The tick stamp, and BOTH readers. One needle over the stamp alone would be
@@ -2982,22 +2986,22 @@ present "$START_MULTI_MD" 'Hold no lock directory and leave no background `heart
 # still messaging every row it finds. So the addressing lifetime and the
 # attribution lifetime are separately pinned (design risk 2 — two readers, two
 # lifetimes); losing either one is silent.
-present "$START_MULTI_MD" 'Stamp every `agents.yaml` row you wrote with `tick: <n>`' \
+present "$TICK_MD" 'Stamp every `agents.yaml` row you wrote with `tick: <n>`' \
   '/start-multi stamps agents.yaml rows with the tick that wrote them (design risk 2)'
-present "$START_MULTI_MD" 'recipient **only** from rows stamped with the current tick' \
+present "$TICK_MD" 'recipient **only** from rows stamped with the current tick' \
   '/start-multi addresses only the current tick'\''s rows'
-present "$START_MULTI_MD" 'attribution (`/run-report --fleet`) reads **every** tick'\''s rows' \
+present "$TICK_MD" 'attribution (`/run-report --fleet`) reads **every** tick'\''s rows' \
   '/start-multi keeps attribution reading every tick'\''s rows'
 
 # F4's positive half: the resume point is DERIVED. Pinned on the derivation
 # sentence rather than on the word "derive", because "derived from the state
 # file" is the exact misread the command itself calls its commonest (git is the
 # primary signal).
-present "$START_MULTI_MD" 'Wave progress is `units[].wave` plus `step`/`status`, cross-checked against `git log' \
+present "$TICK_MD" 'Wave progress is `units[].wave` plus `step`/`status`, cross-checked against `git log' \
   '/start-multi derives wave progress from units[] cross-checked against git (GH-429-F4)'
 # F3's positive half, in the command's own words: a yield is a short success, not
 # a fourth outcome word.
-present "$START_MULTI_MD" 'a wave short of the total is a `success` whose `waves=` is short' \
+present "$TICK_MD" 'a wave short of the total is a `success` whose `waves=` is short' \
   '/start-multi spells a yield as a short success, not a fourth outcome (GH-429-F3)'
 
 # The orchestrator is the WRITER of pluginVersion (GH-429 design risk 4), because
@@ -3142,7 +3146,7 @@ fi
 # The tick boundary must say the same thing step 7 now says, in the place a
 # reader of the yield looks. Two opposite claims about one mechanism in one file
 # is what this pins against.
-present "$START_MULTI_MD" 'keeps its worktree even though its branch is now pushed' \
+present "$TICK_MD" 'keeps its worktree even though its branch is now pushed' \
   '/start-multi keeps a non-terminal lane'\''s worktree after the yield pushes its branch (GH-429-F1)'
 
 # --- executed: the spend accumulator carries its UNIT, and the ceiling it is
@@ -3190,7 +3194,7 @@ SERIAL_MD="$PLUGIN/reference/start-multi-serial.md"
 # needles, deliberately not one over both: a single pin over "ends its context
 # twice" stays green while either boundary's own instruction is deleted, and the
 # A/B one is this slice's probe.
-present "$DESIGN_MULTI_MD" 'Step 3'\''s collect is the A/B boundary: print the A/B verdict and **end your context**' \
+present "$PHASE_MD" 'Step 3'\''s collect is the A/B boundary: print the A/B verdict and **end your context**' \
   '/design-multi ends its context at the A/B boundary (GH-429-F5)'
 present "$DESIGN_MULTI_MD" 'the B/C boundary ends this context the same way' \
   '/design-multi ends its context at the B/C boundary, the same kind of end (GH-429-F5)'
@@ -3198,9 +3202,9 @@ present "$DESIGN_MULTI_MD" 'the B/C boundary ends this context the same way' \
 # --- each phase names the ON-DISK source it restarts from. Separate pins per
 # phase: the whole point of ending is that the next phase reads its input back,
 # and a phase with no named source reconstructs from a memory it does not have.
-present "$DESIGN_MULTI_MD" 'Phase B opens cold and restarts from `<run>/units/`, which is its primary source' \
+present "$PHASE_MD" 'Phase B opens cold and restarts from `<run>/units/`, which is its primary source' \
   'Phase B restarts cold from <run>/units/, named as its primary source (GH-429-F5 walk 1)'
-present "$DESIGN_MULTI_MD" 'Phase C opens cold and restarts from `<run>/subjects/` and `<run>/answers/`' \
+present "$PHASE_MD" 'Phase C opens cold and restarts from `<run>/subjects/` and `<run>/answers/`' \
   'Phase C restarts cold from <run>/subjects/ and <run>/answers/ (GH-429-F5)'
 # The restart claim above is only TRUE if the answers are already on disk when
 # the context ends. Its own pin, narrowed to the obligation's own clause (the
@@ -3208,20 +3212,20 @@ present "$DESIGN_MULTI_MD" 'Phase C opens cold and restarts from `<run>/subjects
 # reads those rows, sits inside Step 5 — Phase C, so without this clause a
 # terminal answer is written AFTER the boundary and the restart source is empty
 # for exactly the answers only the sitting saw.
-present "$DESIGN_MULTI_MD" 'in the shape Step 5.2 reads, `map: <S>` included — **before** this context ends' \
+present "$PHASE_MD" 'in the shape Step 5.2 reads, `map: <S>` included — **before** this context ends' \
   'terminal answers are written to <run>/answers/ in Step 5.2'\''s shape BEFORE the B/C context ends (GH-429-F5)'
 # The half-answered sitting (walk 2): the answers come out of the artifact db,
 # not out of a session that ended. Pinned on the read_db readback rather than on
 # the directory, because the directory is also where a remembered answer would
 # be written — the source is what is being asserted.
-present "$DESIGN_MULTI_MD" 'reads the owner'\''s answers back with `read_db` over the `answers` collection, never from any surviving session state' \
+present "$PHASE_MD" 'reads the owner'\''s answers back with `read_db` over the `answers` collection, never from any surviving session state' \
   'a fresh Phase B reads the owner'\''s answers back with read_db, not from session state (GH-429-F5 walk 2)'
 
 # --- the human opens Phase B, and the mechanism that makes that more than a
 # request. Two pins: the rule, and the token a driver actually reads. The rule
 # alone is green on a design-multi that says "the human opens Phase B" and then
 # prints a verdict any driver ticks again on.
-present "$DESIGN_MULTI_MD" 'The owner opens Phase B by hand, and no driver ever does' \
+present "$PHASE_MD" 'The owner opens Phase B by hand, and no driver ever does' \
   'Phase B is opened by the human, never by a driver (GH-429-F5, option C rejected)'
 present "$DESIGN_MULTI_MD" 'blockedOn=awaiting-owner-sitting' \
   'the A/B verdict stops a driver rather than inviting it to tick again (GH-429-F5)'
@@ -3309,7 +3313,7 @@ present "$SERIAL_MD" '`--serial` never yields' \
 # now record it as ANSWERED and point at the file that answers it. Pinned
 # because two opposite status claims about one mechanism shipping in one branch
 # is exactly the drift a reader resolves by believing the wrong one.
-present "$START_MULTI_MD" 'whether a serialised run yields on this boundary **is decided there, and the answer is never**' \
+present "$TICK_MD" 'whether a serialised run yields on this boundary **is decided there, and the answer is never**' \
   'start-multi records the --serial yield question as decided, in start-multi-serial.md (GH-429-F5)'
 # And the tick stamp it must therefore write, which is behaviourally constant
 # here precisely BECAUSE it never yields — unstamped rows are addressable by no
