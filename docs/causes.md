@@ -63,7 +63,7 @@ claim.
 ## design-silent
 
 - classification: judgement
-- why: the mechanical halves are checked; the residue is "the design did not say", which has no syntactic signature — absence of a decision looks exactly like a decision nobody needed
+- why: measured — 61 of 78 recorded silent seams cost no fix round, and the shape of the 17 that did also matches 44 that did not (~16% precision), so no syntactic signature separates them
 
 The checkable parts were taken and are real gates: a slice may name nothing that
 does not resolve at the base (`/plan` step 3), the unit's seams are named once
@@ -75,9 +75,34 @@ because there was nothing to decide. The disposition is therefore where the
 judgement is: `/design`'s grill pass and the verifier's falsification table,
 which attacks the design's claims rather than checking the diff against them.
 
-**This entry is an admission, not a resolution.** 17 recorded rounds is the
-largest count in the corpus, and if a syntactic signature for it is ever found,
-this entry should become `mechanical` with a check beside it.
+**The search for a signature was made, and it failed on the evidence.** All 17
+rounds were re-read (XL-27 6, ESAS-166 3, ESAS-162/163/186 2 each, ESAS-161/178
+1 each), and the measurement that settles it is this: the corpus records **78
+decisions of `kind: silent-seam` and only 17 `design-silent` fix rounds** — so
+**61 of 78 design silences were filled by the executor at no cost at all.**
+Silence is the norm, not the defect, which is the "absence looks like a decision
+nobody needed" objection turned from an admission into a number.
+
+The 17 do cluster — second-run/resume/already-exists/crash-after/missing-case
+(7), two conditions collapsed onto one outcome or a self-contradiction (4), the
+design stating something false (1), and a residue where nobody opened the fork
+(5) — but the largest cluster is **not a signature**: that same shape matches
+**44 of the 78** silent seams, so a `/plan` check keyed on it would refuse about
+six innocent slices for every round it prevented (~16% precision). A gate at
+that rate is routed around with a token scenario, which is worse than no gate.
+The cluster was also read off the 17 instances it would be validated against —
+the tautology this repo already refused — and the corpus is 10 build summaries
+from this repo alone, so a 7-instance cluster inside it is not out-of-sample
+evidence of anything.
+
+**Classification stays `judgement`, now on evidence rather than as an
+admission.** Do not re-read the 17; re-open this only against an out-of-sample
+corpus (host-repo runs: teselly, pv3, esas), where the 78-vs-17 ratio and the
+44-vs-7 precision are the two numbers to recompute first.
+
+One taxonomy defect surfaced by the read: ESAS-178's round is recorded
+`kind: false-premise` in its `decisions.md` but counted `design-silent` in its
+build summary — the design was wrong, not silent. The true count is 16.
 
 ## invariant
 
