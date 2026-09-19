@@ -1111,21 +1111,21 @@
     {
       "needle": "plan-unseamed",
       "issue": null,
-      "commit": "PENDING",
+      "commit": "bf423ef",
       "was_in": "plugins/bett3r-ai-workflow/skills/design-map/SKILL.md",
       "note": "The seams are named ONCE per unit, before any oracle — fewest, highest, existing over new, the ideal number one (Pocock, `to-spec`). His gate is a human confirm; fleet lanes are unattended by construction, so the seam is named, located and defended instead, and check-plan refuses a plan that declares none."
     },
     {
       "needle": "unnamed-seam",
       "issue": null,
-      "commit": "PENDING",
+      "commit": "bf423ef",
       "was_in": "plugins/bett3r-ai-workflow/skills/design-map/SKILL.md",
       "note": "A slice whose oracle sits at a seam the unit never declared. /plan wrote a per-slice oracle under no pressure toward a shared seam, so eight slices invented eight oracle locations — each an independent chance to assert below the level the claim lives at, which is the shape of the worst defect in the corpus."
     },
     {
       "needle": "extra-unjustified",
       "issue": null,
-      "commit": "PENDING",
+      "commit": "bf423ef",
       "was_in": "plugins/bett3r-ai-workflow/commands/plan.md",
       "note": "Fewest is pressure, not a cap: the first seam is free, every seam after it and every `kind: new` one owes one line saying why the named seams cannot hold the claim. A cap would be wrong — some units genuinely need two — but silence was what was wrong before."
     }
