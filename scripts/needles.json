@@ -1132,21 +1132,21 @@
     {
       "needle": "slice-unprobed",
       "issue": null,
-      "commit": "PENDING",
+      "commit": "f66b2b0",
       "was_in": "plugins/bett3r-ai-workflow/skills/design-map/SKILL.md",
       "note": "REACHABILITY. The slice names, at plan time, the one production line whose deletion must turn its oracle red — before a test exists that has to survive it, since a probe named afterwards is invented to fit what was built. An erasure suite that composed its own subject stayed 8/8 green with the production harness spread removed, and PII shipped unencrypted with every gate green."
     },
     {
       "needle": "expected_from",
       "issue": null,
-      "commit": "PENDING",
+      "commit": "f66b2b0",
       "was_in": "plugins/bett3r-ai-workflow/skills/vertical-slicing/SKILL.md",
       "note": "TAUTOLOGY. An assertion that recomputes its expected value the way the code does passes by construction and can never disagree with the code — red before the code exists and green after, so RED -> GREEN structurally cannot catch it. The expected value comes from a known-good literal, a worked example or the spec, and everything but a literal cites where: the citation is the check."
     },
     {
       "needle": "undiscriminating",
       "issue": null,
-      "commit": "PENDING",
+      "commit": "f66b2b0",
       "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
       "note": "DISCRIMINATION. A RED that is a hang, timeout, crash, import error, empty collection or skipped suite is indistinguishable from a broken harness and is no evidence the test can tell right from wrong. It is a property of the run, not the plan, so it is enforced where that evidence exists rather than claimed by a YAML field."
     }
