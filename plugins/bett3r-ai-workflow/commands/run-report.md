@@ -5,7 +5,7 @@ disable-model-invocation: true
 
 # /run-report — where the time and tokens went
 
-Reconstructs a unit of work from Claude Code's own transcripts; nothing is instrumented, so any branch on disk can be reported.
+Reconstructs a unit of work from Claude Code's own transcripts; nothing is instrumented.
 
 ## Argument: $ARGUMENTS
 
@@ -29,7 +29,7 @@ run-metrics $ARGUMENTS
 
 `run-metrics` is on `PATH` by bare name from this plugin's `bin/`; the plugin-root variable is substituted for *hook* invocations only, so a command's bash never uses it. If the bare name is not found, fall back to `node plugins/bett3r-ai-workflow/scripts/run-metrics.mjs`.
 
-The script does all the parsing and arithmetic; this command interprets. If it reports no transcripts for the branch, run `--list` and check the name. A fleet unit is not found by branch, by construction: a lane runs as a subagent of the orchestrator's session, so its records carry the orchestrator's branch. The script resolves it through the run's `agents.yaml`, found from the lane worktree's `.work/lane.yaml` `runDir`, from `./.work/multi/` in the orchestrator's checkout, or from `--fleet`. Done when the tables print, or the absence is explained.
+The script parses and computes; this command interprets. No transcripts for the branch: run `--list` and check the name. A fleet unit is not found by branch, by construction: a lane runs as a subagent of the orchestrator tick that dispatched it, so its records carry that tick's branch. It resolves through the run's `agents.yaml`, found from the lane worktree's `.work/lane.yaml` `runDir`, from `./.work/multi/`, or from `--fleet`. Done when the tables print, or the absence is explained.
 
 ## Step 2 — Read the four numbers that carry the decision
 
@@ -40,7 +40,7 @@ Print the tables, then say what they mean.
 3. **tool vs reason**, per role. A role at ~95% reason is thinking; a role heavy in `tool` is bounded by commands, and `WHERE COMMAND TIME WENT` names which.
 4. **Weighted tokens per line landed.** Compare it against `--aggregate`, not intuition.
 
-For the agents rather than the run, `--agents` splits the same numbers `BY ROLE`, `BY MODEL` and `BY EFFORT`; only the `ROLE × MODEL × EFFORT` table controls for which roles ran on a model. `REPO CHECKS` and `WHO PAYS FOR THE CHECKS` show how much shell time is the repo answering back, and for whom. A class dominated by one very long call is flagged, not summed: a multi-hour call is a block (a prompt, a pager, a waiting permission), not throughput to optimise. Done when each of the four numbers has one sentence of reading.
+For the agents rather than the run, `--agents` splits the same numbers `BY ROLE`, `BY MODEL` and `BY EFFORT`; only the `ROLE × MODEL × EFFORT` table controls for which roles ran on a model. `REPO CHECKS` and `WHO PAYS FOR THE CHECKS` show how much shell time is the repo answering back, and for whom. Done when each of the four numbers has one sentence of reading.
 
 ## Step 3 — Name the lever, or say there is none
 
@@ -64,5 +64,6 @@ One recommendation tied to a number in the output: "verifiers spend 96% reasonin
 - **Wall time is not elapsed time.** Every millisecond is classified, never subtracted.
 - **A long command is not a stall.** Only non-tool silence counts as stalled, so the threshold applies to gaps between tool calls.
 - **Each `/build` invocation is its own ledger.** Merging two passes over the same slices makes every slice look like it took a fix round.
+- **A fleet run is not one orchestrator session.** It ticks, so `--fleet --all`'s orchestrator-only time is N disjoint windows, netted of every unit's window — an approximation, labelled as one, the session count beside it. `agents.yaml` is read per tick for addressing, across every tick for attribution.
 
 Say where a number is an approximation (prorated per-phase tokens, heuristic slice attribution, `unattributed` rows). A run gets cheaper by weakening the verifier and these tables would applaud, so read first-pass green and rework churn beside any cost win.

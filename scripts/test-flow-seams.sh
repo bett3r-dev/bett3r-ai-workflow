@@ -48,6 +48,7 @@ VERIFY_BUILD_MD="$PLUGIN/commands/verify-build.md"
 DESIGN_MULTI_MD="$PLUGIN/commands/design-multi.md"
 DESIGN_LANE_MD="$PLUGIN/agents/design-lane.md"
 ADR_006_MD="$ROOT/docs/adr/ADR-006-one-program-writes-map-json.md"
+ADR_013_MD="$ROOT/docs/adr/ADR-013-a-fleet-orchestrator-is-a-tick-not-a-session.md"
 LANE_STEP_FIXTURES="$ROOT/scripts/fixtures/lane-step"
 MARKER_PY=${MARKER_PY:-python3}
 
@@ -3316,6 +3317,134 @@ present "$START_MULTI_MD" 'whether a serialised run yields on this boundary **is
 present "$SERIAL_MD" 'stamp every row `tick: 1`' \
   '--serial stamps its agents.yaml rows tick: 1 (slice 3 carry-over)'
 
+# ---------------------------------------------------------------------------
+printf '\nSeam K — ADR-013 records the tick, and attribution is stated per tick\n\n'
+# ---------------------------------------------------------------------------
+#
+# GH-429 slice 5. Two artifacts, and the failure mode of each is different.
+#
+# ADR-013 is the decision record: it must exist, follow the ADR-004/ADR-012
+# shape, and carry the two things the design reserved it for — the
+# projection/accumulator split (the rule that makes a resumed tick safe) and the
+# CORRECTED reason a yield is not a fourth outcome word. The correction is the
+# part worth a test: the issue attributed the blocker to a `step=` enum, and an
+# ADR that repeats a mechanism which does not exist sends every future reader to
+# look for it. So the pin is on the sentence that denies the enum, not on the
+# words "three outcomes", which a wrong version of the record would also carry.
+#
+# `run-report.md` is the measurement instrument, and it is the design's
+# GATE-LESS seam: with N ticks per run, nothing goes red when the attribution is
+# wrong — the numbers are simply mis-attributed. A presence oracle is what is
+# available, so the per-tick wording is pinned, and the retired claim's ABSENCE
+# is pinned separately, because a file can gain the new sentence while keeping
+# the old one and read as two opposite rules to whichever the reader hits first.
+
+# The record exists and is shaped like its siblings: an H1 title sentence and a
+# `## Status` section (ADR-004 and ADR-012 both end on one). Positive control
+# FIRST — every assertion below this point would pass vacuously on a file that
+# is missing or empty, and `present` on an absent file reports "literal not
+# found", which reads like a wording drift rather than a missing record.
+if [ ! -s "$ADR_013_MD" ]; then
+  fail 'docs/adr/ADR-013 exists and is non-empty (positive control)' \
+       "no ${ADR_013_MD#"$ROOT"/}" \
+       'ADR-013 is the number this work reserved; the design defers its content to this slice.'
+else
+  pass 'docs/adr/ADR-013 exists and is non-empty (positive control)'
+  present "$ADR_013_MD" '# A fleet orchestrator is a re-dispatchable tick, not a session' \
+    'ADR-013 states the decision in its H1, as ADR-004 and ADR-012 do'
+  present "$ADR_013_MD" '## Status' \
+    'ADR-013 carries the Status section every accepted ADR here ends on'
+
+  # The projection/accumulator split (GH-429-F4 + design risk 5). Three pins,
+  # because the split has three halves that fail separately: a derived
+  # projection, a stored policy input, and a stored ACCUMULATOR — which F4's
+  # "derive everything but waveBudget" does not reach, and which is the half a
+  # summary of this ADR would drop.
+  present "$ADR_013_MD" 'Projections are derived, every tick' \
+    'ADR-013 states that wave progress and phase are derived on every tick (GH-429-F4)'
+  present "$ADR_013_MD" '`waveBudget` is a **policy input**' \
+    'ADR-013 names waveBudget the one stored policy input (GH-429-F4)'
+  present "$ADR_013_MD" '`spendToDate` is an **accumulator**' \
+    'ADR-013 names cumulative spend an accumulator, not a projection (design risk 5)'
+  present "$ADR_013_MD" 'a `wavesDone:` or `phase:` key there is a second, staler answer' \
+    'ADR-013 carries the negative half: no stored wave or phase pointer (GH-429-F4)'
+
+  # The corrected verdict-grammar constraint (GH-429-F3). The enum denial is the
+  # whole point of re-deriving it, so it is pinned as its own sentence.
+  present "$ADR_013_MD" 'The `OUTCOMES` table is exactly three values' \
+    'ADR-013 names the three-value OUTCOMES table as the first constraint (GH-429-F3)'
+  present "$ADR_013_MD" 'takes an `expectedStep`' \
+    'ADR-013 names the scheduler'\''s expectedStep lease as the second constraint (GH-429-F3)'
+  present "$ADR_013_MD" '**There is no `step=` enum anywhere.**' \
+    'ADR-013 says explicitly that no step= enum exists — the correction the issue got wrong'
+fi
+
+# --- run-report.md: the per-tick window wording. The probe for this slice is
+# deleting the N-disjoint-windows sentence, so it is pinned on its own and not
+# as part of a paragraph.
+present "$RUN_REPORT_MD" '`--fleet --all`'\''s orchestrator-only time is N disjoint windows' \
+  'run-report states that a ticking run'\''s orchestrator time is N disjoint windows'
+present "$RUN_REPORT_MD" 'an approximation, labelled as one' \
+  'run-report labels the orchestrator-only figure an approximation where it is one'
+# The two lifetimes of agents.yaml, which is the half a reader needs to know is
+# not a bug: addressing may only use this tick's rows (an agentId does not
+# outlive its session) while attribution must use every tick's.
+present "$RUN_REPORT_MD" 'read per tick for addressing, across every tick for attribution' \
+  'run-report states agents.yaml'\''s two lifetimes: per tick to address, across ticks to attribute'
+
+# --- STRUCTURAL: the retired claim is gone everywhere it was a live rule, not
+# just from the line this slice rewrote.
+#
+# The retired claim is that a fleet unit's records carry ONE orchestrator's
+# branch as an invariant of the run. Census of `carry|carries the orchestrator's
+# branch` under plugins/ at this slice's base (88d798d), read with
+# /usr/bin/grep -rn:
+#
+#   commands/run-report.md:32      the live rule — RETIRED here
+#   LEDGER.md:1711, LEDGER.md:1714 the recorded incident, verbatim
+#   scripts/run-metrics.mjs:369,486 two docstrings in the implementation
+#
+# and one near-miss inspected and left alone: `agents/provisioner.md:108` says a
+# lane's transcript "is stamped with the orchestrator's branch", which is a
+# per-tick fact that stays true and does not match the pattern.
+#
+# Two exclusions, both by full path and both for a stated reason:
+#   - LEDGER.md carries EVIDENCE, not rules (ADR-012). Rewriting an entry to
+#     match a later change falsifies the record — the same reasoning the
+#     ADR-003 exclusion above gives.
+#   - scripts/run-metrics.mjs is out of this slice's scope by instruction; the
+#     `--fleet` reader's own docstrings are a code change, not a prose one.
+# A third file gaining the sentence is what this guard is for.
+#
+# `-a` is mandatory, not tidy: run-metrics.mjs is classified BINARY (`file` says
+# "binary data"), ugrep matches nothing in it and BSD/GNU grep match two lines,
+# so without `-a` the guard's reach is a property of whose grep is on PATH.
+#
+# The traversal is pinned by a LIVE positive control rather than a planted
+# fixture: the unexcluded census must still find LEDGER.md, which proves the walk
+# reached the tree and the pattern matches real prose. A pattern that matched
+# nothing anywhere would otherwise make the absence assertion pass by walking
+# past everything.
+retired_re="carr(y|ies) the orchestrator's branch"
+census=$( grep -ralE "$retired_re" "$PLUGIN" 2>/dev/null | sed "s#^$ROOT/##" | sort || true )
+if printf '%s\n' "$census" | grep -q 'LEDGER\.md$'; then
+  pass 'the retired-claim census reaches the tree and matches real prose (positive control)'
+else
+  fail 'the retired-claim census reaches the tree and matches real prose (positive control)' \
+       "census: $( printf '%s' "$census" | tr '\n' ' ' )" \
+       'LEDGER.md records the claim verbatim, so a census that misses it is matching nothing.'
+fi
+live=$( printf '%s\n' "$census" \
+        | grep -v '^plugins/bett3r-ai-workflow/LEDGER\.md$' \
+        | grep -v '^plugins/bett3r-ai-workflow/scripts/run-metrics\.mjs$' \
+        | grep -v '^$' || true )
+if [ -z "$live" ]; then
+  pass 'no live artifact under plugins/ still carries the one-orchestrator-branch invariant (GH-429 risk 1)'
+else
+  fail 'no live artifact under plugins/ still carries the one-orchestrator-branch invariant (GH-429 risk 1)' \
+       "still claimed in:" $( printf '%s\n' "$live" ) \
+       'a run has N orchestrator ticks; a rule that says one mis-attributes every fleet report and nothing goes red.'
+fi
 
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"
