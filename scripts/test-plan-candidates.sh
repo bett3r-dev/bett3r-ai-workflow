@@ -12,6 +12,9 @@
 #             top-level review:/candidateOracles: block trails slices:.
 #   AC6     — a plan written with no map.json (no candidateOracles key) passes
 #             check-plan with candidates=0.
+#   oracles — the three adequacy rules: a slice with no `probe:` (reachability)
+#             and a `then:` with no named/cited source for its expected value
+#             (tautology) are refused; a structural scenario needs neither.
 #   seams   — the unit names its seams once (fewest, highest, existing over new)
 #             and every slice tests at a named one; a plan with no `seams:`, a
 #             slice with no `seam:`, a slice at an undeclared seam and an
@@ -243,6 +246,51 @@ run "$DM" check-plan "$PLANS/two-seams.yaml"
 check 'two seams pass when the second says why the first cannot hold the claim' \
       "$( attr "$LINE" outcome ) seams=$( attr "$LINE" seams ) scenarios=$( attr "$LINE" scenarios ) exit=$rc" \
       'ok seams=2 scenarios=2 exit=0' "$( cat "$OUT" )"
+
+# ---------------------------------------------------------------------------
+printf 'Oracle adequacy: green, at the seam, and still proving nothing\n'
+# ---------------------------------------------------------------------------
+# None of these is visible to RED -> GREEN: each is genuinely red before the
+# code exists and green after, which is the whole of the evidence that gate
+# collects. TAUTOLOGY and REACHABILITY are checkable at plan time and are
+# checked here; DISCRIMINATION is a property of the RED the executor watches
+# and is enforced there, deliberately not faked with a field.
+run "$DM" check-plan "$PLANS/slice-unprobed.yaml"
+check 'REACHABILITY: a slice with no `probe:` is refused, naming the slice' \
+      "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" slice ) exit=$rc" \
+      'fail slice-unprobed 1 exit=1' "$( cat "$OUT" )"
+
+# Pocock, tdd/tests.md: "the assertion recomputes the expected value the way the
+# code does... Expected values must come from an independent source of truth."
+run "$DM" check-plan "$PLANS/scenario-unsourced.yaml"
+check 'TAUTOLOGY: a `then:` naming no source for its expected value is refused' \
+      "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" slice ) $( attr "$LINE" why ) exit=$rc" \
+      'fail scenario-unsourced 1 no-expected-from exit=1' "$( cat "$OUT" )"
+
+# The citation is the check: "the spec says so" with nothing to open is how a
+# recomputation gets written down as a fact.
+run "$DM" check-plan "$PLANS/scenario-uncited.yaml"
+check 'TAUTOLOGY: a non-literal expected value citing nothing is refused' \
+      "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" why ) exit=$rc" \
+      'fail scenario-unsourced no-expected-source exit=1' "$( cat "$OUT" )"
+
+# Control: a cited spec expectation passes, and so does a structural scenario,
+# which carries no expected_from at all - its expected value IS the census it
+# states, and there is nothing independent to cite. Without this row the rule
+# would be indistinguishable from "every scenario must say `literal`".
+run "$DM" check-plan "$PLANS/two-seams.yaml"
+check 'a cited spec-sourced expectation passes, and every slice is probed' \
+      "$( attr "$LINE" outcome ) probed=$( attr "$LINE" probed ) exit=$rc" \
+      'ok probed=2 exit=0' "$( cat "$OUT" )"
+check 'control: that fixture really carries a non-literal expectation' \
+      "$( grep -c 'expected_from: spec' "$PLANS/two-seams.yaml" )" 1 "$PLANS/two-seams.yaml"
+
+run "$DM" check-plan "$PLANS/scenario-structural.yaml"
+check 'a structural scenario needs no expected_from, and still passes' \
+      "$( attr "$LINE" outcome ) scenarios=$( attr "$LINE" scenarios ) probed=$( attr "$LINE" probed ) exit=$rc" \
+      'ok scenarios=1 probed=1 exit=0' "$( cat "$OUT" )"
+check 'control: that fixture carries no expected_from at all' \
+      "$( grep -c 'expected_from' "$PLANS/scenario-structural.yaml" )" 0 "$( cat "$PLANS/scenario-structural.yaml" )"
 
 # ---------------------------------------------------------------------------
 printf 'AC5: the trailing review/candidateOracles block does not change pool width\n'

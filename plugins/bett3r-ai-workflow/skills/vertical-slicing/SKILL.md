@@ -80,11 +80,14 @@ slices:
     depends_on: []
     behavior: "<the one observable behavior, end to end, in the ubiquitous language>"
     oracle: "<the test that proves it — what it asserts>"
+    probe: "<the ONE production line whose deletion must turn this oracle red>"  # REQUIRED
     scenarios:                     # REQUIRED, >=1. check-plan refuses the plan without it.
       - scenario: "<what this case is called>"
         given: "<the state the case starts in>"
         when: "<the one thing that happens>"
         then: "<what must be observably true — the assertion, not the setup>"
+        expected_from: spec        # literal | worked-example | spec | existing-behaviour
+        expected_source: "<file:line, doc section or ticket>"   # REQUIRED unless `literal`
       - scenario: "<a census, where the rule is 'every X must do Y'>"
         kind: structural           # keeps prose: Given/When/Then has no room for the
         text: >                    #   negative half, and the negative half is the point
@@ -109,12 +112,21 @@ candidateOracles:                  # OPTIONAL. Only when a <path>/map.json exist
 
 `seams:` is the unit's answer to *"where do we test this"*, written once and inherited by every oracle. Prefer an **existing** seam to a new one and the **highest** one that can still observe the claim, and keep the count down — the ideal is one. Left unpressured, eight slices invent eight oracle locations, and each is an independent chance to assert below the level the claim lives at: the worst defect on record is that shape — the oracle sat at the unit, not the composition root, so both wiring lines could be deleted with `tsc` clean and 738 tests green. *Highest* is a judgement and stays one; what is mechanical is that the seam is **named, located and defended** — `check-plan` refuses `plan-unseamed`, `slice-unseamed`, `unnamed-seam` and an undefended extra or new seam. A `why:` is the entire cost of a second seam, deliberately: a cap would be wrong (some units need two) and silence was what was wrong before.
 
+## An oracle can be green, at the right seam, and still prove nothing
+
+Three adequacy rules, and **RED→GREEN sees none of them** — each is genuinely red before the code exists and green after, which is all the evidence that gate collects.
+
+- **Tautology** — the assertion recomputes the expected value the way the code does, so it passes by construction and can never disagree with the code. The expected value must come from an independent source: a known-good literal, a worked example, the spec. `expected_from:` names which, and `expected_source:` cites it for everything but a literal. The citation is the check.
+- **Reachability** — `probe:` is the one production line whose deletion must turn the oracle red, named at plan time so it cannot be invented afterwards to match what was built. An erasure suite that composed its own subject stayed 8/8 green with the production harness spread removed, and PII shipped unencrypted with every gate green.
+- **Discrimination** — the oracle fails by **assertion, with values**: never a hang, timeout, crash, import error, empty collection or skipped suite. This one is not a plan field, deliberately — it is a property of the RED the executor watches, so it is enforced there and in `/build`'s fix-round causes rather than asserted in YAML.
+
 `passes` flags + git commits **are** the build progress. There is no separate progress doc. `touches: [paths]` may be added as a hint, but lead with `behavior`. `model:` routes the slice's executor — set it only where the implementation is genuinely mechanical, and never on the tracer bullet, which is by construction the slice whose seam nobody has proven yet. `designs:` names the design-layer node ids the slice delivers, so `/build` can scaffold this slice's artifacts and not the whole design's; leave it out when the unit has no design layer, and never guess an id — a wrong one scaffolds the wrong artifact, while an absent one just means "nothing designed here".
 
 ## Anti-patterns
 
 - **Slicing by component/layer** (one ticket per schema/aggregate/readmodel) — the trap *The principle* opens on, usually a sign the plan was shaped to fit specialized tooling. Re-cut by behavior.
 - **Over-slicing below an observable behavior.** The floor is "smallest *observable behavior*", not "smallest *change*". Below that you pay loop/setup overhead for sub-behaviors. **The ceiling belongs to the fix round**: a sweep over 10 files or 200 sites is split (`/plan` Step 3), because one finding anywhere in it re-opens the whole sweep.
+- **An oracle nobody said how to break.** Every slice green, every scenario asserted, and no statement anywhere of what would have to change for any of it to go red. It is the cheapest thing to write and the one that ships a suite that cannot fail.
 - **A seam per slice.** Every slice picking its own oracle location, one at a time, with nothing comparing them. It never looks wrong slice by slice — each oracle is green and each is about the right behaviour — and the unit still ends with no test anywhere that would notice the composition being unwired. Name the seams first, then cut.
 - **Deferring invariants** to a later slice — produces half-formed aggregates that pass tests and ship defects.
 - **Slicing only one side of a contract.** When a unit introduces a contract between two parties — a producer and a consumer, a writer and a reader, a caller and a callee — name the slice that builds **each** side, or state which side is out of scope and why. A unit that ships one side is **green by construction**: the tests can only exercise the half that exists, and the specified degrade path is indistinguishable from the system working. One unit sliced the *reading* of a step contract three ways — spec, parser, reader, plus a uniqueness guard — shipped 41→77 tests, both gates green on every slice, and the marker was emitted by nothing. This is not the tracer bullet rule: every slice there was genuinely vertical and individually complete; the gap is **between** slices, in the set, which is why it belongs to `/plan` and no single slice's gate can see it. The check is one question over the slice list: *for every contract this unit introduces, which slice writes it and which slice reads it?*

@@ -14,6 +14,7 @@ ticket: ESAS-9
 review: unattended
 slices:
   - id: 1
+    probe: delete the line that wires the check into check_plan; the oracle must go red
     seam: the launcher's verdict line
     name: "slice one"
     oracle: |
@@ -23,7 +24,9 @@ slices:
         given: a plan declaring two seams, the second justified
         when: check-plan runs
         then: the launcher prints outcome=ok with seams=2
+        expected_from: literal
   - id: 2
+    probe: delete the line that wires the check into check_plan; the oracle must go red
     seam: check_seams unit
     name: "slice two"
     oracle: |
@@ -33,3 +36,5 @@ slices:
         given: a plan whose slices name different declared seams
         when: check-plan runs
         then: both are accepted
+        expected_from: spec
+        expected_source: plugins/bett3r-ai-workflow/skills/design-map/SKILL.md, check-plan refusals

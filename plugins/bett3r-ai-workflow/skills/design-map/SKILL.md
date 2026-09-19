@@ -313,8 +313,14 @@ a human:
   `seam:`.
 - `outcome=fail reason=unnamed-seam slice=<id> seam=<name>` (exit 1) — a slice's
   `seam:` is not one the plan declared: it tests somewhere nobody agreed to.
+- `outcome=fail reason=slice-unprobed slice=<id>` (exit 1) — a slice declares no
+  `probe:`: the one-line production mutation that must turn its oracle red.
+- `outcome=fail reason=scenario-unsourced slice=<id> why=<detail>` (exit 1) — a
+  behavioural scenario carries no `expected_from:`, names one outside
+  `literal | worked-example | spec | existing-behaviour`, or is non-`literal`
+  and cites no `expected_source:`.
 - else `outcome=ok review=<human|unattended|none> candidates=<n> scenarios=<n>
-  seams=<n>` (exit 0).
+  seams=<n> probed=<n>` (exit 0).
 
 **`scenarios:` is the half of the contract that reaches a unit with no map at
 all**, and that is the half that was costing: both measured 0%-first-pass-green
@@ -326,6 +332,20 @@ test; `scenarios:` is what the executor must make true, in a form it cannot
 quietly re-interpret. The `candidate-in-oracle` search covers a slice's
 `scenarios:` as well as its `oracle:`, or renaming the field would have been the
 whole of the bypass.
+
+**An oracle can be green, at the named seam, and still prove nothing**, in three
+ways that `RED -> GREEN` structurally cannot see, since each is genuinely red
+before the code exists and green after. *Tautology*: the assertion recomputes
+the expected value the way the code does and can never disagree with it, so
+`expected_from:` names an independent source and `expected_source:` cites it —
+the citation is the check, because "the spec says so" with nothing to open is
+how a recomputation is written down as a fact. *Reachability*: `probe:` is the
+production line whose deletion must turn the oracle red, named at plan time so
+it cannot be invented afterwards to fit what was built — an erasure suite that
+composed its own subject stayed 8/8 green with the production harness spread
+removed. *Discrimination*: the failure must be an assertion with values, never a
+hang, crash or import error — and that is a property of the run, so it is
+enforced in `executor.md` and `/build`, not claimed by a field here.
 
 **The seams are named once per unit, before the oracles.** Fewest, highest,
 existing over new — the ideal number is one. Unpressured, eight slices invent

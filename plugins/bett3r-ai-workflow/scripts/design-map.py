@@ -7,7 +7,7 @@
     DESIGN-MAP:v1 outcome=ok verb=render maps=<n> forks=<n> expected=<n> page=<path>   (--stack)
     DESIGN-MAP:v1 outcome=ok verb=apply-answers final=<bool> open=<n> owner=<n> recommendation=<n> code=<n> moot=<n> otherMap=<n> commented=<ids|none> map=<path>
     DESIGN-MAP:v1 outcome=ok verb=candidates forks=<n> candidates=<n> skipped-open=<n> skipped-moot=<n> skipped-nowalk=<n> skipped-untestable=<n>
-    DESIGN-MAP:v1 outcome=ok verb=check-plan review=<human|unattended|none> candidates=<n> scenarios=<n> seams=<n>
+    DESIGN-MAP:v1 outcome=ok verb=check-plan review=<human|unattended|none> candidates=<n> scenarios=<n> seams=<n> probed=<n>
     DESIGN-MAP:v1 outcome=fail verb=check-plan reason=unattended-confirmed
     DESIGN-MAP:v1 outcome=fail verb=check-plan reason=candidate-in-oracle slice=<id>
     DESIGN-MAP:v1 outcome=fail verb=check-plan reason=slice-unscened slice=<id>
@@ -16,6 +16,8 @@
     DESIGN-MAP:v1 outcome=fail verb=check-plan reason=seam-unstructured seam=<name|index> why=<w>
     DESIGN-MAP:v1 outcome=fail verb=check-plan reason=slice-unseamed slice=<id>
     DESIGN-MAP:v1 outcome=fail verb=check-plan reason=unnamed-seam slice=<id> seam=<name>
+    DESIGN-MAP:v1 outcome=fail verb=check-plan reason=slice-unprobed slice=<id>
+    DESIGN-MAP:v1 outcome=fail verb=check-plan reason=scenario-unsourced slice=<id> why=<w>
     DESIGN-MAP:v1 outcome=ok verb=project ticket=<K> forks=<n> nodes=<n>
     DESIGN-MAP:v1 outcome=ok verb=decisions open=<n> owner=<n> recommendation=<n> code=<n> moot=<n>
     DESIGN-MAP:v1 outcome=ok verb=record forks=<n> payloads=<n> owner=<n> recommendation=<n> code=<n> unresolved=<n> nocard=<n> already=<n> sidecar=<path>
@@ -249,6 +251,28 @@ and, over the slices themselves:
   reason=slice-unseamed         a slice names no `seam:`
   reason=unnamed-seam           a slice's `seam:` is not one the plan declared
                                  — it tests somewhere nobody agreed to
+
+and, over oracle adequacy - the three ways an oracle is green and proves
+nothing, none of which RED -> GREEN can see, since each is genuinely red before
+the code exists and green after:
+
+  reason=slice-unprobed         a slice declares no `probe:` - the one-line
+                                 mutation that must turn its oracle red
+                                 (REACHABILITY)
+  reason=scenario-unsourced     a behavioural scenario does not say where its
+                                 expected value comes from, names an unknown
+                                 source, or cites none for a non-`literal` one
+                                 (`why=no-expected-from|unknown-expected-from|
+                                 no-expected-source`) (TAUTOLOGY)
+
+`expected_from:` is one of `literal`, `worked-example`, `spec`,
+`existing-behaviour`; everything but `literal` also carries `expected_source:`,
+the `file:line` or document section it is read from. A `kind: structural`
+scenario carries neither - its expected value IS the census it states - and is
+covered by the slice's `probe:` instead. DISCRIMINATION (a RED that is an
+assertion with values, never a hang, crash or import error) is a property of
+the run, not the plan, and is enforced in `executor.md` and `/build` where that
+evidence exists rather than asserted by a field here.
 
 The seam block is the unit's answer to "where do we test this", written once:
 fewest, highest, existing over new. `at:` records where it is; `why:` is owed
@@ -1404,8 +1428,76 @@ def check_plan(positional, flags):
                                   slice="unknown" if slice_id is None else slice_id)
     scened = check_scenarios(raw_slices)
     seams = check_seams(doc, raw_slices)
+    probed = check_adequacy(raw_slices)
     return dict(review=review if review else "none", candidates=len(raw_candidates),
-                scenarios=scened, seams=seams)
+                scenarios=scened, seams=seams, probed=probed)
+
+
+EXPECTED_FROM = ("literal", "worked-example", "spec", "existing-behaviour")
+
+
+def check_adequacy(raw_slices):
+    """Oracle adequacy: an oracle can be green, at the named seam, and still prove nothing.
+
+    RED -> GREEN cannot catch any of these three - each one is genuinely red
+    before the code exists and green after, which is the whole of the evidence
+    that gate collects.
+
+      TAUTOLOGY. Pocock, `tdd/tests.md`: *"the assertion recomputes the expected
+      value the way the code does... so it passes by construction and can never
+      disagree with the code. Expected values must come from an independent
+      source of truth: a known-good literal, a worked example, the spec."* So a
+      behavioural scenario names where its expected value comes from
+      (`expected_from:`) and, for anything but a hand-checked literal, cites it
+      (`expected_source:`). The citation is the check: "the spec says so" with
+      no `file:line` is how a recomputation gets written down as a fact.
+
+      REACHABILITY. A slice declares the one-line mutation that MUST turn its
+      oracle red (`probe:`). This is the class that cost the most: an erasure
+      suite that built its own subject stayed 8/8 green with the production
+      harness spread removed, and a composition root's two wiring lines could
+      both be deleted with `tsc` clean and 738 tests green. Naming the probe at
+      plan time - before anyone has written a test that must survive it - is
+      what stops it being invented afterwards to match whatever was built.
+
+      DISCRIMINATION is NOT checkable here and is deliberately not faked: it is
+      a property of the RED the executor actually watches (an assertion with
+      expected-vs-actual values, never a hang, crash, import error or empty
+      collection), so it is enforced where that evidence exists - `executor.md`
+      and `/build`'s fix-round causes. A field claiming it would be a claim, and
+      a claim is what this whole verb exists to stop taking on trust.
+
+    `kind: structural` scenarios carry no `expected_from:`: their expected value
+    IS the census they state, and there is nothing independent to cite. They
+    are still covered by the slice's `probe:`, which for a census is the
+    offending file the guard must reject.
+    """
+    probed = 0
+    for sl in raw_slices:
+        if not isinstance(sl, dict):
+            raise Refusal("plan-unparseable")
+        slice_id = sl.get("id")
+        where = "unknown" if slice_id is None else slice_id
+        probe = sl.get("probe")
+        if not (isinstance(probe, str) and probe.strip()):
+            raise Refusal("slice-unprobed", outcome="fail", slice=where)
+        probed += 1
+        for sc in sl.get("scenarios") or []:
+            if not isinstance(sc, dict) or sc.get("kind", "behavioral") != "behavioral":
+                continue
+            source = sc.get("expected_from")
+            if not (isinstance(source, str) and source.strip()):
+                raise Refusal("scenario-unsourced", outcome="fail", slice=where,
+                              why="no-expected-from")
+            if source.strip() not in EXPECTED_FROM:
+                raise Refusal("scenario-unsourced", outcome="fail", slice=where,
+                              why="unknown-expected-from")
+            if source.strip() != "literal":
+                cite = sc.get("expected_source")
+                if not (isinstance(cite, str) and cite.strip()):
+                    raise Refusal("scenario-unsourced", outcome="fail", slice=where,
+                                  why="no-expected-source")
+    return probed
 
 
 def seam_attr(name):

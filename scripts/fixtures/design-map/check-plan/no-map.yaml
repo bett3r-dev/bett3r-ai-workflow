@@ -5,6 +5,7 @@ seams:
 ticket: ESAS-9
 slices:
   - id: 1
+    probe: delete the line that wires the check into check_plan; the oracle must go red
     seam: the launcher's verdict line
     name: "slice one"
     oracle: |
@@ -14,4 +15,5 @@ slices:
         given: the fork is decided for A
         when: the plan is cut
         then: A is applied
+        expected_from: literal
 review: unattended
