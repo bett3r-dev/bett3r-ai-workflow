@@ -2,145 +2,42 @@
 
 ## How this plugin declares a hook
 
-`hooks/hooks.json` — **this exact path** — is loaded automatically for every
-enabled plugin. Nothing in `plugin.json` needs to reference it; that manifest's
-`hooks` field is for *additional* hook files only, and pointing it back here is
-an error ("The standard hooks/hooks.json is loaded automatically, so
-manifest.hooks should only reference additional hook files").
-
-Verified against Claude Code 2.1.220, three ways:
-
-1. **The published schema** — `https://json.schemastore.org/claude-code-plugin-manifest.json`
-   describes `plugin.json`'s `hooks` as "additional hooks (in addition to those
-   in `hooks/hooks.json`, if it exists)".
-2. **`claude plugin validate <plugin> --strict`** reads this file — renaming the
-   event to `UserPromptSubmitt` fails with
-   `hooks.UserPromptSubmitt: Invalid key in record`.
-3. **A live run** — `claude -p … --plugin-dir <this plugin> --debug-file …`
-   logged `Read hooks.json for plugin bett3r-ai-workflow`, then
-   `Hook UserPromptSubmit success: esas: 2 pending (seq 1→4)`, and the line
-   reached the model's context.
-
-Shape:
+`hooks/hooks.json` at this exact path is loaded automatically for every enabled plugin; `plugin.json`'s `hooks` field is for additional hook files only, and pointing it back here is an error. Shape:
 
 ```jsonc
-{ "hooks": { "<Event>": [ { "hooks": [ { "type": "command", … } ] } ] } }
+{ "hooks": { "<Event>": [ { "matcher": "<tool>", "hooks": [ { "type": "command", "command": "sh", "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/<file>"], "timeout": 5 } ] } ] } }
 ```
 
-`${CLAUDE_PLUGIN_ROOT}` is substituted in `command` **and** in each `args`
-element, and is available *only* to plugin hooks — a `settings.json` hook that
-references it is rejected. `${CLAUDE_PROJECT_DIR}` is both substitutable and
-exported into the hook's environment, which is what `esas-pending.sh` reads.
+`${CLAUDE_PLUGIN_ROOT}` is substituted in `command` and in each `args` element, and only for plugin hooks; `${CLAUDE_PROJECT_DIR}` is exported into the hook's environment, which is what every script here reads. `args` is the exec form: no shell re-parse, so a plugin path with spaces cannot break the invocation. `matcher` selects on the tool name and nothing else; there is no per-directory matcher, so every hook here runs in every repo where the plugin is enabled, and the first thing each script does is one cheap check that exits 0 wherever the hook does not apply.
 
-`args` is the exec form: the command is spawned directly, with no shell
-re-parse, so a plugin path containing spaces cannot break the invocation. Keep
-`command` a bare executable name when `args` is present.
+## esas-pending.sh (`UserPromptSubmit`)
 
-## esas-pending.sh — the ESAS board pending count
+Injects one line, `esas: N pending (seq A→B)`, while the user has unsynced semantic edits on the ESAS design board. Telemetry, never a trigger; the rule for reacting to it is `skills/esas-pending/SKILL.md`. Line 2 is `[ -f "${CLAUDE_PROJECT_DIR:-.}/.esas/ops.jsonl" ] || exit 0`. Every path exits 0, because a `UserPromptSubmit` hook that exits 2 erases the user's prompt; with `wc` and `awk` missing it prints nothing. Scanning is linear in the part of the feed the cursor has not bounded, and a hit of the 5 s timeout costs one prompt's telemetry, never the prompt.
 
-A `UserPromptSubmit` hook that injects one line, `esas: N pending (seq A→B)`,
-while the user has unsynced semantic edits on the ESAS design board. It is
-**telemetry, never a trigger**; the standing rule for reacting to it lives in
-`skills/esas-pending/SKILL.md`, deliberately not in the hook's output.
+## esas-session-channel.sh (`SessionStart`)
 
-Two properties are load-bearing, because this runs on **every prompt in every
-repo** where the plugin is enabled (there is no per-directory matcher):
+Prints one instruction, to open the board's session channel with `Monitor({ ws: { url: 'ws://127.0.0.1:<port>/api/esas/ws' }, persistent: true })`, so the board's *Ask Claude* button can reach an idle session from t=0, resumed sessions included. Line 2 is `[ -d "${CLAUDE_PROJECT_DIR:-.}/.esas" ] || exit 0`. It speaks in exactly one state: a board answering `GET /api/esas/status` on `${ESAS_BOARD_PORT:-3727}`, serving this checkout, reporting `sessions: 0`. Nothing on the port, a board for another checkout, `sessions >= 1`, no `sessions` field, no `curl`: all silent, exit 0. A board started later in the session is recovered by the `esasSessionChannel` notice `esas-mcp` attaches to its tool results.
 
-- **It always exits 0.** A `UserPromptSubmit` hook that exits 2 blocks
-  processing and erases the user's prompt. Every path here — corrupt cursor,
-  unreadable feed, torn feed, binary garbage — exits 0.
-- **It is free when there is no board.** Line 2 is
-  `[ -f "${CLAUDE_PROJECT_DIR:-.}/.esas/ops.jsonl" ] || exit 0`. Measured
-  against an empty script on the same machine, the difference is **below the
-  noise floor** — the whole cost is the process spawn that every command hook
-  pays, and the hook's own work does not register.
+## lane-git-guard.sh (`PreToolUse`, matcher `Bash`)
 
-It also degrades silently rather than loudly: with `wc` and `awk` — the only two
-tools it still needs — absent (`PATH=/nonexistent`) it prints nothing, to
-either stream, and exits 0.
+In an unattended lane, blocks the git commands that discard or shelve the working tree. A lane is any checkout holding `.work/lane.yaml`, the brief the provisioner writes, and the checkout a command acts on is not always the project dir (a fleet lane is a subagent of the orchestrator's session and reaches its worktree through `cd` or `git -C`). So the hook reads the event JSON on stdin (line 2; a payload with no `git` in it exits there on a glob match), takes `tool_input.command` and `cwd` from it, tokenises the command with `;`, `|`, `&`, `(`, `)`, a backtick and a newline as separators, and looks for the brief in the cwd, in `CLAUDE_PROJECT_DIR`, and in every path after `cd`, `-C` or `--work-tree` (relative paths resolve against the cwd). When one of them holds the brief and the command carries `git stash` (except `create`, `list`, `show`), `git reset --hard`, `--merge` or `--keep`, `git checkout --`, `.`, `-f` or `--force`, `git switch -f`, `--force` or `--discard-changes`, `git restore` or `git clean -f`, it exits 2 with one line on stderr naming the command and the alternative, `git stash create` plus `git diff <object>`. Everything else exits 0, and nothing is ever written to stdout. The match is on the command's own tokens, so the words inside a quoted string or a description do not match; a heredoc body line starting with `git stash` does.
 
-The declared `timeout` is 5 s. Scanning cost is linear in feed size, on the feed
-the cursor has *not* bounded:
+## Tests
 
-| feed | scan |
-|---|---|
-| 1 MB / 2 000 ops | 0.47 s |
-| 9.7 MB / 20 000 ops | 4.6 s — **at the timeout** |
+`sh scripts/test-hooks.sh` at the repo root covers all three: the pending count against fixtures produced by the real `@bett3r-dev/esas-store` (`scripts/fixtures/esas-pending/README.md`), the session channel against a stub board on an ephemeral port, the guard against synthesized `PreToolUse` payloads, and the wiring in `hooks.json`.
 
-A design session's semantic feed does not approach that, but debounced
-`class: layout` position writes are the plausible route: they are excluded from
-the *count*, not from the *scan*. Hitting the timeout is benign — the hook is
-killed, no line is injected, and the prompt proceeds untouched, because a
-timed-out hook is not a non-zero exit. It costs one prompt's telemetry, never
-the prompt.
+## Fallback: installing a hook by hand
 
-Tested by `scripts/test-hooks.sh` at the repo root, against fixtures produced by
-the real `@bett3r-dev/esas-store` (see `scripts/fixtures/esas-pending/README.md`).
-
-## esas-session-channel.sh — arming the board's summon channel
-
-A `SessionStart` hook that prints one instruction: open the ESAS **session
-channel** with `Monitor({ ws: { url: 'ws://127.0.0.1:<port>/api/esas/ws' },
-persistent: true })`. That socket is how the board's *Ask Claude* button reaches
-an idle session (esas ADR-014); the gesture itself is
-`skills/esas-design/SKILL.md`, and this hook only says *now would be the time*.
-
-**Why a hook exists at all** is the whole reason the mechanism was rewritten.
-The channel it replaced was a shell watcher armed by the `/design` command, so
-its arming died at every session boundary — a resume, a `/handon`, any other
-session in the repo — and the recovery was the human remembering to ask.
-`SessionStart` fires for **every** session in the repo, resumed ones included,
-so the channel can go up at t=0 with nobody asked.
-
-It obeys `esas-pending.sh`'s two rules for the same reason (no per-directory
-matcher, so it runs at the start of every session in every repo): **line 2 is
-the whole program** — `[ -d "${CLAUDE_PROJECT_DIR:-.}/.esas" ] || exit 0` — and
-**every path exits 0**, silently, including a missing `curl`.
-
-**Silence is the behaviour under test.** It speaks in exactly one state: a board
-answering `GET /api/esas/status` on `${ESAS_BOARD_PORT:-3727}`, serving **this**
-checkout (`repoPath` matched in both JSON spellings and both the logical and
-physical spelling of the project root), and reporting `sessions: 0`. Nothing on
-the port, a board serving another checkout, `sessions >= 1`, and a board with no
-`sessions` field at all (unknown, never zero) are **all silent** — `.esas/`
-existing is deliberately *not* sufficient, or every unrelated session in a
-designing repo would open a socket it will never use.
-
-What it does **not** cover: a board restarted later in the session, which
-`SessionStart` has already run past. That is recovered by the
-`esasSessionChannel` notice `esas-mcp` attaches to every tool result while the
-channel is shut. This hook buys t=0 only.
-
-Tested by `scripts/test-hooks.sh`, against a stub board on an ephemeral port.
-
-## Fallback: installing the hook by hand
-
-The plugin mechanism above is verified, so this is **not** needed in a normal
-install. It exists for the case where a user wants the count without enabling
-the plugin, or is on a Claude Code old enough not to load plugin hooks. Add to
-`.claude/settings.json` in the repo being designed:
+Not needed in a normal install. For a user who wants the pending count without enabling the plugin, add to `.claude/settings.json` in the repo being designed and copy `esas-pending.sh` to `.claude/esas-pending.sh`:
 
 ```jsonc
 {
   "hooks": {
     "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh",
-            "args": [".claude/esas-pending.sh"],
-            "timeout": 5
-          }
-        ]
-      }
+      { "hooks": [ { "type": "command", "command": "sh", "args": [".claude/esas-pending.sh"], "timeout": 5 } ] }
     ]
   }
 }
 ```
 
-and copy `esas-pending.sh` to `.claude/esas-pending.sh`. Note the two
-differences from the plugin form: `${CLAUDE_PLUGIN_ROOT}` is **not** available
-in `settings.json` (Claude Code rejects a hook that references it there), so the
-path must be a real one; and a hand-installed copy does not update with the
-plugin. If both are installed the line appears twice — remove one.
+`${CLAUDE_PLUGIN_ROOT}` is not available in `settings.json`, so the path is a real one, and a hand-installed copy does not update with the plugin. If both are installed the line appears twice; remove one.

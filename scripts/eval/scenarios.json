@@ -162,15 +162,17 @@
         ]
       ],
       "must_not_state": [],
-      "_calibration": "Written to guard a split that no longer exists: ADR-FORMAT.md and CONTEXT-FORMAT.md were inlined into SKILL.md and deleted. The parent was 468 words and its two references 668 and 351, so the split sat below the floor where splitting pays — it cost loading probability and bought no attention. must_open is empty because there is nothing left to open; loading probability is 1. Kept anyway, because the ADR numbering rule is high-stakes and silent when wrong, and asserting an INLINE rule is still a legibility regression check — it just is not evidence about a pointer any more. Note guards_split must not name the deleted files: check-eval-coverage.py reads every .md path in that field as a guarded target and correctly flags one the corpus no longer has."
+      "_calibration": "Written when ADR-FORMAT.md and CONTEXT-FORMAT.md had been inlined into SKILL.md and deleted. Those files returned with the Pocock adoption (ADR-012) and are guarded by adr-format-reached and context-format-reached; the numbering rule this scenario asserts stayed INLINE, in SKILL.md's `## In this flow` section, because Pocock's ADR-FORMAT.md numbers from a directory listing and this flow's rule (`git log --all`, every ref) overrides it. must_open stays empty on purpose: the rule is in the parent, and a session that opened ADR-FORMAT.md and took its numbering rule instead would FAIL must_state — which is the regression this scenario now guards. guards_split must not name a companion, since check-eval-coverage.py reads every .md path in that field as a guarded target."
     },
     {
       "id": "context-format-reached",
       "why": "CONTEXT.md is a glossary and nothing else; the format file is what keeps it from drifting into a spec or a scratchpad. The failure is cheap to fix but easy to start, and it compounds — a CONTEXT.md that has become a scratchpad stops being read.",
-      "guards_split": "skills/domain-modeling/SKILL.md — glossary format, now inline",
+      "guards_split": "skills/domain-modeling/SKILL.md -> skills/domain-modeling/CONTEXT-FORMAT.md",
       "artifact": "plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md",
       "prompt": "Read plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md. During a grill the user settles that 'Publication' is the right word for an item listed on an external sales channel, and that 'Listing' should not be used. Write exactly what goes into CONTEXT.md, in the exact format required, and say where the file lives.",
-      "must_open": [],
+      "must_open": [
+        "CONTEXT-FORMAT.md"
+      ],
       "must_state": [
         [
           "_avoid_"
@@ -180,7 +182,7 @@
         ]
       ],
       "must_not_state": [],
-      "_calibration": "Written to guard a split that no longer exists: ADR-FORMAT.md and CONTEXT-FORMAT.md were inlined into SKILL.md and deleted. The parent was 468 words and its two references 668 and 351, so the split sat below the floor where splitting pays — it cost loading probability and bought no attention. must_open is empty because there is nothing left to open; loading probability is 1. Kept anyway, because the ADR numbering rule is high-stakes and silent when wrong, and asserting an INLINE rule is still a legibility regression check — it just is not evidence about a pointer any more. Note guards_split must not name the deleted files: check-eval-coverage.py reads every .md path in that field as a guarded target and correctly flags one the corpus no longer has."
+      "_calibration": "First written when ADR-FORMAT.md and CONTEXT-FORMAT.md had been inlined into SKILL.md and deleted, so must_open was empty. The thin-context rewrite (ADR-012) adopted Matt Pocock's domain-modeling skill verbatim, and the two companions are back as real files behind real links; the `_avoid_` line and the tight-definition rule now live ONLY in CONTEXT-FORMAT.md, so must_open is the load-bearing assertion again. must_state is unchanged: `_avoid_` is the token a session that read only SKILL.md cannot produce."
     },
     {
       "id": "aggregate-patterns-reached",
@@ -473,6 +475,202 @@
         "**Status:** PASS",
         "Status: PASS"
       ]
+    },
+    {
+      "id": "build-pool-reached",
+      "why": "/build's Step 2 sizes the pool inline and hands every pool mechanic to reference/build-pool.md behind one link. The rule most likely to be improvised past is the unconditional reset before every take — install and build whether or not anything changed — because skipping it looks like an optimisation and the stale build output it prevents fails as a flaky test three slices later, not as a reset error.",
+      "guards_split": "commands/build.md -> reference/build-pool.md",
+      "artifact": "plugins/bett3r-ai-workflow/commands/build.md",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/build.md. You are running /build on five slices with no brief. You have ordered the slices and run `worktree-pool size .work/slices.yaml`; its last line was `WORKTREE-POOL:v1 cmd=size outcome=ok pool=2 ready=2 worktrees=/tmp/pool/wt-1,/tmp/pool/wt-2`. Slices 1 and 2 are ready now. State concretely, naming actual commands and agents, everything you do from here until slice 1's executor is dispatched, and say what happens to a worktree whose lockfile did not change since its last use.",
+      "must_open": [
+        "reference/build-pool.md"
+      ],
+      "must_state": [
+        [
+          "worktree-pool provision",
+          "provision"
+        ],
+        [
+          "pool-provisioner"
+        ],
+        [
+          "worktree-pool reset",
+          "reset"
+        ],
+        [
+          "unconditional",
+          "whether or not anything changed",
+          "every take",
+          "before every take",
+          "lockfile did not move",
+          "even if the lockfile"
+        ]
+      ],
+      "must_not_state": [
+        "skip the reset",
+        "skip the install",
+        "reuse the build output"
+      ]
+    },
+    {
+      "id": "build-record-reached",
+      "why": "The D-entry grammar and the build-summary frontmatter moved whole into reference/build-record.md; /build names the two files and links the companion three times. The grammar is executed by test-flow-seams.sh against a real decisions.md, so a wrong entry is caught after the fact — this asserts the session reaches the grammar before writing, since an entry written from memory (a `confidence:` field, a free-text `kind`) is exactly what the fixed header exists to prevent.",
+      "guards_split": "commands/build.md -> reference/build-record.md",
+      "artifact": "plugins/bett3r-ai-workflow/commands/build.md",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/build.md. You are running /build. Slice 2 (`inventory read model`) has just been committed as a1b2c3d after one fix round classified `design-silent`: the executor had to pick a cursor shape the design left open and chose a per-stream position, rejecting a global one. Write the exact decisions.md entry you append now — every header line, spelled as the record requires — and then say who writes build-summary.md, when, and what its entry for slice 5 looks like if the run yields before slice 5 ever starts.",
+      "must_open": [
+        "reference/build-record.md"
+      ],
+      "must_state": [
+        [
+          "kind: silent-seam",
+          "silent-seam"
+        ],
+        [
+          "decidedBy: executor",
+          "decidedBy"
+        ],
+        [
+          "supersedes"
+        ],
+        [
+          "orchestrator",
+          "you alone",
+          "single writer"
+        ],
+        [
+          "attempts: 0",
+          "never started",
+          "commit: null"
+        ]
+      ],
+      "must_not_state": [
+        "confidence:",
+        "the executor writes decisions.md",
+        "the executor appends to decisions.md"
+      ]
+    },
+    {
+      "id": "start-multi-serial-reached",
+      "why": "`--serial` drops the unit-lane and makes the orchestrator run each unit's five steps itself from inside the worktree; the mechanics (EnterWorktree, the run-state mirror, the isolation-safe brief shapes, rescuing learnings before ExitWorktree) live only in reference/start-multi-serial.md. Read past, the orchestrator dispatches unit-lanes it has no tool for, or writes run.yaml from inside a worktree that cannot see it.",
+      "guards_split": "commands/start-multi.md -> reference/start-multi-serial.md",
+      "artifact": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/start-multi.md. You are running it with `--serial` on three units. Step 2 has provisioned all three worktrees (TV1-1900 at /tmp/run/wt/TV1-1900 and so on) and each has its .work/lane.yaml. You are about to run unit TV1-1900's pipeline. Walk through concretely how you run its five steps, where you keep the run state while you are inside its worktree and when that state reaches run.yaml, what you do about .work/learnings.md before leaving, and what happens when /build reports slices=2/5.",
+      "must_open": [
+        "reference/start-multi-serial.md"
+      ],
+      "must_state": [
+        [
+          "EnterWorktree"
+        ],
+        [
+          "state-mirror",
+          "mirror"
+        ],
+        [
+          "ExitWorktree"
+        ],
+        [
+          "learnings.md"
+        ],
+        [
+          "re-invoke",
+          "again",
+          "resumes",
+          "dispatch /build again",
+          "run /build again"
+        ]
+      ],
+      "must_not_state": [
+        "dispatch a unit-lane",
+        "dispatch the unit-lane"
+      ]
+    },
+    {
+      "id": "design-map-fleet-reached",
+      "why": "design-map's SKILL.md keeps the attended verbs and points every fleet reader (render --stack, project, decisions, apply-answers, select) at FLEET.md, opened under /design-multi or as a design-lane. The stacking order and the cross-map answer rule (`otherMap=`) exist only behind that pointer; a session that improvises them renders subjects in argument order and folds a sibling map's answer into the wrong fork.",
+      "guards_split": "skills/design-map/SKILL.md -> skills/design-map/FLEET.md",
+      "artifact": "plugins/bett3r-ai-workflow/skills/design-map/SKILL.md",
+      "prompt": "Read plugins/bett3r-ai-workflow/skills/design-map/SKILL.md. You are the /design-multi orchestrator in a Phase B sitting with three subject maps on disk: units/S1.map.json (4 forks, 1 open), units/S2.map.json (6 forks, 3 open), units/S3.map.json (2 forks, 2 open). Give the exact command that puts all three on one page, say in what order the page shows them and why, and say what apply-answers does with a readback answer whose `map` field names S2 when you fold answers into S1.",
+      "must_open": [
+        "skills/design-map/FLEET.md"
+      ],
+      "must_state": [
+        [
+          "render --stack"
+        ],
+        [
+          "open forks first",
+          "most `open` forks first",
+          "most open forks",
+          "open forks",
+          "S2"
+        ],
+        [
+          "otherMap"
+        ]
+      ],
+      "must_not_state": []
+    },
+    {
+      "id": "adr-format-reached",
+      "why": "domain-modeling's SKILL.md says when an ADR is owed and points at ADR-FORMAT.md for how it is written. The format's one strong claim — an ADR can be a single 1-3 sentence paragraph, with Status / Considered Options / Consequences optional and usually absent — is the opposite of the template-heavy ADR a model writes from its priors, so a session that skipped the pointer produces a five-section document and reads as thorough.",
+      "guards_split": "skills/domain-modeling/SKILL.md -> skills/domain-modeling/ADR-FORMAT.md",
+      "artifact": "plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md",
+      "prompt": "Read plugins/bett3r-ai-workflow/skills/domain-modeling/SKILL.md. During a grill the user settled that the Ordering context will communicate with Billing only through domain events, never synchronous HTTP, because Billing's availability must not gate order placement; the team seriously considered an HTTP call and rejected it. All three ADR tests hold. Write the ADR exactly as this skill's format requires, and say which optional sections you include and which you leave out, and why.",
+      "must_open": [
+        "ADR-FORMAT.md"
+      ],
+      "must_state": [
+        [
+          "1-3 sentences",
+          "1–3 sentences",
+          "one to three sentences",
+          "single paragraph",
+          "one paragraph",
+          "a paragraph"
+        ],
+        [
+          "Considered Options",
+          "Consequences",
+          "Status"
+        ],
+        [
+          "optional",
+          "leave out",
+          "omit",
+          "only when",
+          "skip"
+        ]
+      ],
+      "must_not_state": []
+    },
+    {
+      "id": "skill-mechanics-reached",
+      "why": "writing-for-agents keeps the universal writing rules and points at SKILL-MECHANICS.md for what changes when the document is a skill. The invocation choice lives only there: `disable-model-invocation: true` strips the description from the agent's reach, so no other skill can fire it and the description becomes human-facing. /evolve and /capture-learnings open with this skill, and a session that reads past the pointer writes a trigger-laden description on a skill nothing but a human can invoke.",
+      "guards_split": "skills/writing-for-agents/SKILL.md -> skills/writing-for-agents/SKILL-MECHANICS.md",
+      "artifact": "plugins/bett3r-ai-workflow/skills/writing-for-agents/SKILL.md",
+      "prompt": "Read plugins/bett3r-ai-workflow/skills/writing-for-agents/SKILL.md. You are /evolve, writing a new skill that only a human will ever type by name; it must never fire on its own and no other skill needs to reach it. State the exact frontmatter you write for the invocation choice, what its description should now contain, and whether another skill could invoke it afterwards.",
+      "must_open": [
+        "SKILL-MECHANICS.md"
+      ],
+      "must_state": [
+        [
+          "disable-model-invocation"
+        ],
+        [
+          "user-invoked",
+          "user invoked"
+        ],
+        [
+          "no other skill",
+          "cannot",
+          "can't",
+          "nothing but the human",
+          "only the human"
+        ]
+      ],
+      "must_not_state": []
     }
   ]
 }

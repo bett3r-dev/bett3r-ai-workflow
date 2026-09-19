@@ -1,177 +1,123 @@
 ---
-description: Land the work — one whole-PR coherence review across all slices, a dev verification checklist, finalize ADRs, complete the committed record, and open a PR that links it.
+description: Land the work. One whole-PR review across all slices, the dev checklist, ADRs, the ruled concerns and the measured run, then the PR that links the committed record.
 ---
 
 # /verify-build — land the work
 
-The per-slice `verifier` already checked each slice in isolation during `/build`. This is the **cross-slice** pass: does the *assembled* feature hold together, and then turn the ephemeral working state into the durable record (ADRs, the work item's committed record beside the code, and a PR that links it).
+This is the `verify-build` step; its verdict is `LANE-STEP:v1 step=verify-build …`. It checks the assembled change the per-slice `verifier` could not, completes the committed record `work-docs-path` locates, and opens the PR that links it.
 
 ## Argument: $ARGUMENTS
 
 Optional ticket id. Default: the active work in `.work/slices.yaml`.
 
----
+## Step protocol
+
+**Brief.** If `.work/lane.yaml` exists you are an unattended lane: take every input (`work_item`, `branch`, `worktree`, `runDir`, `gateDeferred`, `sliceBudget`, `mapProvenance`, `preconditions`, the rest) from it and ask no one anything. A fact it hands down is a claim to verify against the tree before you build on it. Without the file you run attended: inputs come from the user and the working tree.
+
+**Mode marker.** Rewrite `.work/mode.yaml` whole: `mode: <this step>`, `work_item:` and `branch:` carried forward exactly as `/start` recorded them, `updated:` now. The file is replaced, not merged or appended; only `/start` clears it.
+
+**Verdict.** Your last line is `LANE-STEP:v1 step=<this step> outcome=<success|gate-red|blocked-on>` with this step's attributes, at column 0 with nothing after it. Run `lane-step-record '<the identical line>'` immediately before printing it (it records the verdict on the branch when the brief opts in). Printing the line ends the run: take no turn after it.
 
 ## Step 1 — Preconditions
 
-Read `.work/slices.yaml` and the committed design — `<path>/design.md`, `path=` being `work-docs-path`'s verdict for this work item, called exactly as `/design` Step 4 calls it. All slices should be `passes: true` and committed (`git log` shows one slice commit per slice). If slices remain unpassed, stop: "Slices N… not yet green — run `/build` first."
+Resolve the record folder: `work-docs-path --item <work_item>`, the reader form, no `--owner-branch`, with `work_item` from `.work/mode.yaml` untouched. Read its last line, `WORK-DOCS-PATH:v1 …`, never its exit code; `<path>` is its `path=`. On `outcome=error`, say so and carry on without a record folder: Steps 5a, 5a2 and 5b leave their files unwritten and carry `outcome=error reason=<its reason>` (5b writes `concerns: null`, 6b posts `failure`); the PR still opens.
+
+Read `.work/slices.yaml` and `<path>/design.md`. Every slice is `passes: true` with one slice commit per slice (`git log --format=%H -E --grep '^Slice <id> of <work_item> ' <base>..HEAD` finds exactly one); otherwise stop: "Slices N… not yet green — run `/build` first." Done when `<path>` resolved and every slice is green and committed.
 
 ## Step 2 — Run the gate
 
-**The host repo declares what "green" means; you discover it.** Follow the [full-gate](../skills/full-gate/SKILL.md) skill for the discovery order (`.claude/gate.mjs`, then `.claude/gate.sh`, then a fallback that must be reported as one), the `GATE-STEP:` output contract, and the four ways a green read is wrong. Do not restate them here and do not hardcode `yarn test` — a repo whose routine gate is `yarn test` + `yarn test:integration` + `yarn generate-all` + `yarn lint` cannot be served by a guess.
+`Call the Skill tool with "full-gate"`. It owns discovery, the `GATE-STEP:` contract and the report block; read the verdict as `full-gate` does. The mode:
 
-Which mode you run depends on whether this unit is landing on its own:
+- **`.work/lane.yaml` exists and carries `gateDeferred: true`** → run **`--fast`** only; `/merge-multi` runs the branch-wide check once. The PR body records "Gate deferred to the fleet gate, run `<runId>`." and "Version bump deferred to the fleet merge, run `<runId>`." (the version-bump step reports `SKIP reason=deferred-to-merge-multi`; a `FAIL` there is still a `FAIL`).
+- **No brief, or one that does not defer** → the repo's scoped default (no argument), baseline-diffed; with no scoped mode declared, run `--fast` and say so.
 
-- **`.work/lane.yaml` exists and carries `gateDeferred: true`** (the lane brief, written by the `provisioner`; this unit is one lane of a `/start-multi` fleet) → run **`--fast`** only. The branch-wide check is hoisted to `/merge-multi`, which runs it once on the run's integration branch — the only tree where cross-unit breakage exists at all. Record in the PR body: *"Gate deferred to the fleet gate, run `<runId>`."* That line is load-bearing: without it the PR reads as fully certified.
-- **No brief, or one that does not defer** (a single `/start` flow) → run the repo's **scoped** mode — `node .claude/gate.mjs` with **no argument** — baseline-diffed. Its report block goes into the PR body under **Verification**, verbatim, counts included, including the `GATE-MODE:` line and the sentence that it certifies this branch's diff and its importers, not the tree. Where the repo declares no scoped mode, run **`--fast`** and say so.
+Record the report block verbatim, `GATE-MODE:` line included, for the PR body. A `FAIL` blocks Step 6; a step red on the base too is pre-existing, named and left alone; `SKIP` and `INCONCLUSIVE` steps are named and do not block. Done when the report block is recorded with its mode and verdict.
 
-**Never `--full`, never `--all`, under any condition — not for a big diff, not for a risky one, not "just to be sure".** The whole-repo run belongs to the CI pipeline, or to the user asking for it by name; a flow step that helps itself to one spends tens of minutes of the user's laptop re-proving a tree the unit did not touch. If you think this unit needs one, **say so in the PR body and stop** — the decision is the user's.
+## Step 3 — Whole-PR review
 
-In a `gateDeferred` lane the host gate's version-bump step is expected to report `SKIP reason=deferred-to-merge-multi` for every plugin the unit touched — the fleet does one bump per plugin on the integration branch, so a lane never bumps `plugin.json` (N lanes bumping guarantee manifest conflicts and a version meaningless on int). Name it in the PR body: *"Version bump deferred to the fleet merge, run `<runId>`."* A version-bump `FAIL` in a lane is still a `FAIL` (e.g. an unreadable manifest is never deferred), and outside a `gateDeferred` lane a missing bump `FAIL`s as always.
+**Resolve the base.** When the diff's file count is several times the union of `touches:` in `.work/slices.yaml`, `git branch -r --contains <first-branch-commit>` names the parent and `git merge-base <candidate> HEAD` is `<resolved-base>` for every later step.
 
-A `FAIL` blocks Step 6 — do not open the PR over a red gate. A step red on the base as well is pre-existing, not this unit's `FAIL`: name it in the PR body and leave it, here and in any fix slice — the unit delivers its ticket, not unrelated repairs. A `SKIP` or `INCONCLUSIVE` step does not block, but is named in the PR body; silence there reads as coverage. This step *produces* the verdict every sweep below assumes.
+**Review.** Two read-only sub-agents in one message, both `sonnet`, each briefed in under 400 words with the diff *command* (`git diff <resolved-base>...HEAD`), never the diff itself, and asked for findings only, each naming file, line and the rule or requirement it breaks. *Standards*: judged against `${CLAUDE_PROJECT_DIR}/.claude/rules/` and the repo's own conventions; the repo overrides general taste, and anything a linter or type checker already enforces is skipped. *Spec*: judged against the committed `<path>/design.md`: every resolved decision and scenario implemented, nothing outside the design shipped, deviations recorded in `decisions.md`. Aggregate verbatim under two headings, never re-ranked across axes. Then the cross-slice questions are yours: do the slices compose, is one undone by a later one, does the whole deliver the resolved design.
 
-**The same applies to CI, and there it is easier to miss.** `gh pr checks` collapses a whole workflow to one line, and a job that fail-fasted reports every later step as `skipped` ([EVIDENCE.md](../EVIDENCE.md) §1, *it never ran*). "The only failure is the known baseline" is therefore not a reading of the run: open the step list, **enumerate the steps the red one prevented from running, and run each locally by name** — reported as `RAN LOCALLY: <step> exit N`, never folded into the general gate table. Where the repo is yours to change, give each independent gate its own job, so one red cannot mask its siblings.
+**Ripple sweeps.** A mechanical third pass, run rather than eyeballed, against `HEAD` even after `/build`'s own ripple check. When a diff redefines a value's semantics, sweep its readers. Dispatch the sweeps as read-only subagents routed as `/build`'s table does, one row each; where the work carries a safety-direction invariant (may only widen, must never lose), each brief asks the invariant's question. Adjudicate rather than re-run. A clean verdict is a claim too ([EVIDENCE.md](../EVIDENCE.md) §3).
 
-## Step 3 — Whole-PR coherence review
-
-**Resolve the true base first — don't trust `master`/`origin/master` by default.** Under `/start-multi`'s worktree fleet, a per-ticket branch is cut from an *integration* branch that hasn't merged to `master` yet, so the branch's true fork point is that integration branch, not `master`. Diffing against a stale `master` silently inflates the scope (a real case: 509 files / +68k/−46k instead of ~67 files) and the coherence review runs against the wrong diff — a *silent* scope error, no command errors. Before reviewing:
-
-1. Compute the diff against the assumed base, then **sanity-check its file count against `.work/slices.yaml`'s union of `touches:` paths.** If the diff is wildly larger (e.g. >3–5×), treat `master`/`origin/master` as **suspect**, not authoritative.
-2. When suspect, resolve the real base: `git branch -r --contains <first-branch-commit>` to find the nearest integration/parent branch, and prefer `git merge-base <candidate> HEAD` over the assumed default.
-
-Then diff the full branch against that resolved base (`git diff <base>...HEAD`). Read `${CLAUDE_PROJECT_DIR}/.claude/rules` for the repo's architectural checklist. Review the **assembled** change — the things no single-slice verifier could see:
-
-- **Cross-slice invariants** — does the feature hold as a whole; do the slices compose correctly; any contract that two slices had to agree on?
-- **Coherence** — consistent patterns across slices, no duplication introduced between them, no slice undone by a later one.
-- **Design fidelity** — does the assembled result deliver what the design resolved? Note any deliberate deviation.
-- **Quality** — real bugs, unsafe casts, security, dead code introduced across the diff. Look for accidental complexity, technical debt or anti-patterns relentlessly and be critical.
-
-### Concrete ripple sweeps (run them; don't eyeball)
-
-Every sweep below is one of two facts. Most are [EVIDENCE.md](../EVIDENCE.md) §1 — *a verdict is evidence only about what it executed*, and each row is a different way that path was narrower than it looked. The rest are the one class with **no per-slice gate at all: composition** — two slices individually correct, the defect in the seam between them. "Both slices were individually correct" is the *signature* of a real composition finding, never a reason to downgrade it.
-
-A recurring trait makes several of them hard to see: **the broken code is code this PR never touched.** A diff-shaped review looks straight past it, because what changed is the *meaning* of something the old code still reads. When a diff redefines a value's semantics, review the **readers of that value**.
-
-`/build` runs a first-pass ripple check per slice. **Do not assume it caught anything** — its carry-forward is a claim to verify against `HEAD` (§3), not evidence. These sweeps are the backstop.
-
-| When the diff… | Prove | The tell (each cost a real miss) |
+| When the diff… | Sweep | A hit means |
 |---|---|---|
-| **deletes** a symbol / route / config field / subsystem | zero live callers across **every** repo — a broken caller in a sibling package still compiles that package fine | a deleted bitmap subsystem left a live admin route → runtime 404, plus a debug tool and dead config, all green |
-| changes an **exported signature** | every caller matches, **including** `*.integration.test.ts` / e2e / fixtures excluded from the default run — then run those suites or flag them un-run | a widened arg fixed the one prod site; 7 integration suites kept passing the old shape, invisible to `yarn test` |
-| changes a read model's **key property**, a persisted field name, or anything that changes what `readById` / a pushed-down filter resolves | enumerate every consumer of that collection **outside the owning module** (`grep -rn "<table_name>"`) and check each one's access shape — key-based, filter-based, scan-and-match; migrate them to **one shared helper** plus a guard test on the old shape, not N call-site edits | the module's own ~21 suites and its integration oracle stayed green while 19 integration suites in four unrelated subsystems used the table as a de-facto fixture and got `null`; two hours were spent attributing it, one of them to machine contention |
-| deletes or redefines a **credential, header, auth mode or env contract** | grep the **templates and skills** that emit code using it — `.claude/skills/**`, plugin skills, scaffolding scripts, `docs/**` code fences, README snippets — and fix them in the same PR; a template that emits a credential should reference a helper, never inline the literal | a template is a generator of future code: it has *authors*, not callers, so every caller-shaped sweep returns clean. A seeder built from the stale one authenticated, got a 200, and read an empty set |
-| adds a **new reader** of an already-persisted table / index / collection | reason about *what the query can return*, not when it runs: enumerate **every other writer** and prove this key space cannot select their rows, or narrow it until it can't | the safety argument is phrased as control flow ("only runs when X failed", "byte-identical for existing callers"). Control flow is about your code; the rows belong to someone else |
-| touches **event schemas**, **persisted field names**, or **idempotency/dedup records** | (1) a rename/removal ships an upcaster or version bump; (2) rows written *before* this diff still work, with a test that exercises one; (3) name the changed path that has no test | a "pure rename" rehydrated the aggregate to `accounts["undefined"]`; a reversal keyed off a field pre-enrichment rows lacked |
-| has **migrate-on-read** for a persisted format | reads and writes agree per version: recognized-legacy **migrates on write** (never dead-ends the session), genuinely-newer **refuses, typed** — and both directions are tested | a file that rendered everywhere refused every write; the fold restamped a v99 file *down*, the exact loss its own comment claimed was closed |
-| introduces an **adjustment to a total / count / threshold** | every *other* site comparing against the **unadjusted** value (`< total`, `>= totalItems`) is fixed — and if more than one site computes the adjusted value, **collapse them into one exported function** | a stale canary WARNed on every no-op batch. Fixing only the arithmetic left the duplication, and the next skip-bucket re-broke it at the same line two weeks later. **A sweep firing twice on one site means the earlier remedy was too shallow** |
-| introduces a **mechanical guard** (conflict, tenancy, rate, permission) | name the field its dispatch condition reads, then enumerate **every surface that can set it** — tool schemas, HTTP bodies, message payloads, defaults. Stamp at each surface; never validate the claim | one frontend hard-stamped `author: 'human'` with a comment on why spoofing was impossible; the sibling MCP surface forwarded it as an optional parameter, disarming the guard entirely |
-| ships an **on-demand "operate over my rows" endpoint** | the tenant is derived from the authenticated user and pushed into the query filter — never from an optional body field, never a system-wide scan for an authed caller (cron/system paths legitimately stay unscoped). Build the two-tenant repro | single-tenant harnesses cannot see it: build, `generate:check` and a green Postgres integration test all passed a cross-tenant reconcile |
-| implements a **reversible operation** | the **inverse** on the real adapter too, with its write semantics stated. A forward-green gate — or an inherited "verified on Postgres" — says nothing about the other direction | the two directions took different write paths: a dot-path write forward, a whole-row merge back, which could not drop the keys the forward pass baked |
-| adds endpoints / operations / policies / registry nodes | run the repo's **own** codegen/drift gate (`generate:check`, `generate-all` + `git status`) and read its real verdict. Composition drift exists only once the slices are assembled, so no per-slice gate sees it | if the gate asserts something you can verify is false in the source, **suspect its inputs before editing the source** — it resolved through `paths` and loaded a stale compiled `.js` sitting beside the `.ts` |
-| **corrects a claim** or removes a duplication | sweep the **belief in synonyms**, not the literal string, and **re-sweep every file this PR itself edited** | a literal `git log -S` found 4 sites; synonyms found 2 more and the whole-PR pass found a seventh **72 lines below a line the PR had just fixed** — shipping a self-contradicting file is worse than fixing neither |
-| merges another branch in | enumerate what the **other side added** (`git diff --diff-filter=A --name-only <base>...<theirs>`), intersect with what **this** side modified, and read the assertions of every added test/fixture on that intersection | new files conflict with nothing, so they appear in no conflict list — an added PCI oracle merged green against a prop API this branch had replaced, still committed, still collecting, testing nothing |
-| a later slice **removes a protection** an earlier slice made unnecessary | state the two sets — what the earlier slice actually covers, what the removal is applied to — and the difference. Non-empty difference *is* the finding | one slice made *one* watched file degrade safely; the next stopped holding **all three**, and the third was still client-fatal |
-| asserts **why** a guarantee holds by naming a framework mechanism | verify the claim against framework source-of-truth **before it reaches the PR body**; correct it in place | an oracle and comment credited a deep merge; the guarantee actually came from an outbox `concurrency:1` and was topology-dependent. Behaviour green, stated reason wrong |
-| carries **skipped / `xfail` / tracer** blocks citing a blocker | re-validate each rationale against `HEAD` — a later slice may have fixed the cited blocker, leaving the path uncovered and the comment lying | a tracer bypassed a "P0" that a later commit on the same branch had already fixed |
-| — (always) **cross-slice composition** | enumerate the invariants / cursors / floors more than one slice touches; reason about each **pairwise** interaction, especially where one slice *advances* what another *reads* or *trims* against (the gate from Step 2 covers the whole diff; this row is about *why* it is green) | a by-position refill and a stream trim were each correct and composed into a silent-drop window |
-| — (always) **`Bin` in the diff-stat** on a hand-authored source path | treat as a hard finding, not noise. `git diff --numstat` emits `-\t-\t<path>`; locate with `grep -aPn '[\x00-\x08\x0e-\x1f]'` | a NUL sentinel in a `.ts` string literal compiled, passed 8/8 integration tests, and made the whole file's diff unreviewable on a diff-is-the-deliverable ticket. Earlier tell: **`grep` returning nothing on a file you just edited** is a binary-classification symptom, not an answer — run `file` |
+| deletes a symbol, route, config field or subsystem, or changes an exported signature | grep every repo for callers, including `*.integration.test.ts`, e2e and fixtures outside the default run (a sibling package compiles fine with a broken one); run those suites or name them un-run | fix the caller here; name the un-run suite |
+| changes a read model's key or what `readById` or a pushed-down filter resolves | `grep -rn "<table_name>"` outside the owning module; check each consumer's access shape | one shared helper plus a guard test on the old shape |
+| deletes or redefines a credential, header, auth mode or env contract | grep the templates that emit code using it (`.claude/skills/**`, plugin skills, scaffolding) | point the template at a helper |
+| adds a reader of an already-persisted table, index or collection | enumerate every other writer; prove this key space cannot select their rows | narrow the query |
+| touches event schemas, persisted field names or idempotency records | an upcaster or version bump per rename; a test on a row written before this diff | add it, or name the untested path |
+| adds migrate-on-read or a reversible operation | both directions on the real adapter, tested; legacy migrates on write, newer refuses typed | one direction untested |
+| adjusts a total, count or threshold | grep every other comparison against the unadjusted value; collapse duplicate computations into one exported function | fix both |
+| introduces a mechanical guard | name the field its condition reads; enumerate every surface that can set it (tool schemas, HTTP bodies, payloads, defaults) | stamp at that surface |
+| ships an "operate over my rows" endpoint | the tenant comes from the authenticated user into the filter; build the two-tenant repro | a body field or a system-wide scan |
+| adds endpoints, operations, policies or registry nodes | the repo's own codegen or drift gate (`generate:check`) | drift; on a false assertion suspect a stale compiled `.js` before editing source |
+| corrects a claim or removes a duplication | sweep synonyms of the belief; re-sweep every file this PR edited | a surviving copy |
+| merges another branch in | `git diff --diff-filter=A --name-only <base>...<theirs>` ∩ files this side modified; read every added test's assertions there | an added oracle testing a replaced API |
+| removes, in a later slice, a protection an earlier slice made unnecessary | state what the earlier slice covers and what the removal applies to | a non-empty difference |
+| asserts a reason: a framework mechanism behind a guarantee, a blocker behind a skipped, `xfail` or tracer block | verify each against the framework's source or against `HEAD` | correct the reason, or uncover the path |
+| always: cross-slice composition | enumerate the invariants, cursors and floors more than one slice touches; reason pairwise where one advances what another reads or trims against | two correct slices with a defect in the seam: a real finding |
+| always: `Bin` in the diff-stat on a hand-authored path | `git diff --numstat` prints `-\t-\t<path>`; locate with `grep -aPn '[\x00-\x08\x0e-\x1f]'`; `grep` returning nothing on a file you just edited is a binary-classification symptom, so run `file` | a hard finding |
 
-### The gate's verdict, and the sweeps that outlive it
+Where the plan names a tier the widest gate excludes, run it or say in the PR body that it was not run.
 
-The sweeps assume you can trust the word "green." How to read a gate's verdict — the piped-exit-code lie, the run that executed nothing, the green *partial* inventory, and the baseline diff against an already-red base — now lives once in the [full-gate](../skills/full-gate/SKILL.md) skill, and Step 2 has already produced that verdict. Read it there; do not re-derive it per sweep.
-
-Two things that verdict does **not** cover, and that stay here:
-
-- **Tiers the repo excludes from its widest run on purpose, and anything the scoped run did not select.** A slice's `passes:` flag records the default run, which skipped them. Where the plan names such a tier — env-gated integration suites, e2e, anything needing testcontainers — either run it explicitly, or state in the PR body that it was not run and why.
-- **The composition question.** The gate proves the assembled tree is green; it says nothing about *why*, and a green tree with a silent-drop window in it is exactly the case the composition row above exists to catch.
-
-Apply the `critique` skill's tone throughout: substance over compliments, no hedging, every finding specific and actionable with a concrete fix. For an assembled feature that crosses a non-trivial architectural seam, run a focused `critique --lens arch,ops` pass over the diff and fold its verdict into the findings below.
-
-**The sweeps parallelize well** as independent read-only subagents — they are grep-shaped and disjoint, and the wall-clock is the slowest one. **Dispatch them on `sonnet`, named explicitly** (an unnamed model inherits the session's, which is the most expensive one you have): each sweep is a bounded grep with a stated tell, and the judgment — adjudicating conflicting reports, disproving a Critical — is yours and stays on this session's model. Brief each with the row it owns and the specific artifact it must produce, never a generic "review this diff"; a sweep dispatched vaguely returns prose you then have to re-run. Your job then is **adjudication, not re-running them**: when two reports disagree about a checkable fact, *neither* is evidence — read the primary source and record which report was wrong. A **clean verdict is a claim too** (§3), and it is the seductive one, because it asks for no work and reads as resolution. (A "this is already fixed, lines 35-60 type-prefix every import" verdict had read the first half of the import block; the blocker was live, and trusting it would have dropped the fix and the gate wiring built on it.)
-
-**Disprove every Critical/High before propagating it.** A plausible-sounding Critical that's actually a false positive is *more* expensive than a missed nit — "fixing" it introduces a regression. Before reporting or acting on any Critical/High finding, attempt to **disprove** it: (a) read the actual call site — not the diff hunk in isolation; (b) run a `git blame` / base-branch check — "is this pre-existing on the base, not introduced by this PR? Y/N"; (c) construct a concrete failing input that reproduces it. Drop or downgrade any Critical that can't survive all three. (Real miss: 3 of 4 reported Criticals on TV1-1950 were false positives — a truthy `'0'` misread as falsy, a verbatim-from-`master` pre-existing line, and a "double increment" that was load-bearing for restart determinism — each would have introduced a bug if "fixed"; the git-blame check alone kills two of them.)
-
-Surface findings by severity (Critical / Medium / Low). Fix Critical/Medium before opening the PR (small fixes inline, or a fix slice appended to `.work/slices.yaml` with `origin: verify-build` — `/build`'s build-summary rule reads a slice's `origin:` and records a slice without one as `plan`). For anything left open, state your recommendation and why it can ship unresolved. This review is **not** committed to a file, except the counts Step 5b records in `build-summary.md` — its conclusions go into the PR body (Step 6).
+**Disprove every Critical before reporting it**: read the call site, not the hunk; `git blame` for pre-existing on `<resolved-base>`; construct a failing input; drop or downgrade what fails any of the three. Fix Critical and Medium before the PR, inline or as a fix slice appended to `.work/slices.yaml` with `origin: verify-build` and driven through `/build`; anything shipped unresolved carries a recommendation. The conclusions go into the PR body, except the counts Step 5b records. Done when every Critical is disproved or fixed and the counts by severity are noted.
 
 ## Step 4 — Dev verification checklist
 
-Produce a single **developer verification checklist**: the things a human should manually confirm that the automated slice tests do **not** cover — UI/UX, a browser smoke for a user journey, anything environment-specific. One lean list. (No separate QA plan.) This goes in the PR body, not a committed file.
+One lean list of what a human confirms by hand because the slice tests cannot (UI, a browser smoke, environment), for the PR body. Done when each item names the path and what a pass looks like.
 
-## Step 5 — Finalize the durable record
+## Step 5 — ADRs
 
-- **ADR(s):** ensure the decisions from the design that aren't recoverable from code are captured as committed ADR(s) in the repo's ADR location. Commit them if not already.
-  - **An ADR owed by the resolved design is written BEFORE the PR is opened, never filed as a follow-up.** Deferring is the *reasonable* default here and a competent lane proposes it from good reasoning — which is why this is a stated requirement rather than a preference. Writing it now is not a formality: **this is the last point at which the deciding evidence is in hand**, and re-measuring the design's own figures against the built code is part of writing it. Quote the measurement and the command, not the design's number — two lanes that deferred were made to write the ADR now, and **both re-measured figures their own designs had wrong.** The cost of deferring is invisible: the ADR still gets written, just from a worse source. If it cannot be written now, that is an **escalation** — the decision is not actually resolved.
-  - **Never take the next number from a directory listing** — it shows only numbers that reached *your* branch, and numbers on unmerged siblings, open PRs and other stacks are already claimed. Scan every ref: `git log --all --name-only --pretty=format: | grep -oE 'ADR-[0-9]+' | sort -u | tail -5`, then go above it. This is the last point where a collision is still cheap: a rename after merge breaks every inbound `ADR-0NN` citation permanently.
-  - **Check uniqueness against the merge target, not the branch.** The failure shape is a *filename* difference with a *number* collision, which no git mechanism surfaces — different names never conflict, so both land.
-  - **Re-resolve every path and symbol the ADR cites** before committing it. A wrong `file:line` in an ADR outlives the PR and misleads whoever reads it next (§3) — one shipped citing a path that did not exist as written, an abbreviation having dropped a directory.
-  - **A deferral naming a sibling unit is not done until it is tracked somewhere the sibling reads.** Grep your resolved block for one (`deferred to <UNIT>` is the written form, so this is a grep, not a judgement) and refuse to report done while the obligation lives only in your block — the sibling never sees it, and nothing in the flow errors.
-  - If a composition finding traces to text the design or an existing ADR *also* asserts, **amending that text is part of the fix**, not a follow-up — otherwise the next reader re-derives the bug from the record.
-  - **If this work discovered a rule that's true beyond this ticket** (a framework rule, a decomposition heuristic, a flow-methodology finding), it needs a stated destination, not just prose in the narrative above: put it in an ADR's optional **Principle** section (`domain-modeling`'s ADR template), or, if it's about the flow/a shared skill rather than this feature, route it via `/capture-learnings` instead. Reasoning left only in the PR narrative is exactly the shape that gets lost — the PR body is a short summary plus links, and nobody re-reads it once this PR merges.
-- **Link the record, don't copy it:** the PR body is a short summary plus blob links to the four committed files — `design.md`, `decisions.md`, `concerns.md` and `build-summary.md`, in the folder `work-docs-path` names (Step 6's template). The design narrative is not copied into the body: `design.md` is committed, and a second copy is one nothing checks against the first.
-- **If the PR adds an enforcement mechanism** (a CI gate, lint rule, schema check, hook), state **which commit is its first live proof** — or, if none is, say why. A gate that never fired is indistinguishable from a gate that cannot fire.
-- **A worked example the suite does not consume is a claim nobody is checking.** Where an ADR, design doc or config sample ships one, make it a fixture the tests read, render and assert on — it then fails the build the day it stops being true. If it genuinely cannot be executable, say so at its top and anchor it to the command or commit that verified it; a hand-maintained example on no build path (one named a unit that did not exist) is a liability to delete, not neutral documentation.
+Every decision the resolved design owes an ADR is written now; deferring is an escalation. `Call the Skill tool with "domain-modeling"` for the format and the numbering.
 
-## Step 5a — Rule every concern, before the record is committed
+- Re-measure the design's figures against the built code, quoting command and result, and re-resolve every path and symbol the ADR cites before committing.
+- A deferral naming a sibling unit (`deferred to <UNIT>`, a grep over your resolved block) is done only once tracked where the sibling reads.
+- A composition finding that traces to text the design or an ADR asserts amends that text in the same fix; a rule true beyond this ticket goes into the ADR's Principle section or, for the flow, through `/capture-learnings`.
+- A PR that adds an enforcement mechanism names the commit that is its first live proof, or says why none exists: a gate that never fired is indistinguishable from a gate that cannot fire. A worked example the suite does not consume becomes a fixture or says at its top that it is unexecutable.
 
-This step sits after the gate (Step 2), the review (Step 3) and the ADRs (Step 5), because those produce the evidence a ruling cites, and before Step 5b, because Step 5b's `build-summary.md` commit carries the result as `verifyBuild.concerns`.
+Done when every owed ADR is committed and each citation resolves.
 
-**Resolve the file.** `concerns.md` is in the folder `work-docs-path --item <work_item>` names: the same reader-form call Step 5b makes (no `--owner-branch`, the `work_item` from `.work/mode.yaml`), its last line read, never its exit code (ADR-004). On `outcome=error` nothing can be ruled: say so, treat this step's result as `outcome=error` with that `reason=` everywhere below (Step 5b writes `concerns: null`, Step 6b posts `failure`), and carry on.
+## Step 5a — Rule every concern
 
-**No `concerns.md` in that folder means this unit raised none.** The `concern` skill creates the file with a unit's first entry, in the folder this same call names. Say so in one line, and write an **empty** `concerns.md` there. `concerns-check` reads an empty file as `outcome=pass hard=0 soft=0`, so "no concerns recorded" becomes a committed, checkable record, like `postDesignDecisions: []`, and a missing file is never silently read as a pass. Write no entry into it, and never create it outside that folder.
+`concerns.md` is in `<path>`; when absent, this unit raised none: say so and write an empty `concerns.md` there, so "no concerns recorded" is a committed record.
 
-**Rule each C-entry.** For every `## C<n>` entry, following its `verify:` instruction, set:
+**Rule each `## C<n>` entry** by its `verify:` instruction: `verdict:` is one of `met | partial | unmet | cannot-determine | waived`; `evidence:` is what you checked and saw in this run (a test result, a `file:line`, a measurement with its command); a `passes:` flag is not evidence, and the unchecked is `cannot-determine` with why. `quote:` stays the raising quote, `bar:` stays what the owner said, entries keep their ids.
 
-- `verdict:` — one of `met | partial | unmet | cannot-determine | waived`.
-- `evidence:` — what you actually checked and saw: a test and its result, a `file:line`, the Step 2 gate line, a measurement with its command. Evidence is what was observed in this run, never assumed. A slice's `passes:` flag does not stand in for a check. What you could not check is `cannot-determine`, with why — never `met`.
+**Only the owner waives.** A C-entry is `waived` only on the owner's own words, from this run, this conversation or the ticket; an agent's judgement or a paraphrase is not a waiver, and an unwaived hard concern keeps its ruling. To record one: append a D-entry to `<path>/decisions.md` in `/build`'s grammar with `kind: waiver`, `decidedBy: human`, `sources: [human]` and the next id. Its title names every C-entry it waives by id (`## D<n> — The owner waives C<n>: <label>`) and its body carries the owner's verbatim waiver quote. The C-entry then gets `verdict: waived`, and its `evidence:` cites it as `decisions.md#D<n>`, written without backticks or a path.
 
-Change no other field: `quote:` stays the raising quote, and `bar:` stays what the owner said. Never delete or renumber an entry.
-
-**Waivers. Only the owner waives.** A C-entry is `waived` only when the owner — the human who owns this unit — gives a waiver in their own words, during this `/verify-build` or earlier in this conversation or the ticket. Never waive on an agent's own judgment (yours, a sub-agent's, a review bot's), and never from a paraphrase. A hard concern the owner has not waived keeps its ruling, and the PR names it. When the owner waives:
-
-1. Append a `decisions.md` entry in the header `/build` fixes (*The committed record* in [build.md](build.md)), with `kind: waiver`, `decidedBy: human`, `sources: [human]`. Its title names every C-entry it waives by id (`## D<n> — The owner waives C<n>: <label>`), and its body carries the owner's verbatim waiver quote, in quotes. `concerns-check` refuses a citation from a C-entry the title does not name. Allocate the id the way `/build` does: one more than the highest id in the file, read at the moment you append.
-2. Set the C-entry's `verdict: waived`; its `evidence:` cites it as `decisions.md#D<n>`, written without backticks or a path (`evidence: owner waiver, decisions.md#D4`) — a backticked or path-prefixed citation is refused, because the citation resolves only against this unit's own `decisions.md`. `quote:` stays the raising quote.
-
-**Check it.** One command, redirected, always with `--decisions`:
+**Check it**, with `--decisions` as the first argument:
 
 ```bash
 concerns-check --decisions "<path>/decisions.md" "<path>/concerns.md" > "${TMPDIR:-/tmp}/concerns-check.txt" 2>&1
 ```
 
-(`concerns-check` is on `PATH` from this plugin's `bin/`.) Read its last line, `CONCERNS-CHECK:v1 outcome=pass|fail|error …`, never the exit code. With `--decisions`, every `waived` entry's citation must name this unit's own `decisions.md` and resolve to exactly one entry with `kind: waiver`, `decidedBy: human` and a non-empty body. Anything else — a missing id, another kind, another `decidedBy`, a path-prefixed citation, no `decisions.md` while an entry is waived — is `outcome=error` naming the C-entry and the D-id. **`outcome=error` is not-success, exactly like `outcome=fail`:** a malformed file or a bad waiver record is never read as a pass or as "no concerns". A command that printed no verdict line is `outcome=error`.
+Read its last line, `CONCERNS-CHECK:v1 outcome=pass|fail|error …`, never the exit code. `pass`: continue. `fail` or `error`: `/verify-build` opens the PR either way; the entries fill the body's *Unmet hard concerns* section and Step 6b posts `failure`. `outcome=error` is not-success, exactly like `outcome=fail`: neither a pass nor "no concerns". A verdict written from evidence stands; the line goes green only through new evidence or an owner waiver. `/merge-multi` is the hard block.
 
-Commit `concerns.md`, plus `decisions.md` when a waiver was appended, on its own (`docs(record): rule the concerns`). Never re-rule a concern to turn the line green. Whatever the outcome, `/verify-build` opens the PR either way: a `fail` or `error` becomes Step 6's *Unmet hard concerns* section and a `failure` status in Step 6b.
+Commit `concerns.md`, plus `decisions.md` when a waiver was appended, on its own: `docs(record): rule the concerns`. Done when every entry carries a verdict and evidence and the verdict line is recorded for Steps 5b and 6b.
 
-## Step 5a2 — Map drift (ESAS-162; inert until ESAS-167/169)
+## Step 5a2 — Map drift
 
-Before Step 5b, route the map's drift verdict — this never blocks Step 6, and every outcome is a line in the PR body's `### Record` section, beside the goal-signal line Step 6 pastes:
+Each outcome is one line in the PR body's `### Record` section; nothing here blocks Step 6.
 
-- **`.work/lane.yaml` exists** (this unit is a `/start-multi` fleet lane) → `design-map drift <path>/map.json --no-feed` → the script prints `outcome=skip reason=no-map-feed`; relabel it in the PR as **`map drift: not checked: fleet-lane-no-feed`**.
-- **No brief (main checkout), but no map feed is advertised** — true of every run until ESAS-167/169 land it — → `design-map drift <path>/map.json --no-feed` → `outcome=skip reason=no-map-feed`, named in the PR as `map drift: not checked: no-map-feed`.
-- **`outcome=current`** → nothing to do.
-- **`outcome=drifted`, main checkout, and a live map feed advertised** → the owner check first (`work-docs-path --item <work_item> --owner-branch "$(git branch --show-current)"`): on any verdict but `owner=none|self`, write nothing and flag it in the PR body. On `none`/`self`: `get_map` the current fold → `design-map write <path>/map.json` (the returned map, on stdin) → `design-map render <path>/map.json --expect <forks in the returned map> --out <path>/map.html` → on `outcome=ok`, `map-tree write --map <path>/map.json --ticket <work_item> --insert-after "## Resolved decision tree" --on-tamper displace <path>/design.md` regenerates `design.md`'s decision region from the refreshed map (ADR-007) → on `outcome=written` or `outcome=displaced`, commit with `/design` Step 4's three-path pathspec (`git commit -m "docs(<id>): design" -- <path>/design.md <path>/map.json <path>/map.html`); on a refused render or a `map-tree` `outcome=error` (a `heading-not-found`, when `design.md` lacks the `## Resolved decision tree` line `/design` writes, included), flag it with its reason and commit nothing. An `outcome=displaced` is committed and named in the Record section as `map-tree: displaced`, since a hand edit inside the region was moved out verbatim rather than kept in place.
-- **any other `outcome=skip`/`outcome=error`** → `map drift: not checked: <reason>` in the PR body.
+- `.work/lane.yaml` exists, or no map feed is advertised → `design-map drift <path>/map.json --no-feed` prints `outcome=skip reason=no-map-feed`; write `map drift: not checked: fleet-lane-no-feed` in a lane, else `map drift: not checked: no-map-feed`.
+- `outcome=current` → nothing.
+- `outcome=drifted` with a live feed → owner check first (`work-docs-path --item <work_item> --owner-branch "$(git branch --show-current)"`; any verdict but `owner=none|self` is flagged and nothing written), then refresh the map as `/design` Step 4 writes it: `get_map` → `design-map write` → `design-map render` → `map-tree write --map <path>/map.json --ticket <work_item> --insert-after "## Resolved decision tree" --on-tamper displace <path>/design.md` → the three-path `docs(<id>): design` commit, naming a `displaced` result as `map-tree: displaced`. A refused render or `map-tree` error is flagged, nothing committed.
+- Any other `skip` or `error` → `map drift: not checked: <reason>`.
 
-**This step is inert until ESAS-167/169 land the feed (`get_map`, `mapSeq`)** — with no feed advertised anywhere yet, every run today takes the `no-map-feed` branch above, and `outcome=drifted` cannot occur.
+## Step 5b — Measure the run
 
-## Step 5b — Measure the run, and complete `build-summary.md`, before the PR
-
-The PR opens over a committed record, so the run is measured **here, before Step 6** — never after the PR, where the numbers could only land in an extra commit. `build-summary.md` is in the folder `work-docs-path --item <work_item>` names: call it exactly as `/design` Step 4 calls it — the reader form, no `--owner-branch` — with the `work_item` from `.work/mode.yaml` untouched, and read its last line, not its exit code (ADR-004). `outcome=error`, or no `build-summary.md` in that folder (a `/build` that predates it): say so in one line, skip the fill, and still run the two commands below. **Never fall back** to a default root or a copy under `.work/`.
-
-Two commands, from the branch's worktree, each redirected to a file:
+`build-summary.md` is in `<path>`; when absent, say so, skip the fill, and still run both commands:
 
 ```bash
 run-metrics --emit --quiet > "${TMPDIR:-/tmp}/run-metrics-report.txt" 2>&1
 run-metrics --usage-fragment --quiet > "${TMPDIR:-/tmp}/usage-fragment.yaml" 2> "${TMPDIR:-/tmp}/usage-fragment.err"
 ```
 
-(`run-metrics` is on `PATH` from this plugin's `bin/`. `${CLAUDE_PLUGIN_ROOT}` is **not** available in a command's bash block — it is substituted for hooks only.)
+The first records the run and prints the headline Step 7 pastes; the second prints the `usage` fragments as YAML ending in `# RUN-METRICS-USAGE:v1 outcome=ok …` or `outcome=error reason=…`, read as a line, never as an exit code. Dispatches are attributed by the `slice <id>` in their description, else `unattributed`.
 
-The first reconstructs the whole unit from the transcripts — every session the branch touched, across `/clear` and `/handoff` — and writes one document to `~/.claude/bett3r-metrics/runs/`, plus a row in `index.jsonl` keyed by (repo, branch). Re-running replaces that run's row rather than appending, so this is safe to repeat. Its report is the headline Step 7 pastes into the PR body.
-
-The second prints the `usage` fragments `build-summary.md` needs, as YAML, and ends with one comment line: `# RUN-METRICS-USAGE:v1 outcome=ok …`, or `outcome=error reason=…`. Read that line, never the exit code. A slice's dispatches are attributed by `slice <id>` in their description (the `fixRoundLedger` convention `/build` names every dispatch for); an executor, verifier or test-runner dispatch naming no slice is printed under `unattributed`, never spread across slices.
-
-**Usage is generated by `run-metrics`, never hand-written.** An agent cannot observe its own usage, so every number in these blocks is copied verbatim from the fragment — never estimated, re-added, rounded or filled in where the fragment printed `null`. The blocks it fills, keyed the way `/build`'s frontmatter keys its slices:
+**Usage is generated by `run-metrics`, never hand-written.** Every number is copied verbatim from the fragment into these blocks, keyed as `/build` keys its slices:
 
 ```yaml
 slices:
@@ -184,50 +130,50 @@ verifyBuild:
   usage: { model: <model>, effort: <effort>, tokens: <n>, activeMs: <ms> }
 ```
 
-- **`outcome=ok`** → each slice entry in `build-summary.md` gets the `usage:` of the fragment entry with the same `id`; a role the fragment prints as `null` had no dispatch found — or its only dispatches ran in a detached pool worktree (see `droppedDetached`, below) — and stays `null`. A slice with no fragment entry gets `usage: null`, named in `## What shipped` with why (no dispatch named `slice <id>` was found — e.g. it ran in a session whose transcripts are gone). `verifyBuild.usage` is the fragment's — every `/verify-build` invocation on the branch, up to this step, with executor, verifier and test-runner dispatches excluded; `null` when no `/verify-build` invocation was found. No other key of `build-summary.md` changes, except the `verifyBuild` keys in the next bullet.
-- **`verifyBuild.gate`, `verifyBuild.coherence`, `verifyBuild.fixSlicesAdded` and `verifyBuild.adrs` are this run's own results**, written on every outcome of the fragment: `gate: { mode, verdict, skipped, inconclusive }` from Step 2's report block (the mode run, its verdict, and the steps it reported `SKIP` and `INCONCLUSIVE`); `coherence: { critical, medium, low, shippedUnresolved }` from Step 3 (its finding counts by severity, and the findings shipped unresolved); `fixSlicesAdded:` the number of fix slices Step 3 added; `adrs:` the ADRs Step 5 wrote or amended. `verifyBuild.concerns` is copied from Step 5a's verdict line: on `outcome=pass` or `outcome=fail`, `concerns: { hard, soft, unmet }` — `hard=` and `soft=` as numbers, `unmet=` as a list of its ids (`none` is `[]`; like the line, it names soft concerns too); on `outcome=error`, `concerns: null` and one line in `## What shipped`, `Concerns not checked: <the reason= value>.` Every value is copied from those steps' own reports, never estimated — a step that produced no report writes `null` for its key.
-- **How a usage cell is made.** `model` and `effort` are the values carrying the most tokens across that role's runs, read as the transcripts record them: a sonnet executor moved to opus for a fix round records only `opus`, and the round stays visible in the slice's `fixRounds`. `activeMs` sums the runs, so parallel dispatches can exceed wall time. The `/build` orchestrator's own usage appears in no block.
-- **`droppedDetached=<n>`** on the verdict line counts the dispatches `run-metrics` skipped: dispatches whose transcript is stamped `gitBranch: HEAD` (a detached checkout, such as a pool worktree). Its 0 is not always a measurement: a `/start-multi` unit reports 0 because it is never branch-filtered — 0 means not measured. When it is above 0, add one sentence to `## What shipped`: `<n>` dispatches ran in a detached pool worktree and were not attributed, so the usage above undercounts them.
-- **`unattributed`** is not frontmatter. When the fragment's block is not `null`, add one sentence to `## What shipped` quoting its tokens and `activeMs` per role, as dispatches whose description named no slice.
-- **`outcome=error`, no verdict line, or a command that did not run** is a failure to measure: write `usage: null` on every slice and `verifyBuild.usage: null`, and one line in `## What shipped` — `Usage not measured: <the reason= value, or the error's first line>.` Never invent numbers.
+- `outcome=ok` → each slice entry in `build-summary.md` gets the `usage:` of the fragment entry with the same `id`; a role printed as `null` stays `null`; a slice with no fragment entry gets `usage: null`, named in `## What shipped`. `verifyBuild.usage` is the fragment's, or `null`. A non-`null` `unattributed` block is quoted per role in `## What shipped`.
+- `verifyBuild.gate`, `verifyBuild.coherence`, `verifyBuild.fixSlicesAdded` and `verifyBuild.adrs` are this run's own results, written on every outcome of the fragment: `gate: { mode, verdict, skipped, inconclusive }` from Step 2's report block; `coherence: { critical, medium, low, shippedUnresolved }` from Step 3; `fixSlicesAdded:` the number of fix slices Step 3 added; `adrs:` the ADRs Step 5 wrote or amended. `verifyBuild.concerns` is copied from Step 5a's verdict line: on `pass` or `fail`, `concerns: { hard, soft, unmet }` with `unmet` a list of ids (`none` is `[]`); on `error`, `concerns: null` and one line in `## What shipped`, `Concerns not checked: <the reason= value>.` Every value is copied from those steps' own reports, never estimated; a step that produced no report writes `null`.
+- `droppedDetached=<n>` on the verdict line counts dispatches whose transcript is stamped `gitBranch: HEAD` (a detached checkout, such as a pool worktree): above 0, one sentence in `## What shipped` says `<n>` dispatches ran in a detached pool worktree and were not attributed; a `/start-multi` unit reports 0 because it is never branch-filtered — 0 means not measured.
+- `outcome=error`, no verdict line, or a command that did not run → write `usage: null` on every slice and `verifyBuild.usage: null`, and one line in `## What shipped`: `Usage not measured: <the reason= value, or the error's first line>.` Never invent numbers.
 
-Commit `build-summary.md` on its own (`docs(record): measure the run`), then go to Step 6, which pushes it with the branch. **A failure to measure must never block landing the work**: an error in either command is one line in your report and the `usage: null` above, and Step 6 runs regardless.
+Commit `build-summary.md` on its own: `docs(record): measure the run`. A failure to measure must never block landing the work: it is one line in your report plus the nulls above, and Step 6 runs regardless. Done when the commit exists and every `usage:` cell is copied from the fragment or `null`.
 
-## Step 6 — Open the PR (the system of record)
+## Step 6 — Open the PR
 
-Push the branch and open the PR **ready for review, not a draft** (compose the repo's `create-pr` flow if it has one, overriding any draft default it carries; otherwise `gh pr create --base <resolved-base>`, which opens a review-ready PR — do **not** pass `--draft`, and pass the base resolved in Step 3, not a hardcoded `master`). **Verify the created PR's base after the fact:** `gh pr create` succeeds silently even when it targets the wrong ref, so confirm the PR's `changed_files`/`commits` roughly match the local `git log <base>..HEAD` count/diffstat. If they don't, retarget with `gh pr edit --base <true-base>`.
+Push the branch, then open the PR ready for review in a Bash call:
 
-**`/verify-build` opens the PR either way on concerns.** Step 5a's `outcome=fail` or `outcome=error` never delays it or turns it into a draft: the unmet hard concerns go into the body's *Unmet hard concerns* section, and Step 6b posts a red `flow/concerns` status. Among verdicts, only Step 2's `FAIL` holds this step back.
+```bash
+gh pr create --base <resolved-base> --title "<TICKET-ID> — <title>" --body-file "${TMPDIR:-/tmp}/pr-body.md"
+```
 
-**"PR opened" is not "done" — report its mergeability.** Re-fetch and compare `origin/<default>` against the base you branched from: a merge by anyone outside this work invalidates the pin, and the cost lands at the worst moment, with gates green and the PR declared ready. **It invalidates the green checks too, and nothing marks them stale:** a gate that reads the *diff* (a version-bump gate, a changed-files guard) stated its verdict about a base that is gone, and GitHub does not re-run it when the base moves. Compare each check's sha and timestamp against the current base; where the base moved, **re-run the diff-reading gates locally against it and report that**, rather than reading the green. Two same-base PRs that agree on a version string produce no conflict at all — the one case a merge conflict cannot surface. Read `gh pr view --json mergeable,mergeStateStatus` after a short settle (GitHub returns `UNKNOWN` for a few seconds after a push) and say so. The remedy for a conflict is rebasing **this branch, in its own worktree** — safe, and not to be confused with the real prohibitions (never modify the default branch or another unit's branch; never rewrite history something is stacked on).
+No `--draft`. Then compare the PR's `changed_files` and `commits` with `git log <resolved-base>..HEAD` and retarget with `gh pr edit --base <true-base>` on a mismatch. Step 5a's `fail` or `error` fills the *Unmet hard concerns* section and Step 6b's status. Among verdicts, only Step 2's `FAIL` holds this step back.
 
-**For a stacked child, do not rely on GitHub to retarget it — both things that happen to its base are silent.** While the parent's branch stays, the child keeps pointing at a merged branch: merging it there returns exit 0, shows MERGED, and delivers nothing to the default branch. And **deleting that branch through `gh pr merge --delete-branch` or `git push --delete` closes the child unmerged** (`base_ref_deleted` → `closed`, observed with `delete_branch_on_merge` false), and a closed child cannot be reopened while its base is gone. So retarget first (`gh pr edit <n> --base <default>`), delete a parent's branch only once nothing targets it, and verify **after every merge** with `git merge-base --is-ancestor origin/<head> origin/<default>` — the only check that catches a wrong-target merge, because that merge itself reports success.
+**Report mergeability, not "opened".** Re-fetch `origin/<default>`: a moved base voids every gate that read the diff, so re-run those locally and report that; a red CI job hides every step after it, so run those locally by name and report each as `RAN LOCALLY: <step> exit N`. Read `gh pr view --json mergeable,mergeStateStatus` after a short settle. Fix a conflict by rebasing this branch in its own worktree, touching no other branch or stacked-on history.
 
-**A closing keyword binds to exactly one issue — repeat it per issue.** `Closes #56, closes #62, closes #63`, in the body and in every commit message. A bare list, commas or not, closes the first and leaves the rest as mentions, with nothing red anywhere — 80 references once shipped as 7 closures. The plugin repo gates this (`scripts/check-closes-syntax.py`, over commit messages *and* instructional examples); a host repo does not, so here the rule travels with you.
+**A stacked child is retargeted before its parent's branch is deleted**: deleting the base branch (`gh pr merge --delete-branch`, `git push --delete`) closes the child unmerged (`base_ref_deleted`, whatever `delete_branch_on_merge` says). `gh pr edit <n> --base <default>` first, delete the parent's branch once nothing targets it, and verify every merge with `git merge-base --is-ancestor origin/<head> origin/<default>`.
 
-**"Merged" is not "closed" — assert the issues reached CLOSED.** Same shape as the wrong-target merge above, one level up: the merge reports success and the delivery that failed is the issue state, not the diff. So after the merge, read the referenced set rather than trusting the keyword that named it:
+**A closing keyword binds to exactly one issue.** Repeat it per issue in the body and every commit message: `Closes #12, closes #13`; a bare list, `Closes #12 #13`, closes `#12` and leaves the rest as mentions. After the merge, assert the issues reached `CLOSED`:
 
 ```sh
 for n in <every issue the PR references>; do printf '%s %s\n' "$n" "$(gh issue view "$n" --json state -q .state)"; done
 ```
 
-**One line per reference, every one `CLOSED`** — check the line count *before* the states, because a `gh` failure prints a blank state and greps clean. Report the ones that did not close, and close them (`gh issue close <n> -c "landed in #<pr>"`). Bulk form when the set is long: `comm -13 <(gh issue list --state closed --limit 500 --json number -q '.[].number' | sort) <(printf '%s\n' <referenced> | sort)` — what it prints is what stayed open.
+One line per reference, every one `CLOSED`; check the line count first, since a `gh` failure prints a blank state. Close stragglers with `gh issue close <n> -c "landed in #<pr>"`.
 
-The PR body is **a short summary plus links to the committed record**. `<path>` is Step 5a's `path=` (repo-relative) and `<branch>` is this branch:
+The body is a short summary plus links to the committed record; `<path>` is Step 1's `path=` and `<branch>` is this branch:
 
 ```
 ## <TICKET-ID> — <title>
 
-<two to four sentences: what shipped and why — a summary, not the design>
+<two to four sentences: what shipped and why; a summary, not the design>
 
 ### Record
 - [design.md](https://github.com/<owner>/<repo>/blob/<branch>/<path>/design.md) — the design as resolved
 - [decisions.md](https://github.com/<owner>/<repo>/blob/<branch>/<path>/decisions.md) — every decision made after it
 - [concerns.md](https://github.com/<owner>/<repo>/blob/<branch>/<path>/concerns.md) — the owners' bars, ruled
 - [build-summary.md](https://github.com/<owner>/<repo>/blob/<branch>/<path>/build-summary.md) — the run's telemetry
-- <the `--line` output of `design-map count <path>/map.json [--lane .work/lane.yaml] --line` (ESAS-162), pasted verbatim and never omitted — `N of M forks answered by the owner (…)`, or `map: none` when the folder carries no map, or `map: owner answers not carried: run dir absent` when the lane brief carries `mapProvenance: lost`>
-- <Step 5a2's drift line: `map drift: not checked: no-map-feed` (the normal case today), `map drift: not checked: fleet-lane-no-feed`, a flag noting a refresh downgraded to a non-owner verdict, or nothing when `outcome=current`/a refresh committed cleanly>
-- <`map-tree: displaced` when the Step 5a2 refresh's `map-tree write` reported `outcome=displaced` (the hand edit sits under `### Displaced from generated section (<date>)` in `design.md`); nothing otherwise>
+- <`design-map count <path>/map.json [--lane .work/lane.yaml] --line` output, verbatim: `N of M forks answered by the owner (…)`, `map: none` when the folder carries no map, or `map: owner answers not carried: run dir absent` when the brief carries `mapProvenance: lost`>
+- <Step 5a2's drift line, if any>
+- <`map-tree: displaced` when Step 5a2 reported it>
 
 ### Slices
 - slice 1 — <name> (<commit>)
@@ -249,7 +195,7 @@ fail: one bullet per bar: hard entry ruled partial, unmet or cannot-determine (o
 error: the reason= and the C-entry and D-id the verdict line names>
 
 ### Verification
-<the Step 2 gate report block, verbatim — or "Full gate deferred to the fleet gate, run `<runId>`." plus the `--fast` result>
+<the Step 2 gate report block verbatim, `GATE-MODE:` line included, or "Gate deferred to the fleet gate, run `<runId>`." plus the `--fast` result; then every SKIP, INCONCLUSIVE or excluded tier by name>
 
 <the dev checklist from Step 4>
 
@@ -260,33 +206,29 @@ error: the reason= and the C-entry and D-id the verdict line names>
 <Critical/Medium findings and how resolved; or "clean">
 ```
 
+Done when the PR is open against `<resolved-base>` with every section above and its mergeability is reported.
+
 ## Step 6b — Post the `flow/concerns` commit status
 
-Once the PR is open, post Step 5a's result on the head sha — `git rev-parse HEAD` after the push, which must equal `gh pr view --json headRefOid -q .headRefOid`:
+Post Step 5a's result on the head sha (`git rev-parse HEAD` after the push, equal to `gh pr view --json headRefOid -q .headRefOid`):
 
 ```bash
 gh api repos/{owner}/{repo}/statuses/<head-sha> -f context=flow/concerns -f state=<failure|success> -f description="<description>" -f target_url=<blob URL of concerns.md on the branch> > "${TMPDIR:-/tmp}/flow-concerns-status.txt" 2>&1
 ```
 
-`gh` fills `{owner}` and `{repo}` from the current repository. The `target_url` is the same `concerns.md` link as the body's *Record* section. Commit statuses need only the `repo` scope the `gh` token already has, so there is no GitHub App and no Actions workflow.
-
-The state comes from Step 5a's verdict line. There is one bullet per outcome, in the grammar `` - `outcome=<o>` → `state=<s>` — <description> ``, and each outcome is mapped exactly once:
+One bullet per outcome, each mapped exactly once:
 
 - `outcome=pass` → `state=success` — `concerns met: <hard> hard, <soft> soft`, or `no concerns recorded` when both are 0.
 - `outcome=fail` → `state=failure` — `<k> hard concerns unmet: C1, C3`, naming the `unmet=` ids whose `bar:` is `hard`; with `reason=missing-verdict`, `<k> concerns unruled: <the missing= ids>`.
-- `outcome=error` → `state=failure` — `concerns not checked: <the reason= value>`. No verdict line, or a `work-docs-path` error, lands on this row too.
+- `outcome=error` → `state=failure` — `concerns not checked: <the reason= value>`. No verdict line, or a `work-docs-path` error, lands here too.
 
-The description is limited to 140 characters (the limit assumed here for GitHub's status API). When it would be longer, drop C-ids from the end of the list and close it with `, +<n> more` so it fits; every id is still named in the PR body and at the `target_url`.
+The description is limited to 140 characters: drop C-ids from the end and close with `, +<n> more`.
 
-**Re-post on every later push this flow makes.** A status belongs to one sha and does not follow a push. Whenever this flow pushes to the branch after the PR opens — a Step 6 rebase, a fix after review — re-run Step 5a's check on the new head and post again on the new sha. The flow re-posts; nothing re-posts on a human's push. A head pushed outside the flow carries no `flow/concerns` status until the flow runs again, and it looks clean. That seam is deliberately unspecified, and no git hook is added to cover it.
-
-**The status is advisory (R5).** In a private repository on GitHub's free plan, branch protection and rulesets are unavailable: a status cannot be required, so the red mark is advisory in a single flow, and a human can merge over `flow/concerns` = failure. `/merge-multi` is the hard block — it runs the check on each unit head itself, never trusting this status. The status is display; nothing in this flow reads it back.
-
-**A failed status post never blocks landing.** Read the output file. A non-zero exit or an error body (auth, a non-GitHub remote) becomes one line in your report — `flow/concerns not posted: <its first error line>` — and you carry on to Step 7.
+A status belongs to one sha: on every later push this flow makes, re-run Step 5a's check on the new head and post again; nothing re-posts on a human's push. Advisory: a status cannot be required, so the red mark is advisory in a single flow, and nothing in this flow reads it back; `/merge-multi` is the hard block. A failed status post never blocks landing: a non-zero exit or an error body becomes one line in your report, `flow/concerns not posted: <its first error line>`. Done when the post is made or that line is written.
 
 ## Step 7 — Put what the run cost in the PR body
 
-The run was measured in Step 5b, before the PR opened, so nothing is re-run here and nothing here gates the PR. Paste the headline of Step 5b's report into the PR body, under the template above (`gh pr edit --body-file` once the PR exists). If Step 5b's report command errored, write `Run cost: not measured — <its first error line>` instead and carry on to Step 8:
+Paste the headline of Step 5b's report under the template (`gh pr edit --body-file`), or `Run cost: not measured — <its first error line>` if it errored:
 
 ```
 ### Run cost
@@ -294,30 +236,10 @@ elapsed <X>h · alive <Y>h (<duty>%) · <N> agents · <W> weighted tokens · +<A
 first-pass green: <G>  ·  plugin <version>@<sha>  ·  <model>, effort <effort>
 ```
 
-Two lines, no tables — the PR is a record of the work, not a dashboard. `/run-report` renders the full breakdown on demand, and `/run-report --aggregate` compares this run against every previous one by plugin version.
+Two lines, no tables.
 
-Report the duty cycle in your summary to the user **only when it is low and the dead time was not simply overnight** — otherwise it is noise. `DEAD GAPS` in the full report distinguishes the two.
+## Step 8 — Report
 
-## Step 8 — Cleanup
+Report the PR URL; `.work/` is disposable now. Suggest `/capture-learnings` for flow learnings.
 
-The ephemeral `.work/` (slices.yaml, mode.yaml) has now been fully promoted (ADRs, the committed record, per-slice commits, and a PR body that links them); the design was never in it — `/design` committed it. It is gitignored and may be discarded. Report the PR URL.
-
-> If this work surfaced an improvement to the *flow or a shared skill/plugin* (not this feature), run `/capture-learnings` to route it to the repo that owns it.
-
-## Step 9 — Report the outcome
-
-End your output with this line, at column 0, as the **final** line — nothing after it, not even a closing remark, and no trailing punctuation (`success.` is a value in no vocabulary, and a step that punctuates its marker reports no verdict at all):
-
-    LANE-STEP:v1 step=verify-build outcome=<success|gate-red|blocked-on>
-
-`success` when the gate is green and the PR is open. `gate-red` when Step 2's gate returned `FAIL` — which already blocks Step 6, so this reports a branch that is red rather than a step that failed. `blocked-on` when the PR cannot be opened for a reason a human must resolve (a conflict, a missing base). A `SKIP` or `INCONCLUSIVE` step is **not** `gate-red`: name it in the PR body and report `success`. Nor is a concerns `fail` or `error` from Step 5a: the PR is open with them named, so report `success`. **Immediately before printing it**, run `lane-step-record '<the identical line>'`: it writes the verdict onto your branch when `.work/lane.yaml` carries `verdictOnBranch: true` and does nothing otherwise — into Step 5b's commit when nothing pushed it (a `gate-red`), else as an empty commit, because Step 6 pushed before the verdict was known; a non-zero exit is reported in your prose, never by changing the line. That commit is pushed, so it moves the head off the sha Step 6b posted on: when it printed `recorded=empty`, post Step 6b's status again, unchanged, on the new head sha — the verdict commit is empty, so the tree is the one Step 5a checked and nothing is re-run. A failed post is one line in your prose, as in Step 6b. Never emit `infra` — its signal is the line's absence. The format contract is stated once in [unit-lane](../agents/unit-lane.md); do not restate it here.
-
-## Principles
-
-- The PR is the system of record through what it lands: its commits and the committed record beside the code (`design.md`, `decisions.md`, `concerns.md`, `build-summary.md`). Keep its body a short summary that links that record rather than restating it, and put decisions that outlive this work item in ADRs.
-- This pass is cross-slice; trust the per-slice gates for within-slice correctness — but not for anything that ripples *outside* a slice's oracle. That is this pass's job.
-- **"Tests pass" is not evidence for a path that has no test.** A green gate covers the path it ran, nothing more. Every sweep above is a way that path is narrower than it looks; name the untested path rather than inferring coverage from green. The four facts this pass rests on are in [EVIDENCE.md](../EVIDENCE.md) — read it if a sweep's *why* is unclear.
-- **Disprove in both directions** — disprove a *finding* before you report it (a false Critical is costlier than a missed nit), and disprove the *claims the code makes about itself* before they propagate into the PR body. A **clean** verdict is the third kind of claim, and the easiest to accept.
-- **Where the work carries a safety-direction invariant** ("may only ever widen", "must never lose X"), brief the sweeps with *invariant-shaped* questions — "does any clause default to DROP?" — not a generic "review this diff". Both defects in one such change looked locally correct and were invisible from the output by construction; a generic review would have missed them, and its own zero-delta measurement did.
-- Tone follows the `critique` skill: substance over compliments, specific and actionable findings.
-
+Verdict values: `success` when the gate is green and the PR is open; `gate-red` when Step 2 returned `FAIL`; `blocked-on` when a human must resolve something first. A `SKIP` or `INCONCLUSIVE` step, like a concerns `fail` or `error`, is named in the PR and still `success`. `lane-step-record` may commit the verdict, moving the head off the sha Step 6b posted on: when it printed `recorded=empty`, say so and post Step 6b's status again, unchanged, on the new head. Then the verdict line, as the protocol says.

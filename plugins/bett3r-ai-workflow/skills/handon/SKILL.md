@@ -1,20 +1,23 @@
 ---
 name: handon
-description: "Use when resuming from a handoff: locate it, load its frontmatter and referenced `.work/` artifacts, then continue the named status, command, flow step, or artifact reference. A handoff bearing a flow link resumes a step in the pipeline: load the preserved prior state (commits, the committed design, `.work/slices.yaml`) and treat its next-step commitment as a forecast for the next flow command to reconcile, not assume."
+description: "Use when resuming from a handoff: locate it, load its frontmatter and the `.work/` artifacts it references, then continue the named status, command, flow step or artifact reference."
 ---
 
 Resume from a handoff.
 
-When I give no path, scan `.work/handoff/` (and `.work/multi/*/handoff/` for fleet runs). Resume a single match directly. For several, ask me to choose, sorted by descending modification date. For none, ask for a path.
+**Locate.** With no path, scan `.work/handoff/` and `.work/multi/*/handoff/`. One match resumes directly; several, ask which, newest first; none, ask for a path.
 
-Read the handoff; load referenced artifacts only as needed (the design — the `design.md` path the handoff cites, or else `work-docs-path` called for the work item exactly as `/design` Step 4 calls it; `.work/slices.yaml`, the branch's commits, ADRs). The design has one location: if neither resolves to a file, say so rather than looking anywhere else. Continue from `status`; honor `skill-runbook` conditions before inventing a path.
+**Load.** Read the handoff; open referenced artifacts as needed: the design at the `design.md` path it cites, or else the folder `work-docs-path --item <work_item>` names (the design has that one location; if neither resolves, say so); `.work/slices.yaml`; the branch's commits; ADRs. Continue from `status`, honouring `skill-runbook` conditions before inventing a path. A bare `/command` in `status` or the runbook is ambiguous where the host repo has one by that name: prefer the plugin's and say which you picked.
 
-If the handoff carries a `flow` block, it is a step in the pipeline: confirm the prior steps' state is intact (the branch, the per-slice commits, the committed design, and the `.work/` artifacts are preserved for you), re-read `.work/slices.yaml` to see what already `passes: true` (the flow is idempotent — skip done work), and carry its next-step commitment to the next flow command (`/plan`, `/build`, `/verify-build`) as a forecast to reconcile against reality, never as a settled contract.
+**Place yourself in the flow.** A `flow` block means a pipeline step: confirm the prior steps' state is intact (branch, slice commits, committed design, `.work/`), re-read `.work/slices.yaml` for what already `passes: true` (the flow is idempotent, so done work is skipped), and carry the next-step commitment to the next command as a forecast to reconcile, not a settled contract.
 
-**Everything the handoff measured has expired — re-derive before you plan around it.**
+## Everything the handoff measured has expired
 
-- **Re-run `git merge-tree` against the current `origin/<default>` immediately before each merge**, and diff the result against the handoff's claim. In a stacked integration *every merge invalidates the inventory for every remaining branch*. Treat any new conflict — a hand-authored one especially — as a signal to re-scope that merge, not to proceed on the inherited plan. Note `merge-tree`'s verdict is its **exit status**, not its output: it prints a tree even when conflicted.
-- **A `.work` collision / occupancy warning has expired like everything else.** For every ticket it names run `git log --all --grep=<ID>` and `grep -c "passes: true"` on the referenced `slices.yaml`; report the verdict rather than acting on the imperative — a stale one stalls the session on artifacts merged commits already preserve, a live one ignored lets `/start` overwrite an in-flight lane. Whatever it resolves to, preserve any unprocessed `record.md` / `learnings.md` buffer first.
-- **Verify agent reachability before planning around it**, and fall back to a fresh dispatch without treating that as an error. Recorded `agentId`s do not survive the session that spawned them.
-- **A bare `/command` in a `status` or runbook is ambiguous** where the host repo also has a command by that name. Prefer the plugin skill and say which you picked, rather than silently choosing.
-- **An undrained `## Durable` region is a loss in progress**, the same way an undrained `.work/learnings.md` is: if the handoff still has one, fold it into an ADR or the PR body now, before continuing — it will not survive `.work/` being replaced.
+Re-derive before planning around it:
+
+- A conflict inventory: re-run `git merge-tree` against the current `origin/<default>` immediately before each merge and diff it against the claim; in a stacked integration every merge invalidates the inventory for every remaining branch. `merge-tree`'s verdict is its exit status, since it prints a tree even when conflicted.
+- A `.work/` occupancy or collision warning: for every ticket it names, `git log --all --grep=<ID>` and `grep -c "passes: true"` on the referenced `slices.yaml`; report the verdict rather than acting on the imperative, and preserve any unprocessed `learnings.md` buffer first.
+- A recorded `agentId`: verify reachability, and fall back to a fresh dispatch without treating that as an error.
+- An undrained `## Durable` region is a loss in progress, like an undrained `.work/learnings.md`: fold it into an ADR or the PR body now, before continuing.
+
+Done when `status` is being executed and every measured claim above has been re-derived or explicitly set aside.

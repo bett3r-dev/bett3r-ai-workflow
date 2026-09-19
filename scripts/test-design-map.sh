@@ -1673,9 +1673,10 @@ expect_error 'record over an unparseable sidecar' sidecar-unparseable record "$T
 # script: it catches deletion, not wrongness, as the design's own test-seams
 # table says of this exact case.
 # ---------------------------------------------------------------------------
-printf '\nskills/design-map/SKILL.md — the F4 disarm and the two invariants\n'
+printf '\nskills/design-map/SKILL.md — the F4 disarm, and the pointers to its two companions\n'
 
 SKILL_MD="$ROOT/plugins/bett3r-ai-workflow/skills/design-map/SKILL.md"
+FLEET_MD="$ROOT/plugins/bett3r-ai-workflow/skills/design-map/FLEET.md"
 
 # Failures name the file repo-relative, mirroring test-esas-design.sh's own
 # helper (two files across the plugin are both called SKILL.md).
@@ -1740,8 +1741,6 @@ assert_md "$SKILL_MD" 'a wake never runs --final' \
   'A wake never runs `--final`'
 assert_md "$SKILL_MD" '--final and the D8 comment resolution are pinned to the terminal' \
   'given in the terminal'
-assert_md "$SKILL_MD" 'the description forbids --final from a wake too' \
-  'A wake never runs --final'
 assert_md "$SKILL_MD" 'the read_db document id is the forkId' \
   'the `read_db` document id is the fork id'
 assert_md "$SKILL_MD" 'the verdict line is read, not the exit code' \
@@ -1753,16 +1752,29 @@ assert_md "$SKILL_MD" 'the verdict line is read, not the exit code' \
 # thread wake stays unmeasured, and the skill must say so.
 assert_md "$SKILL_MD" "the page's comment box is stated never to wake the session" \
   "The page's comment box never wakes the session."
-assert_md "$SKILL_MD" 'the description carries the same never-wakes claim' \
-  "the page's comment box never wakes the session"
 refute_md "$SKILL_MD" 'a page comment is no longer offered as a readback trigger' \
   'or a comment on the page'
 assert_md "$SKILL_MD" 'publishing tells the owner to hand back in the terminal' \
   "tell me in the terminal when you're done"
-assert_md "$SKILL_MD" 'the comment-mode thread wake is marked unmeasured' \
-  'This is not measured'
 assert_md "$SKILL_MD" 'out_dir readback lands directly in the D10 layout' \
   'lands **directly**'
+
+# The frontmatter description is the only part of a skill that is resident
+# without the file being opened, so the two rules that must fire on a wake the
+# model was not expecting live there — and the listing pays for every character
+# of it on every turn, so the whole description stays inside the 200-char cap
+# rather than earning an exemption. Measured on the value (prefix, quotes off).
+description=$( awk 'NR>1 && /^---/{exit} NR>1{print}' "$SKILL_MD" | sed -n '/^description:/,$p' | head -n 1 )
+assert_in_description(){
+  if printf '%s' "$description" | grep -qF -- "$2"; then pass "$1"; else fail "$1" "not in the frontmatter description: $2"; fi
+}
+assert_in_description 'the description forbids --final from a wake too' 'A wake never runs --final'
+assert_in_description 'the description carries the same never-wakes claim' "the page's comment box never wakes the session"
+desc_len=$( printf '%s' "$description" \
+  | sed 's/^description:[[:space:]]*//; s/^"//; s/"$//' \
+  | { python3 -c 'import sys; print(len(sys.stdin.read().rstrip("\n")))' 2>/dev/null || wc -m | tr -d ' '; } )
+check 'the description stays within the 200-char listing cap' \
+  "$( [ -n "$desc_len" ] && [ "$desc_len" -le 200 ] && echo yes )" yes "length: ${desc_len:-unmeasured}"
 
 # The v2 contract: the vocabulary copy and the structure file are two files,
 # the copy is never hand-edited, and validate / not-grounded are named.
@@ -1777,19 +1789,52 @@ assert_md "$SKILL_MD" 'write is named the only structural authoring path' 'the o
 assert_md "$SKILL_MD" 'the fork-title-only refusal is named' 'reason=fork-title-only'
 assert_md "$SKILL_MD" 'the title-only-open refusal is named' 'reason=title-only-open'
 assert_md "$SKILL_MD" 'otherMap is named' 'otherMap='
-assert_md "$SKILL_MD" 'render --stack is documented' 'design-map render --stack <m1> <m2>... --expect <n1> <n2>... --out <page.html>'
-assert_md "$SKILL_MD" 'the stack order is documented' 'most `open` forks first'
-assert_md "$SKILL_MD" 'project piped into write is documented' 'design-map project --ticket <K> <map>... | design-map write'
-assert_md "$SKILL_MD" 'decisions --closed is documented' 'design-map decisions <map.json> [--closed]'
+# The flag `candidates` skips on (executed above: skipped-untestable=2). A
+# process-rule fork with no observable behaviour carries it; the field is
+# defined here, so this is where the spelling is pinned.
+assert_md "$SKILL_MD" 'the testable flag a process-rule fork carries is named where the shape is defined' \
+  'testable: false'
 
-# Two invariants, carried over from esas-design because they are properties of
-# turn-based answering rather than of any one transport.
-assert_md "$SKILL_MD" 'invariant 1: a wake with nothing new is a normal outcome' \
-  'Tolerate an empty wake'
-assert_md "$SKILL_MD" 'invariant 1: an empty readback is not an error' \
-  'is a normal outcome, not an error'
-assert_md "$SKILL_MD" 'invariant 2: nothing is proposed off a half-answered fork' \
-  'Never propose from partial answers'
+# The two invariants (an empty wake is normal; nothing is proposed off a
+# half-answered fork) have one home, skills/esas-design/SKILL.md, where
+# scripts/test-esas-design.sh pins them token by token. This skill points at
+# that home by name and restates neither, so the pointer is what is pinned here;
+# a second copy of the tokens would be a second place for them to drift.
+assert_md "$SKILL_MD" "the wake defers to esas-design's two invariants by name, not by restating them" \
+  "\`esas-design\`'s two invariants"
+
+# ── skills/design-map/FLEET.md — the fleet companion ─────────────────────────
+#
+# The readers only `/design-multi` and a `design-lane` reach (render --stack,
+# project | write, decisions --closed, record, select, post) live in a companion
+# beside SKILL.md, opened through a pointer that names the condition. The pointer
+# is pinned in SKILL.md; the verb lines are pinned where they now live. Three of
+# the literals are spelled in esas (`capabilities.verbFamilies`, `boardKinds`,
+# `LINKED_WORKTREE`): the select table transcribes them, and a paraphrase there
+# is a silent break against design-map.py, which reads them off the real bodies
+# (the select cases above execute that; this pins the prose the model reads).
+
+printf '\nskills/design-map/FLEET.md — the fleet companion\n'
+
+assert_md "$SKILL_MD" 'SKILL.md points at the companion by a markdown link' '[FLEET.md](./FLEET.md)'
+assert_md "$SKILL_MD" 'and names the condition that opens it: a /design-multi sitting' '/design-multi'
+assert_md "$SKILL_MD" 'or a design-lane' 'design-lane'
+if [ ! -f "$FLEET_MD" ]; then
+  fail 'the fleet companion exists' "no file at $FLEET_MD"
+else
+  pass 'the fleet companion exists'
+  assert_md "$FLEET_MD" 'render --stack is documented' 'design-map render --stack <m1> <m2>... --expect <n1> <n2>... --out <page.html>'
+  assert_md "$FLEET_MD" 'the stack order is documented' 'most `open` forks first'
+  assert_md "$FLEET_MD" 'project piped into write is documented' 'design-map project --ticket <K> <map>... | design-map write'
+  assert_md "$FLEET_MD" 'decisions --closed is documented' 'design-map decisions <map.json> [--closed]'
+  assert_md "$FLEET_MD" 'the board path grounds before it posts (the artifact path: render refuses not-grounded, executed above)' \
+    '`map_ground` replays before any `map_post`'
+  assert_md "$FLEET_MD" 'cross-repo literal: the status capability the select table reads' 'capabilities.verbFamilies'
+  assert_md "$FLEET_MD" 'cross-repo literal: the board-kinds field the select table reads' 'boardKinds'
+  assert_md "$FLEET_MD" 'cross-repo literal: the start_map_session refusal on a linked worktree' 'LINKED_WORKTREE'
+  refute_md "$FLEET_MD" 'the companion does not restate the F4 disarm (one home: SKILL.md)' \
+    'the notification is the doorbell'
+fi
 
 # ---------------------------------------------------------------------------
 printf 'the verdict line, not the exit code\n'

@@ -1,64 +1,77 @@
 # bett3r-ai-workflow
 
-A Claude Code plugin that encodes a **vertical-slice, dual-gated development flow**. It is the *methodology* — project-agnostic. It reads each host repo's own conventions (`.claude/rules/`, installed framework plugins, `.esas.config.json`) at runtime, so the same flow works in any repo, PV3 or not.
+A Claude Code plugin that encodes a vertical-slice, dual-gated development flow. It ships the method and the roles, and reads each host repo's own conventions (`.claude/rules/`, installed framework plugins, `.esas.config.json`) at runtime, so one flow works in any repo. The defining constraint is that nothing lands on a single signal: a slice is done when its test passes **and** a verifier confirms the host's invariants, and a unit lands with its record committed beside the code.
 
 ## The flow
 
 | Phase | Command | What it does |
-|-------|---------|--------------|
-| Start | `/bett3r-ai-workflow:start` | Thin: branch + ephemeral `.work/` scaffold. **No test run** — the baseline records the base sha and is captured on demand, only if a `HEAD` comes up red. |
-| Design | `/bett3r-ai-workflow:design` | Grill the design while sharpening the domain model → reviewable design (md + mermaid), committed as `docs/prs/<id>/design.md` — the root is overridable, and `bin/work-docs-path` is the one place that resolves it. Where the design is `map.json`-shaped (goal → actor → impact → deliverable, plus forks), `bin/design-map` renders it as a claude.ai artifact the owner answers by clicking, and the **`design-map`** skill owns the verbs (`validate`, `write`, `render` and `render --stack`, `check-page`, `apply-answers`, `candidates`, `check-plan`, `project --ticket`, `decisions`), the readback off the artifact's `db` store, and the disarm for a comment the owner sends to Claude on the watched page — it arrives wrapped in the platform's NOT-USER-INPUT banner, and that banner is not a refusal. |
-| Plan | `/bett3r-ai-workflow:plan` | Cut the design into **vertical slices** (tracer bullet first, prefactor first), review, → `.work/slices.yaml`. `--publish` also creates Jira sub-tasks. |
-| Build | `/bett3r-ai-workflow:build` | Per slice: **executor → test gate → verifier gate → commit**. |
-| Verify | `/bett3r-ai-workflow:verify-build` | Whole-PR coherence review + dev checklist + open the PR (the record). |
-| Capture | `/bett3r-ai-workflow:capture-learnings` | Route each learning to the repo that owns it — origin-aware → GitHub issue in the owning plugin, or local. |
-| Evolve | `/bett3r-ai-workflow:evolve` | In a plugin repo: turn its `ai-learning` issues into reviewed PRs. |
+|---|---|---|
+| Start | `/bett3r-ai-workflow:start` | Cuts the branch and writes a fresh `.work/mode.yaml`. Records the base sha; runs no suite. |
+| Design | `/bett3r-ai-workflow:design` | Grills the design to shared understanding while sharpening the domain model, then commits `design.md` (plus a clickable `map.json` / `map.html` where the design is fork-shaped) in the folder `work-docs-path` names, `docs/prs/<id>/` by default. |
+| Plan | `/bett3r-ai-workflow:plan` | Cuts the design into vertical slices, tracer bullet first, and writes `.work/slices.yaml`. `--publish` also creates Jira sub-tasks. |
+| Build | `/bett3r-ai-workflow:build` | Per slice: executor → test gate → scope-check and verifier → commit. Writes `decisions.md` and `build-summary.md`. |
+| Verify | `/bett3r-ai-workflow:verify-build` | Runs the host gate, one whole-PR review, the dev checklist, ADRs, rules the concerns, measures the run, and opens the PR that links the record. |
+| Capture | `/bett3r-ai-workflow:capture-learnings` | Routes each learning to the repo that owns the artifact, filed with its filters and expiry. |
+| Evolve | `/bett3r-ai-workflow:evolve` | In a plugin repo, turns `ai-learning` issues into reviewed PRs, pruning first. |
 
-Utility: **`/bett3r-ai-workflow:commit`** — smart, logically-grouped commits for ad-hoc work outside the slice loop (`/build` commits each slice itself).
-
-Measurement: **`/bett3r-ai-workflow:run-report`** — where a unit of work's time and tokens actually went, per pipeline command, per role, per slice. It reads Claude Code's own transcripts (`scripts/run-metrics.mjs`), so nothing is instrumented and **any past branch can be reported retroactively**. `/verify-build` runs it with `--emit` as its last step, recording each finished unit to `~/.claude/bett3r-metrics/`; `--aggregate` then compares runs **by plugin version**, which is what makes "did that change to the flow help?" an answerable question. Time is classified (tool / reason / child / stalled) rather than inferred from first→last timestamps, and records are sliced by git branch — the two mistakes that make transcript-derived numbers confidently wrong.
 Fleet:
 
 | Phase | Command | What it does |
-|-------|---------|--------------|
-| Multi | `/bett3r-ai-workflow:start-multi` | Fleet orchestrator: drive N work units through the flow **unattended**, one git worktree each — in parallel where safe, serially where not. Cuts one integration branch `int/<run-id>` for the run; every unit PR targets it. Resumable; ends at N PRs opened ready for review, merging nothing. |
-| Land | `/bett3r-ai-workflow:merge-multi` | After you have reviewed those PRs: merge them into the integration branch (conflicts resolved **once**, never by rebasing a reviewed branch), run the gate **once** there — scoped to the fleet's combined diff, never `--full` — and open one index-style integration PR. `--land` merges it to the default branch. Run it in a **fresh session** — the fleet conversation is the run's largest context and none of it is needed to land. |
+|---|---|---|
+| Multi | `/bett3r-ai-workflow:start-multi` | Drives N units through the flow unattended, one worktree each, in parallel where safe. Every unit PR targets one integration branch, `int/<run-id>`; the run ends at N PRs, merging nothing. `/bett3r-ai-workflow:design-multi` does the same for N designs, batching the genuine forks into one human sitting. |
+| Land | `/bett3r-ai-workflow:merge-multi` | After review: merges the unit PRs into the integration branch (conflicts resolved once), runs the gate once there, opens one integration PR. `--land` merges it. Run it in a fresh session. |
 
-Hook: **`UserPromptSubmit` → `esas: N pending (seq A→B)`** (`hooks/esas-pending.sh`). While the user has unsynced edits on the ESAS design board, the count goes in front of the next prompt so Claude knows its picture is stale — telemetry, never a trigger. Silent and free in every repo without a `.esas/` directory, and it always exits 0, because a `UserPromptSubmit` hook that doesn't would erase the user's prompt. The standing rule for reacting to it (never unsolicited) is the **`esas-pending`** skill. See `hooks/README.md`.
+Utilities: `/bett3r-ai-workflow:commit` (logically grouped commits for ad-hoc work) and `/bett3r-ai-workflow:run-report` (where a unit's time and tokens went, read from the transcripts, so any past branch can be reported; `--aggregate` compares runs by plugin version).
 
-ESAS board mode: `/design` now runs a map gate first (a design map, no `.esas/` needed, silent in lanes) and the eventstorming gate second, the two combined by an executable `BOARD-GATE:v1` block. In a repo with a `.esas/`, **`/design`** opens a second surface — decisions go to the committed design (`work-docs-path`) as always, structure goes to a live board the user watches while you talk, through the `esas-mcp` tools. Step 0 of the command is the two gates, the preflight (extracted and run against fixture host repos by `scripts/test-esas-design.sh`) and the table that turns each verdict into a response — the trigger stays inline, the response does not: everything downstream of a double yes (registering the server, seeding the design layer, the launch offer, what changes in Steps 2–3) is `skills/esas-design/BOARD-SETUP.md`, opened only when a verdict calls for it, so the most-used command in the flow does not carry board prose into every repo that has no board. The gestures on top of all of it — the sync point, the summon that lets the board wake an idle session (one frame on a session channel, `/api/esas/ws`, held open with `Monitor` — plus a `SessionStart` hook that says to open it when a board is up and nobody is), the withdrawal and correction gestures, the two restarts, the main-checkout-only fleet rule — are the **`esas-design`** skill. Registering the MCP server takes effect only on session restart, so that is its own explicit step and the command stops there.
+## The gate is the host repo's
 
-## The gate is the host repo's, not the plugin's
+The plugin makes no guess about what "green" means. A host repo declares its own gate as `.claude/gate.mjs` (or `.claude/gate.sh`), taking `--fast`, no argument (scoped: whole-repo structural checks, then only the suites and guards the diff touches) or `--full`, and printing one `GATE-STEP: <name> PASS|FAIL|SKIP|INCONCLUSIVE <detail>` line per step. `/verify-build` runs the scoped mode for a unit landing alone, or `--fast` for one lane of a fleet (`gateDeferred: true` in its `.work/lane.yaml`), and `/merge-multi` runs the scoped mode once on the integration branch. The whole-repo run is CI's, or the user's on request; no flow step selects it. Every verdict is reported with the blind spot it leaves: a scoped pass certifies the diff and its importers, not the tree. The `full-gate` skill carries the contract and how to read a verdict.
 
-`yarn test` is a guess, and the plugin no longer makes it. A host repo declares its own validation gate as **`.claude/gate.mjs`** (Node, so a Windows contributor needs no bash to run their own repo's gate; an existing `.claude/gate.sh` is still accepted), taking `--fast` (build + typecheck — the inner loop), no argument (**scoped**: the structural checks whole-repo, then only the suites, drift checks and guards the branch's diff touches) or `--full` (the whole repo, unconditionally — **CI's job, or the user's on request; no flow step ever selects it**), and printing one `GATE-STEP: <name> PASS|FAIL|SKIP|INCONCLUSIVE <detail>` line per step so a caller can read *which* step failed and with what counts. The **`full-gate`** skill carries the contract, an example script, the discovery fallback, and the four ways a "green" read is wrong.
+## The record
 
-A repo may also declare a **scoped** middle mode as its no-argument default — whole-repo structural checks, then only the suites and guards its diff touches — for the human inner loop. The flow never selects it: a scoped verdict certifies a diff and its importers, not the tree.
-
-Where it runs: `/verify-build` runs the **scoped** mode for a single unit of work, or `--fast` when the unit is one lane of a fleet (the `provisioner` stamps `gateDeferred: true` in the lane's `.work/lane.yaml` brief to say so). The branch-wide run is then hoisted to `/merge-multi`, which runs it once — still scoped, over the fleet's combined diff — on the assembled integration branch, the only tree where cross-unit breakage exists at all. **`--full` and `--all` are never run by a flow step**: the whole-repo run belongs to the CI pipeline, or to the user asking for it by name. Every scoped verdict is reported as what it is — a claim about the diff and its importers, with the tree-counting guards it could not select named in the PR body.
-
-Plus skills: **`grill`** (the relentless design interview), **`critique`** (the divergent counterpart — a one-shot adversarial multi-lens stress-test of a resolved design; wired into `/design` and `/verify-build`), **`domain-modeling`** (sharpen the ubiquitous language + ADRs; glossaries live in the host repo's domain package), **`seed-context`** (bootstrap a whole bounded context's glossary from existing code — code-first, grill the gaps; refers to `domain-modeling`), **`vertical-slicing`** (the slicing methodology), **`full-gate`** (the host repo's `.claude/gate.mjs` convention and how to read its verdict), and **`record`** (instant frictionless capture of a thought/learning to `.work/learnings.md`, drained by `capture-learnings`). And the generic agent roles: **`executor`**, **`verifier`**, **`test-runner`**, **`scope-check`**, **`provisioner`**.
-
-## Propagation (capture → evolve)
-
-The flow improves itself. `capture-learnings` routes each learning to **where its source-of-truth lives** — an improvement to a shared skill becomes a GitHub issue in that plugin's repo; a repo-specific fact stays local. `evolve`, run inside a plugin repo, turns its accumulated issues into reviewed PRs. On merge **and a version bump**, every repo that installs the plugin gets the improvement on its next refresh — the bump is not bookkeeping, it is the release itself, because the install is a version-keyed cache that copies nothing when the string has not moved (see `docs/adr/ADR-001`, and the CI gate that now refuses the omission). (Requires each plugin's `repository` set in `plugin.json`, or a git remote, for issue routing.)
-
-## Core principles
-
-- **A slice is the smallest independently-*verifiable* behavior**, cut top-to-bottom through all layers — never a horizontal layer. Only a vertical slice has its own green signal, which is what lets the loop verify and commit it on its own.
-- **Tracer bullet first.** The first slice is the thinnest end-to-end path through the riskiest, gate-less seam — proving the architecture before fleshing it out.
-- **Dual gate.** A slice is done only when its automated test passes **and** a verifier confirms the host repo's architectural invariants (the judgment tests can't catch). Tests alone ship defects that pass tests.
-- **Git is the system of record — the commits and a committed record beside the code.** One slice commit per slice. Each work item also leaves one folder under the work-docs root (resolved by `work-docs-path`, `docs/prs/<id>/` by default) holding four files, one copy each: `design.md` (the design as resolved), `decisions.md` (every decision made after it), `concerns.md` (the owners' bars, ruled at landing) and `build-summary.md` (the run's telemetry). The PR body is a short summary that links that record. ADRs still own the durable decisions that outlive a work item. (`docs/adr/ADR-005` records why this reversed the plugin's original "keep only the PR" rule.)
-- **Only working state is ephemeral.** The gitignored `.work/` holds working state alone — `slices.yaml`, `mode.yaml`, a lane brief, learnings, handoffs — and is discarded after landing. Nothing in the committed record has a second copy there. No committed `sdd.md` / `build-progress.md` / test-plan scaffolding.
+Git is the system of record: one commit per slice, and one folder per work item under the work-docs root (`work-docs-path` resolves it) holding `design.md`, `decisions.md`, `concerns.md` and `build-summary.md`, one copy each. The PR body links that folder. ADRs own the decisions that outlive a work item. The gitignored `.work/` holds working state only (`slices.yaml`, `mode.yaml`, a lane brief, learnings, handoffs) and is disposable.
 
 ## The plugin/project seam
 
-This plugin ships the **roles and methodology**. The **domain knowledge** stays in the host repo and its framework plugins:
+This plugin ships roles and method; the domain knowledge stays in the host repo and its framework plugins:
 
-- The `verifier` reads `${CLAUDE_PROJECT_DIR}/.claude/rules/` for the host repo's invariants.
-- The `executor` uses whatever framework skills the host repo provides (e.g. the `bett3r-pv3-ai-skills` plugin's `create-aggregate`).
-- **Where a design graph fixes an artifact mechanically, `/build` generates it before the executor runs** (step 0), scoped to the slice's `designs:` node ids. The flow stays framework-agnostic: it runs the scaffolder the repo declares as `designTooling.scaffold` in `.esas.config.json` (and the extractor as `designTooling.extract`), and skips the step when nothing is declared. What the generator refuses to guess — a location, a payload, an invariant — is surfaced as a design question rather than filled in, because a scaffold block is a finding about the design, not an obstacle in the build.
+- the `verifier` reads `${CLAUDE_PROJECT_DIR}/.claude/rules/` for the host's invariants;
+- the `executor` uses whatever framework skills the host provides (a PV3 repo installs `bett3r-pv3-ai-skills` beside this plugin);
+- where a design graph fixes an artifact mechanically, `/build` runs the scaffolder the repo declares as `designTooling.scaffold` in `.esas.config.json` before the executor, and skips the step when nothing is declared.
 
-A PV3 repo installs this **plus** `bett3r-pv3-ai-skills`; a non-PV3 repo installs just this.
+## ESAS board mode
+
+In a repo with a `.esas/` design layer, `/design` opens a second surface: decisions still go to the committed design, structure goes to a live board the user watches, through the `esas-mcp` tools. The `esas-design` skill carries the standing rules, the `esas-pending` skill the rule for the hook line below, and `skills/esas-design/BOARD-SETUP.md` everything downstream of a board being present, opened only when the command's gates say so.
+
+## Hooks
+
+Three, all in `hooks/hooks.json` and each one cheap check and gone in a repo where it does not apply:
+
+| Hook | Fires | Does |
+|---|---|---|
+| `esas-pending.sh` | `UserPromptSubmit` | Puts `esas: N pending (seq A→B)` in front of the prompt while the user has unsynced board edits. Telemetry, never a trigger. |
+| `esas-session-channel.sh` | `SessionStart` | Tells a session to open the board's summon channel when a board is serving this repo and nobody holds it. |
+| `lane-git-guard.sh` | `PreToolUse` on `Bash` | When the checkout a command acts on holds `.work/lane.yaml` (an unattended lane), blocks the git commands that discard or shelve the working tree. |
+
+## It's working if
+
+- `/start` finishes in seconds and runs no tests; `.work/mode.yaml` names the work item.
+- Every slice in `/build` goes red before it goes green, and lands as its own commit.
+- `/verify-build` opens the PR ready for review with a `### Record` section linking four files, and a `flow/concerns` status on the head commit.
+- A fleet run ends with N open PRs against `int/<run-id>` and nothing merged.
+- A gate verdict in a PR body names its mode and what it did not run.
+
+## Propagation
+
+The flow improves itself: `capture-learnings` files an improvement to a shared skill as an issue in the plugin that owns it; `evolve`, run in that plugin's repo, turns the issues into reviewed PRs. A merge reaches installs only with a version bump, because the install is a version-keyed cache (`docs/adr/ADR-001`).
+
+## Where the evidence lives
+
+The artifacts carry rules. The evidence behind them lives in two files nothing loads by default: `EVIDENCE.md`, the four facts about what counts as evidence that every gate and sweep falls out of, and `LEDGER.md`, the incidents and measurements that justified each rule, each with its source and expiry. Read them when a rule's why is unclear; `/evolve` and `/capture-learnings` append to the ledger.
+
+## Third-party skills
+
+`grilling`, `writing-for-agents` and `domain-modeling` are adopted verbatim from Matt Pocock's skills repository under the MIT license; see `THIRD-PARTY-LICENSES.md` and the `CREDITS.md` beside each.
 
 ## Install
 

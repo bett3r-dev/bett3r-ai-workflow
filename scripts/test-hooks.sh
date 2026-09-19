@@ -461,6 +461,192 @@ else
   fi
 fi
 
+# ── The lane git guard (hooks/lane-git-guard.sh) ─────────────────────────────
+#
+# A PreToolUse(Bash) hook, so it runs before every Bash call in every repo
+# where the plugin is enabled. It reads the payload (line 2), exits on a glob
+# match when no `git` is in it, and otherwise looks for `.work/lane.yaml` in
+# the checkouts the command can act on: the payload's cwd, the project dir,
+# and every path after `cd`, `-C` or `--work-tree`. The attended fast path is
+# asserted silent on both streams. Where a brief is found this is the one hook
+# in the plugin that MAY exit 2: that blocks the tool call and hands stderr to
+# the model. So the positive cases assert the block (exit 2, exactly one
+# stderr line naming the alternative), the negative cases assert exit 0 and
+# silence, and stdout is asserted empty on every path, because a PreToolUse
+# hook's stdout is injected into the session.
+
+printf '\nlane-git-guard hook (PreToolUse Bash)\n'
+
+GUARD_HOOK="$PLUGIN/hooks/lane-git-guard.sh"
+
+# guard_payload <command> — a PreToolUse(Bash) event. Built with python3, as the
+# sibling plugin's suite builds its payloads, so the suite is not testing its
+# own JSON escaping of a shell line full of quotes.
+guard_payload(){
+  python3 -c '
+import json, sys
+print(json.dumps({
+    "session_id": "s1",
+    "transcript_path": "/tmp/t.jsonl",
+    "cwd": sys.argv[2],
+    "hook_event_name": "PreToolUse",
+    "tool_name": "Bash",
+    "tool_input": {"command": sys.argv[1], "description": "run a command", "timeout": 120000},
+}))' "$1" "$gcwd"
+}
+
+# run_guard <lane|no-lane> <command> — a fresh work dir per case, with or
+# without the lane brief, the payload on stdin as the harness sends it. The
+# project dir and the payload's cwd are that work dir unless GUARD_PROJECT /
+# GUARD_CWD point elsewhere (the cross-checkout cases).
+GUARD_PROJECT=''
+GUARD_CWD=''
+run_guard(){
+  gwork="$TMP/gwork"
+  rm -rf "$gwork"; mkdir -p "$gwork/.work"
+  if [ "$1" = lane ]; then
+    printf 'ticket: XL-1\nworktree: %s\nbranch: xl-1-guard\ngateDeferred: true\n' "$gwork" >"$gwork/.work/lane.yaml"
+  fi
+  gproject=${GUARD_PROJECT:-$gwork}
+  gcwd=${GUARD_CWD:-$gwork}
+  # Built first, then piped by printf, so a python3 writing straight into a
+  # pipe the hook has already left would not print an EPIPE traceback into the
+  # suite's own output.
+  gpayload=$( guard_payload "$2" )
+  printf '%s' "$gpayload" | CLAUDE_PROJECT_DIR="$gproject" "$HOOK_SH" "$GUARD_HOOK" >"$TMP/gout" 2>"$TMP/gerr"
+  guard_status=$?
+}
+
+# assert_guard <lane|no-lane> <command> <allow|block> <description>
+assert_guard(){
+  run_guard "$1" "$2"
+  gout=$( cat "$TMP/gout" )
+  gerr=$( cat "$TMP/gerr" )
+  if [ -n "$gout" ]; then
+    fail "$4" "wrote to stdout — a PreToolUse hook's stdout is injected into the session" "stdout: $gout"
+    return
+  fi
+  if [ "$3" = allow ]; then
+    if [ "$guard_status" -ne 0 ]; then
+      fail "$4" "exit status $guard_status — this command must pass through" "stderr: $gerr"
+    elif [ -n "$gerr" ]; then
+      fail "$4" "wrote to stderr on a command it let through" "stderr: $gerr"
+    else
+      pass "$4"
+    fi
+    return
+  fi
+  if [ "$guard_status" -ne 2 ]; then
+    fail "$4" "exit status $guard_status — expected 2, the PreToolUse block" "stderr: $gerr"
+    return
+  fi
+  glines=$( wc -l <"$TMP/gerr" | tr -d ' ' )
+  if [ "$glines" != '1' ]; then
+    fail "$4" "expected exactly 1 line on stderr, got $glines" "stderr: $gerr"
+    return
+  fi
+  case $gerr in
+    *'git stash create'*'git diff <object>'* ) pass "$4" ;;
+    * ) fail "$4" 'the stderr line must name the alternative: git stash create + git diff <object>' "stderr: $gerr" ;;
+  esac
+}
+
+if [ ! -f "$GUARD_HOOK" ]; then
+  fail 'hooks/lane-git-guard.sh ships' "no file at $GUARD_HOOK"
+elif ! command -v python3 >/dev/null 2>&1; then
+  fail 'the lane-git-guard cases need python3' 'python3 is missing on this machine'
+else
+  pass 'hooks/lane-git-guard.sh ships'
+
+  # The attended fast path: no brief, a command it would otherwise block.
+  assert_guard no-lane 'git stash' allow \
+    'no .work/lane.yaml: git stash passes through, silent on both streams'
+
+  # The four shapes the design names.
+  assert_guard lane 'git stash' block 'lane: git stash is blocked, one stderr line'
+  assert_guard lane 'git stash create' allow 'lane: git stash create passes through'
+  assert_guard lane 'git stash list' allow 'lane: git stash list passes through'
+  assert_guard lane 'git status' allow 'lane: git status passes through'
+
+  # The rest of the blocked set, and its allowed neighbours.
+  assert_guard lane 'git stash push -m wip' block 'lane: git stash push is blocked'
+  assert_guard lane 'git stash pop' block 'lane: git stash pop is blocked'
+  assert_guard lane 'git reset --hard HEAD~1' block 'lane: git reset --hard is blocked'
+  assert_guard lane 'git reset --soft HEAD~1' allow 'lane: git reset --soft passes through (inline-fix squashes with it)'
+  assert_guard lane 'git checkout -- src/a.ts' block 'lane: git checkout -- <path> is blocked'
+  assert_guard lane 'git checkout .' block 'lane: git checkout . is blocked'
+  assert_guard lane 'git checkout -b feature/x' allow 'lane: git checkout -b passes through'
+  assert_guard lane 'git restore src/a.ts' block 'lane: git restore is blocked'
+  assert_guard lane 'git clean -fd' block 'lane: git clean -fd is blocked'
+  assert_guard lane 'git clean -n' allow 'lane: git clean -n (dry run) passes through'
+
+  # Compound and wrapped spellings.
+  assert_guard lane 'cd /tmp/x && git stash' block 'lane: a blocked command behind cd … && is still blocked'
+  assert_guard lane 'git -C /tmp/x stash' block 'lane: git -C <path> stash is blocked'
+  assert_guard lane 'git status; git stash' block 'lane: a blocked command after ; is still blocked'
+  assert_guard lane 'obj=$(git stash create) && git diff "$obj"' allow \
+    'lane: the sanctioned pair, git stash create + git diff <object>, passes through'
+
+  # Tokens, not substrings: the words inside a quoted string are not a command.
+  assert_guard lane 'git commit -m "never git stash in a lane"' allow \
+    'lane: git stash inside a quoted commit message is not a match'
+
+  # Multi-line commands: a newline is a command separator, like `;`.
+  nl=$( printf '\n.' ); nl=${nl%.}
+  assert_guard lane "git add .${nl}git stash" block \
+    'lane: git stash on the second line of a command is blocked'
+  assert_guard lane "git status${nl}git reset --hard HEAD" block \
+    'lane: git reset --hard on the second line of a command is blocked'
+
+  # The rest of the tree-discarding forms, and their allowed neighbours.
+  assert_guard lane 'git reset --merge' block 'lane: git reset --merge is blocked'
+  assert_guard lane 'git reset --keep HEAD~1' block 'lane: git reset --keep is blocked'
+  assert_guard lane 'git switch -f main' block 'lane: git switch -f is blocked'
+  assert_guard lane 'git switch --discard-changes main' block 'lane: git switch --discard-changes is blocked'
+  assert_guard lane 'git switch main' allow 'lane: a plain git switch passes through'
+  assert_guard lane 'git checkout -f main' block 'lane: git checkout -f is blocked'
+  assert_guard lane 'x=`git stash`' block 'lane: git stash inside a backtick substitution is blocked'
+  assert_guard lane 'git stash show' allow 'lane: git stash show passes through'
+
+  # The lane is the checkout the command acts on, not necessarily the project
+  # dir: a fleet lane is a subagent of the orchestrator's session and reaches
+  # its worktree through cd or git -C, so the brief is looked for in the
+  # payload's cwd, the project dir, and every path the command names.
+  glane="$TMP/glane"; rm -rf "$glane"; mkdir -p "$glane/.work"
+  printf 'ticket: XL-2\nworktree: %s\nbranch: xl-2-guard\n' "$glane" >"$glane/.work/lane.yaml"
+  gplain="$TMP/gplain"; rm -rf "$gplain"; mkdir -p "$gplain"
+  GUARD_PROJECT="$gplain"; GUARD_CWD="$gplain"
+  assert_guard no-lane "git -C $glane stash" block \
+    'no lane at the project dir or the cwd: git -C <lane worktree> stash is blocked'
+  assert_guard no-lane "cd $glane && git stash" block \
+    'no lane at the project dir or the cwd: cd <lane worktree> && git stash is blocked'
+  assert_guard no-lane "cd $gplain && git stash" allow \
+    'no lane anywhere the command reaches: cd <plain dir> && git stash passes through'
+  GUARD_PROJECT="$gplain"; GUARD_CWD="$glane"
+  assert_guard no-lane 'git stash' block \
+    "lane at the payload's cwd only: git stash is blocked"
+  GUARD_PROJECT="$glane"; GUARD_CWD="$gplain"
+  assert_guard no-lane 'git stash' block \
+    'lane at the project dir only: git stash is blocked'
+  GUARD_PROJECT="$TMP"; GUARD_CWD="$TMP"
+  assert_guard no-lane 'cd glane && git stash' block \
+    'a relative cd into a lane worktree resolves against the cwd and is blocked'
+  GUARD_PROJECT=''; GUARD_CWD=''
+
+  # An empty payload: nothing to read, nothing to say.
+  gwork="$TMP/gwork"
+  rm -rf "$gwork"; mkdir -p "$gwork/.work"
+  printf 'branch: xl-1-guard\n' >"$gwork/.work/lane.yaml"
+  CLAUDE_PROJECT_DIR="$gwork" "$HOOK_SH" "$GUARD_HOOK" >"$TMP/gout" 2>"$TMP/gerr" </dev/null
+  guard_status=$?
+  if [ "$guard_status" -ne 0 ] || [ -s "$TMP/gout" ] || [ -s "$TMP/gerr" ]; then
+    fail 'lane: an empty payload passes through silently' "exit $guard_status" \
+      "stdout: [$( cat "$TMP/gout" )]" "stderr: [$( cat "$TMP/gerr" )]"
+  else
+    pass 'lane: an empty payload passes through silently'
+  fi
+fi
+
 # ── The mechanism: how the plugin declares the hooks ─────────────────────────
 #
 # The script working is worth nothing if Claude Code never runs it, and that
@@ -484,6 +670,9 @@ else
     'CLAUDE_PLUGIN_ROOT}/hooks/esas-session-channel.sh'
   assert_json 'it sets an explicit timeout of 5s' '"timeout": *5'
   assert_json 'it points at the shipped script via ${CLAUDE_PLUGIN_ROOT}' 'CLAUDE_PLUGIN_ROOT}/hooks/esas-pending.sh'
+  assert_json 'it declares a PreToolUse hook' '"PreToolUse"'
+  assert_json 'matched on the Bash tool' '"matcher": *"Bash"'
+  assert_json 'and points that one at the lane git guard' 'CLAUDE_PLUGIN_ROOT}/hooks/lane-git-guard.sh'
   if python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$HOOKS_JSON" 2>/dev/null; then
     pass 'hooks.json is valid JSON'
   else

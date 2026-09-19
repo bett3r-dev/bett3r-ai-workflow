@@ -1,58 +1,35 @@
 ---
 name: seed-context
-description: Bootstrap (or refresh) a complete bounded context's CONTEXT.md glossary from its existing code — code-first extraction, then grill only the gaps. Use to seed the ubiquitous language for an existing subdomain that has no/stale CONTEXT.md. Defers to domain-modeling for the glossary format and discipline.
+description: Bootstrap or refresh a whole bounded context's CONTEXT.md glossary from its existing code, code first, then grill only the gaps. For an existing subdomain with no or a stale CONTEXT.md.
+disable-model-invocation: true
 ---
 
 # Seed context
 
-Bootstrap a complete bounded context's `CONTEXT.md` from code that already exists — the one-time pass the inline `domain-modeling` discipline doesn't cover (that one sharpens the glossary *during* a feature; this one seeds an existing subdomain wholesale). **Code-first**, so it doesn't fabricate; **grill only what code can't settle.**
+Seed a complete bounded context's `CONTEXT.md` from code that already exists: the one-time pass, where `/design` grows a glossary inline during a feature. Code first, so nothing is fabricated; grill only what code cannot settle. Not for greenfield contexts, which grow their glossary through `/design`.
 
-This skill owns the *seeding orchestration*. It **refers to `domain-modeling`** for the `CONTEXT.md` format, the glossary-only rule, the anti-rot cross-reference, and the sparing-ADR rule — do not duplicate those here.
-
-## When to use
-
-An existing subdomain has no `CONTEXT.md` (or a stale one) and you want to capture its ubiquitous language. **Not** for greenfield contexts built through the flow — those grow their glossary inline during `/design`.
+`Call the Skill tool with "domain-modeling"` for the `CONTEXT.md` format, the glossary-only rule, the anti-rot cross-reference and the sparing-ADR rule. This skill owns only the seeding.
 
 ## Step 1 — Locate the context
 
-Read `.esas.config.json` for `domainEventsPath` (repo-root fallback). The target subdomain's canonical definitions live under `<domainEventsPath>/src/<context>/`; the matching server module (if any) holds its behavior. The glossary goes to `<domainEventsPath>/src/<context>/CONTEXT.md`.
+Read `.esas.config.json` for `domainEventsPath` (repo root when absent). The subdomain's canonical definitions live under `<domainEventsPath>/src/<context>/`, its server module holds the behaviour, and the glossary goes to `<domainEventsPath>/src/<context>/CONTEXT.md`. Done when all three paths are named.
 
-## Step 2 — Extract from code (the high-confidence seed — no assumption)
+## Step 2 — Extract from code
 
-Read the subdomain's schemas / events / commands / aggregates / reducers / policies and pull the **facts**:
+Read the subdomain's schemas, events, commands, aggregates, reducers and policies and pull the facts: the term list (entity, event and command names, domain concepts only, so implementation fields like `correlationId` or `expectedVersion` are skipped); relationships and cardinality (reducers say what holds what, keyed maps `x.{id}` mean many, policies say which events cross contexts); lifecycles (status enums plus the commands that transition them); invariants (the guards the aggregates enforce). Done when each fact cites the file it was read from.
 
-- **Term list** — entity / event / command names. Filter to **domain concepts only** (the `domain-modeling` rule); skip general-programming / implementation fields (`correlationId`, `expectedVersion`, `additionalProperties`).
-- **Relationships & cardinality** — from reducers (what state holds what), keyed maps (`x.{id}` → "many"), and policies (which events flow between contexts).
-- **Lifecycles** — status enums + the commands that transition them.
-- **Invariants** — the guards enforced in the aggregates.
+## Step 3 — Fold in existing knowledge
 
-This is reading, not inventing — it's the prescriptive ~80%.
+Read `${CLAUDE_PROJECT_DIR}/.claude/rules`, `AGENTS.md`, existing ADRs and any domain graph, as priors and as a cross-check against the code. A disagreement between docs and code is a flag for Step 5, not a fact to pick. Done when every disagreement is listed.
 
-## Step 3 — Fold in the repo's existing knowledge (priors + cross-check)
+## Step 4 — Draft CONTEXT.md
 
-Read whatever domain knowledge the host repo already has — `${CLAUDE_PROJECT_DIR}/.claude/rules`, `AGENTS.md`, existing ADRs, an ESAS / domain graph if present — and use it BOTH as priors and as a **cross-check** against the code. Where existing docs and the code disagree, that's a flag for Step 5; do not silently trust either.
+Write the draft in `domain-modeling`'s format: one tight sentence per term, cross-referenced against the schema in the same folder as you write it. Glossary only. Done when every term from Step 2 has an entry.
 
-## Step 4 — Draft CONTEXT.md (grounded, per domain-modeling)
+## Step 5 — Grill the gaps only
 
-Write the draft in `domain-modeling`'s `CONTEXT.md` format. For each term, a tight one-sentence definition **cross-referenced against the schema in the same folder as you write it** (the anti-rot check, applied at seed time). Glossary only — no implementation detail.
+Collect what code cannot settle and grill the user on exactly those: the canonical term and its `_Avoid_` list where the code uses synonyms (offer the observed candidates, never an invented one); fuzzy boundaries between near-terms; intent, the "what it is and why it exists" the code under-determines; terms used two ways or mid-migration (ask rather than snapshot the confusion). Done when every flag has an answer or is recorded as open.
 
-## Step 5 — Flag the gaps, then grill ONLY those
+## Step 6 — Write and review
 
-Do **not** fabricate the parts code can't settle. Collect them and grill the user on just these:
-
-- **Canonical term + `_Avoid_`** — where the code uses synonyms (e.g. `client` vs `customer`), list the **observed** candidates and ask which is canonical. Never invent synonyms not seen in code/docs.
-- **Fuzzy boundaries** — near-terms whose prose distinction is unclear (e.g. Item vs Variation vs Publication vs Listing).
-- **Intent** — the "what it IS / why it exists" that the code under-determines.
-- **Inconsistencies / in-flux terms** — where the code uses a term two ways, or something is mid-migration. Don't snapshot confusion — ask.
-
-Grilling only the flags is what keeps this short: the obvious 80% came from code; you resolve only the real decisions.
-
-## Step 6 — Write & review
-
-Write `CONTEXT.md` to the located path; update `CONTEXT-MAP.md` (create it once the repo has >1 context) with this subdomain and its event relationships. Open it as a **PR** — a seeded glossary is a reviewed draft, not an authority, until merged.
-
-## Principles
-
-- **Code-first; grill the gaps; never fabricate precision.** A wrong glossary is trusted, read every time, and poisons its own cross-reference check.
-- **One bounded context per run.** Seed the high-traffic contexts first; leave the rest to grow inline via `/design`.
-- **Refer to `domain-modeling`** for format and discipline — this skill is only the seeding orchestration.
+Write `CONTEXT.md` to the located path; update `CONTEXT-MAP.md` (create it once the repo has more than one context) with this subdomain and its event relationships. Open a PR: a seeded glossary is a reviewed draft until merged. One bounded context per run; seed the high-traffic contexts first and let the rest grow through `/design`. Done when the PR is open.
