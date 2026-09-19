@@ -1,0 +1,21 @@
+# REACHABILITY: a slice whose oracle nobody has said how to break. The erasure
+# suite that built its own subject stayed 8/8 green with the production harness
+# spread removed — no probe was ever named, so nothing noticed.
+seams:
+  - name: the launcher's verdict line
+    at: plugins/bett3r-ai-workflow/bin/design-map:1
+    kind: existing
+ticket: ESAS-9
+review: unattended
+slices:
+  - id: 1
+    seam: the launcher's verdict line
+    name: "slice one"
+    oracle: |
+      the launcher prints outcome=ok and exits 0
+    scenarios:
+      - scenario: a slice names no probe
+        given: a plan whose slices are seamed and scened
+        when: a slice carries no probe key
+        then: the launcher refuses it, naming the slice
+        expected_from: literal

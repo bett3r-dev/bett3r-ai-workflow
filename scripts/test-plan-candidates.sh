@@ -12,6 +12,14 @@
 #             top-level review:/candidateOracles: block trails slices:.
 #   AC6     — a plan written with no map.json (no candidateOracles key) passes
 #             check-plan with candidates=0.
+#   oracles — the three adequacy rules: a slice with no `probe:` (reachability)
+#             and a `then:` with no named/cited source for its expected value
+#             (tautology) are refused; a structural scenario needs neither.
+#   seams   — the unit names its seams once (fewest, highest, existing over new)
+#             and every slice tests at a named one; a plan with no `seams:`, a
+#             slice with no `seam:`, a slice at an undeclared seam and an
+#             unjustified second seam are each refused, and two justified seams
+#             pass.
 #
 # Every case reads the tool's own verdict line, never the exit code alone.
 #
@@ -189,6 +197,100 @@ run "$DM" check-plan "$PLANS/candidate-in-scenario.yaml"
 check 'an unconfirmed candidate copied into a SCENARIO is refused, like one in an oracle' \
       "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" slice ) exit=$rc" \
       'fail candidate-in-oracle 1 exit=1' "$( cat "$OUT" )"
+
+# ---------------------------------------------------------------------------
+printf 'The unit names its seams once, and every slice tests at a named one\n'
+# ---------------------------------------------------------------------------
+# Pocock's `to-spec`: "Use the highest seam possible... the fewer seams across
+# the codebase, the better - the ideal number is one." `/plan` wrote a per-slice
+# oracle under no pressure toward a shared seam, so eight slices invented eight
+# oracle locations. His gate is a human confirm; lanes are unattended by
+# construction, so the seam is named, justified and recorded instead, and these
+# rows are what makes that mechanical rather than advisory.
+run "$DM" check-plan "$PLANS/plan-unseamed.yaml"
+check 'a plan that names no seam at all is refused' \
+      "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) exit=$rc" \
+      'fail plan-unseamed exit=1' "$( cat "$OUT" )"
+
+run "$DM" check-plan "$PLANS/slice-unseamed.yaml"
+check 'a slice that names no seam is refused, naming the slice' \
+      "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" slice ) exit=$rc" \
+      'fail slice-unseamed 1 exit=1' "$( cat "$OUT" )"
+
+# The failure this closes: an oracle at a seam nobody agreed to. It is the shape
+# of the worst defect in the corpus - the oracle sat at the unit, not at the
+# composition root, so both wiring lines could be deleted with tsc clean and 738
+# tests green.
+run "$DM" check-plan "$PLANS/unnamed-seam.yaml"
+check "a slice testing at an undeclared seam is refused, naming slice and seam" \
+      "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" slice ) $( attr "$LINE" seam ) exit=$rc" \
+      'fail unnamed-seam 1 check_seams_internals exit=1' "$( cat "$OUT" )"
+# A seam is named in prose, and a verdict is space-separated key=value: emitted
+# raw, the name would end at its first space and every parser downstream would
+# read a truncated name as the whole one.
+check 'the refused seam name is squashed, not truncated at its first space' \
+      "$( grep -c 'seam=check_seams_internals' "$OUT" )" 1 "$( cat "$OUT" )"
+
+# FEWEST is pressure, not a cap: the first seam is free, every one after it owes
+# a line saying why the named ones cannot hold this slice's claim. A number
+# cannot be legislated - some units genuinely need two - but the cost of the
+# second can be made a justification.
+run "$DM" check-plan "$PLANS/seam-unjustified.yaml"
+check 'a second seam with no `why:` is refused, naming the seam' \
+      "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" seam ) $( attr "$LINE" why ) exit=$rc" \
+      'fail seam-unstructured check_seams_unit extra-unjustified exit=1' "$( cat "$OUT" )"
+
+# Control: without this row, the rule above would be indistinguishable from a
+# hard cap of one seam, and every legitimate two-seam unit would be stuck.
+run "$DM" check-plan "$PLANS/two-seams.yaml"
+check 'two seams pass when the second says why the first cannot hold the claim' \
+      "$( attr "$LINE" outcome ) seams=$( attr "$LINE" seams ) scenarios=$( attr "$LINE" scenarios ) exit=$rc" \
+      'ok seams=2 scenarios=2 exit=0' "$( cat "$OUT" )"
+
+# ---------------------------------------------------------------------------
+printf 'Oracle adequacy: green, at the seam, and still proving nothing\n'
+# ---------------------------------------------------------------------------
+# None of these is visible to RED -> GREEN: each is genuinely red before the
+# code exists and green after, which is the whole of the evidence that gate
+# collects. TAUTOLOGY and REACHABILITY are checkable at plan time and are
+# checked here; DISCRIMINATION is a property of the RED the executor watches
+# and is enforced there, deliberately not faked with a field.
+run "$DM" check-plan "$PLANS/slice-unprobed.yaml"
+check 'REACHABILITY: a slice with no `probe:` is refused, naming the slice' \
+      "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" slice ) exit=$rc" \
+      'fail slice-unprobed 1 exit=1' "$( cat "$OUT" )"
+
+# Pocock, tdd/tests.md: "the assertion recomputes the expected value the way the
+# code does... Expected values must come from an independent source of truth."
+run "$DM" check-plan "$PLANS/scenario-unsourced.yaml"
+check 'TAUTOLOGY: a `then:` naming no source for its expected value is refused' \
+      "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" slice ) $( attr "$LINE" why ) exit=$rc" \
+      'fail scenario-unsourced 1 no-expected-from exit=1' "$( cat "$OUT" )"
+
+# The citation is the check: "the spec says so" with nothing to open is how a
+# recomputation gets written down as a fact.
+run "$DM" check-plan "$PLANS/scenario-uncited.yaml"
+check 'TAUTOLOGY: a non-literal expected value citing nothing is refused' \
+      "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" why ) exit=$rc" \
+      'fail scenario-unsourced no-expected-source exit=1' "$( cat "$OUT" )"
+
+# Control: a cited spec expectation passes, and so does a structural scenario,
+# which carries no expected_from at all - its expected value IS the census it
+# states, and there is nothing independent to cite. Without this row the rule
+# would be indistinguishable from "every scenario must say `literal`".
+run "$DM" check-plan "$PLANS/two-seams.yaml"
+check 'a cited spec-sourced expectation passes, and every slice is probed' \
+      "$( attr "$LINE" outcome ) probed=$( attr "$LINE" probed ) exit=$rc" \
+      'ok probed=2 exit=0' "$( cat "$OUT" )"
+check 'control: that fixture really carries a non-literal expectation' \
+      "$( grep -c 'expected_from: spec' "$PLANS/two-seams.yaml" )" 1 "$PLANS/two-seams.yaml"
+
+run "$DM" check-plan "$PLANS/scenario-structural.yaml"
+check 'a structural scenario needs no expected_from, and still passes' \
+      "$( attr "$LINE" outcome ) scenarios=$( attr "$LINE" scenarios ) probed=$( attr "$LINE" probed ) exit=$rc" \
+      'ok scenarios=1 probed=1 exit=0' "$( cat "$OUT" )"
+check 'control: that fixture carries no expected_from at all' \
+      "$( grep -c 'expected_from' "$PLANS/scenario-structural.yaml" )" 0 "$( cat "$PLANS/scenario-structural.yaml" )"
 
 # ---------------------------------------------------------------------------
 printf 'AC5: the trailing review/candidateOracles block does not change pool width\n'

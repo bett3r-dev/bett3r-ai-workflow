@@ -1,0 +1,19 @@
+# The slice tests at a seam the unit never declared — the eight-oracle-locations
+# failure, caught at the plan rather than in review.
+seams:
+  - name: the launcher's verdict line
+    at: plugins/bett3r-ai-workflow/bin/design-map:1
+    kind: existing
+ticket: ESAS-9
+review: unattended
+slices:
+  - id: 1
+    seam: check_seams internals
+    name: "slice one"
+    oracle: |
+      the launcher prints outcome=ok and exits 0
+    scenarios:
+      - scenario: a slice tests below the named seam
+        given: a plan declaring one seam
+        when: a slice names a different one
+        then: the launcher refuses it, naming slice and seam

@@ -1,0 +1,21 @@
+# A non-literal expected value with no citation: "the spec says so" is how a
+# recomputation gets written down as a fact. The citation IS the check.
+seams:
+  - name: the launcher's verdict line
+    at: plugins/bett3r-ai-workflow/bin/design-map:1
+    kind: existing
+ticket: ESAS-9
+review: unattended
+slices:
+  - id: 1
+    probe: delete the expected_source check; the oracle must go red
+    seam: the launcher's verdict line
+    name: "slice one"
+    oracle: |
+      the launcher prints outcome=ok and exits 0
+    scenarios:
+      - scenario: a spec-sourced expectation cites nothing
+        given: "a behavioural scenario with expected_from: spec"
+        when: it carries no expected_source
+        then: the launcher refuses it
+        expected_from: spec

@@ -97,6 +97,12 @@ jobs:
       # agent or skill carrying that flag; prose forbidding it is allowed.
       - name: No flow artifact runs the gate whole-repo
         run: python3 scripts/check-no-full-gate.py
+      # A fix-round cause recorded three or more times across docs/prs/ must have a
+      # disposition in docs/causes.md: a deterministic check if it is mechanical, an
+      # explicit judgement with its reason if it is not. Writing the rule down a
+      # second time is not a disposition — that is what this makes visible.
+      - name: Repeat fix-round causes are disposed, not tallied
+        run: python3 scripts/check-repeat-causes.py
       # The shipped UserPromptSubmit hook runs on every prompt in every repo
       # where the plugin is enabled, and a non-zero exit blocks the prompt.
       # Run it under dash too — `sh` is dash on Debian/Ubuntu, bash on macOS.

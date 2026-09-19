@@ -1,3 +1,7 @@
+seams:
+  - name: the launcher's verdict line
+    at: plugins/bett3r-ai-workflow/bin/design-map:1
+    kind: existing
 ticket: ESAS-9
 review: unattended
 candidateOracles:
@@ -17,6 +21,8 @@ candidateOracles:
     status: unconfirmed
 slices:
   - id: 1
+    probe: delete the line that wires the check into check_plan; the oracle must go red
+    seam: the launcher's verdict line
     name: "slice one"
     oracle: |
       the launcher prints outcome=ok and exits 0
@@ -25,3 +31,4 @@ slices:
         given: a plan whose candidates are all unconfirmed
         when: check-plan runs
         then: the launcher prints outcome=ok and exits 0
+        expected_from: literal

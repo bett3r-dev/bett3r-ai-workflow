@@ -1,0 +1,14 @@
+# A plan whose slices are fully scened but that names no seam: every oracle is
+# at a location nobody agreed to, chosen slice by slice.
+ticket: ESAS-9
+review: unattended
+slices:
+  - id: 1
+    name: "slice one"
+    oracle: |
+      the launcher prints outcome=ok and exits 0
+    scenarios:
+      - scenario: the launcher runs over a seamless plan
+        given: a plan with no seams block
+        when: check-plan runs
+        then: the launcher refuses it

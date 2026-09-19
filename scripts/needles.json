@@ -1107,6 +1107,62 @@
       "commit": "a3b4cc5",
       "was_in": "plugins/bett3r-ai-workflow/skills/vertical-slicing/SKILL.md",
       "note": "Given/When/Then has no room for a census's negative half (\"and no module outside <owner> does Y\"), and that half is what catches the writer added next week — it caught a composition root whose two wiring lines could both be deleted with tsc clean and 738 tests green."
+    },
+    {
+      "needle": "plan-unseamed",
+      "issue": null,
+      "commit": "bf423ef",
+      "was_in": "plugins/bett3r-ai-workflow/skills/design-map/SKILL.md",
+      "note": "The seams are named ONCE per unit, before any oracle — fewest, highest, existing over new, the ideal number one (Pocock, `to-spec`). His gate is a human confirm; fleet lanes are unattended by construction, so the seam is named, located and defended instead, and check-plan refuses a plan that declares none."
+    },
+    {
+      "needle": "unnamed-seam",
+      "issue": null,
+      "commit": "bf423ef",
+      "was_in": "plugins/bett3r-ai-workflow/skills/design-map/SKILL.md",
+      "note": "A slice whose oracle sits at a seam the unit never declared. /plan wrote a per-slice oracle under no pressure toward a shared seam, so eight slices invented eight oracle locations — each an independent chance to assert below the level the claim lives at, which is the shape of the worst defect in the corpus."
+    },
+    {
+      "needle": "extra-unjustified",
+      "issue": null,
+      "commit": "bf423ef",
+      "was_in": "plugins/bett3r-ai-workflow/commands/plan.md",
+      "note": "Fewest is pressure, not a cap: the first seam is free, every seam after it and every `kind: new` one owes one line saying why the named seams cannot hold the claim. A cap would be wrong — some units genuinely need two — but silence was what was wrong before."
+    },
+    {
+      "needle": "slice-unprobed",
+      "issue": null,
+      "commit": "f66b2b0",
+      "was_in": "plugins/bett3r-ai-workflow/skills/design-map/SKILL.md",
+      "note": "REACHABILITY. The slice names, at plan time, the one production line whose deletion must turn its oracle red — before a test exists that has to survive it, since a probe named afterwards is invented to fit what was built. An erasure suite that composed its own subject stayed 8/8 green with the production harness spread removed, and PII shipped unencrypted with every gate green."
+    },
+    {
+      "needle": "expected_from",
+      "issue": null,
+      "commit": "f66b2b0",
+      "was_in": "plugins/bett3r-ai-workflow/skills/vertical-slicing/SKILL.md",
+      "note": "TAUTOLOGY. An assertion that recomputes its expected value the way the code does passes by construction and can never disagree with the code — red before the code exists and green after, so RED -> GREEN structurally cannot catch it. The expected value comes from a known-good literal, a worked example or the spec, and everything but a literal cites where: the citation is the check."
+    },
+    {
+      "needle": "undiscriminating",
+      "issue": null,
+      "commit": "f66b2b0",
+      "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
+      "note": "DISCRIMINATION. A RED that is a hang, timeout, crash, import error, empty collection or skipped suite is indistinguishable from a broken harness and is no evidence the test can tell right from wrong. It is a property of the run, not the plan, so it is enforced where that evidence exists rather than claimed by a YAML field."
+    },
+    {
+      "needle": "deterministic check, full stop",
+      "issue": null,
+      "commit": "c5116b3",
+      "was_in": "plugins/bett3r-ai-workflow/commands/capture-learnings.md",
+      "note": "Pocock's retro rule, as the DEFAULT disposition of a repeat fix-round cause: classify the violation first — a mechanical one (a fixed syntactic pattern, a banned API, an import shape, a file-location rule) gets a check, and prose is reserved for genuine judgement calls. Writing the rule down a second time changes nothing about the run that would have broken it; every fix round was already classified and the tally was quoted in retros and disposed of by nobody."
+    },
+    {
+      "needle": "most context pressure",
+      "issue": null,
+      "commit": "c5116b3",
+      "was_in": "plugins/bett3r-ai-workflow/commands/capture-learnings.md",
+      "note": "A standard is imposed by the REVIEW agent, not the implementation agent: the implementer is under the most context pressure at exactly the moment it would have to remember the rule. So a judgement disposition goes where the verifier reads and a mechanical one goes in scripts/ — never one more line in the executor's brief."
     }
   ]
 }

@@ -1,0 +1,22 @@
+# Fewest is pressure, not a cap: the first seam is free, the second owes one
+# line saying why the first cannot hold this slice's claim.
+seams:
+  - name: the launcher's verdict line
+    at: plugins/bett3r-ai-workflow/bin/design-map:1
+    kind: existing
+  - name: check_seams unit
+    at: plugins/bett3r-ai-workflow/scripts/design-map.py:1
+    kind: existing
+ticket: ESAS-9
+review: unattended
+slices:
+  - id: 1
+    seam: the launcher's verdict line
+    name: "slice one"
+    oracle: |
+      the launcher prints outcome=ok and exits 0
+    scenarios:
+      - scenario: a second seam arrives undefended
+        given: a plan declaring two seams
+        when: the second carries no why
+        then: the launcher refuses it, naming the seam
