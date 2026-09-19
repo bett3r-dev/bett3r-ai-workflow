@@ -3147,6 +3147,157 @@ else
        'the cost stop compares spendToDate against this ceiling; two units make the comparison a coin flip.'
 fi
 
+printf '\nSeam J — /design-multi ends at the A/B and B/C phase boundaries\n\n'
+# ---------------------------------------------------------------------------
+#
+# GH-429-F5. `/design-multi` was one context for three phases; it is now three
+# ticks, ending at the A/B and the B/C boundary and reopening cold against the
+# run dir. Presence oracle, for Seam I's reason one command over: the boundary is
+# prose, and the failure it prevents is a DELETION. Each half fails silently on
+# its own, so each gets its own assertion and never one over the paragraph:
+#
+#   - an end sentence dropped: the phase runs on into the next one and the
+#     context is a session again — nothing is red, it is just long;
+#   - a restart source dropped: the next phase opens cold with nothing named to
+#     read back, so it re-derives from its own memory, which is empty;
+#   - "the human opens Phase B" dropped: a driver opens a sitting nobody is
+#     sitting in, and every fork is then taken on its recommendation;
+#   - the derivation dropped: a `phase:` key appears, and a stale pointer becomes
+#     a second answer to a question `units[].step` already answers.
+SERIAL_MD="$PLUGIN/reference/start-multi-serial.md"
+
+# --- the two boundaries, each named as a session end in its own sentence. Two
+# needles, deliberately not one over both: a single pin over "ends its context
+# twice" stays green while either boundary's own instruction is deleted, and the
+# A/B one is this slice's probe.
+present "$DESIGN_MULTI_MD" 'Step 3'\''s collect is the A/B boundary: print the A/B verdict and **end your context**' \
+  '/design-multi ends its context at the A/B boundary (GH-429-F5)'
+present "$DESIGN_MULTI_MD" 'the B/C boundary ends this context the same way' \
+  '/design-multi ends its context at the B/C boundary, the same kind of end (GH-429-F5)'
+
+# --- each phase names the ON-DISK source it restarts from. Separate pins per
+# phase: the whole point of ending is that the next phase reads its input back,
+# and a phase with no named source reconstructs from a memory it does not have.
+present "$DESIGN_MULTI_MD" 'Phase B opens cold and restarts from `<run>/units/`, which is its primary source' \
+  'Phase B restarts cold from <run>/units/, named as its primary source (GH-429-F5 walk 1)'
+present "$DESIGN_MULTI_MD" 'Phase C opens cold and restarts from `<run>/subjects/` and `<run>/answers/`' \
+  'Phase C restarts cold from <run>/subjects/ and <run>/answers/ (GH-429-F5)'
+# The restart claim above is only TRUE if the answers are already on disk when
+# the context ends. Its own pin, narrowed to the obligation's own clause (the
+# shape and the deadline) and not to the sentence's subject: Step 5.2, which
+# reads those rows, sits inside Step 5 — Phase C, so without this clause a
+# terminal answer is written AFTER the boundary and the restart source is empty
+# for exactly the answers only the sitting saw.
+present "$DESIGN_MULTI_MD" 'in the shape Step 5.2 reads, `map: <S>` included — **before** this context ends' \
+  'terminal answers are written to <run>/answers/ in Step 5.2'\''s shape BEFORE the B/C context ends (GH-429-F5)'
+# The half-answered sitting (walk 2): the answers come out of the artifact db,
+# not out of a session that ended. Pinned on the read_db readback rather than on
+# the directory, because the directory is also where a remembered answer would
+# be written — the source is what is being asserted.
+present "$DESIGN_MULTI_MD" 'reads the owner'\''s answers back with `read_db` over the `answers` collection, never from any surviving session state' \
+  'a fresh Phase B reads the owner'\''s answers back with read_db, not from session state (GH-429-F5 walk 2)'
+
+# --- the human opens Phase B, and the mechanism that makes that more than a
+# request. Two pins: the rule, and the token a driver actually reads. The rule
+# alone is green on a design-multi that says "the human opens Phase B" and then
+# prints a verdict any driver ticks again on.
+present "$DESIGN_MULTI_MD" 'The owner opens Phase B by hand, and no driver ever does' \
+  'Phase B is opened by the human, never by a driver (GH-429-F5, option C rejected)'
+present "$DESIGN_MULTI_MD" 'blockedOn=awaiting-owner-sitting' \
+  'the A/B verdict stops a driver rather than inviting it to tick again (GH-429-F5)'
+
+# --- F4 one command over: the phase is DERIVED from units[].step.
+present "$DESIGN_MULTI_MD" 'The phase is read from `units[].step` and never stored' \
+  '/design-multi derives the phase from units[].step (GH-429-F4)'
+
+# --- executed: the structural census. NO state-file block anywhere in the plugin
+# gains a `phase:` key. Both halves, because either alone reads as a pass: the
+# census must have found the blocks (an extraction that found none passes the
+# absence assertion whatever the files say), and the needle must be able to fire
+# (a `phase:` that the grep cannot see passes too). Comment lines are stripped
+# first: a fenced block's `# step: pending|drafting|...` comment is documentation
+# of the enum, not a key, and the prohibition itself is written as `phase:` in
+# start-multi's precondition 4 prose.
+find "$PLUGIN" -name '*.md' -print0 \
+  | xargs -0 awk '/^```ya?ml/{f=1; next} f&&/^```/{f=0; next} f' \
+  > "$TMP/plugin-state-blocks-raw.txt"
+sed 's/#.*$//' "$TMP/plugin-state-blocks-raw.txt" > "$TMP/plugin-state-blocks.txt"
+blocks=$( grep -c 'runId:\|work_item:\|unitId:\|slices:\|id:' "$TMP/plugin-state-blocks.txt" || true )
+if [ ! -s "$TMP/plugin-state-blocks.txt" ] || [ "$blocks" -lt 5 ]; then
+  fail 'the plugin'\''s fenced state-file blocks are extractable (positive control)' \
+       "extracted $(wc -l < "$TMP/plugin-state-blocks.txt" 2>/dev/null) line(s), $blocks key-bearing" \
+       'an empty extraction makes the phase-key census below pass whatever the state files say.'
+else
+  pass 'the plugin'\''s fenced state-file blocks are extractable (positive control)'
+  # The needle's own positive control: injected into a copy, it must fire.
+  { cat "$TMP/plugin-state-blocks.txt"; echo 'phase: B'; } > "$TMP/plugin-state-blocks-mutant.txt"
+  if grep -q '^ *phase:' "$TMP/plugin-state-blocks-mutant.txt"; then
+    pass 'the phase-key needle fires on a block that carries one (positive control)'
+  else
+    fail 'the phase-key needle fires on a block that carries one (positive control)' \
+         'an injected `phase: B` line was not matched' \
+         'a census whose needle cannot match is a guard over nothing.'
+  fi
+  # The negative half, which is the assertion.
+  phase_keys=$( grep -n '^ *phase:' "$TMP/plugin-state-blocks.txt" || true )
+  if [ -z "$phase_keys" ]; then
+    pass 'no state-file block in the plugin carries a `phase:` key — it is derived from units[].step (GH-429-F4)'
+  else
+    fail 'no state-file block in the plugin carries a `phase:` key — it is derived from units[].step (GH-429-F4)' \
+         "stored phase key(s): $phase_keys" \
+         'a stored phase is a second and staler answer to a question units[].step already answers.'
+  fi
+  # And the census's own subject: the enum the derivation reads must still be
+  # there, or the derivation sentence points at nothing.
+  # Read from the RAW extraction, not the comment-stripped one: design-multi
+  # documents the enum in the block's own trailing comment, which is exactly the
+  # line the census above has to strip in order not to read it as a key.
+  if grep -q 'pending | drafting | critiqued | resolved | written | done' "$TMP/plugin-state-blocks-raw.txt" \
+     || grep -q 'pending|drafting|critiqued|resolved|written|done' "$TMP/plugin-state-blocks-raw.txt"; then
+    pass 'the units[].step enum the phase is derived from is still in a state-file block (GH-429-F4)'
+  else
+    fail 'the units[].step enum the phase is derived from is still in a state-file block (GH-429-F4)' \
+         "design-multi step: line(s): $( grep -n 'step:' "$TMP/plugin-state-blocks-raw.txt" | head -3 | tr '\n' ' ' )" \
+         'the derivation reads this enum; without it the phase is derived from nothing.'
+  fi
+fi
+
+# --- the negative half of the design's Unspecified seams: NOTHING licenses a
+# /merge-multi yield by analogy. Positive half first (the refusal is written
+# down), then the census over the corpus: no merge-multi artifact may spell a
+# tick/yield boundary of its own.
+present "$DESIGN_MULTI_MD" 'nothing here licenses a `/merge-multi` yield by analogy' \
+  'the phase boundary refuses to generalise itself to /merge-multi (design Unspecified seams)'
+merge_yield=$( grep -n 'FLEET-STEP\|tick boundary\|phase boundary\|end your context' \
+               "$PLUGIN/commands/merge-multi.md" || true )
+if [ -z "$merge_yield" ]; then
+  pass '/merge-multi invents no yield boundary of its own (design Unspecified seams)'
+else
+  fail '/merge-multi invents no yield boundary of its own (design Unspecified seams)' \
+       "merge-multi.md now carries: $merge_yield" \
+       'the design states plainly that nothing in it licenses a merge-multi yield by analogy.'
+fi
+
+# --- `--serial` answers the question in its OWN words (design Unspecified
+# seams: it must either yield on the same boundary or say that it never does).
+# Pinned in reference/start-multi-serial.md, not in start-multi.md: the reference
+# file is what the serial path reads, and a rule stated only in the parallel
+# command is one the serial reader never sees.
+present "$SERIAL_MD" '`--serial` never yields' \
+  '--serial states in its own words that it does not yield (design Unspecified seams)'
+# ...and the parallel command, which used to record the question as OPEN, must
+# now record it as ANSWERED and point at the file that answers it. Pinned
+# because two opposite status claims about one mechanism shipping in one branch
+# is exactly the drift a reader resolves by believing the wrong one.
+present "$START_MULTI_MD" 'whether a serialised run yields on this boundary **is decided there, and the answer is never**' \
+  'start-multi records the --serial yield question as decided, in start-multi-serial.md (GH-429-F5)'
+# And the tick stamp it must therefore write, which is behaviourally constant
+# here precisely BECAUSE it never yields — unstamped rows are addressable by no
+# tick, so "always 1" has to be written down rather than left implied.
+present "$SERIAL_MD" 'stamp every row `tick: 1`' \
+  '--serial stamps its agents.yaml rows tick: 1 (slice 3 carry-over)'
+
+
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"
   exit 0

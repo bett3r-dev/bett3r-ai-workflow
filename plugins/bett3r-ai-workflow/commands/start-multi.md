@@ -114,7 +114,7 @@ A pre-existing or dirty worktree stays. Skip with `--keep-worktrees`. Done when 
 
     `k` is the number of waves now complete and `N` the wave count step 1's sort produced; `t` is the units at a terminal status (`passed`, `failed`, `blocked`) and `u` every unit in `run.yaml`. The outcome vocabulary is `success`, `gate-red` and `blocked-on` and there is no fourth word: a wave short of the total is a `success` whose `waves=` is short, exactly as `/build` spells its own yield one level down. `gate-red` is a red gate you own (step 5's base gate), `blocked-on=<what>` a tick that could not proceed at all, and `waves=<N>/<N>` a run that has finished — the driver stops on that and on a `k` that did not advance. An absent line is `infra`, and `infra` is retried.
 
-`--serial` (`reference/start-multi-serial.md`) is untouched here: whether a serialised run yields on this boundary is not decided, so it keeps running as it does today.
+`--serial` (`reference/start-multi-serial.md`) is untouched here: whether a serialised run yields on this boundary **is decided there, and the answer is never**, so it keeps running as it does today.
 
 ## run.yaml (ephemeral, gitignored)
 
