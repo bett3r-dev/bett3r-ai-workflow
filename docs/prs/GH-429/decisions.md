@@ -241,3 +241,67 @@ sources: [code:scripts/test-fleet-loop.sh:268-276]
 rejected: adding a per-case guard against inherited stub state — judged not worth the harness complexity for a 50-case single-file suite
 supersedes: —
 `stub-trailing-prose.sh` does not call `arm` and inherits the previous case's exported `STUB_VERSION`. Verified correct today (run-c2's `arm` resets it to the real manifest version immediately before), but order-fragile if cases are reordered. Follow-up named, not taken: have the trailing-prose stub read `$VERSION` directly.
+
+## D31 — The plan's "run-metrics.mjs has no `--fleet` path" premise is FALSE; the conclusion survives for a different reason
+kind: false-premise
+step: build · slice: 5 · decidedBy: verifier
+sources: [code:plugins/bett3r-ai-workflow/scripts/run-metrics.mjs:1378-1405,1421, code:scripts/test-flow-seams.sh:1050, design:risk 1]
+rejected: writing the assertion against run-metrics.mjs that the false premise would have justified — and equally, letting the premise stand because the conclusion it supported was right
+supersedes: —
+`.work/slices.yaml`'s plan-time correction states that run-metrics.mjs contains ZERO occurrences of `fleet`, `agents.yaml` or `agentId` in 1569 lines, checked at d04a3cd. It contains 87 (63 lines), at HEAD and at d04a3cd, and ships `fleetRunDirs()`, `readAgentsYaml()`, `findFleetLane()`, `collectFleetUnit()`, `fleetWholeRun()` and `renderFleet()`. The "zero" is a grep binary-classification artifact — `file(1)` reports the script as binary data on 3 NUL bytes in 77,560, and ugrep matches nothing in it while BSD/GNU grep, perl and python3 all match normally. This is the exact hazard scripts/test-flow-seams.sh:1050 already documents, and it fooled the plan. The plan's CONCLUSION — that slice 5 is a prose/contract change, not a script change — survives, but for the opposite reason to the one recorded: not because the code is absent, but because the shipped `--fleet --all` path is ALREADY correct about N orchestrator sessions (`parents` is a Set of parent session files, `orchOnly.sessions = orchFiles.length`, spans unioned then netted of unit windows, and the count is rendered). So run-report.md's new prose documents shipped behaviour rather than requesting it.
+
+## D32 — Two singular docstrings in run-metrics.mjs are left standing as a named follow-up
+kind: shipped-finding
+step: build · slice: 5 · decidedBy: verifier
+sources: [code:plugins/bett3r-ai-workflow/scripts/run-metrics.mjs:369,486, code:scripts/test-flow-seams.sh (Seam K census exclusion)]
+rejected: widening the census to catch them — it would redden a file this slice deliberately writes no assertion about, and the fix is a docstring sweep, not this slice's behaviour
+supersedes: —
+Both lines still say a lane runs as a subagent of the ORCHESTRATOR's session. `git log -L` pins both to 77957d4, so they are pre-existing and out of this slice's scope; the same file's `--fleet --all` header already reads plural, and `:486`'s own sentence continues "No branch filtering", so behaviour is unaffected. Excluded from the census by full path with the reason stated in the guard's comment. Residual and named: the retired wording survives in two stale comments.
+
+## D33 — The census pins the absence of a rewording, not of the falsehood itself
+kind: shipped-finding
+step: build · slice: 5 · decidedBy: verifier
+sources: [code:scripts/test-flow-seams.sh (Seam K), code:plugins/bett3r-ai-workflow/hooks/lane-git-guard.sh:9, code:plugins/bett3r-ai-workflow/hooks/README.md:23]
+rejected: widening the needle to `subagent of the orchestrator's session` — lane-git-guard.sh:9 and hooks/README.md:23 use that phrase for a nesting/cwd fact that stays true per tick, so the wider guard would have forced edits to two CORRECT hook comments
+supersedes: —
+"A fleet unit's records carry one orchestrator's branch" is not actually wrong per tick — the branch is the same across ticks. The genuinely retired claim is the singular SESSION, retired here as "the orchestrator TICK that dispatched it, so its records carry THAT tick's branch". The census therefore guards a phrase that is not itself the falsehood: a rewording guard in ADR-012's sense. Accepted because the load-bearing gate is the POSITIVE pin, which reddens under the slice's probe; the census's own controls (a planted third carrier, and a no-match regex) both fire.
+
+## D34 — LEDGER.md is excluded from the census by name
+kind: waiver
+step: build · slice: 5 · decidedBy: executor
+sources: [adr:ADR-012, code:docs/LEDGER.md:1711,1714]
+rejected: amending LEDGER entry 1710-1714 with a retire condition — ADR-012 is explicit that the ledger carries evidence verbatim, and rewriting an entry to match a later change falsifies the record
+supersedes: —
+The precedent is the existing ADR-003 exclusion. The exclusion cannot hide anything, because the excluded file is simultaneously the census's LIVE positive control for traversal — hiding a carrier would break the control.
+
+## D35 — Three passages were trimmed from run-report.md that the slice did not ask for
+kind: deviation
+step: build · slice: 5 · decidedBy: executor
+sources: [code:plugins/bett3r-ai-workflow/commands/run-report.md:22, code:plugins/bett3r-ai-workflow/scripts/run-metrics.mjs:1426, adr:ADR-012]
+rejected: exceeding ADR-012's 900-word ceiling to leave the prose untouched
+supersedes: —
+The file was 898 words at base and the slice's additions had to be paid for. Adjudicated trim by trim by the verifier: (a) the Step-2 "a class dominated by one very long call is flagged, not summed" sentence was not merely duplicative but MISPLACED — `BIGGEST SINGLE CALLS` is rendered only by `renderFleet` (`--fleet --all`), while the sentence sat in the `--agents` paragraph describing a table `--agents` does not print; its single home is :22 and the interpretation half ships in the output header itself. (b) "so any branch on disk can be reported" is already in the frontmatter description. (c) compression of a paragraph the slice rewrote anyway. No rule lost. Named for the next editor: the file is now at exactly 900 words with ZERO headroom.
+
+## D36 — The declared probe reddens three pins, not one, and the sentence was not split to change that
+kind: deviation
+step: build · slice: 5 · decidedBy: verifier
+sources: [code:plugins/bett3r-ai-workflow/commands/run-report.md (the new bullet), code:scripts/test-flow-seams.sh (Seam K)]
+rejected: splitting the bullet into three sentences so the probe reddens exactly one assertion — three clauses of one rule belong in one reader-facing sentence
+supersedes: —
+The bullet carries the N-windows clause, the approximation label and the agents.yaml two-lifetimes clause, and the suite's `present` helper is line-oriented, so the probe reddens all three pins. The executor reported 2; the verifier re-ran it and measured 3. Each clause additionally has its own isolating mutation, so no clause rests on the shared probe alone.
+
+## D37 — ADR-013 records the rejected fourth outcome word without spelling its token
+kind: deviation
+step: build · slice: 5 · decidedBy: executor
+sources: [code:scripts/test-flow-seams.sh (the slice-1 census), code:docs/adr/ADR-013-a-fleet-orchestrator-is-a-tick-not-a-session.md]
+rejected: spelling the literal token — a slice-1 guard forbids it outside docs/prs/GH-429/, and minting it in an ADR would defeat the guard that keeps the vocabulary at three
+supersedes: —
+Reworded to "a fourth outcome word — a `yield` beside the three". The ADR records the rejected option without the literal appearing in a live artifact.
+
+## D38 — The "five leased steps" count was dropped rather than propagated
+kind: deviation
+step: build · slice: 5 · decidedBy: executor
+sources: [code:../remote-ai-agents/src/ledger/runs.ts:12]
+rejected: writing "five" to match the phrasing used elsewhere in this ticket's prose — `RunStep` is six values (start|plan|build|verify-build|merge|lane)
+supersedes: —
+The count was removed from the ADR instead. The verifier swept the branch: no surviving artifact says "five leased steps", and every remaining "five steps" refers to the PIPELINE's five, which is accurate — `lane` is the wrapper, not a pipeline step.
