@@ -13,6 +13,7 @@ tools:
   - Read
   - Write
   - Grep
+model: sonnet
 ---
 
 # Tracker writer (Phase C)

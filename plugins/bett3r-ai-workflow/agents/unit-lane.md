@@ -11,6 +11,7 @@ tools:
   - Agent
   - SlashCommand
   - Skill
+model: sonnet
 ---
 
 # Unit lane

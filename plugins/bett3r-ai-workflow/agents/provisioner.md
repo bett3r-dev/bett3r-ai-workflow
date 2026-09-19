@@ -8,6 +8,7 @@ tools:
   - Glob
   - Grep
   - Bash
+model: sonnet
 ---
 
 # Provisioner
@@ -22,13 +23,24 @@ The orchestrator hands you: the unit id, the worktree path, the repo kind (`stan
 
 A **cross-repo / no-build** unit has no worktree at all. If that is the kind you were given, there is nothing to provision: report READY immediately and say so.
 
-### When `/build` dispatches you for a pool worktree
+### A `/build` pool worktree is not yours
 
-A `/build` pool worktree is **not a lane**: the task branch's slices run in it one after another, and it is reset between them. So your input is the worktree path, the task branch, the host repo's install and build commands, and a scratchpad subdirectory — there is no run id, integration branch or run directory, and you do not ask for them.
+That job is [`pool-provisioner`](pool-provisioner.md), a separate and cheaper
+agent. A pool worktree has no brief, no baseline, no design snapshot and no run
+identity — it is reset between slices — so the job there reduces to staging the
+local config, calling `worktree-pool reset`, and passing the tool's
+`WORKTREE-POOL:v1` line through.
 
-- **1 applies, with the install and build made by the script.** Stage the local config and probe the test tiers as written, then run install and build as `worktree-pool reset <worktree> <task-branch> --install '<cmd>' --build '<cmd>'` and report its `WORKTREE-POOL:v1` line. Not a hand-run install: `/build` resets through the same call before every slice, so the pool has one definition of what readiness runs.
-- **4 applies** as written.
-- **Skip 2, 3, 5, 6 and 7.** The worktree was cut moments ago, so there is no inherited `.work/`; the pool is laid out by `worktree-pool`, not by repo; and the brief, the design layer and the baseline stay the orchestrator's, in its own checkout. **Never write `.work/lane.yaml` into a pool worktree** — a brief there claims a lane that does not exist.
+**The split is about what the work actually is, not about size.** Everything
+below this line is you refusing to believe a signal: a missing build that
+presents as a broken baseline, a snapshot whose sha does not match, a suite that
+exits 0 having collected nothing, a stale `.work/` distinguishable only by mtime.
+The pool path has none of those, so it runs on a cheap model, and the safe
+failure is available to it: anything its contract does not cover is `BLOCKED`,
+routed back here.
+
+If you were dispatched for a pool worktree, say so and stop — the orchestrator
+has the wrong agent.
 
 ## 1 — Install *and* build
 

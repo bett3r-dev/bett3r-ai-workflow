@@ -11,6 +11,7 @@ tools:
   - Agent
   - SlashCommand
   - Skill
+model: sonnet
 ---
 
 # Step lane
@@ -69,6 +70,20 @@ agent was created to delete.
    do not repair it: you pass through what the step printed. The format
    contract is stated once in [unit-lane](unit-lane.md); do not restate it.
 
+   **That line ends you.** It is a terminal act, not a status update: once you
+   have emitted it, your run is over and you take no further turn — no
+   re-verification, no tidying, no "let me just confirm the tree is clean", and
+   above all no waiting to see whether anything else happens. There is nothing
+   left to wait for; the line *is* the result, and your caller already has it.
+
+   This is the failure the *ending* is supposed to buy, and it is the common
+   one: across a measured fleet, **31 of 106 lanes kept running past their own
+   line** — one emitted it on turn 622 and then took 133 more turns, another
+   finished on turn 7 and took 193. Together, **3,264 turns and ~$488 spent
+   after the work was done**, at the largest prefix each context ever reached,
+   producing nothing. A lane that has reported and not stopped is not being
+   thorough; it is billing its caller for its own history.
+
 ## What you never do
 
 - **Never adjudicate the outcome.** A `gate-red` step is a step that reported;
@@ -77,8 +92,29 @@ agent was created to delete.
 - **Never run a second step**, including a "quick" `/start` before `/design`.
 - **Never write another unit's files, `run.yaml`, or the design layer.**
 - **Never end a turn on "waiting".** `/build` dispatches children; have each
-  result in hand before proceeding. A backgrounded gate is polled from
-  foreground calls — see `full-gate`, *Reading the verdict*.
+  result in hand before proceeding. A backgrounded gate is waited on by **one
+  blocking call** — see `full-gate`, *Reading the verdict*, and *Wait in one
+  call, never in a loop of turns* below.
+
+## Wait in one call, never in a loop of turns
+
+Waiting is the cheapest thing you do and the easiest to make the most expensive.
+A wait costs **one whole context re-read per turn it spans** — so what you pay
+is set by how many *turns* you wait across, never by how long you wait.
+
+**One blocking call is one turn, at any duration.** Put the condition inside the
+call and let it block:
+
+    until [ -f "$LOG" ] && grep -q '^LANE-STEP:v1' "$LOG"; do sleep 10; done
+
+**A sequence of `sleep` calls is one turn each, and every one re-reads your
+whole history.** A measured lane issued `sleep 550; echo ok` **530 separate
+times** while its prefix stood at 200–410k tokens: ~$58 of cache reads to wait,
+and not one line of work in any of them. That is the single most expensive way
+to do nothing this harness offers.
+
+So: never re-issue a timer to check again. Give the call the condition that ends
+it, plus a bound so it cannot hang forever, and spend one turn on it.
 
 ## If the step printed no line
 
