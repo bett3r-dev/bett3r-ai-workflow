@@ -15,6 +15,10 @@ slices:
     verifier: pass
     redBeforeGreen: true
     postDesignDecisions: [D1, D2, D3, D4, D5, D6]
+    usage:
+      executor: { model: "claude-opus-5", effort: "low", tokens: 1395457, activeMs: 477043 }
+      verifier: { model: "claude-opus-5", effort: "low", tokens: 789591, activeMs: 414947 }
+      testRunner: { model: "claude-haiku-4-5-20251001", effort: null, tokens: 128371, activeMs: 27481 }
   - id: 2
     name: "bin/fleet-loop ticks until the run is terminal and stops when the wave does not advance"
     origin: plan
@@ -28,6 +32,10 @@ slices:
     verifier: pass
     redBeforeGreen: mutation
     postDesignDecisions: [D8, D9, D10, D11, D16, D24, D25, D26, D27, D28, D29, D30]
+    usage:
+      executor: { model: "claude-opus-5", effort: "low", tokens: 4924051, activeMs: 1252523 }
+      verifier: { model: "claude-opus-5", effort: "low", tokens: 2421274, activeMs: 906232 }
+      testRunner: { model: "claude-haiku-4-5-20251001", effort: null, tokens: 195144, activeMs: 63703 }
   - id: 3
     name: "/start-multi yields at wave completion, having pushed every started branch and released the lock"
     origin: plan
@@ -41,6 +49,10 @@ slices:
     verifier: pass
     redBeforeGreen: true
     postDesignDecisions: [D12, D13, D14, D15]
+    usage:
+      executor: { model: "claude-opus-5", effort: "low", tokens: 2960889, activeMs: 961128 }
+      verifier: { model: "claude-opus-5", effort: "low", tokens: 1378718, activeMs: 835916 }
+      testRunner: { model: "claude-haiku-4-5-20251001", effort: null, tokens: 348421, activeMs: 70927 }
   - id: 4
     name: "/design-multi ends at the A/B and B/C phase boundaries"
     origin: plan
@@ -54,6 +66,10 @@ slices:
     verifier: pass
     redBeforeGreen: true
     postDesignDecisions: [D17, D18, D19, D20, D21, D22, D23]
+    usage:
+      executor: { model: "claude-opus-5", effort: "low", tokens: 2822301, activeMs: 1244775 }
+      verifier: { model: "claude-opus-5", effort: "low", tokens: 1485724, activeMs: 948930 }
+      testRunner: { model: "claude-haiku-4-5-20251001", effort: null, tokens: 56978, activeMs: 46546 }
   - id: 5
     name: "ADR-013 and the attribution rule for a run with many orchestrator ticks"
     origin: plan
@@ -66,6 +82,17 @@ slices:
     verifier: pass
     redBeforeGreen: mutation
     postDesignDecisions: [D31, D32, D33, D34, D35, D36, D37, D38]
+    usage:
+      executor: { model: "claude-opus-5", effort: "low", tokens: 4825723, activeMs: 994642 }
+      verifier: { model: "claude-opus-5", effort: "low", tokens: 667775, activeMs: 415604 }
+      testRunner: null
+verifyBuild:
+  usage: null
+  gate: { mode: "--scoped", verdict: PASS, skipped: [xp-layer-hooks], inconclusive: [] }
+  coherence: { critical: 0, medium: 4, low: 4, shippedUnresolved: [run-metrics-stale-session-comment, migration-scripts-unguarded-and-now-dead, run-report-at-900-of-900, spendToDate-never-compared-to-ceiling] }
+  fixSlicesAdded: 0
+  adrs: [ADR-013 (verified as written, unchanged), ADR-012 (amended: the two orchestrator ceilings, per D39)]
+  concerns: { hard: 0, soft: 0, unmet: [] }
 ---
 ## What shipped
 
@@ -189,3 +216,19 @@ diff (`gate-drift`, `validate-plugins`) were run by name and are green.
   is safe for a human to tear down, but that is a human's call, not this run's.
 - **No out-of-`yarn test` suites were flagged un-run**: this repo has no jest and no integration
   tier; every suite is a shell script the gate runs directly.
+
+## Measured at `/verify-build`
+
+`run-metrics --usage-fragment` reported `outcome=ok slices=5 unattributed=0 verifyBuild=absent
+droppedDetached=0`, so every slice's `usage:` above is copied verbatim from the fragment.
+`verifyBuild.usage` is `null`: no `/verify-build` invocation was found in the transcripts, because
+this is that invocation and it had not been written when the fragment was generated.
+Slice 5's `testRunner` is `null` — no test-runner dispatch was found for it (the slice is an ADR plus
+prose, and its oracle is a `test-flow-seams.sh` pin the executor ran directly).
+`droppedDetached=0` is a real measurement here, not the un-filtered `0` a fleet unit reports: this
+unit ran under no `.work/lane.yaml`. Slice 2's first attempt did run in a pool worktree, and its work
+was re-landed on the branch by the resumed invocation, so nothing is attributed to a detached head.
+
+`/verify-build`'s own gate was the repo's **scoped** mode (`sh .claude/gate.sh`, no argument):
+`GATE: PASS`, `GATE-MODE: --scoped`, one `SKIP` (`xp-layer-hooks`, surface not touched) and no
+`INCONCLUSIVE`. The scoped run certifies this branch's diff and its importers, not the tree.
