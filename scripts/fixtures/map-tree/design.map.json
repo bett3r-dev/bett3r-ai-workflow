@@ -345,6 +345,143 @@
       "status": {
         "kind": "open"
       }
+    },
+    {
+      "id": "ESAS-906-F1",
+      "title": "Open with a vocabulary reason",
+      "tickets": [
+        "ESAS-906"
+      ],
+      "card": {
+        "problem": "Which way?",
+        "useCases": [
+          "an owner answers"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Alpha",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ]
+          },
+          {
+            "id": "B",
+            "label": "Beta",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ],
+            "rejectedBecause": "beta costs more"
+          }
+        ],
+        "recommendation": {
+          "option": "A",
+          "why": "alpha is enough"
+        },
+        "ifOverturned": "The other option replaces it."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "open",
+        "reason": "store-unreachable"
+      }
+    },
+    {
+      "id": "ESAS-906-F2",
+      "title": "Open with a free-text reason",
+      "tickets": [
+        "ESAS-906"
+      ],
+      "card": {
+        "problem": "Which way?",
+        "useCases": [
+          "an owner answers"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Alpha",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ]
+          },
+          {
+            "id": "B",
+            "label": "Beta",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ],
+            "rejectedBecause": "beta costs more"
+          }
+        ],
+        "recommendation": {
+          "option": "A",
+          "why": "alpha is enough"
+        },
+        "ifOverturned": "The other option replaces it."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "open",
+        "reason": "the atom store answered, but nothing it holds is canonical yet"
+      }
+    },
+    {
+      "id": "ESAS-906-F3",
+      "title": "Open with no reason at all",
+      "tickets": [
+        "ESAS-906"
+      ],
+      "card": {
+        "problem": "Which way?",
+        "useCases": [
+          "an owner answers"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Alpha",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ]
+          },
+          {
+            "id": "B",
+            "label": "Beta",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ],
+            "rejectedBecause": "beta costs more"
+          }
+        ],
+        "recommendation": {
+          "option": "A",
+          "why": "alpha is enough"
+        },
+        "ifOverturned": "The other option replaces it."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "open"
+      }
     }
   ]
 }

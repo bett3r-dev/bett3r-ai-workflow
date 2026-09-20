@@ -466,6 +466,47 @@ check 'T9: the conformance fixture is non-empty' \
 holds 'T9: a fresh render is byte-identical to the checked-in conformance body' \
   cmp "$TMP/t9-905.body" "$FIX/resolved-by-body.md"
 
+# ---------------------------------------------------------------------------
+printf 'T10: an open fork'"'"'s typed reason is rendered inline, and only inline\n'
+# ---------------------------------------------------------------------------
+# An open fork carries a typed `reason` (why it could not be settled from
+# grounding) and deliberately has no machine-read line; XL-62-F3
+# (docs/prs/XL-62/ticket-block.md) renders it inline on the OPEN line,
+# mirroring the `moot — <reason>` shape two branches above it, and nothing
+# more. Presentation only: no column-0 line, no parser, no verdict-line counter.
+
+W6="$TMP/t10.md"
+cp "$FIX/design.md" "$W6"
+mt write --map "$MAP" --ticket ESAS-906 "$W6" --insert-after "$H"
+expect 'T10 write ESAS-906' written 0
+region_body "$W6" > "$TMP/t10.body"
+check 'T10: ESAS-906 forks=3' "$( attr "$LINE" forks )" 3 "$LINE"
+check 'T10: ESAS-906 open=3'  "$( attr "$LINE" open )" 3 "$LINE"
+
+check 'T10: an open fork with a recorded reason renders it inline' \
+  "$( section_of "$TMP/t10.body" ESAS-906-F1 | grep -c '^OPEN — recommended: Alpha (store-unreachable)$' )" 1
+check 'T10: a reason outside the documented vocabulary is rendered verbatim' \
+  "$( section_of "$TMP/t10.body" ESAS-906-F2 | grep -c '^OPEN — recommended: Alpha (the atom store answered, but nothing it holds is canonical yet)$' )" 1
+check 'T10: an open fork with no reason renders exactly as before' \
+  "$( section_of "$TMP/t10.body" ESAS-906-F3 | grep -c '^OPEN — recommended: Alpha$' )" 1
+check 'T10: no empty parentheses where there is no reason' \
+  "$( grep -c 'recommended: Alpha ()' "$TMP/t10.body" )" 0
+check 'T10: the reason-less fork keeps a bare OPEN line (no trailing parenthesis)' \
+  "$( section_of "$TMP/t10.body" ESAS-906-F3 | grep -c '^OPEN — recommended: .*(' )" 0
+check 'T10: the render did not warn or refuse on the free-text reason' \
+  "$( grep -ci 'vocabulary\|unknown reason' "$OUT" )" 0
+
+# The negative half (XL-62-F3, docs/prs/XL-62/ticket-block.md): rendered, never machine-read.
+check 'T10: the reason text never appears at column 0' \
+  "$( grep -c '^store-unreachable' "$TMP/t10.body" )" 0
+check 'T10: no open_reason: line is emitted anywhere' \
+  "$( grep -c 'open_reason' "$TMP/t10.body" )" 0
+check 'T10: no resolved_by: line for an open fork with a reason' \
+  "$( grep -c '^resolved_by: ' "$TMP/t10.body" )" 0
+check 'T10: the verdict line key set is unchanged by the rendered reason' \
+  "$( printf '%s\n' "$LINE" | tr ' ' '\n' | sed -n 's/=.*//p' | tr '\n' ' ' )" \
+  'outcome verb ticket forks owner code recommendation open moot path ' "$LINE"
+
 printf '\n'
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"

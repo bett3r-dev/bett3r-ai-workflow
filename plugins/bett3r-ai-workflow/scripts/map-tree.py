@@ -162,6 +162,19 @@ def render_md(forks):
             continue
         if status["kind"] == "open":
             rec = option_label(card, card["recommendation"]["option"])
+            # The typed `reason` an open fork may carry (why it could not be
+            # settled from grounding) is rendered inline here, mirroring the
+            # `moot — <reason>` shape above: presentation only, no column-0
+            # line and nothing parses it (XL-62-F3). The string is emitted
+            # verbatim by design: F3 rejected judging it here (option C, a
+            # vocabulary check in the renderer) in favour of option A. No layer
+            # enforces the three documented codes today: open.reason is
+            # `$defs/text` ({"type": "string", "minLength": 1}) in
+            # map-structure.schema.json, and `design-map validate` returns
+            # outcome=ok on a value outside them. That gap is an open,
+            # unmitigated risk (docs/prs/XL-62/ticket-block.md, Risks).
+            if "reason" in status:
+                rec += f" ({status['reason']})"
             out += [f"### {fork['id']} — {fork['title']}", "",
                     f"OPEN — recommended: {rec}", "", f"Why: {card['recommendation']['why']}", ""]
             continue
