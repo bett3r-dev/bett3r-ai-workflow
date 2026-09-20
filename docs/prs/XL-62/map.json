@@ -1,0 +1,574 @@
+{
+  "structureVersion": 2,
+  "mapId": "XL-62",
+  "grounded": true,
+  "shape": "decision",
+  "nodes": [
+    {
+      "id": "goal",
+      "level": "goal",
+      "title": "A fork's resolved_by citation reaches a committed design.md and is counted",
+      "parents": []
+    },
+    {
+      "id": "renderer",
+      "level": "deliverable",
+      "title": "map-tree render_md emits the column-0 resolved_by line (bett3r-ai-workflow)",
+      "parents": [
+        "goal"
+      ]
+    },
+    {
+      "id": "grammar",
+      "level": "deliverable",
+      "title": "The resolved_by grammar in xp-layer (RESOLVED_BY_LITERALS, ADR-053 section 10)",
+      "parents": [
+        "goal"
+      ]
+    },
+    {
+      "id": "reach",
+      "level": "deliverable",
+      "title": "The census driver's repo reach",
+      "parents": [
+        "goal"
+      ]
+    },
+    {
+      "id": "coupling",
+      "level": "deliverable",
+      "title": "Plugin store-agnosticism (ADR-003) vs a consumer-defined grammar term",
+      "parents": [
+        "goal"
+      ]
+    }
+  ],
+  "forks": [
+    {
+      "id": "XL-62-F1",
+      "title": "What resolved_by value a decided fork gets when the map carries no resolvedBy",
+      "tickets": [
+        "XL-62"
+      ],
+      "anchor": "grammar",
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "recommendation",
+        "option": "A"
+      },
+      "card": {
+        "problem": "ADR-064 section 1 says the renderer reads status.resolvedBy and emits the column-0 resolved_by line, but is silent on the far more common case where resolvedBy is absent - every fork in every map committed to date. source is a closed enum of owner|recommendation|code (map.schema.json:16-24) and the xp-layer grammar has literals for only two of the three (RESOLVED_BY_LITERALS = ['human','code'], packages/xp-mcp/src/resolved-by.ts:54). The census contract states N forks carry N lines (resolved-by.ts:34-36), so recommendation needs a value - but minting one adds a sixth field to ResolvedByCensus, and ADR-064 section 2's rejection clause reads, word for word, 'an open_reason: line and a sixth census counter'. Whether that phrase is scoped to the negative half or bars any sixth counter is genuinely ambiguous in the ADR text.",
+        "useCases": [
+          "A lane recalls a canonical atom that settles a fork (resolvedBy set)",
+          "The owner answers a fork in an attended sitting (source=owner, no resolvedBy)",
+          "apply-answers --final turns 35 still-open forks into source=recommendation on a blanket 'take your recommendations'",
+          "A lane settles a fork from the code alone (source=code)",
+          "The owner overturns a fork that had resolvedBy; design-map.py:1189-1190 drops the key"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Fall back to the source literal, minting the literal `recommendation`",
+            "walks": [
+              {
+                "scenario": "resolvedBy present",
+                "text": "Emits the verbatim value, e.g. resolved_by: atom:teselly-000412-03"
+              },
+              {
+                "scenario": "source=owner, no resolvedBy",
+                "text": "Emits resolved_by: human"
+              },
+              {
+                "scenario": "35 recommendation-applied forks",
+                "text": "Emits 35 x resolved_by: recommendation - THE DIVERGING STEP; only this option keeps 'applied on recommendation' visible in counted data"
+              },
+              {
+                "scenario": "source=code",
+                "text": "Emits resolved_by: code"
+              },
+              {
+                "scenario": "owner overturn",
+                "text": "Falls back to resolved_by: human; the atom count silently drops by one"
+              }
+            ]
+          },
+          {
+            "id": "B",
+            "label": "Fall back, but map recommendation to the existing literal `human`",
+            "walks": [
+              {
+                "scenario": "resolvedBy present",
+                "text": "Emits the verbatim value"
+              },
+              {
+                "scenario": "source=owner",
+                "text": "resolved_by: human"
+              },
+              {
+                "scenario": "35 recommendation-applied forks",
+                "text": "35 x resolved_by: human - THE DIVERGING STEP; 35 silent defaults recorded as 35 human answers"
+              },
+              {
+                "scenario": "source=code",
+                "text": "resolved_by: code"
+              },
+              {
+                "scenario": "owner overturn",
+                "text": "resolved_by: human"
+              }
+            ],
+            "rejectedBecause": "design-multi.md:74 says in terms 'silence is not assent, and a default named is not a decision laundered'; B is that laundering, and it collides with ADR-064 section 5, which reserves the literal human for 'a person answered in this session'.",
+            "evidence": [
+              "cross-repo bett3r-ai-workflow@e4b8ee8:plugins/bett3r-ai-workflow/commands/design-multi.md:74",
+              "ADR-064 section 5"
+            ]
+          },
+          {
+            "id": "C",
+            "label": "Emit a line ONLY where status.resolvedBy is present",
+            "walks": [
+              {
+                "scenario": "resolvedBy present",
+                "text": "Emits the verbatim value"
+              },
+              {
+                "scenario": "source=owner, no resolvedBy",
+                "text": "NO LINE - THE DIVERGING STEP; the count of lines stops being the count of forks"
+              },
+              {
+                "scenario": "35 recommendation-applied forks",
+                "text": "No lines at all"
+              },
+              {
+                "scenario": "source=code",
+                "text": "No line"
+              },
+              {
+                "scenario": "owner overturn",
+                "text": "No line"
+              }
+            ],
+            "rejectedBecause": "The documented invariant at packages/xp-mcp/src/resolved-by.ts:34-36 ('a draft that records N forks carries N such lines') becomes false and must be rewritten; the census loses its denominator, so XL-24 and XL-52 must take the fork count from map.json instead. Realistically the census stays at or near zero until recall runs live.",
+            "evidence": [
+              "packages/xp-mcp/src/resolved-by.ts:34-36 (BASE)"
+            ]
+          },
+          {
+            "id": "D",
+            "label": "Fall back, mapping recommendation to the existing literal `code`",
+            "walks": [
+              {
+                "scenario": "resolvedBy present",
+                "text": "Emits the verbatim value"
+              },
+              {
+                "scenario": "source=owner",
+                "text": "resolved_by: human"
+              },
+              {
+                "scenario": "35 recommendation-applied forks",
+                "text": "35 x resolved_by: code - THE DIVERGING STEP"
+              },
+              {
+                "scenario": "source=code",
+                "text": "resolved_by: code"
+              },
+              {
+                "scenario": "owner overturn",
+                "text": "resolved_by: human"
+              }
+            ],
+            "rejectedBecause": "Asserts the code settled forks the code did not settle - the same laundering as B pointed at a different literal - and it corrupts the one counter meant to measure code-answerability."
+          }
+        ],
+        "recommendation": {
+          "option": "A",
+          "why": "It is the only option that keeps a distinction the flow already records: source has had three values since esas minted the enum, and COUNT_KEYS at map-tree.py:55 already counts recommendation separately in the verdict line, so the writer side has always treated it as its own thing. Collapsing it at the census boundary (B, D) destroys exactly the signal XL-24 was built to read, and C leaves the census structurally unable to produce a ratio. The cost is one reading call this lane may not make for the owner: whether ADR-064 section 2's 'sixth census counter' clause bars A. My reading is that it does not - the sentence's subject is the open/negative half and its stated harm is about ABSENCE, not arity, while recommendation is a positive fact about a fork that IS resolved and DOES produce a line. But that is a reading of someone else's words; if the owner reads it the other way, C is the fallback, not B or D."
+        },
+        "ifOverturned": "If C, the xp-layer half of XL-62 disappears entirely (no literal, no ADR-053 amendment, no sixth counter) and F2 goes moot; resolved-by.ts:34-36's contract comment must be rewritten instead, which is the one place XL-62 collides with XL-48's shipped line contract. If B or D, no repo but the plugin changes, but XL-24's escalation measure is corrupted at the source."
+      }
+    },
+    {
+      "id": "XL-62-F2",
+      "title": "Does the xp-layer half of XL-62 exist at all, and does this stay one ticket or split into two",
+      "tickets": [
+        "XL-62"
+      ],
+      "anchor": "grammar",
+      "restsOn": [
+        "XL-62-F1"
+      ],
+      "status": {
+        "kind": "decided",
+        "source": "recommendation",
+        "option": "A"
+      },
+      "card": {
+        "problem": "XL-62 is filed as one ticket spanning two repos with different gates: bett3r-ai-workflow (GitHub Actions LIVE - test-map-tree.sh under sh/dash/bash, a mandatory plugin version bump) and xp-layer (Actions disabled, local yarn gate only). If F1 resolves to A/B/D there are two PRs that must land in a defined order; if F1 = C the xp-layer half vanishes and this fork is moot.",
+        "useCases": [
+          "F1 = C: nothing to split",
+          "F1 = A and the plugin PR lands first: censusResolvedBy counts every recommendation line as `invalid` (resolved-by.ts:81-95, :142-147) until the xp-layer PR lands",
+          "The xp-layer PR lands first: the parser accepts a literal nothing emits - a harmless no-op",
+          "A reviewer asks 'did the gate pass?' for a change spanning a CI-live repo and a CI-disabled one"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "One ticket, two PRs, xp-layer (parser) lands FIRST",
+            "walks": [
+              {
+                "scenario": "F1 = C",
+                "text": "Moot - nothing to order"
+              },
+              {
+                "scenario": "plugin emits a literal the parser does not know",
+                "text": "PREVENTED BY ORDERING - THE DIVERGING STEP"
+              },
+              {
+                "scenario": "parser ahead of writer",
+                "text": "Transient no-op; count stays 0"
+              },
+              {
+                "scenario": "reviewer asks about the gate",
+                "text": "The PR body names both gates and their modes separately"
+              }
+            ]
+          },
+          {
+            "id": "B",
+            "label": "One ticket, two PRs, the plugin lands first",
+            "walks": [
+              {
+                "scenario": "F1 = C",
+                "text": "Moot"
+              },
+              {
+                "scenario": "plugin emits a literal the parser does not know",
+                "text": "THE DIVERGING STEP - the census reports non-zero `invalid` for the whole window, and `invalid` is precisely the counter meant to mean 'a malformed line, never mistaken for silence' (resolved-by.ts:110). A real regression signal gets a false positive sitting in it."
+              },
+              {
+                "scenario": "parser ahead of writer",
+                "text": "N/A"
+              },
+              {
+                "scenario": "reviewer asks about the gate",
+                "text": "Same as A"
+              }
+            ],
+            "rejectedBecause": "Strictly worse than A for no gain."
+          },
+          {
+            "id": "C",
+            "label": "Split into two tickets - XL-62 keeps the renderer, a new ticket owns the literal",
+            "walks": [
+              {
+                "scenario": "F1 = C",
+                "text": "THE DIVERGING STEP - this files a ticket with nothing in it"
+              },
+              {
+                "scenario": "plugin emits a literal the parser does not know",
+                "text": "Ordered across two tickets instead of two PRs"
+              },
+              {
+                "scenario": "parser ahead of writer",
+                "text": "No-op"
+              },
+              {
+                "scenario": "reviewer asks about the gate",
+                "text": "Each ticket has exactly one gate, named once"
+              }
+            ],
+            "rejectedBecause": "Costs a new Jira key and a second design, and splits the cross-repo conformance check (test seam 2) across two tickets that cannot be verified independently - that seam spans both repos by construction."
+          }
+        ],
+        "recommendation": {
+          "option": "A",
+          "why": "The cross-repo conformance check is the ticket's single real risk and it only exists when both halves are in view; splitting it across two tickets is exactly how a two-repo grammar drifts. Parser-first makes the transient window a no-op instead of a false `invalid`. Conditional on F1 != C; if F1 = C this fork is moot."
+        },
+        "ifOverturned": "Under C the build lane must carry the conformance fixture obligation explicitly into whichever ticket ships second, or nothing compares the Python writer against the TypeScript parser at all."
+      }
+    },
+    {
+      "id": "XL-62-F3",
+      "title": "Should render_md surface an open fork's reason at all",
+      "tickets": [
+        "XL-62"
+      ],
+      "anchor": "renderer",
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "recommendation",
+        "option": "A"
+      },
+      "card": {
+        "problem": "status['reason'] on the open branch is read NOWHERE in the renderer - not in render_md (map-tree.py:146-150), not in render_jira (:199-209), and it does not affect counts_of (:86-97). So a lane that dutifully records reason: store-unreachable per commands/design.md:83 produces a fact no human ever sees in any rendered artifact. The moot branch two lines above DOES render its reason inline (map-tree.py:140). ADR-064 section 2 rejected an `open_reason:` line and a sixth census counter - a column-0, machine-parsed, counted line - and said nothing about a human-readable prose rendering; its stated rationale is an argument about COUNTING, not about DISPLAYING.",
+        "useCases": [
+          "Grounding is down; the lane records {kind:open, reason:'store-unreachable'} - the case this very draft is in",
+          "The store answers and nothing canonical matches; reason: 'no-atoms-matched'",
+          "An ordinary fork nobody tried to ground; {kind:open} with no reason - 'absent is the normal case' per map-structure.schema.json:72",
+          "A lane writes free prose, e.g. reason: 'the server was down' - schema-valid, since reason is $defs/text (:27)"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Render it inline, mirroring the moot branch: OPEN - recommended: <label> (<reason>)",
+            "walks": [
+              {
+                "scenario": "reason store-unreachable",
+                "text": "Renders 'OPEN - recommended: A (store-unreachable)' - THE DIVERGING STEP; the reason becomes visible to a reader of design.md for the first time"
+              },
+              {
+                "scenario": "reason no-atoms-matched",
+                "text": "Renders '(no-atoms-matched)'"
+              },
+              {
+                "scenario": "no reason recorded",
+                "text": "Unchanged - today's exact bytes"
+              },
+              {
+                "scenario": "free-prose reason",
+                "text": "Renders '(the server was down)' - arbitrary prose inside a generated region, bounded since that is already true of moot"
+              }
+            ]
+          },
+          {
+            "id": "B",
+            "label": "Render nothing (status quo)",
+            "walks": [
+              {
+                "scenario": "reason store-unreachable",
+                "text": "Identical to today - THE DIVERGING STEP is its absence"
+              },
+              {
+                "scenario": "reason no-atoms-matched",
+                "text": "Identical to today"
+              },
+              {
+                "scenario": "no reason recorded",
+                "text": "Identical to today"
+              },
+              {
+                "scenario": "free-prose reason",
+                "text": "Identical to today"
+              }
+            ],
+            "rejectedBecause": "Zero risk of being read as re-litigating ADR-064 section 2, but the recorded reason stays invisible in every artifact a person reads - a slow way to discover that lanes have stopped recording it correctly. Nothing in either repo reads open.reason today except test-design-map.sh."
+          },
+          {
+            "id": "C",
+            "label": "Render it, and additionally warn when the value is outside the three-code vocabulary",
+            "walks": [
+              {
+                "scenario": "reason store-unreachable",
+                "text": "Renders inline"
+              },
+              {
+                "scenario": "reason no-atoms-matched",
+                "text": "Renders inline"
+              },
+              {
+                "scenario": "no reason recorded",
+                "text": "Unchanged"
+              },
+              {
+                "scenario": "free-prose reason",
+                "text": "Renders plus a MAP-TREE:v1 warning attribute - THE DIVERGING STEP"
+              }
+            ],
+            "rejectedBecause": "Puts a vocabulary judgement in the renderer, which is the wrong layer - validation belongs in design-map validate - and it is scope XL-62 was not filed for."
+          }
+        ],
+        "recommendation": {
+          "option": "A",
+          "why": "It costs three lines, it is exactly symmetric with the moot branch two lines above it in the same function (map-tree.py:140), and it makes a fact ADR-064 deliberately created - the typed open reason - visible to the person reading the design, which is the only thing ADR-064 left undone about it. It is distinctly NOT the open_reason: line section 2 rejected: no column 0, no parse, no counter."
+        },
+        "ifOverturned": "If the owner reads ADR-064 section 2 broadly at F1 (as barring any renderer response to the negative half), F3 should be B for consistency, and the typed open.reason stays a map-only fact that only test-design-map.sh ever observes."
+      }
+    },
+    {
+      "id": "XL-62-F4",
+      "title": "Is cross-repo census reach in XL-62's scope",
+      "tickets": [
+        "XL-62"
+      ],
+      "anchor": "reach",
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "C"
+      },
+      "card": {
+        "problem": "The census runs git with cwd: REPO_ROOT (scripts/xp-resolved-by-census.ts:59) and resolves --root against REPO_ROOT (:88), so it counts ONLY xp-layer's own docs/prs/<item>/design.md - 21 runs at BASE, all five counters zero. Most /design runs happen in teselly and pv3, whose committed design.md files this census can never see. So XL-62 shipping does not by itself move XL-24's numbers.",
+        "useCases": [
+          "XL-62 ships as designed; someone runs the census next week and reads atom: 0 from a healthy, working system",
+          "XL-24 populates xp.fork_outcomes.resolved_by from this census and records the zeros as fact",
+          "A teselly /design run emits perfect resolved_by: lines and is counted nowhere"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Out of scope - XL-62 is the writer only",
+            "walks": [
+              {
+                "scenario": "census read next week",
+                "text": "Reads zero; correct-but-misleading unless the reader already knows - THE DIVERGING STEP, since the zero carries no caveat"
+              },
+              {
+                "scenario": "XL-24 consumes it",
+                "text": "Inherits the reach problem silently"
+              },
+              {
+                "scenario": "teselly design run",
+                "text": "Uncounted"
+              }
+            ]
+          },
+          {
+            "id": "B",
+            "label": "Add --repo / multi-root to the census driver inside XL-62",
+            "walks": [
+              {
+                "scenario": "census read next week",
+                "text": "Meaningful numbers"
+              },
+              {
+                "scenario": "XL-24 consumes it",
+                "text": "Meaningful numbers"
+              },
+              {
+                "scenario": "teselly design run",
+                "text": "Counted - THE DIVERGING STEP"
+              }
+            ],
+            "rejectedBecause": "Makes XL-62 a cross-repo PR pair AND puts it inside scripts/xp-resolved-by-census.ts, a file XL-48 shipped and XL-24 reads; it must also answer what 'last N' means across repos with independent commit histories, which is a real design question of its own. Materially enlarges a ticket that has just been correctly shrunk."
+          },
+          {
+            "id": "C",
+            "label": "Out of scope, but file the follow-up now and cite it from the Risks section",
+            "walks": [
+              {
+                "scenario": "census read next week",
+                "text": "Reads zero, with a named owner attached to the gap"
+              },
+              {
+                "scenario": "XL-24 consumes it",
+                "text": "THE DIVERGING STEP - XL-24 has a ticket to point at instead of a surprise"
+              },
+              {
+                "scenario": "teselly design run",
+                "text": "Still uncounted, but tracked"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "C",
+          "why": "A's reasoning is right and still exact at BASE - the reader's reach belongs to the reader - but A as it stands ships a system whose headline metric reads zero BY CONSTRUCTION, with the explanation living only in a design doc nobody will re-read. ADR-064's own Consequences already warn about a narrower version of the same trap ('the oracle reads an empty corpus and reports a confident zero'). One filed follow-up converts a silent-zero trap into a tracked gap for the cost of a ticket."
+        },
+        "ifOverturned": "Under B, XL-62 stops being a renderer ticket and acquires a second design question (cross-repo 'last N' ordering) plus an edit to a file two other tickets depend on."
+      }
+    },
+    {
+      "id": "XL-62-F5",
+      "title": "May the store-agnostic plugin hardcode a consumer's grammar term (promoted by self-critique)",
+      "tickets": [
+        "XL-62"
+      ],
+      "anchor": "coupling",
+      "restsOn": [
+        "XL-62-F1"
+      ],
+      "status": {
+        "kind": "decided",
+        "source": "recommendation",
+        "option": "A"
+      },
+      "card": {
+        "problem": "Plugin ADR-003 keeps the base flow store-agnostic, and ADR-064's own section 'How this reads against the plugin' says the plugin CANNOT use the words atom: and neotoma: to state rule 3, so it states it generically in map-structure.schema.json's $comment and names the provider nowhere. XL-62 is about to put the literal string `resolved_by:` - a term defined by xp-layer's ADR-053 section 10 and parsed by xp-layer's RESOLVED_BY_LINE_PATTERN - into that store-agnostic renderer, and under F1=A a source-to-xp-layer-literal mapping with it. CHECKED AND CLEARED as a CI blocker: test-flow-seams.sh's coupling table covers exactly seven seam files (COUPLING_SEAM_FILES, :242-248) and map-tree.py is not among them; the forbidden terms are 'experience layer' and 'xp-layer' (:252-253), not resolved_by. The guard is silent here, which is precisely why it should be answered deliberately rather than discovered later.",
+        "useCases": [
+          "xp-layer runs /design; the line must be spelled resolved_by: at column 0 or the census cannot see it (resolved-by.ts:37-40)",
+          "teselly or pv3 runs /design with no context provider declared and no census at all",
+          "A future second consumer repo wants the same fact under a different key or vocabulary",
+          "A plugin maintainer with no xp-layer context reads map-tree.py and asks what resolved_by is and who defined it"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Hardcode resolved_by: (and, under F1=A, the literal mapping) in map-tree.py",
+            "walks": [
+              {
+                "scenario": "xp-layer /design",
+                "text": "Works"
+              },
+              {
+                "scenario": "teselly/pv3 /design",
+                "text": "An unread line in every design.md, harmless"
+              },
+              {
+                "scenario": "a second consumer arrives",
+                "text": "THE DIVERGING STEP - forces a plugin change"
+              },
+              {
+                "scenario": "plugin maintainer reads the file",
+                "text": "Finds a term the plugin cannot explain in its own vocabulary"
+              }
+            ]
+          },
+          {
+            "id": "B",
+            "label": "The key and the source-to-value mapping come from the host's .claude/bett3r-ai-workflow.json",
+            "walks": [
+              {
+                "scenario": "xp-layer /design",
+                "text": "xp-layer declares the key and mapping; works"
+              },
+              {
+                "scenario": "teselly/pv3 /design",
+                "text": "NO LINE AT ALL, plugin output byte-identical to today - THE DIVERGING STEP"
+              },
+              {
+                "scenario": "a second consumer arrives",
+                "text": "A config row"
+              },
+              {
+                "scenario": "plugin maintainer reads the file",
+                "text": "Reads a generic mechanism"
+              }
+            ],
+            "rejectedBecause": "ADR-003-true and symmetric with work-docs-path.py, which already reads that config - but it is new machinery with its own failure mode: map-tree.py reads no config at all today (json.load only on the map itself, :324), it would gain a dependency on the host repo root, and a missing declaration silently emits nothing, which is the confident-zero failure ADR-064 already warns about for --root."
+          },
+          {
+            "id": "C",
+            "label": "Hardcode the key resolved_by: but emit only status.resolvedBy verbatim (equals F1 = C)",
+            "walks": [
+              {
+                "scenario": "xp-layer /design",
+                "text": "Works for cited forks only"
+              },
+              {
+                "scenario": "teselly/pv3 /design",
+                "text": "Nothing emitted, since nothing sets resolvedBy without a provider - THE DIVERGING STEP"
+              },
+              {
+                "scenario": "a second consumer arrives",
+                "text": "The key is still fixed, but no vocabulary is"
+              },
+              {
+                "scenario": "plugin maintainer reads the file",
+                "text": "One term, no mapping table"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "A",
+          "why": "B is the architecturally correct answer and is also a different ticket - a host-configured renderer is new machinery with its own failure mode, and XL-62 was filed as a ~20-line writer. What makes A acceptable is WRITING THE COUPLING DOWN in plugin ADR-007 or a new plugin ADR - that it is an accepted, named exception to ADR-003, that test-flow-seams.sh's table does not cover map-tree.py, and that a second consumer is the trigger to make it host-configured. That costs a paragraph. What makes A dangerous is shipping it silently past a guard that happens not to cover this file."
+        },
+        "ifOverturned": "If F1 resolves to C, this fork softens to option C by construction and the ADR note gets shorter. If the owner picks B, XL-62 acquires a config schema, a host-root dependency and fixture surface, and should be re-sized before build."
+      }
+    }
+  ]
+}
