@@ -163,7 +163,7 @@ Pocock's adopted files carry no budget of ours; they are his as shipped.
 
 ## Third-party skills
 
-`grilling`, `writing-for-agents` and `domain-modeling` are Matt Pocock's
+`grilling`, `writing-for-agents`, `domain-modeling` and `prototype` are Matt Pocock's
 files (github.com/mattpocock/skills, MIT), copied verbatim with the notice in
 `THIRD-PARTY-LICENSES.md` and a `CREDITS.md` beside each. In-house material that layers on them
 is a separate skill (`grill`) or a trailing section (`domain-modeling` § In this flow), never an

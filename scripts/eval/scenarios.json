@@ -673,6 +673,52 @@
       "must_not_state": []
     },
     {
+      "id": "prototype-logic-reached",
+      "why": "prototype's SKILL.md only names the two branches. The load-bearing rule for a logic demo lives in LOGIC.md: isolate the answering code as a pure module with no DOM, then wrap it in one framework-free HTML file. A session that stays on SKILL.md produces a React page or a DOM-tangled script, and the prototype cannot lift into the real module.",
+      "guards_split": "skills/prototype/SKILL.md -> skills/prototype/LOGIC.md",
+      "artifact": "plugins/bett3r-ai-workflow/skills/prototype/SKILL.md",
+      "prompt": "Read plugins/bett3r-ai-workflow/skills/prototype/SKILL.md. The user wants a throwaway prototype to feel out whether an order-state model handles 'paid then cancelled'. Build the prototype. State the exact shape of the artifact, where the answering logic lives, and what it is forbidden to touch.",
+      "must_open": [
+        "LOGIC.md"
+      ],
+      "must_state": [
+        [
+          "no DOM",
+          "no `document`",
+          "no document"
+        ],
+        [
+          "no framework",
+          "no bundler"
+        ]
+      ],
+      "must_not_state": [],
+      "_calibration": "UNVALIDATED: added with the skill copy. SKILL.md names a shareable HTML file but never the purity rule or the no-framework ban; those live only in LOGIC.md."
+    },
+    {
+      "id": "prototype-ui-reached",
+      "why": "prototype's SKILL.md names a URL search param and a floating bar. The default that actually decides the artifact — mount variants on an existing page (sub-shape A), three of them, hide the bar in production — lives only in UI.md. A session that stays on SKILL.md invents a vacuum route and ships the switcher.",
+      "guards_split": "skills/prototype/SKILL.md -> skills/prototype/UI.md",
+      "artifact": "plugins/bett3r-ai-workflow/skills/prototype/SKILL.md",
+      "prompt": "Read plugins/bett3r-ai-workflow/skills/prototype/SKILL.md. The user wants to see options for how the existing settings page should look. Build the prototype. State how many variants you generate, where they mount, and how the switcher is kept out of production.",
+      "must_open": [
+        "UI.md"
+      ],
+      "must_state": [
+        [
+          "sub-shape A",
+          "existing page",
+          "same route"
+        ],
+        [
+          "NODE_ENV",
+          "production"
+        ]
+      ],
+      "must_not_state": [],
+      "_calibration": "UNVALIDATED: added with the skill copy. SKILL.md never says sub-shape A or the production gate; those live only in UI.md. `production` is a prior-guessable word, so the pair with the mount rule is the evidence."
+    },
+    {
       "id": "tick-boundary-reached",
       "why": "A wave boundary is where /start-multi ends its context. All five preconditions fail SILENTLY if skipped: an unpushed wave is commits on one machine, a leaked lock costs every later tick the full reclaim wait, and an unstamped agents.yaml row is addressable by no tick. The command file now states the five as a list and delegates the rules; if that pointer is read past, the orchestrator ends a context and the run loses the wave.",
       "guards_split": "commands/start-multi.md -> reference/start-multi-tick-boundary.md",

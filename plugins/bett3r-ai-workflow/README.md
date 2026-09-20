@@ -71,7 +71,7 @@ The artifacts carry rules. The evidence behind them lives in two files nothing l
 
 ## Third-party skills
 
-`grilling`, `writing-for-agents` and `domain-modeling` are adopted verbatim from Matt Pocock's skills repository under the MIT license; see `THIRD-PARTY-LICENSES.md` and the `CREDITS.md` beside each.
+`grilling`, `writing-for-agents`, `domain-modeling` and `prototype` are adopted verbatim from Matt Pocock's skills repository under the MIT license; see `THIRD-PARTY-LICENSES.md` and the `CREDITS.md` beside each.
 
 ## Install
 
