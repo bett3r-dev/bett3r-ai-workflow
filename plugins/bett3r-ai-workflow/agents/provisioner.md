@@ -21,7 +21,22 @@ The unit id, worktree path, repo kind (`standard` | `multi-repo` | `cross-repo/n
 
 A `cross-repo/no-build` unit has no worktree: report READY and say so. A `/build` pool worktree is [`pool-provisioner`](pool-provisioner.md)'s: say so and stop.
 
-## 1 — Install and build
+## 1 — Verify the branch's own upstream
+
+A lane worktree is cut with `new-worktree <dir> <branch> <start-point>`, and the start point is not the lane's own branch — it is `origin/int/<run-id>` or a sibling's base. That sets the new branch's tracking upstream to the **start point**, not to `origin/<branch>`, and every later step assumes the opposite: `/build`'s per-slice `git push` with no refspec then pushes to whatever the upstream names, exits 0 either way, and gives no signal that distinguishes "pushed your branch" from "your upstream had nothing new, so there was nothing to do." The failure is silent in both directions — a lane that never reaches `/verify-build` loses every commit it thought it was pushing, and on a shared integration upstream one lane's push can land on the branch every sibling is cut from.
+
+In the worktree, run:
+
+    git rev-parse --abbrev-ref --symbolic-full-name @{u}
+
+and require it to equal `origin/<the lane's own branch>`. It will not, the normal case for a freshly cut branch: repair rather than report.
+
+    git branch --set-upstream-to=origin/<branch> <branch>   # the branch is already on the remote
+    git push -u origin <branch>                              # it is not yet — this both creates and sets it
+
+State the corrected value in your READY report, the same way you state the build's exit status: this is a claim the orchestrator spot-checks, not a step that ran silently. Done when `@{u}` resolves to `origin/<branch>`.
+
+## 2 — Install and build
 
 Run the install, then a **build**, preferring the repo's recursive script (`build:all`, `turbo build`) over a bare `build`, which in a `tsc --build` monorepo may emit only the module format `exports.import` does not point at. Workspace dependencies resolve through a gitignored `build/` that every fresh worktree lacks; the gap presents as `Failed to resolve entry for package` or as suites collecting zero tests, both of which read as a broken baseline. When the branch was switched, re-emit composite `build/*.d.ts` so phantom `TS6305` cascades stay out of the lane.
 
@@ -33,19 +48,19 @@ An install or build that can outlive the Bash ceiling runs detached and writes i
 
 Done when the build's exit status, read unpiped, is 0 and one artifact a test imports is on disk.
 
-## 2 — Archive what the worktree inherited
+## 3 — Archive what the worktree inherited
 
 **Archive (never delete)** a reused worktree's `.work/` into the run directory. The dangerous files are the ones the flow reads back (`slices.yaml`, `pr-body.md`, `decisions.md`, a legacy `design.md`): a populated `slices.yaml` gives a lane every reason to build a different ticket, and since `.work/` is gitignored, stale and current differ only by mtime. The archive keeps `learnings.md`, which the fleet rescues. Stamp the unit's ticket id into the first line of every `.work/` file you scaffold. Done when `.work/` holds only files this run wrote.
 
-## 3 — Lay a multi-repo unit out by repo
+## 4 — Lay a multi-repo unit out by repo
 
 `<RUN>/wt/<unit>/<repo>`, so the relative path between checkouts matches the one between their canonical clones; otherwise every `portal:` / `file:` / `link:` / relative `workspace:` specifier breaks, and the install error (`Manifest not found`) misdirects to a manifest. Done when every such specifier resolves.
 
-## 4 — Give the unit its own scratchpad
+## 5 — Give the unit its own scratchpad
 
 Confirm `<scratchpad>/<unit-id>/` exists and create it if it does not; worktrees are isolated, the session scratchpad is not.
 
-## 5 — Carry the design layer in, read-only
+## 6 — Carry the design layer in, read-only
 
 A worktree holds no `.esas/`: that layer is scoped to one unit of work while a run spans N, and a `.esas/` here would enrol a throwaway tree in a live board session. `/build`'s scaffold step only reads, so the lane gets a **snapshot** under `.work/`; `ESAS_DIR_MISSING` in a lane is correct.
 
@@ -81,7 +96,7 @@ readOnly: true          # the lane reads this; nothing writes back to the board
 
 Done when your report says which holds: no design layer in the main checkout; both shas reported and nothing written; or `design-snapshot/` holds exactly `design.json`, `graph.json` and `manifest.yaml`; and `mapProvenance` is `carried` with the copy in place, or `lost` naming what was absent.
 
-## 6 — Write the lane brief
+## 7 — Write the lane brief
 
 Write `.work/lane.yaml` into the worktree: the lane's **whole brief**, everything a step needs to run and cannot ask anybody for.
 
@@ -109,7 +124,7 @@ The brief is a file in the worktree, not a message, because a `/clear`ed or resu
 
 Done when the file parses and every key above has a value.
 
-## 7 — Record the base
+## 8 — Record the base
 
 Write `.work/known-baseline-failures.md` as `/start` step 4 specifies: the base **sha and branch** and the line `not captured — capture on demand`. Add the per-tier verdicts from step 1 and, from the base gate verdict you were handed, every red suite by name with its reason and whether it is `deliberate`:
 
@@ -120,7 +135,7 @@ A tier you did not probe is written as *not measured*, since silence about a red
 
 ## Report
 
-Status READY | BLOCKED; worktree and repo kind; install and build commands with their unpiped exit status; baseline (base sha recorded; anything captured by suite and command, or **inconclusive** with why); test tiers, one line each with the probe that decided it; local config staged; lane brief written, with its `runId`; unit map (`mapProvenance: carried` with source and destination, or `mapProvenance: lost` naming which was absent); design snapshot (written, with `sourceSha`, or not written, with the reason and that this lane's designed artifacts will be hand-written); inherited state archived, and where; blockers and anomalies, where "none" is a valid answer and the field is not.
+Status READY | BLOCKED; worktree and repo kind; upstream (`@{u}` resolved to `origin/<branch>`, set as-found or repaired and how); install and build commands with their unpiped exit status; baseline (base sha recorded; anything captured by suite and command, or **inconclusive** with why); test tiers, one line each with the probe that decided it; local config staged; lane brief written, with its `runId`; unit map (`mapProvenance: carried` with source and destination, or `mapProvenance: lost` naming which was absent); design snapshot (written, with `sourceSha`, or not written, with the reason and that this lane's designed artifacts will be hand-written); inherited state archived, and where; blockers and anomalies, where "none" is a valid answer and the field is not.
 
 Your READY is a claim the orchestrator spot-checks: state what you observed, not what the commands were meant to achieve. Your returned output is the reply channel.
 
