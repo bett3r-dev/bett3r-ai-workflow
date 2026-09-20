@@ -115,9 +115,9 @@ check 'first write: moot=0'           "$( attr "$LINE" moot )" 0 "$LINE"
 check 'first write: region follows the heading' \
   "$( awk -v h="$H" 'p && NF{print substr($0,1,17); exit} $0==h{p=1}' "$D" )" '<!-- map-tree:v1 '
 check 'first write: comment marker present' \
-  "$( grep -c '^<!-- map-tree:v1 ticket=ESAS-901 gen=1 src=sha256:[0-9a-f]\{64\} out=sha256:[0-9a-f]\{64\} -->$' "$D" )" 1
+  "$( grep -c '^<!-- map-tree:v1 ticket=ESAS-901 gen=2 src=sha256:[0-9a-f]\{64\} out=sha256:[0-9a-f]\{64\} -->$' "$D" )" 1
 check 'first write: inline twin present' \
-  "$( grep -c '^`map-tree:v1 ticket=ESAS-901 gen=1 src=sha256:[0-9a-f]\{64\} out=sha256:[0-9a-f]\{64\}`$' "$D" )" 1
+  "$( grep -c '^`map-tree:v1 ticket=ESAS-901 gen=2 src=sha256:[0-9a-f]\{64\} out=sha256:[0-9a-f]\{64\}`$' "$D" )" 1
 check 'first write: other ticket fork not projected' "$( grep -c 'ESAS-902-F1' "$D" )" 0
 
 mt check --map "$MAP" --ticket ESAS-901 "$D"
@@ -162,7 +162,7 @@ expect 'check with no region' error 2 no-region
 mt check --map "$FLIP" --ticket ESAS-901 "$D"
 expect 'check against an overturned map' stale 1
 
-sed '/^`map-tree:v1 /s/gen=1/gen=7/' "$D" > "$TMP/twin.md"
+sed '/^`map-tree:v1 /s/gen=2/gen=7/' "$D" > "$TMP/twin.md"
 mt check --map "$MAP" --ticket ESAS-901 "$TMP/twin.md"
 expect 'twins disagree' error 2 twin-mismatch
 
@@ -171,12 +171,15 @@ expect 'an invalid map' error 2 map-invalid
 mt check --map "$MAP" --ticket ESAS-999 "$D"
 expect 'a ticket with no forks' error 2 no-forks
 
+# A region written by the PREVIOUS generation (gen=1, before the resolved_by:
+# line moved the projection's shape) reads stale and is re-rendered, never
+# refused as a hand edit.
 G="$TMP/gen.md"
-sed 's/gen=1/gen=0/; s/keeps design-map.py untouched/an older generation wrote this/' "$D" > "$G"
+sed 's/gen=2/gen=1/; s/keeps design-map.py untouched/an older generation wrote this/' "$D" > "$G"
 mt check --map "$MAP" --ticket ESAS-901 "$G"
-expect 'an older gen with a different body: re-render, not tamper' stale 1
+expect 'the previous gen with a different body: re-render, not tamper' stale 1
 mt write --map "$MAP" --ticket ESAS-901 "$G"
-expect 'write over an older gen' written 0
+expect 'write over the previous gen' written 0
 mt check --map "$MAP" --ticket ESAS-901 "$G"
 expect 'check after the gen re-render' fresh 0
 
@@ -378,6 +381,138 @@ check 'T8 edge: beside a stray backtick the span is double-backtick' \
 check 'T8 edge: a path glued to an unclosed backtick is left bare' \
   "$( grep -c '^- \*\*ESAS-911-F1 — Where the hook reads `\*\*files\*\*`: see `docs/a.md here\*\* — decided(owner)$' "$TMP/t8e.body" )" 1
 check 'T8 edge: no span wrapped around a backtick-glued path' "$( grep -c '`` `docs/a.md ``' "$TMP/t8e.body" )" 0
+
+# ---------------------------------------------------------------------------
+printf 'T9: one machine-read resolved_by: line per decided fork, and only there\n'
+# ---------------------------------------------------------------------------
+# The census that parses these lines lives in ANOTHER repository:
+# bett3r-xp-layer, ticket XL-24. Neither that ticket nor that repo's ADR-053
+# s10 — which is where the five-value grammar `atom:<id> | neotoma:<entity_id>
+# | human | code | recommendation` is specified — resolves here, and no
+# `cross-repo <repo>@<sha>:<path>` citation (ADR-010's spelling) is given for
+# them because this repo pins no sha of that tree. The in-repo record is
+# `docs/adr/ADR-014-the-md-projection-carries-one-machine-read-line-per-decided-fork.md`.
+# The value is status.resolvedBy verbatim where the map carries it, else it is
+# minted from status.source: owner -> human, code -> code, recommendation ->
+# recommendation (XL-62-F1 option A, docs/prs/XL-62/ticket-block.md).
+
+# region_body <file> — the body between the inline twin and the inline end
+# marker, i.e. exactly the bytes out= covers.
+region_body(){
+  awk '/^`map-tree:v1 /{p=1; next} /^`\/map-tree:v1`$/{p=0} p' "$1"
+}
+
+# section_of <file> <fork-id> — the rendered `###` section for one fork.
+section_of(){
+  awk -v id="$2" '/^### /{p = (index($0, "### " id " ") == 1)} p' "$1"
+}
+
+W9="$TMP/t9.md"
+cp "$FIX/design.md" "$W9"
+mt write --map "$MAP" --ticket ESAS-901 "$W9" --insert-after "$H"
+expect 'T9 write ESAS-901' written 0
+region_body "$W9" > "$TMP/t9-901.body"
+check 'T9: an owner-decided fork with no resolvedBy mints human' \
+  "$( grep -c '^resolved_by: human$' "$TMP/t9-901.body" )" 1
+check 'T9: a recommendation-decided fork with no resolvedBy mints recommendation' \
+  "$( grep -c '^resolved_by: recommendation$' "$TMP/t9-901.body" )" 1
+check 'T9: ESAS-901 carries one line per decided fork (forks - open - moot)' \
+  "$( grep -c '^resolved_by: ' "$TMP/t9-901.body" )" \
+  "$(( $( attr "$LINE" forks ) - $( attr "$LINE" open ) - $( attr "$LINE" moot ) ))" "$LINE"
+
+W5="$TMP/t9-905.md"
+cp "$FIX/design.md" "$W5"
+mt write --map "$MAP" --ticket ESAS-905 "$W5" --insert-after "$H"
+expect 'T9 write ESAS-905 (all four fork kinds at once)' written 0
+check 'T9: ESAS-905 forks=5'          "$( attr "$LINE" forks )" 5 "$LINE"
+check 'T9: ESAS-905 owner=1'          "$( attr "$LINE" owner )" 1 "$LINE"
+check 'T9: ESAS-905 code=1'           "$( attr "$LINE" code )" 1 "$LINE"
+check 'T9: ESAS-905 open=2'           "$( attr "$LINE" open )" 2 "$LINE"
+check 'T9: ESAS-905 moot=1'           "$( attr "$LINE" moot )" 1 "$LINE"
+check 'T9: the verdict line key set is unchanged (COUNT_KEYS)' \
+  "$( printf '%s\n' "$LINE" | tr ' ' '\n' | sed -n 's/=.*//p' | tr '\n' ' ' )" \
+  'outcome verb ticket forks owner code recommendation open moot path ' "$LINE"
+region_body "$W5" > "$TMP/t9-905.body"
+check 'T9: a code-decided fork with no resolvedBy mints code' \
+  "$( grep -c '^resolved_by: code$' "$TMP/t9-905.body" )" 1
+check 'T9: a resolvedBy citation is emitted verbatim' \
+  "$( grep -c '^resolved_by: atom:xp-0042$' "$TMP/t9-905.body" )" 1
+check 'T9: the citation wins — that owner fork does not also mint human' \
+  "$( grep -c '^resolved_by: human$' "$TMP/t9-905.body" )" 0
+check 'T9: ESAS-905 carries one line per decided fork (forks - open - moot)' \
+  "$( grep -c '^resolved_by: ' "$TMP/t9-905.body" )" 2 "$LINE"
+check 'T9: no resolved_by line for the open fork' \
+  "$( section_of "$TMP/t9-905.body" ESAS-905-F3 | grep -c '^resolved_by: ' )" 0
+check 'T9: no resolved_by line for the moot fork' \
+  "$( section_of "$TMP/t9-905.body" ESAS-905-F4 | grep -c '^resolved_by: ' )" 0
+check 'T9: no resolved_by line for the LOCKED (card-less) fork' \
+  "$( section_of "$TMP/t9-905.body" ESAS-905-F5 | grep -c '^resolved_by: ' )" 0
+check 'T9 control: the open fork section was found' \
+  "$( section_of "$TMP/t9-905.body" ESAS-905-F3 | grep -c '^OPEN — recommended: Alpha$' )" 1
+check 'T9 control: the moot fork section was found' \
+  "$( section_of "$TMP/t9-905.body" ESAS-905-F4 | grep -c '^moot — the feature was cut$' )" 1
+check 'T9 control: the LOCKED fork section was found' \
+  "$( section_of "$TMP/t9-905.body" ESAS-905-F5 | grep -c '^LOCKED — waits on ESAS-905-F1$' )" 1
+check 'T9: no resolved_by line is indented (the census reads column 0 only)' \
+  "$( grep -c '^[[:space:]][[:space:]]*resolved_by: ' "$TMP/t9-905.body" )" 0
+
+# The census reads a committed design.md only, never a Jira ticket block, so
+# render_jira stays out of its reach by construction.
+mt render --map "$MAP" --ticket ESAS-905 --dialect jira
+expect 'T9 jira render' ok 0
+check 'T9: the jira dialect emits no resolved_by line' "$( grep -c 'resolved_by' "$OUT" )" 0
+
+# Conformance: the md body is checked in, so any interior spacing or ordering
+# change around the resolved_by: line is a reviewable diff. This is the only
+# drift signal this repo can carry for a grammar whose reader lives in another
+# repo — `packages/xp-mcp/src/resolved-by.ts` in bett3r-xp-layer, a path that
+# does not resolve here by construction (ADR-014, "no coupling guard covers
+# this file").
+check 'T9: the conformance fixture is non-empty' \
+  "$( [ -s "$FIX/resolved-by-body.md" ] && echo non-empty )" non-empty
+holds 'T9: a fresh render is byte-identical to the checked-in conformance body' \
+  cmp "$TMP/t9-905.body" "$FIX/resolved-by-body.md"
+
+# ---------------------------------------------------------------------------
+printf 'T10: an open fork'"'"'s typed reason is rendered inline, and only inline\n'
+# ---------------------------------------------------------------------------
+# An open fork carries a typed `reason` (why it could not be settled from
+# grounding) and deliberately has no machine-read line; XL-62-F3
+# (docs/prs/XL-62/ticket-block.md) renders it inline on the OPEN line,
+# mirroring the `moot — <reason>` shape two branches above it, and nothing
+# more. Presentation only: no column-0 line, no parser, no verdict-line counter.
+
+W6="$TMP/t10.md"
+cp "$FIX/design.md" "$W6"
+mt write --map "$MAP" --ticket ESAS-906 "$W6" --insert-after "$H"
+expect 'T10 write ESAS-906' written 0
+region_body "$W6" > "$TMP/t10.body"
+check 'T10: ESAS-906 forks=3' "$( attr "$LINE" forks )" 3 "$LINE"
+check 'T10: ESAS-906 open=3'  "$( attr "$LINE" open )" 3 "$LINE"
+
+check 'T10: an open fork with a recorded reason renders it inline' \
+  "$( section_of "$TMP/t10.body" ESAS-906-F1 | grep -c '^OPEN — recommended: Alpha (store-unreachable)$' )" 1
+check 'T10: a reason outside the documented vocabulary is rendered verbatim' \
+  "$( section_of "$TMP/t10.body" ESAS-906-F2 | grep -c '^OPEN — recommended: Alpha (the atom store answered, but nothing it holds is canonical yet)$' )" 1
+check 'T10: an open fork with no reason renders exactly as before' \
+  "$( section_of "$TMP/t10.body" ESAS-906-F3 | grep -c '^OPEN — recommended: Alpha$' )" 1
+check 'T10: no empty parentheses where there is no reason' \
+  "$( grep -c 'recommended: Alpha ()' "$TMP/t10.body" )" 0
+check 'T10: the reason-less fork keeps a bare OPEN line (no trailing parenthesis)' \
+  "$( section_of "$TMP/t10.body" ESAS-906-F3 | grep -c '^OPEN — recommended: .*(' )" 0
+check 'T10: the render did not warn or refuse on the free-text reason' \
+  "$( grep -ci 'vocabulary\|unknown reason' "$OUT" )" 0
+
+# The negative half (XL-62-F3, docs/prs/XL-62/ticket-block.md): rendered, never machine-read.
+check 'T10: the reason text never appears at column 0' \
+  "$( grep -c '^store-unreachable' "$TMP/t10.body" )" 0
+check 'T10: no open_reason: line is emitted anywhere' \
+  "$( grep -c 'open_reason' "$TMP/t10.body" )" 0
+check 'T10: no resolved_by: line for an open fork with a reason' \
+  "$( grep -c '^resolved_by: ' "$TMP/t10.body" )" 0
+check 'T10: the verdict line key set is unchanged by the rendered reason' \
+  "$( printf '%s\n' "$LINE" | tr ' ' '\n' | sed -n 's/=.*//p' | tr '\n' ' ' )" \
+  'outcome verb ticket forks owner code recommendation open moot path ' "$LINE"
 
 printf '\n'
 if [ "$failed" -eq 0 ]; then

@@ -50,6 +50,7 @@ PHASE_MD="$PLUGIN/reference/design-multi-phase-boundary.md"
 DESIGN_LANE_MD="$PLUGIN/agents/design-lane.md"
 ADR_006_MD="$ROOT/docs/adr/ADR-006-one-program-writes-map-json.md"
 ADR_013_MD="$ROOT/docs/adr/ADR-013-a-fleet-orchestrator-is-a-tick-not-a-session.md"
+ADR_014_MD="$ROOT/docs/adr/ADR-014-the-md-projection-carries-one-machine-read-line-per-decided-fork.md"
 LANE_STEP_FIXTURES="$ROOT/scripts/fixtures/lane-step"
 MARKER_PY=${MARKER_PY:-python3}
 
@@ -3381,6 +3382,93 @@ else
     'ADR-013 names the scheduler'\''s expectedStep lease as the second constraint (GH-429-F3)'
   present "$ADR_013_MD" '**There is no `step=` enum anywhere.**' \
     'ADR-013 says explicitly that no step= enum exists — the correction the issue got wrong'
+fi
+
+# ---------------------------------------------------------------------------
+printf '\nADR-014 — the machine-read line, and the ADR-003 exception it needs\n\n'
+# ---------------------------------------------------------------------------
+# XL-62 taught `map-tree.py` to emit a column-0 `resolved_by:` line that a
+# program in ANOTHER repository reads. The key and its vocabulary are that
+# consumer's, not this plugin's, so the renderer now knows a consumer's grammar
+# term — the shape ADR-003 exists to keep out of the base flow plugin.
+#
+# The decision was to hardcode it and WRITE THE COUPLING DOWN. That makes the
+# record itself load-bearing: if the paragraph is lost in a tidy-up, what
+# remains is a store-agnostic plugin with an unexplained consumer term in it,
+# and the next reader's only options are to rip it out or to assume someone
+# checked. Deletion is what a presence oracle catches, so each of the four
+# clauses the design fixed is pinned as its own literal.
+if [ ! -s "$ADR_014_MD" ]; then
+  fail 'docs/adr/ADR-014 exists and is non-empty (positive control)' \
+       "no ${ADR_014_MD#"$ROOT"/}" \
+       'every ADR-014 assertion below passes vacuously on a missing file, and `present` would report it as wording drift.'
+else
+  pass 'docs/adr/ADR-014 exists and is non-empty (positive control)'
+  present "$ADR_014_MD" '# The md projection carries one machine-read line per decided fork' \
+    'ADR-014 states the decision in its H1, as its siblings do'
+  present "$ADR_014_MD" '## Status' \
+    'ADR-014 carries the Status section every accepted ADR here ends on'
+
+  # Clause (a) — the projection rule slice 1 obeyed. Two pins: the line exists
+  # per decided fork, and its VALUE has one source. The value half fails
+  # separately, and it is the half a summary drops.
+  present "$ADR_014_MD" '**The md projection carries one machine-read line per decided fork.**' \
+    'ADR-014 records the one-line-per-decided-fork rule (XL-62 clause a)'
+  present "$ADR_014_MD" '**The value is `status.resolvedBy` verbatim where the map carries it, and the `status.source` fallback otherwise.**' \
+    'ADR-014 records that the value is status.resolvedBy verbatim, else the source fallback (XL-62 clause a)'
+
+  # Clause (b) — the generation rule. `GEN` is what keeps an already-committed
+  # region rendered under the old shape from reading as `tampered`, so a render
+  # that changes the machine-read surface without bumping it is a silent
+  # false-tamper across every existing design.md.
+  present "$ADR_014_MD" '**Any render change that adds or removes a machine-read line bumps `GEN`.**' \
+    'ADR-014 records that adding or removing a machine-read line bumps GEN (XL-62 clause b)'
+
+  # Clause (c) — THE EXCEPTION, and the probe for this slice. Three facts in
+  # one sentence each: the file, the hardcoded key, and ADR-003 as the rule
+  # being excepted. Pinned as two literals so that losing the "accepted, named
+  # exception" verdict fails even if the descriptive half survives.
+  present "$ADR_014_MD" '**`map-tree.py` hardcodes the key `resolved_by:` and the five-value vocabulary around it, and that key and vocabulary are defined by a consumer outside this plugin.**' \
+    'ADR-014 names map-tree.py and the hardcoded resolved_by: key (XL-62 clause c)'
+  present "$ADR_014_MD" '**This is an accepted, named exception to ADR-003, not an oversight.**' \
+    'ADR-014 names ADR-003 as the rule this excepts, accepted rather than overlooked (XL-62 clause c)'
+  present "$ADR_014_MD" '**No coupling guard covers this file.**' \
+    'ADR-014 records that no coupling guard covers map-tree.py (XL-62 clause c)'
+
+  # Clause (d) — the trigger. The rejected host-configured option is DEFERRED,
+  # not abandoned, and the trigger is a checkable fact (a second consumer
+  # exists) rather than a judgement anyone can defer indefinitely.
+  present "$ADR_014_MD" '**A second consumer repo wanting a different key or a different vocabulary is the named trigger to make this host-configured instead.**' \
+    'ADR-014 names a second consumer repo as the trigger to make this host-configured (XL-62 clause d)'
+fi
+
+# --- STRUCTURAL: ADR-014's central factual claim, checked against the tree.
+#
+# The ADR says the coupling guard is silent on `map-tree.py` BY CONSTRUCTION —
+# it never looked, rather than looked and passed. That is a claim about
+# COUPLING_SEAM_FILES above, and a claim in prose about a table twenty lines up
+# is exactly the kind that quietly stops being true. So it is executed: the
+# rows the coupling loop actually reconciled are searched for map-tree.py, and
+# finding it fails. If someone adds map-tree.py to that table the guard starts
+# covering the file, the ADR's paragraph becomes false, and this assertion is
+# what says so instead of leaving the record to rot silently.
+#
+# Positive control first: the same grep over the same rows MUST find a file
+# that IS in the table. Without it a truncated, renamed or mis-parsed row file
+# makes the negative pass by matching nothing, which is the reassuring shape.
+if grep -qF 'design.md' "$TMP/coupling-seam-files"; then
+  pass 'the coupling-table rows are searchable (positive control for the absence below)'
+else
+  fail 'the coupling-table rows are searchable (positive control for the absence below)' \
+       'design.md is a known row and was not found: the absence assertion below would match nothing and pass.'
+fi
+coupling_map_tree=$( grep -F 'map-tree.py' "$TMP/coupling-seam-files" || true )
+if [ -z "$coupling_map_tree" ]; then
+  pass '[ADR-014] the coupling table does NOT cover map-tree.py — the exception ADR-014 records is real'
+else
+  fail '[ADR-014] the coupling table does NOT cover map-tree.py — the exception ADR-014 records is real' \
+       'COUPLING_SEAM_FILES now lists:' $( printf '%s\n' "$coupling_map_tree" ) \
+       'map-tree.py is now covered, so ADR-014'\''s "no coupling guard covers this file" is false and the ADR must be revisited.'
 fi
 
 # --- run-report.md: the per-tick window wording. The probe for this slice is
