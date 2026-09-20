@@ -54,7 +54,16 @@ Usage:
 
 Both are required; neither is guessed. `--tick` is run through the shell once per
 tick, with its combined output echoed and then parsed — in practice
-`claude -p '/bett3r-ai-workflow:start-multi <ids>'`.
+
+    CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 claude -p '/bett3r-ai-workflow:start-multi <ids>'
+
+**That env var is not optional.** A tick runs until every unit of its wave is
+terminal, which is hours, while print mode terminates background tasks after
+600 s by default — so without it the orchestrator is killed before its step 8,
+never prints `FLEET-STEP:v1`, and the driver correctly reads the absence as
+`infra`. A truncated tick and a failed one are indistinguishable from the
+verdict, which is why the ceiling is lifted at the invocation rather than
+diagnosed afterwards. `0` means no ceiling.
 
 Exit codes. The contract is the printed line, never the status (ADR-004); these
 exist so `fleet-loop && <next>` composes:
@@ -231,6 +240,22 @@ def main(argv):
             )
             return STOPPED
         if recorded is None:
+            # Two very different facts wear the same absence. A run dir that does
+            # not exist is operator error — a typo in `--run`, or the driver
+            # launched from the wrong working directory — and naming it "contract
+            # drift" sends the reader after the orchestrator for a mistake one
+            # `os.path.isdir` identifies. The check belongs here and not before
+            # tick 1, because refusing up front on a missing `run.yaml` is exactly
+            # the refusal that broke every fresh run.
+            if not os.path.isdir(run_dir):
+                print(
+                    "fleet-loop: refused after tick %d — the run directory %s does not "
+                    "exist. Step 0 creates run.yaml inside an existing run dir, so a dir "
+                    "that is still absent after a tick means --run names a path that is "
+                    "not there: check the path and the working directory you launched "
+                    "from. This is not contract drift." % (tick_number, run_dir)
+                )
+                return STOPPED
             print(
                 "fleet-loop: refused after tick %d — %s still records no pluginVersion. "
                 "Step 0 records it from the orchestrator's own loaded manifest on every "
