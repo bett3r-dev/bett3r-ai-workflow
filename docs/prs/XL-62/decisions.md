@@ -63,3 +63,35 @@ sources: [code:scripts/test-map-tree.sh:472-475, code:scripts/test-map-tree.sh:4
 rejected: leaving them for slice 3's sweep — they were one line each and already under the verifier's eye
 supersedes: —
 Two comments cited `ADR-064` bare; that ADR lives in bett3r-xp-layer and `docs/adr/` here tops out at ADR-013. Both now cite `docs/prs/XL-62/ticket-block.md`, which is in-repo and quotes the same decision, so no `cross-repo <repo>@<sha>:<path>` form was needed. `git diff | grep 'ADR-0[0-9][0-9]'` over the whole slice-2 diff returns nothing. D4's sweep over slice 1's `map-tree.py:134-140` remains owed to slice 3.
+
+## D9 — the D4 citation sweep covers scripts/test-map-tree.sh as well as map-tree.py
+kind: deviation
+step: build · slice: 3 · decidedBy: executor
+sources: [code:plugins/bett3r-ai-workflow/scripts/map-tree.py:134-148, code:scripts/test-map-tree.sh:388-397, code:scripts/test-map-tree.sh:465-470]
+rejected: reverting the test file to stay inside the slice's stated intended-files line
+supersedes: —
+Slice 3's `touches:` named two files; the carried D4 sweep added map-tree.py, and the executor found the same three bare citations in test-map-tree.sh and fixed them too, flagging the extra file. The verifier accepted it: D4's own `sources:` line already named `scripts/test-map-tree.sh:465` alongside map-tree.py, so the sweep was always two files. Both edits were proved comment-only — filtering the diff of `#`-prefixed lines yields zero lines, GEN is untouched at 2, and all 231 map-tree assertions are unchanged.
+
+## D10 — a cross-repo citation with no pinned sha names the repo in prose instead
+kind: deviation
+step: build · slice: 3 · decidedBy: executor
+sources: [adr:ADR-010, code:map-tree.py:134-148, design:ticket-block.md]
+rejected: inventing or omitting a sha to satisfy ADR-010's `cross-repo <repo>@<sha>:<path>` form literally
+supersedes: —
+ADR-010's spelling requires a sha, and this repo pins no sha of bett3r-xp-layer (the ticket block pins only `bett3r-ai-workflow@e4b8ee8`). The comments now name the repo explicitly, state that XL-24, `packages/xp-mcp/src/resolved-by.ts` and that repo's ADR-053 §10 do not resolve here and why no sha citation is given, and re-point the reader at the in-repo record. This follows D8's precedent. The verifier judged the original defect — a bare token a reader takes as in-repo — genuinely gone, with a shaless `cross-repo <repo>:<path>` form noted as a tidier future spelling.
+
+## D11 — `bett3r-xp-layer` is written literally into the very file ADR-014 excepts
+kind: shipped-finding
+step: build · slice: 3 · decidedBy: verifier
+sources: [code:map-tree.py:134-148, code:COUPLING_SEAM_FILES (scripts/test-flow-seams.sh:246-258), adr:ADR-014]
+rejected: keeping the coupling vague in source to avoid the term — it would have left D4 undischarged
+supersedes: —
+`xp-layer` is one of COUPLING_FORBIDDEN_TERMS, and D4 required the consumer repo be named. map-tree.py is deliberately outside the coupling table, which is precisely the exception ADR-014 records, so the term is legal there today. The consequence, reproduced by the verifier: whoever later adds map-tree.py to that table — ADR-014's own designed revisit trigger — gets TWO reds, the ADR-014 absence assertion and `map-tree.py stays store-agnostic` firing on this comment. That is noise at the revisit, not a widening of the exception, and the fix at that point is the ADR, never weakening the comment.
+
+## D12 — ADR-014's prose asserts the cross-repo census without the caveat its source comments carry
+kind: shipped-finding
+step: build · slice: 3 · decidedBy: verifier
+sources: [code:docs/adr/ADR-014-...md, human]
+rejected: —
+supersedes: —
+`bett3r-xp-layer` is not on this machine, so `packages/xp-mcp/src/resolved-by.ts`, XL-24 and that repo's ADR-053 §10 could not be opened: `environment-gap: consumer repository not present locally`. The ADR states the consumer reads the line as fact, where the two source comments say explicitly that those tokens do not resolve here. The verifier judged this a nit rather than a finding — the claim is the ticket block's own premise, in-repo-cited, and asserts nothing about consumer behaviour beyond "reads the line" — but it is carried here and into the PR body rather than silently accepted.
