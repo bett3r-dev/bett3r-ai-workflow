@@ -6,8 +6,8 @@ The decision text of a design.md (`--dialect md`) or a Jira ticket block
 `tickets` hold the ticket, in map order. It lives between a marker pair carrying two hashes
 (ESAS-163 D2/D3):
 
-    <!-- map-tree:v1 ticket=<KEY> gen=1 src=sha256:<hex> out=sha256:<hex> -->
-    `map-tree:v1 ticket=<KEY> gen=1 src=sha256:<hex> out=sha256:<hex>`
+    <!-- map-tree:v1 ticket=<KEY> gen=2 src=sha256:<hex> out=sha256:<hex> -->
+    `map-tree:v1 ticket=<KEY> gen=2 src=sha256:<hex> out=sha256:<hex>`
     <body>
     `/map-tree:v1`
     <!-- /map-tree:v1 -->
@@ -43,7 +43,7 @@ import subprocess
 import sys
 
 TOKEN = "MAP-TREE:v1"
-GEN = 1
+GEN = 2
 DIALECTS = ("md", "jira")
 PLUGIN = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DESIGN_MAP = os.path.join(PLUGIN, "bin", "design-map")
@@ -131,6 +131,23 @@ def rejected_line(opt):
     return line
 
 
+# The census in the xp layer (XL-24) reads one column-0 `resolved_by: <value>`
+# line per decided fork, in the five-value grammar `atom:<id> |
+# neotoma:<entity_id> | human | code | recommendation` (ADR-053 s10). Where the
+# map carries no citation the value is minted from `status.source`: the three
+# values esas emits map one-to-one, and `recommendation` stays its own literal
+# rather than being laundered into `human` (XL-62-F1 option A). Adding or
+# removing such a line is a shape change and bumps GEN.
+RESOLVED_BY_FALLBACK = {"owner": "human", "code": "code", "recommendation": "recommendation"}
+
+
+def resolved_by(status):
+    """The citation the map carries, verbatim, else the `source` fallback."""
+    if "resolvedBy" in status:
+        return status["resolvedBy"]
+    return RESOLVED_BY_FALLBACK[status["source"]]
+
+
 def render_md(forks):
     """One `###` section per fork: heading, status tag, why, rejected options."""
     out = []
@@ -150,6 +167,7 @@ def render_md(forks):
             continue
         out += [f"### {fork['id']} — {fork['title']}: {option_label(card, status['option'])}", "",
                 f"decided({status['source']})", "", f"Why: {card['recommendation']['why']}", ""]
+        out += [f"resolved_by: {resolved_by(status)}", ""]
         rejected = [o for o in card["options"] if o["id"] != status["option"]]
         if rejected:
             out += [f"- {rejected_line(o)}" for o in rejected] + [""]

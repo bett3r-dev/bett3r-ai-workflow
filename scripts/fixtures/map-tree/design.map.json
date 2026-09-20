@@ -148,6 +148,203 @@
       "status": {
         "kind": "open"
       }
+    },
+    {
+      "id": "ESAS-905-F1",
+      "title": "Settled by a cited atom",
+      "tickets": [
+        "ESAS-905"
+      ],
+      "card": {
+        "problem": "Which way?",
+        "useCases": [
+          "an owner answers"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Cite the atom",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ]
+          },
+          {
+            "id": "B",
+            "label": "Cite nothing",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ],
+            "rejectedBecause": "prose is regenerated away"
+          }
+        ],
+        "recommendation": {
+          "option": "A",
+          "why": "the citation outlives the prose"
+        },
+        "ifOverturned": "The other option replaces it."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "A",
+        "resolvedBy": "atom:xp-0042"
+      }
+    },
+    {
+      "id": "ESAS-905-F2",
+      "title": "Settled by the code",
+      "tickets": [
+        "ESAS-905"
+      ],
+      "card": {
+        "problem": "Which way?",
+        "useCases": [
+          "an owner answers"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Use the new reader",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ]
+          },
+          {
+            "id": "B",
+            "label": "Keep the old reader",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ],
+            "rejectedBecause": "the reader is already gone"
+          }
+        ],
+        "recommendation": {
+          "option": "A",
+          "why": "the old reader is gone"
+        },
+        "ifOverturned": "The other option replaces it."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "code",
+        "option": "A"
+      }
+    },
+    {
+      "id": "ESAS-905-F3",
+      "title": "Still open",
+      "tickets": [
+        "ESAS-905"
+      ],
+      "card": {
+        "problem": "Which way?",
+        "useCases": [
+          "an owner answers"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Alpha",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ]
+          },
+          {
+            "id": "B",
+            "label": "Beta",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "A",
+          "why": "alpha is cheaper"
+        },
+        "ifOverturned": "The other option replaces it."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "open"
+      }
+    },
+    {
+      "id": "ESAS-905-F4",
+      "title": "A question that stopped mattering",
+      "tickets": [
+        "ESAS-905"
+      ],
+      "card": {
+        "problem": "Which way?",
+        "useCases": [
+          "an owner answers"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Alpha",
+            "walks": [
+              {
+                "scenario": "the owner picks A",
+                "text": "A is applied"
+              }
+            ]
+          },
+          {
+            "id": "B",
+            "label": "Beta",
+            "walks": [
+              {
+                "scenario": "the owner picks B",
+                "text": "B is applied"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "A",
+          "why": "alpha is enough"
+        },
+        "ifOverturned": "The other option replaces it."
+      },
+      "restsOn": [],
+      "status": {
+        "kind": "moot",
+        "reason": "the feature was cut"
+      }
+    },
+    {
+      "id": "ESAS-905-F5",
+      "title": "Waits on the cited fork",
+      "tickets": [
+        "ESAS-905"
+      ],
+      "restsOn": [
+        "ESAS-905-F1"
+      ],
+      "status": {
+        "kind": "open"
+      }
     }
   ]
 }
