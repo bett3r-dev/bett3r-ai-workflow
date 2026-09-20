@@ -6,8 +6,8 @@ The decision text of a design.md (`--dialect md`) or a Jira ticket block
 `tickets` hold the ticket, in map order. It lives between a marker pair carrying two hashes
 (ESAS-163 D2/D3):
 
-    <!-- map-tree:v1 ticket=<KEY> gen=1 src=sha256:<hex> out=sha256:<hex> -->
-    `map-tree:v1 ticket=<KEY> gen=1 src=sha256:<hex> out=sha256:<hex>`
+    <!-- map-tree:v1 ticket=<KEY> gen=2 src=sha256:<hex> out=sha256:<hex> -->
+    `map-tree:v1 ticket=<KEY> gen=2 src=sha256:<hex> out=sha256:<hex>`
     <body>
     `/map-tree:v1`
     <!-- /map-tree:v1 -->
@@ -43,7 +43,7 @@ import subprocess
 import sys
 
 TOKEN = "MAP-TREE:v1"
-GEN = 1
+GEN = 2
 DIALECTS = ("md", "jira")
 PLUGIN = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DESIGN_MAP = os.path.join(PLUGIN, "bin", "design-map")
@@ -131,6 +131,32 @@ def rejected_line(opt):
     return line
 
 
+# The census that reads this line lives in ANOTHER repository: bett3r-xp-layer,
+# ticket XL-24, `packages/xp-mcp/src/resolved-by.ts`. None of those three
+# resolve in this repo, and no `cross-repo <repo>@<sha>:<path>` citation
+# (ADR-010's spelling) is given for them because this repo pins no sha of that
+# tree. The in-repo record of this contract, and the one to read first, is
+# `docs/adr/ADR-014-the-md-projection-carries-one-machine-read-line-per-decided-fork.md`
+# with `docs/prs/XL-62/ticket-block.md` behind it.
+#
+# That census reads one column-0 `resolved_by: <value>` line per decided fork,
+# in the five-value grammar `atom:<id> | neotoma:<entity_id> | human | code |
+# recommendation` — specified by bett3r-xp-layer's ADR-053 s10, which is that
+# repo's numbering and not this one's. Where the map carries no citation the
+# value is minted from `status.source`: the three values esas emits map
+# one-to-one, and `recommendation` stays its own literal rather than being
+# laundered into `human` (XL-62-F1 option A, ticket-block.md). Adding or
+# removing such a line is a shape change and bumps GEN (ADR-014).
+RESOLVED_BY_FALLBACK = {"owner": "human", "code": "code", "recommendation": "recommendation"}
+
+
+def resolved_by(status):
+    """The citation the map carries, verbatim, else the `source` fallback."""
+    if "resolvedBy" in status:
+        return status["resolvedBy"]
+    return RESOLVED_BY_FALLBACK[status["source"]]
+
+
 def render_md(forks):
     """One `###` section per fork: heading, status tag, why, rejected options."""
     out = []
@@ -145,11 +171,25 @@ def render_md(forks):
             continue
         if status["kind"] == "open":
             rec = option_label(card, card["recommendation"]["option"])
+            # The typed `reason` an open fork may carry (why it could not be
+            # settled from grounding) is rendered inline here, mirroring the
+            # `moot — <reason>` shape above: presentation only, no column-0
+            # line and nothing parses it (XL-62-F3). The string is emitted
+            # verbatim by design: F3 rejected judging it here (option C, a
+            # vocabulary check in the renderer) in favour of option A. No layer
+            # enforces the three documented codes today: open.reason is
+            # `$defs/text` ({"type": "string", "minLength": 1}) in
+            # map-structure.schema.json, and `design-map validate` returns
+            # outcome=ok on a value outside them. That gap is an open,
+            # unmitigated risk (docs/prs/XL-62/ticket-block.md, Risks).
+            if "reason" in status:
+                rec += f" ({status['reason']})"
             out += [f"### {fork['id']} — {fork['title']}", "",
                     f"OPEN — recommended: {rec}", "", f"Why: {card['recommendation']['why']}", ""]
             continue
         out += [f"### {fork['id']} — {fork['title']}: {option_label(card, status['option'])}", "",
                 f"decided({status['source']})", "", f"Why: {card['recommendation']['why']}", ""]
+        out += [f"resolved_by: {resolved_by(status)}", ""]
         rejected = [o for o in card["options"] if o["id"] != status["option"]]
         if rejected:
             out += [f"- {rejected_line(o)}" for o in rejected] + [""]
