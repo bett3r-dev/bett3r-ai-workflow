@@ -131,13 +131,22 @@ def rejected_line(opt):
     return line
 
 
-# The census in the xp layer (XL-24) reads one column-0 `resolved_by: <value>`
-# line per decided fork, in the five-value grammar `atom:<id> |
-# neotoma:<entity_id> | human | code | recommendation` (ADR-053 s10). Where the
-# map carries no citation the value is minted from `status.source`: the three
-# values esas emits map one-to-one, and `recommendation` stays its own literal
-# rather than being laundered into `human` (XL-62-F1 option A). Adding or
-# removing such a line is a shape change and bumps GEN.
+# The census that reads this line lives in ANOTHER repository: bett3r-xp-layer,
+# ticket XL-24, `packages/xp-mcp/src/resolved-by.ts`. None of those three
+# resolve in this repo, and no `cross-repo <repo>@<sha>:<path>` citation
+# (ADR-010's spelling) is given for them because this repo pins no sha of that
+# tree. The in-repo record of this contract, and the one to read first, is
+# `docs/adr/ADR-014-the-md-projection-carries-one-machine-read-line-per-decided-fork.md`
+# with `docs/prs/XL-62/ticket-block.md` behind it.
+#
+# That census reads one column-0 `resolved_by: <value>` line per decided fork,
+# in the five-value grammar `atom:<id> | neotoma:<entity_id> | human | code |
+# recommendation` — specified by bett3r-xp-layer's ADR-053 s10, which is that
+# repo's numbering and not this one's. Where the map carries no citation the
+# value is minted from `status.source`: the three values esas emits map
+# one-to-one, and `recommendation` stays its own literal rather than being
+# laundered into `human` (XL-62-F1 option A, ticket-block.md). Adding or
+# removing such a line is a shape change and bumps GEN (ADR-014).
 RESOLVED_BY_FALLBACK = {"owner": "human", "code": "code", "recommendation": "recommendation"}
 
 

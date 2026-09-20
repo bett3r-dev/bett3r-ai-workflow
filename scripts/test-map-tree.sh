@@ -385,11 +385,16 @@ check 'T8 edge: no span wrapped around a backtick-glued path' "$( grep -c '`` `d
 # ---------------------------------------------------------------------------
 printf 'T9: one machine-read resolved_by: line per decided fork, and only there\n'
 # ---------------------------------------------------------------------------
-# The xp-layer census (XL-24) parses column-0 `resolved_by: <value>` lines in
-# the five-value grammar `atom:<id> | neotoma:<entity_id> | human | code |
-# recommendation` (ADR-053 s10). The value is status.resolvedBy verbatim where
-# the map carries it, else it is minted from status.source: owner -> human,
-# code -> code, recommendation -> recommendation (XL-62-F1 option A).
+# The census that parses these lines lives in ANOTHER repository:
+# bett3r-xp-layer, ticket XL-24. Neither that ticket nor that repo's ADR-053
+# s10 — which is where the five-value grammar `atom:<id> | neotoma:<entity_id>
+# | human | code | recommendation` is specified — resolves here, and no
+# `cross-repo <repo>@<sha>:<path>` citation (ADR-010's spelling) is given for
+# them because this repo pins no sha of that tree. The in-repo record is
+# `docs/adr/ADR-014-the-md-projection-carries-one-machine-read-line-per-decided-fork.md`.
+# The value is status.resolvedBy verbatim where the map carries it, else it is
+# minted from status.source: owner -> human, code -> code, recommendation ->
+# recommendation (XL-62-F1 option A, docs/prs/XL-62/ticket-block.md).
 
 # region_body <file> — the body between the inline twin and the inline end
 # marker, i.e. exactly the bytes out= covers.
@@ -460,7 +465,9 @@ check 'T9: the jira dialect emits no resolved_by line' "$( grep -c 'resolved_by'
 # Conformance: the md body is checked in, so any interior spacing or ordering
 # change around the resolved_by: line is a reviewable diff. This is the only
 # drift signal this repo can carry for a grammar whose reader lives in another
-# repo (packages/xp-mcp/src/resolved-by.ts).
+# repo — `packages/xp-mcp/src/resolved-by.ts` in bett3r-xp-layer, a path that
+# does not resolve here by construction (ADR-014, "no coupling guard covers
+# this file").
 check 'T9: the conformance fixture is non-empty' \
   "$( [ -s "$FIX/resolved-by-body.md" ] && echo non-empty )" non-empty
 holds 'T9: a fresh render is byte-identical to the checked-in conformance body' \
