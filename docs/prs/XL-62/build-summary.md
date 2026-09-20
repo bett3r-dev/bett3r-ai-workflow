@@ -15,6 +15,7 @@ slices:
     verifier: pass
     redBeforeGreen: true
     postDesignDecisions: [D1, D2, D3, D4, D5]
+    usage: null
   - id: 2
     name: "An open fork's typed reason is visible to the person reading the design"
     origin: plan
@@ -27,6 +28,7 @@ slices:
     verifier: pass
     redBeforeGreen: true
     postDesignDecisions: [D6, D7, D8]
+    usage: null
   - id: 3
     name: "The accepted ADR-003 exception is written down where the next renderer change will read it"
     origin: plan
@@ -39,8 +41,20 @@ slices:
     verifier: pass
     redBeforeGreen: mutation
     postDesignDecisions: [D9, D10, D11, D12]
+    usage: null
+verifyBuild:
+  usage: null
+  gate: { mode: --fast, verdict: PASS, skipped: 18, inconclusive: 0 }
+  coherence: { critical: 0, medium: 0, low: 0, shippedUnresolved: 0 }
+  fixSlicesAdded: 0
+  adrs: [ADR-014]
+  concerns: { hard: 0, soft: 0, unmet: [] }
 ---
 ## What shipped
+
+Usage not measured: no-transcripts (`run-metrics` finds no transcript for branch XL-62;
+this unit's step contexts live under the orchestrator session, and `--fleet`'s `agents.yaml`
+names no units). Every `usage:` cell above is `null` rather than estimated.
 
 All three slices green and committed, one commit each, in plan order, sequentially in the lane
 worktree (`worktree-pool size` returned `pool=0`: the slices are a 1 -> 2 -> 3 chain, width 1).
