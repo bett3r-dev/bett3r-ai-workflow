@@ -358,6 +358,25 @@ check 'a tick that recorded no pluginVersion refuses, and ticks no second time' 
       "$( ticks )" '1' "$( cat "$TMP/out" )"
 says 'and names the field the orchestrator owed' "$TMP/out" 'still records no pluginVersion'
 
+# A --run that names a path which does not EXIST is operator error, not contract
+# drift: a typo or the wrong working directory ticks a whole orchestrator and
+# then blames the orchestrator for a file it was never given a dir to write. The
+# fresh-run case above is why this cannot be checked before tick 1 — absent
+# run.yaml inside an existing dir is legitimate — so the two are told apart here,
+# by the dir, after the tick.
+new_run run-d6
+RUN="$TMP/run-d6/does-not-exist"
+STUB_RUN=$RUN
+export STUB_RUN
+arm 'FLEET-STEP:v1 outcome=success waves=1/3 units=2/7' \
+    'FLEET-STEP:v1 outcome=success waves=2/3 units=5/7'
+loop "$TMP/out" --run "$RUN" --tick "$STUB_TICK"
+check 'a --run path that does not exist refuses after one tick' \
+      "$( ticks )" '1' "$( cat "$TMP/out" )"
+says 'and the refusal names the missing run directory' "$TMP/out" 'run directory'
+says 'and points at --run rather than the orchestrator' "$TMP/out" '--run names a path'
+says_not 'it is not reported as contract drift' "$TMP/out" 'still records no pluginVersion'
+
 # The version the run records must not MOVE mid-run either: the orchestrator
 # writes it from the manifest it actually loaded, so two different values across
 # two ticks means two plugin versions drove one run. Reported as a change, not as
