@@ -39,3 +39,27 @@ sources: [code:scripts/test-flow-seams.sh, human]
 rejected: treating gate step `flow-seams` as met — it is not; it is red, and reported red
 supersedes: —
 `sh scripts/test-flow-seams.sh` reports `✗ 2 failed, 544 passed`: `the brief keeps every field the absorbed lane marker carried` and `the brief carries what a step invoked on its own cannot ask anyone for`. The verifier reproduced the identical count and the identical two names on a clean base checkout, so the red predates the slice and names no file in its diff. Slice 1's gate 2 is therefore not met, and the failure is out of the slice's scope rather than waived.
+
+## D6 — the reason cases live in a new fixture ticket ESAS-906, not on the existing ESAS-905-F3
+kind: deviation
+step: build · slice: 2 · decidedBy: executor
+sources: [code:ESAS-906 (scripts/fixtures/map-tree/design.map.json), code:resolved-by-body.md (scripts/fixtures/map-tree/), design:slice 2 oracle]
+rejected: adding `reason` to the existing open fork ESAS-905-F3 — it would have moved slice 1's conformance body and broken two slice-1 control assertions
+supersedes: —
+The slice says to extend design.map.json with an open fork carrying a reason. A new ticket `ESAS-906` (vocabulary reason, free text, no reason) does that without mutating ESAS-905. The verifier judged this strictly better than the alternative: slice 1's byte-pin survives as an INDEPENDENT signal, and is now a live assertion that this feature moved zero bytes of the no-reason render. Confirmed by rendering ESAS-901, ESAS-902 and ESAS-905 before and after — byte-identical, `src=` and `out=` hashes included.
+
+## D7 — the renderer's comment must not claim a vocabulary guard that does not exist
+kind: overruled
+step: build · slice: 2 · decidedBy: verifier
+sources: [code:render_md (plugins/bett3r-ai-workflow/scripts/map-tree.py:168-175), code:map-structure.schema.json $defs.text, design:ticket-block.md "Risks"]
+rejected: the executor's original wording, "Whether the string is one of the documented codes is `design-map validate`'s judgement, not the renderer's" — false in the present tense
+supersedes: —
+Fix round 1, cause `invariant`, executor `fresh`. The first draft's comment converted F3's NORMATIVE placement of vocabulary validation into a present-tense fact. The verifier ran `design-map validate` against a reason outside the three documented codes and got `outcome=ok`: `open.reason` is `$defs/text` (`{"type":"string","minLength":1}`), and no layer enforces the vocabulary today. The comment now says exactly that and cites the ticket block's Risks section, where the gap is recorded as open and unmitigated. A reader who believed the original would have concluded drift was caught downstream; nothing catches it.
+
+## D8 — bare cross-repo ADR citations in the slice-2 diff are re-pointed in-repo
+kind: deviation
+step: build · slice: 2 · decidedBy: orchestrator
+sources: [code:scripts/test-map-tree.sh:472-475, code:scripts/test-map-tree.sh:499, adr:ADR-010]
+rejected: leaving them for slice 3's sweep — they were one line each and already under the verifier's eye
+supersedes: —
+Two comments cited `ADR-064` bare; that ADR lives in bett3r-xp-layer and `docs/adr/` here tops out at ADR-013. Both now cite `docs/prs/XL-62/ticket-block.md`, which is in-repo and quotes the same decision, so no `cross-repo <repo>@<sha>:<path>` form was needed. `git diff | grep 'ADR-0[0-9][0-9]'` over the whole slice-2 diff returns nothing. D4's sweep over slice 1's `map-tree.py:134-140` remains owed to slice 3.
