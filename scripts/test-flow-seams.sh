@@ -862,11 +862,27 @@ present "$PROVISIONER_MD" '.work/lane.yaml' 'the writer (provisioner) names .wor
 # section rather than "the first fenced block in the file", because provisioner.md
 # fences another manifest earlier and the first-block shortcut would silently
 # assert against that one instead.
-awk '/^## 6 /{s=1} s&&/^```yaml$/{f=1;next} f&&/^```$/{exit} f' "$PROVISIONER_MD" > "$TMP/lane-brief.yaml"
+#
+# The anchor is the heading's TEXT, not its number. It was `^## 6 ` and the
+# brief moved to section 7; section 6 ("Carry the design layer in, read-only")
+# fences a manifest of its own, so the extraction kept finding A block, the
+# `-s` guard below was satisfied by it, and the two field-set assertions then
+# reported all fifteen fields "missing" against the wrong yaml entirely. That
+# is this very suite's own stated failure mode — "an absorbed field dropped in
+# the rename is exactly what a rename loses quietly" — landing on the suite
+# instead of the artifact. A renumbered heading must not be able to do it again.
+awk '/^## [0-9]+ — Write the lane brief/{s=1} s&&/^```yaml$/{f=1;next} f&&/^```$/{exit} f' "$PROVISIONER_MD" > "$TMP/lane-brief.yaml"
 
+# Two guards, because "I extracted something" is not "I extracted the brief".
+# The needle is a field no other fenced block in the writer carries, so landing
+# on the wrong section fails HERE, loudly and by name, rather than being
+# re-described downstream as a brief that lost every field it has.
 if [ ! -s "$TMP/lane-brief.yaml" ]; then
   fail 'the lane brief schema block is extractable from the writer' \
-       'no fenced ```yaml block found under provisioner.md section 6 — the brief format is specified nowhere executable'
+       'no fenced ```yaml block found under provisioner.md'"'"'s "Write the lane brief" section — the brief format is specified nowhere executable'
+elif ! grep -q '^runId:' "$TMP/lane-brief.yaml"; then
+  fail 'the lane brief schema block is extractable from the writer' \
+       'the block extracted under "Write the lane brief" carries no top-level `runId:` — the section anchor matched the wrong block, so every field assertion below would be measured against the wrong yaml'
 else
   pass 'the lane brief schema block is extractable from the writer'
 
