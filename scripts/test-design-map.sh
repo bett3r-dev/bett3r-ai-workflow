@@ -1115,7 +1115,7 @@ expect_error 'decisions: no map' missing-map decisions
 expect_error 'decisions: --final is not its flag' unknown-flag-final decisions "$TMP/dec/map.json" --final
 
 # ---------------------------------------------------------------------------
-printf '\nBLUEPRINT-166: fleet maps — 10 fragments stack into 7 maps, one answer path closes\n'
+printf '\nESAS-166: fleet maps — 10 fragments stack into 7 maps, one answer path closes\n'
 # ---------------------------------------------------------------------------
 # Fixtures: scripts/fixtures/design-map/stack-3-2-5/ holds 7 valid subject
 # maps built from 10 ticket fragments — a3.map.json carries 3 tickets'
@@ -1184,7 +1184,7 @@ python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); print(",".join(f["i
 check 'fleet project: only the forks whose tickets contain ESAS-202' "$( cat "$TMP/f325/projected-ids" )" 'ESAS-202-F1,ESAS-202-F2'
 
 # ---------------------------------------------------------------------------
-printf '\nBLUEPRINT-174: select — the map target is a first-match table, probes before start\n'
+printf '\nESAS-174: select — the map target is a first-match table, probes before start\n'
 # ---------------------------------------------------------------------------
 # `select` is pure over a captures directory (design.md P1). Each case builds
 # its own directory under $TMP from scripts/fixtures/design-map/select/ (the
@@ -1365,7 +1365,7 @@ sel_case prec-nokinds-linked status-map-ok.json tools-full.txt board-nokinds.jso
 expect_select 'precedence row 8 over 9-11 (no boardKinds + linked worktree)' prec-nokinds-linked start artifact board-no-map done
 
 # ---------------------------------------------------------------------------
-printf '\nBLUEPRINT-174: post — the board store readback matches map.json (D7, D5)\n'
+printf '\nESAS-174: post — the board store readback matches map.json (D7, D5)\n'
 # ---------------------------------------------------------------------------
 # The readback is the `get_map` tool body `{ok:true, map, mapSeq}` (blueprint-mcp
 # handlers.ts GetMapToolResult = blueprint-store map-write.ts MapReadResult). Its map
