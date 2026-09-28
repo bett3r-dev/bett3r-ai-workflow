@@ -3,7 +3,7 @@
 A Claude Code plugin that ships the **PV3 DDD framework skills** — the `create-*` scaffolders and
 a `ddd-patterns` reference for the PV3 event-sourcing/CQRS framework (AggregateBuilder,
 ReadmodelBuilder, PolicyBuilder, the MDU/lift composition model). Install it in **any PV3 repo**;
-it reads that repo's own package names and paths from `.esas.config.json` instead of hardcoding
+it reads that repo's own package names and paths from `.blueprint.config.json` instead of hardcoding
 Teselly's, so the same patterns propagate everywhere PV3 runs.
 
 It is the **framework half** of the flow. Pair it with [`bett3r-ai-workflow`](../bett3r-ai-workflow)
@@ -13,17 +13,17 @@ A PV3 repo installs both; a non-PV3 repo installs just the workflow plugin.
 ## The mechanical pass, and what's left after it
 
 The design graph already fixes an artifact's file path, builder wiring, event names, placement,
-registration — and the **node id the ESAS extractor will read back**. `scaffold-from-design`
+registration — and the **node id the BLUEPRINT extractor will read back**. `scaffold-from-design`
 generates that half with a tested program
-([`@bett3r-dev/pv3-library-esas-scaffold`](https://github.com/bett3r-dev/pv3/tree/master/packages/pv3-library-esas-scaffold),
-run as `pv3 g scaffold`, the mirror of the extractor's `pv3 g esas`), so it is derived rather than
+([`@bett3r-dev/pv3-library-blueprint-scaffold`](https://github.com/bett3r-dev/pv3/tree/master/packages/pv3-library-blueprint-scaffold),
+run as `pv3 g scaffold`, the mirror of the extractor's `pv3 g blueprint`), so it is derived rather than
 retyped.
 
 That is not about typing speed. It is about **convergence**: a hand-written artifact that drifts by
 one word in a label reads back as a different node, the design's proposal never flips to
 `satisfied`, and the board reports a phantom forever — while the code compiles and the tests pass.
 
-Everything the graph cannot carry stays here, in the `create-*` skills, because an ESAS node has a
+Everything the graph cannot carry stays here, in the `create-*` skills, because an BLUEPRINT node has a
 label, a subdomain and a resource key and **no fields**. Schemas, invariants, handler bodies,
 projections, stream strategy and idempotency are hand-written, and the generator refuses to guess
 any of them. Each generated file states its own `STILL OWED` list.
@@ -64,9 +64,9 @@ per-artifact one: the at-least-once contract, the per-stream version watermark a
 `isRedelivery` bind **any** consumer — policy, read model, or an external non-PV3 service —
 and buried under one artifact kind the other two would never find them.
 
-## The `.esas.config.json` seam
+## The `.blueprint.config.json` seam
 
-Every PV3 repo carries an `.esas.config.json` at its root. The skills resolve these fields
+Every PV3 repo carries an `.blueprint.config.json` at its root. The skills resolve these fields
 (Teselly's values shown as examples):
 
 | Field | Meaning | Example (Teselly) |
@@ -77,7 +77,7 @@ Every PV3 repo carries an `.esas.config.json` at its root. The skills resolve th
 | `clientLibraryPackageName` | Generated client-library import name | `@bett3r-dev/teselly-client-library` |
 | `domainUtilsPackageName` | Domain utilities import name (scope invariants, projection transformers, process-manager helpers). **Optional** — defaults to `domainEventsPackageName` + `-utils`. | `@bett3r-dev/teselly-domain-utils` |
 
-> **Setup note:** `domainUtilsPackageName` is **optional** — if a repo's `.esas.config.json`
+> **Setup note:** `domainUtilsPackageName` is **optional** — if a repo's `.blueprint.config.json`
 > omits it, the `create-aggregate` / `create-policy` / `create-readmodel` skills derive it as
 > `domainEventsPackageName` + `-utils` (e.g. `@bett3r-dev/teselly-domain` →
 > `@bett3r-dev/teselly-domain-utils`). Declare it explicitly only if your utilities package
@@ -93,8 +93,8 @@ step (saying so) when the block does not name its command:
 ```json
 "designTooling": {
   "framework": "pv3",
-  "extract": "yarn esas",
-  "scaffold": "yarn esas:scaffold",
+  "extract": "yarn blueprint",
+  "scaffold": "yarn blueprint:scaffold",
   "scaffoldSkill": "bett3r-pv3-ai-skills:scaffold-from-design"
 }
 ```
@@ -102,11 +102,11 @@ step (saying so) when the block does not name its command:
 | Field | Contract |
 |---|---|
 | `framework` | The adapter pair's framework. |
-| `extract` | Rewrites `.esas/graph.json` from code. In any PV3 repo, `yarn pv3 g esas`. |
+| `extract` | Rewrites `.blueprint/graph.json` from code. In any PV3 repo, `yarn pv3 g blueprint`. |
 | `scaffold` | Accepts `--nodes`, `--design`, `--graph`, `--write`, `--json`, runs from the repo root, exits `0` clean · `1` unreadable input · `3` blocked. In any PV3 repo, `yarn pv3 g scaffold`. |
 | `scaffoldSkill` | The skill that reads the scaffold output and owns what it leaves unwritten. |
 
-Teselly routes both through its `scripts/pv3Cli.js` wrapper, so its values are the `yarn esas*`
+Teselly routes both through its `scripts/pv3Cli.js` wrapper, so its values are the `yarn blueprint*`
 scripts shown above.
 
 ## Relationship to the host repo

@@ -12,7 +12,7 @@ Seed a complete bounded context's `CONTEXT.md` from code that already exists: th
 
 ## Step 1 — Locate the context
 
-Read `.esas.config.json` for `domainEventsPath` (repo root when absent). The subdomain's canonical definitions live under `<domainEventsPath>/src/<context>/`, its server module holds the behaviour, and the glossary goes to `<domainEventsPath>/src/<context>/CONTEXT.md`. Done when all three paths are named.
+Read `.blueprint.config.json` for `domainEventsPath` (repo root when absent). The subdomain's canonical definitions live under `<domainEventsPath>/src/<context>/`, its server module holds the behaviour, and the glossary goes to `<domainEventsPath>/src/<context>/CONTEXT.md`. Done when all three paths are named.
 
 ## Step 2 — Extract from code
 

@@ -1041,14 +1041,14 @@ condition that retires it on purpose.
   > `<map path without its .json>.resolved-by.json`, beside the map, a JSON object
   > keyed by fork id, committed with the map. **Beside, not inside:** the fork
   > object is closed (`additionalProperties: false`), as is every `status` branch,
-  > and the status kind refs the byte-identical copy of esas's vocabulary — so an
+  > and the status kind refs the byte-identical copy of blueprint's vocabulary — so an
   > id in the map would be a cross-repo vocabulary change, not a field addition. **Named after its own map**, not a flat
   > `resolved-by.json`, because a run dir holds one map per subject in one
   > directory. That file is the id's one home. It is distinct from `resolvedBy` on
   > a fork's status, which carries what **settled** the fork; an id handed back by
   > a recorder says only where the answer was filed.
 - recorded: 2026-09-18
-- expiry: esas's map vocabulary gains a field for a recorder id
+- expiry: blueprint's map vocabulary gains a field for a recorder id
 
 ### Recording is never a gate; never probe whether the provider is up before calling
 - rule: A refusal is learned from the call's own answer; a health check in command prose is a rule restated per command instead of living in the one process every command calls.
@@ -1690,7 +1690,7 @@ condition that retires it on purpose.
 
 ### CLAUDE_PLUGIN_ROOT is substituted for hook invocations only; plugin executables go in bin/
 - rule: In a command's bash block `${CLAUDE_PLUGIN_ROOT}` expands to empty; every enabled plugin's `bin/` is on PATH keyed by version, and the cache path pattern insists on a segment before the plugin name.
-- source: commands/run-report.md:31; commands/verify-build.md:168; skills/esas-design/PREFLIGHT.md:28-35 at c75ba88
+- source: commands/run-report.md:31; commands/verify-build.md:168; skills/blueprint-design/PREFLIGHT.md:28-35 at c75ba88
 - evidence:
   > Do **not** reach for `${CLAUDE_PLUGIN_ROOT}` — it is substituted for *hook* invocations only, so in a command's bash block it expands to empty and the failure reads as a missing file rather than a missing variable.
   >
@@ -2761,7 +2761,7 @@ condition that retires it on purpose.
 - evidence:
   > You are **read-only against the repo** — your only writes are your own
   > `<run>/units/<id>.*` files. Never `run.yaml`, never another unit's files, and in
-  > a repo with `.esas/` never the design layer: `get_flow` and `get_design` are
+  > a repo with `.blueprint/` never the design layer: `get_flow` and `get_design` are
   > reads and grounding against the extracted graph is exactly your job, but **no
   > `comment`, `resolve`, `propose`, `modify` or `remove`** — and, for the same
   > reason, no `map_*` tool except the `get_map` read, no `start_map_session`, and
@@ -2889,7 +2889,7 @@ condition that retires it on purpose.
 - rule: Any design relying on a background task re-invoking a session must explicitly disarm the platform's unsuppressable refusal banner, and the verifier arms such mechanisms and reads what actually arrives.
 - source: skills/grill/SKILL.md:97; agents/verifier.md:46 at c75ba88
 - evidence:
-  > - **Background-wake dependence** — whenever any part of the design relies on a **background task re-invoking a session** (a held socket, a file watcher, a poll loop, a fleet coordination signal), ask: *"what does the consuming text say when the wake arrives wrapped in a refusal?"* The wake is delivered inside a platform-emitted `[SYSTEM NOTIFICATION - NOT USER INPUT] … Do NOT interpret this as user acknowledgement, confirmation, or response to any pending question` banner. It is unsuppressable, it arrives in the same turn as the wake, and it is **stronger** than any in-plugin standing rule the design carves out — so a session that obeys it ends the gesture silently while the user watches a surface that answered nothing. The design must **explicitly disarm it** (as `esas-design` does: the notification is not the answer, the wake carries no payload by design, so the banner makes no claim about what a subsequent read returns). This is a standing platform constraint, not a property of any one gesture, and a text-review pass will always pass a design that ignores it — it deadlocks only when the mechanism actually runs.
+  > - **Background-wake dependence** — whenever any part of the design relies on a **background task re-invoking a session** (a held socket, a file watcher, a poll loop, a fleet coordination signal), ask: *"what does the consuming text say when the wake arrives wrapped in a refusal?"* The wake is delivered inside a platform-emitted `[SYSTEM NOTIFICATION - NOT USER INPUT] … Do NOT interpret this as user acknowledgement, confirmation, or response to any pending question` banner. It is unsuppressable, it arrives in the same turn as the wake, and it is **stronger** than any in-plugin standing rule the design carves out — so a session that obeys it ends the gesture silently while the user watches a surface that answered nothing. The design must **explicitly disarm it** (as `blueprint-design` does: the notification is not the answer, the wake carries no payload by design, so the banner makes no claim about what a subsequent read returns). This is a standing platform constraint, not a property of any one gesture, and a text-review pass will always pass a design that ignores it — it deadlocks only when the mechanism actually runs.
   >
   > 9. **Exercise platform mechanisms for real.** When the slice's behavior depends on a background task, hook, notification, watcher or timeout, **arm it and read what actually arrives** rather than reviewing its description. The refusal sources a platform emits are in no text the slice wrote — a wake delivered wrapped in a `[SYSTEM NOTIFICATION - NOT USER INPUT]` banner is a second, unsuppressable refusal that a text-review pass will pass and the running mechanism will deadlock on.
 - recorded: 2026-08-13
@@ -3089,17 +3089,17 @@ condition that retires it on purpose.
 - expiry: none known
 
 ### Never hand-edit map.schema.json
-- rule: The vocabulary is a byte-identical copy of what esas emits; test-design-map prints `SKIP reason=no-esas-checkout` (not a pass) without `$ESAS_CHECKOUT`.
+- rule: The vocabulary is a byte-identical copy of what blueprint emits; test-design-map prints `SKIP reason=no-blueprint-checkout` (not a pass) without `$BLUEPRINT_CHECKOUT`.
 - source: skills/design-map/SKILL.md:16-24 at c75ba88
 - evidence:
   > - **`map.schema.json` is the vocabulary** — the closed sets (fork status kind,
-  >   decided source, node level, map shape), a byte-identical copy of what esas
-  >   emits at `packages/esas-schema/schema/map.schema.json`.
-  >   **Never hand-edit `map.schema.json`**: a value added here and not in esas is a second source
+  >   decided source, node level, map shape), a byte-identical copy of what blueprint
+  >   emits at `packages/blueprint-schema/schema/map.schema.json`.
+  >   **Never hand-edit `map.schema.json`**: a value added here and not in blueprint is a second source
   >   for one closed set, and an edited copy can no longer be told stale. To
-  >   change a set, change it in esas and copy the emitted file over whole.
-  >   `scripts/test-design-map.sh` compares the copy with `$ESAS_CHECKOUT` when
-  >   that is set, and prints `SKIP reason=no-esas-checkout` (not a pass) when it
+  >   change a set, change it in blueprint and copy the emitted file over whole.
+  >   `scripts/test-design-map.sh` compares the copy with `$BLUEPRINT_CHECKOUT` when
+  >   that is set, and prints `SKIP reason=no-blueprint-checkout` (not a pass) when it
   >   is not.
 - recorded: 2026-09-17
 - expiry: none known
@@ -3143,15 +3143,15 @@ condition that retires it on purpose.
 - recorded: 2026-09-17
 - expiry: none known
 
-## skills/esas-design/SKILL.md
+## skills/blueprint-design/SKILL.md
 
 ### Read ids before referencing them: UNRESOLVED_EDGE_ENDPOINT and label casing
 - rule: Extracted `ext` ids carry an `external-system-` segment a proposed node will not; label casing changes the derived id; propose nodes first and read the returned nodeIds before sending edges.
-- source: skills/esas-design/SKILL.md:255-276 at c75ba88
+- source: skills/blueprint-design/SKILL.md:255-276 at c75ba88
 - evidence:
   > **Read ids before referencing them — never guess a derived id.** No verb lists
   > node ids (`get_flow` *requires* a root command id you already have), so the
-  > entry point is grepping `.esas/graph.json`. Ids read
+  > entry point is grepping `.blueprint/graph.json`. Ids read
   > `<subdomain>_<abbrev>_<kebab-label>` (`cmd`, `evt`, `rm`, `agg`, `pol`, `sys`,
   > `ext`, `ui`). Two things break the obvious guess:
   >
@@ -3172,11 +3172,11 @@ condition that retires it on purpose.
   > rejects the whole batch and the no-take-it-apart rule makes each miss a full
   > round-trip.
 - recorded: 2026-09-04
-- expiry: esas's id derivation changes
+- expiry: blueprint's id derivation changes
 
 ### No hook can wake the board session
 - rule: `FileChanged` has no decision control and `Stop` fires before anything is answered; the session channel is a persistent `Monitor` and the SessionStart hook only nudges.
-- source: skills/esas-design/SKILL.md:88-96 at c75ba88
+- source: skills/blueprint-design/SKILL.md:88-96 at c75ba88
 - evidence:
   > `persistent: true` makes it **session-scoped rather than turn-scoped**, which is
   > the whole mechanism: a command-scoped channel dies at every session boundary and
@@ -3190,17 +3190,17 @@ condition that retires it on purpose.
 - recorded: 2026-09-04
 - expiry: Claude Code hooks gain a way to inject context on a file change
 
-### Verified at esas @ de920db: --non-anchor serves a board with no extracted reality
-- rule: A repo with no graph can still get a map; the owner launches `esas-session-server --non-anchor` from the launch line, and nothing in design-map spawns it.
-- source: skills/esas-design/BOARD-SETUP.md:15 at c75ba88
+### Verified at blueprint @ de920db: --non-anchor serves a board with no extracted reality
+- rule: A repo with no graph can still get a map; the owner launches `blueprint-session-server --non-anchor` from the launch line, and nothing in design-map spawns it.
+- source: skills/blueprint-design/BOARD-SETUP.md:15 at c75ba88
 - evidence:
-  > Verified at esas @ de920db: `packages/esas-session-server/src/launcher.ts:261-262` parses `--non-anchor` into `args.nonAnchor = true`, and `:303` sets `anchored: !args.nonAnchor`.
+  > Verified at blueprint @ de920db: `packages/blueprint-session-server/src/launcher.ts:261-262` parses `--non-anchor` into `args.nonAnchor = true`, and `:303` sets `anchored: !args.nonAnchor`.
 - recorded: before 2026-09-19
-- expiry: esas changes the launcher's --non-anchor handling
+- expiry: blueprint changes the launcher's --non-anchor handling
 
 ### The arming, not the transport, was what kept failing
 - rule: The summon channel is one persistent Monitor call opened at SessionStart for every session in the repo, replacing a watcher armed by /design that died at every session boundary.
-- source: skills/esas-design/BOARD-SETUP.md:70; hooks/README.md:88-93 at c75ba88
+- source: skills/blueprint-design/BOARD-SETUP.md:70; hooks/README.md:88-93 at c75ba88
 - evidence:
   > That replaces a watcher that had to be armed on exactly the right turn and re-armed after every one — the arming, not the transport, was what kept failing.
   >
@@ -3215,38 +3215,38 @@ condition that retires it on purpose.
 
 ### Never spawn the board unasked: an orphan squats :3727 for the next repo
 - rule: The board is offered when the first batch of questions is ready and started only on a yes; the port is claimed strictly.
-- source: skills/esas-design/BOARD-SETUP.md:60 at c75ba88
+- source: skills/blueprint-design/BOARD-SETUP.md:60 at c75ba88
 - evidence:
   > **Never spawn it unasked, and never at the preflight.** The port is the reason, and it is strict (below): a board nobody asked for squats :3727 for as long as it runs, and the repo that pays is the *next* one — its board will not bind, in a session that did nothing wrong and has no reason to suspect a board it never started. An orphan is also the hardest kind to find, which is what the `board: other-repo` row of the command's verdict table is for. Offering at the preflight makes that the ordinary outcome rather than the unlucky one: the preflight answers *capability*, and a checkout that can hold a board is not yet a design that needs one.
 - recorded: 2026-08-08
 - expiry: the board stops claiming its port strictly
 
-### Do not set ESAS_REPO_PATH
+### Do not set BLUEPRINT_REPO_PATH
 - rule: .mcp.json is git-tracked and byte-identical in every worktree, so an absolute path would make every worktree design against one checkout.
-- source: skills/esas-design/BOARD-SETUP.md:29 at c75ba88
+- source: skills/blueprint-design/BOARD-SETUP.md:29 at c75ba88
 - evidence:
-  > **Do not set `ESAS_REPO_PATH`.** The server designs against its working directory, and Claude Code spawns a project server with the working directory set to the project root — including inside a worktree, where that is the worktree itself. `.mcp.json` is git-tracked, so the entry is byte-identical in every worktree of a fleet: pinning an absolute path there would make all of them design against the one checkout it names, which is exactly the split layer the main-checkout rule exists to prevent. Unpinned, a worktree answers `ESAS_DIR_MISSING`, which is the right answer there.
+  > **Do not set `BLUEPRINT_REPO_PATH`.** The server designs against its working directory, and Claude Code spawns a project server with the working directory set to the project root — including inside a worktree, where that is the worktree itself. `.mcp.json` is git-tracked, so the entry is byte-identical in every worktree of a fleet: pinning an absolute path there would make all of them design against the one checkout it names, which is exactly the split layer the main-checkout rule exists to prevent. Unpinned, a worktree answers `BLUEPRINT_DIR_MISSING`, which is the right answer there.
 - recorded: 2026-08-08
 - expiry: none known
 
-## skills/esas-pending/SKILL.md
+## skills/blueprint-pending/SKILL.md
 
 ### The pending count is telemetry, never a trigger
-- rule: Never act on, sync, or mention pending ESAS board changes unless the user asks; the only ask is a summon frame on the session channel.
-- source: skills/esas-pending/SKILL.md:3; hooks/README.md:43; README.md:27; CONTEXT-PROVIDERS.md:14-24 at c75ba88
+- rule: Never act on, sync, or mention pending BLUEPRINT board changes unless the user asks; the only ask is a summon frame on the session channel.
+- source: skills/blueprint-pending/SKILL.md:3; hooks/README.md:43; README.md:27; CONTEXT-PROVIDERS.md:14-24 at c75ba88
 - evidence:
-  > description: "STANDING RULE for the `esas: N pending (seq A→B)` line injected by this plugin's UserPromptSubmit hook: it is telemetry, never a trigger — never act on, sync, or even mention pending ESAS board changes unless the user asks. The one carve-out: a board summon — a frame arriving on the ESAS session channel (/api/esas/ws) that this session holds open — IS the user asking, and is synced; the count never is. Read this file only if unsure what the line means or whether to react to it."
+  > description: "STANDING RULE for the `blueprint: N pending (seq A→B)` line injected by this plugin's UserPromptSubmit hook: it is telemetry, never a trigger — never act on, sync, or even mention pending BLUEPRINT board changes unless the user asks. The one carve-out: a board summon — a frame arriving on the BLUEPRINT session channel (/api/blueprint/ws) that this session holds open — IS the user asking, and is synced; the count never is. Read this file only if unsure what the line means or whether to react to it."
   >
   > **telemetry, never a trigger**; the standing rule for reacting to it lives in
   >
-  > Hook: **`UserPromptSubmit` → `esas: N pending (seq A→B)`** (`hooks/esas-pending.sh`). While the user has unsynced edits on the ESAS design board, the count goes in front of the next prompt so Claude knows its picture is stale — telemetry, never a trigger. Silent and free in every repo without a `.esas/` directory, and it always exits 0, because a `UserPromptSubmit` hook that doesn't would erase the user's prompt. The standing rule for reacting to it (never unsolicited) is the **`esas-pending`** skill. See `hooks/README.md`.
+  > Hook: **`UserPromptSubmit` → `blueprint: N pending (seq A→B)`** (`hooks/blueprint-pending.sh`). While the user has unsynced edits on the BLUEPRINT design board, the count goes in front of the next prompt so Claude knows its picture is stale — telemetry, never a trigger. Silent and free in every repo without a `.blueprint/` directory, and it always exits 0, because a `UserPromptSubmit` hook that doesn't would erase the user's prompt. The standing rule for reacting to it (never unsolicited) is the **`blueprint-pending`** skill. See `hooks/README.md`.
   >
   > The obvious alternative was tried in this repo and is rejected **on its own measured evidence**.
-  > A hook that injects a count exists — `hooks/esas-pending.sh`, a `UserPromptSubmit` hook that runs
+  > A hook that injects a count exists — `hooks/blueprint-pending.sh`, a `UserPromptSubmit` hook that runs
   > unconditionally on every prompt in every repo where the plugin is enabled — and the standing rule
-  > in `skills/esas-pending/SKILL.md` that governs it says:
+  > in `skills/blueprint-pending/SKILL.md` that governs it says:
   >
-  > > it is telemetry, never a trigger — never act on, sync, or even mention pending ESAS board
+  > > it is telemetry, never a trigger — never act on, sync, or even mention pending BLUEPRINT board
   > > changes unless the user asks.
   >
   > That is a surface this codebase built, found to be an interruption, and then suppressed by
@@ -3347,13 +3347,13 @@ condition that retires it on purpose.
   >    `hooks.UserPromptSubmitt: Invalid key in record`.
   > 3. **A live run** — `claude -p … --plugin-dir <this plugin> --debug-file …`
   >    logged `Read hooks.json for plugin bett3r-ai-workflow`, then
-  >    `Hook UserPromptSubmit success: esas: 2 pending (seq 1→4)`, and the line
+  >    `Hook UserPromptSubmit success: blueprint: 2 pending (seq 1→4)`, and the line
   >    reached the model's context.
   >
   > `${CLAUDE_PLUGIN_ROOT}` is substituted in `command` **and** in each `args`
   > element, and is available *only* to plugin hooks — a `settings.json` hook that
   > references it is rejected. `${CLAUDE_PROJECT_DIR}` is both substitutable and
-  > exported into the hook's environment, which is what `esas-pending.sh` reads.
+  > exported into the hook's environment, which is what `blueprint-pending.sh` reads.
   >
   > `args` is the exec form: the command is spawned directly, with no shell
   > re-parse, so a plugin path containing spaces cannot break the invocation. Keep
@@ -3361,7 +3361,7 @@ condition that retires it on purpose.
 - recorded: 2026-08-01
 - expiry: Claude Code changes the plugin hook loading contract
 
-### esas-pending.sh always exits 0 and is free without a board: below the noise floor
+### blueprint-pending.sh always exits 0 and is free without a board: below the noise floor
 - rule: A UserPromptSubmit hook that exits 2 erases the user's prompt; the hook's own work does not register against an empty script, and it degrades silently.
 - source: hooks/README.md:46-60 at c75ba88
 - evidence:
@@ -3372,7 +3372,7 @@ condition that retires it on purpose.
   >   processing and erases the user's prompt. Every path here — corrupt cursor,
   >   unreadable feed, torn feed, binary garbage — exits 0.
   > - **It is free when there is no board.** Line 2 is
-  >   `[ -f "${CLAUDE_PROJECT_DIR:-.}/.esas/ops.jsonl" ] || exit 0`. Measured
+  >   `[ -f "${CLAUDE_PROJECT_DIR:-.}/.blueprint/ops.jsonl" ] || exit 0`. Measured
   >   against an empty script on the same machine, the difference is **below the
   >   noise floor** — the whole cost is the process spawn that every command hook
   >   pays, and the hook's own work does not register.
@@ -3404,22 +3404,22 @@ condition that retires it on purpose.
 - recorded: 2026-08-01
 - expiry: the feed format or the hook's scan changes
 
-### esas-session-channel.sh speaks in exactly one state
-- rule: A board answering on the port, serving this checkout, with `sessions: 0`; everything else is silent, because `.esas/` existing is not sufficient.
+### blueprint-session-channel.sh speaks in exactly one state
+- rule: A board answering on the port, serving this checkout, with `sessions: 0`; everything else is silent, because `.blueprint/` existing is not sufficient.
 - source: hooks/README.md:100-112 at c75ba88
 - evidence:
   > **Silence is the behaviour under test.** It speaks in exactly one state: a board
-  > answering `GET /api/esas/status` on `${ESAS_BOARD_PORT:-3727}`, serving **this**
+  > answering `GET /api/blueprint/status` on `${BLUEPRINT_BOARD_PORT:-3727}`, serving **this**
   > checkout (`repoPath` matched in both JSON spellings and both the logical and
   > physical spelling of the project root), and reporting `sessions: 0`. Nothing on
   > the port, a board serving another checkout, `sessions >= 1`, and a board with no
-  > `sessions` field at all (unknown, never zero) are **all silent** — `.esas/`
+  > `sessions` field at all (unknown, never zero) are **all silent** — `.blueprint/`
   > existing is deliberately *not* sufficient, or every unrelated session in a
   > designing repo would open a socket it will never use.
   >
   > What it does **not** cover: a board restarted later in the session, which
   > `SessionStart` has already run past. That is recovered by the
-  > `esasSessionChannel` notice `esas-mcp` attaches to every tool result while the
+  > `blueprintSessionChannel` notice `blueprint-mcp` attaches to every tool result while the
   > channel is shut. This hook buys t=0 only.
 - recorded: 2026-08-13
 - expiry: none known

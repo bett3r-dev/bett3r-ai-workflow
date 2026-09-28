@@ -20,7 +20,7 @@ A worktree whose slice did not land takes no further slice until teardown: a res
 
 Each ready slice runs the whole of Step 3 there: executor, test-runner, scope-check and verifier receive the worktree path as the project directory, and the commit is made in that worktree. A dependent slice becomes ready only after its parent landed: its reset takes the task-branch tip, and a parent still in a worktree does not exist for it.
 
-In a pool worktree point the scaffolder's `--design`/`--graph` at the main checkout's `.esas/design.json` and `.esas/graph.json`, and skip the step (*snapshot sha ≠ this worktree's base*) after a sibling has landed since the reset.
+In a pool worktree point the scaffolder's `--design`/`--graph` at the main checkout's `.blueprint/design.json` and `.blueprint/graph.json`, and skip the step (*snapshot sha ≠ this worktree's base*) after a sibling has landed since the reset.
 
 ## 4. Land in dependency order, parents first
 

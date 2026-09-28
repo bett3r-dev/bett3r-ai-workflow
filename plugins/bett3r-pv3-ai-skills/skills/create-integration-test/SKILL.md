@@ -8,9 +8,9 @@ Scaffold an **in-process integration test suite** that drives a server module's 
 
 ## Project configuration
 
-This skill resolves the following placeholders from your repo's `.esas.config.json`:
+This skill resolves the following placeholders from your repo's `.blueprint.config.json`:
 
-| Placeholder | `.esas.config.json` field | Example value |
+| Placeholder | `.blueprint.config.json` field | Example value |
 |---|---|---|
 | `<serverPath>` | `serverPath` | `src/services/server` |
 

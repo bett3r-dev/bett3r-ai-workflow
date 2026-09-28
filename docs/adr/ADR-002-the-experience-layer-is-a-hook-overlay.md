@@ -2,7 +2,7 @@
 
 Three tickets — ESAS-85 (capture), ESAS-87 (extraction kick) and ESAS-92 (export
 freshness) — each needed an invocation point inside the development flow. All
-three attach to the same two events, and none of them could land in the `esas`
+three attach to the same two events, and none of them could land in the `blueprint`
 repo, because the flow commands live here. The obvious implementation was to
 edit `/verify-build` and `/start-multi` to call the store. That was rejected,
 and this ADR records what was chosen instead and the invariant the choice
@@ -44,7 +44,7 @@ the plugin is enabled — there is no per-directory matcher. The gate is
 [ -x "${CLAUDE_PROJECT_DIR:-.}/.knowledge-store/capture" ] || exit 0
 ```
 
-which is the discipline `plugins/bett3r-ai-workflow/hooks/esas-pending.sh`
+which is the discipline `plugins/bett3r-ai-workflow/hooks/blueprint-pending.sh`
 already established for the same reason, copied deliberately rather than
 reinvented. A config-file parse at hook start was rejected: it is I/O paid by
 every repo that gains nothing from it.
@@ -52,7 +52,7 @@ every repo that gains nothing from it.
 The sentinel doubles as **the seam**. `.knowledge-store/capture` is a repo-local
 executable the store installs, invoked in exactly two shapes
 (`capture worktree-remove <path> <cwd>` and `capture pr-create <url> <cwd>`).
-This plugin therefore hardcodes no path into `esas`, no package name and no
+This plugin therefore hardcodes no path into `blueprint`, no package name and no
 transport, and the dependency on ESAS-85's CLI is satisfied by an interface
 rather than by a location. That is what lets this ticket land while ESAS-85 is
 still open.
@@ -160,7 +160,7 @@ that direction on purpose — the failure ADR-001 documents is somebody bumping
 - **A wrapper command, `/verify-build-ks`, referencing the base one.** Forces the
   user to type a namespaced command, and silently diverges the moment the base
   command changes — the divergence being silent is the disqualifying part.
-- **A `.esas/`-style sentinel without the exit-0 discipline.** The sentinel is
+- **A `.blueprint/`-style sentinel without the exit-0 discipline.** The sentinel is
   the cheap part; the discipline is the load-bearing part. A throwing
   `PreToolUse` hook cancels the command it was meant to protect.
 - **Git hooks.** `git config core.hooksPath` is empty in the working tree that
@@ -172,17 +172,17 @@ that direction on purpose — the failure ADR-001 documents is somebody bumping
 The decision above stands unchanged. This note records where things moved
 since it was written.
 
-- **The store moved.** The knowledge store moved from `bett3r-dev/esas` to
+- **The store moved.** The knowledge store moved from `bett3r-dev/blueprint` to
   `github.com/bett3r-dev/bett3r-xp-layer`, keeping its history and relative
   paths. Its Jira issues moved from project ESAS to project XL. The key map is
   `docs/jira-key-map.tsv` in bett3r-xp-layer. The ESAS keys cited above map to:
   ESAS-85 → XL-30, ESAS-87 → XL-21, ESAS-92 → XL-14.
-- **esas has no adapter any more.** esas PR #82 removed the store and
-  `.knowledge-store/capture` from esas. The reference adapter is now
+- **blueprint has no adapter any more.** blueprint PR #82 removed the store and
+  `.knowledge-store/capture` from blueprint. The reference adapter is now
   `bett3r-xp-layer/.knowledge-store/capture`. It only works inside a repo that
   contains the knowledge-store packages, because it runs `yarn knowledge-capture`
   and loads `packages/knowledge-capture/build` from its own repo root. Consumer
-  repos (esas, teselly, pv3) have no adapter, so the hooks are inert there until
+  repos (blueprint, teselly, pv3) have no adapter, so the hooks are inert there until
   XL-11 (formerly ESAS-151) re-enables capture for consumers.
 - **The hook seam is unchanged.** The line-2 sentinel, the two invocation
   shapes and the exit-0 discipline are the same. The move needed no hook change,

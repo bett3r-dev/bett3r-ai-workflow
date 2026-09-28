@@ -11,7 +11,7 @@ The block's D9 and AC8 name `check-plugin-version-bump.sh` passing; on this bran
 ## D2 — the BOARD-GATE marker is an HTML comment line, matched exactly
 kind: silent-seam
 step: build · slice: S1 · decidedBy: executor
-sources: [design:E4, code:preflight extraction (scripts/test-esas-design.sh)]
+sources: [design:E4, code:preflight extraction (scripts/test-blueprint-design.sh)]
 rejected: bare `BOARD-GATE:v1` text as marker — any prose mention would arm the extraction
 supersedes: —
 `<!-- BOARD-GATE:v1 -->` does not render and cannot be matched by prose that names the line. Verifier ACCEPT.
@@ -24,10 +24,10 @@ rejected: argument validation — not in the design; a bad arg is a loud `[` std
 supersedes: —
 Verifier ACCEPT; exhaustive 72-combination check matched the rule.
 
-## D4 — esas-design's "## The map and the questions" heading keeps "map"
+## D4 — blueprint-design's "## The map and the questions" heading keeps "map"
 kind: shipped-finding
 step: build · slice: S2 · decidedBy: verifier
-sources: [design:E5 (names :53 only), code:skills/esas-design/SKILL.md:51]
+sources: [design:E5 (names :53 only), code:skills/blueprint-design/SKILL.md:51]
 rejected: renaming the heading in this slice — outside E5's stated scope
 supersedes: —
 It still uses "map" in the terminal-list sense; a one-line follow-up for the owner.

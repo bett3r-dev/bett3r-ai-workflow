@@ -42,15 +42,15 @@ seam. That is deliberate on both counts:
 
 The experience layer lives in
 [`bett3r-dev/bett3r-xp-layer`](https://github.com/bett3r-dev/bett3r-xp-layer).
-It moved there from `bett3r-dev/esas` on 2026-09-11, and its Jira keys moved
-from ESAS to XL. The reference adapter is
+It moved there from `bett3r-dev/blueprint` on 2026-09-11, and its Jira keys moved
+from BLUEPRINT to XL. The reference adapter is
 `bett3r-xp-layer/.xp-layer/capture`.
 
 That adapter only works **inside a repo that contains the xp-layer
 packages**. It runs `yarn xp:capture` and loads
-`packages/xp-capture/build` from its own repo root. esas no longer ships
-an adapter (esas PR #82 removed it along with the store), and neither do the
-consumer repos (esas, teselly, pv3). So the hooks are inert in those repos
+`packages/xp-capture/build` from its own repo root. blueprint no longer ships
+an adapter (blueprint PR #82 removed it along with the store), and neither do the
+consumer repos (blueprint, teselly, pv3). So the hooks are inert in those repos
 today. Re-enabling capture for consumers is tracked by XL-11.
 
 ### The contract your `capture` must satisfy

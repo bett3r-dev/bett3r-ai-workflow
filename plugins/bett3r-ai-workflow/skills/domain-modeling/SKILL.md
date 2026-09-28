@@ -81,7 +81,7 @@ If any of the three is missing, skip the ADR. Use the format in [ADR-FORMAT.md](
 
 ## In this flow
 
-**Where the model lives.** When `.esas.config.json` exists, read `domainEventsPath`: contexts live at `<domainEventsPath>/src/<context>/CONTEXT.md` and the map at `<domainEventsPath>/src/CONTEXT-MAP.md`, one `CONTEXT.md` per bounded context, never one per aggregate. Without the config, the root layout above applies.
+**Where the model lives.** When `.blueprint.config.json` exists, read `domainEventsPath`: contexts live at `<domainEventsPath>/src/<context>/CONTEXT.md` and the map at `<domainEventsPath>/src/CONTEXT-MAP.md`, one `CONTEXT.md` per bounded context, never one per aggregate. Without the config, the root layout above applies.
 
 **ADR path.** Match the repo's existing ADR directory and filename pattern. Only a repo with no ADRs yet defaults to `docs/adr/ADR-NNN-slug.md`, the spelling `vertical-slicing`'s `slices.yaml` schema and `verify-build`'s PR template render; that default fires once per repo and sets the convention every later ADR inherits. `ADR-FORMAT.md`'s `0001-slug.md` spelling and its numbering by listing are the upstream skill's: in this flow this paragraph governs the filename and the next governs the number.
 

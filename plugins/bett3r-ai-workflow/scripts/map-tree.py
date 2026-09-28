@@ -143,7 +143,7 @@ def rejected_line(opt):
 # in the five-value grammar `atom:<id> | neotoma:<entity_id> | human | code |
 # recommendation` — specified by bett3r-xp-layer's ADR-053 s10, which is that
 # repo's numbering and not this one's. Where the map carries no citation the
-# value is minted from `status.source`: the three values esas emits map
+# value is minted from `status.source`: the three values blueprint emits map
 # one-to-one, and `recommendation` stays its own literal rather than being
 # laundered into `human` (XL-62-F1 option A, ticket-block.md). Adding or
 # removing such a line is a shape change and bumps GEN (ADR-014).

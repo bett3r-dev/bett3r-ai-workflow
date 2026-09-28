@@ -18,7 +18,7 @@
     {
       "name": "bett3r-pv3-ai-skills",
       "source": "./plugins/bett3r-pv3-ai-skills",
-      "description": "PV3 DDD framework skills: generate designed artifacts' mechanical half from the ESAS design graph, then fill schemas, aggregates, policies, read models and tests by hand, with a ddd-patterns reference. Reads each host repo's packages/paths from .esas.config.json."
+      "description": "PV3 DDD framework skills: generate designed artifacts' mechanical half from the BLUEPRINT design graph, then fill schemas, aggregates, policies, read models and tests by hand, with a ddd-patterns reference. Reads each host repo's packages/paths from .blueprint.config.json."
     },
     {
       "name": "bett3r-xp-layer",

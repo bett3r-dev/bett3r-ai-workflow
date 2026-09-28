@@ -1,0 +1,8 @@
+{
+  "name": "host-repo",
+  "private": true,
+  "scripts": {
+    "blueprint": "pv3 g blueprint",
+    "blueprint:board": "node node_modules/sticky-notes-board/bin/blueprint-board.mjs"
+  }
+}

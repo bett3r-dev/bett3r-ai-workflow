@@ -97,7 +97,7 @@ evidence of anything.
 
 **Classification stays `judgement`, now on evidence rather than as an
 admission.** Do not re-read the 17; re-open this only against an out-of-sample
-corpus (host-repo runs: teselly, pv3, esas), where the 78-vs-17 ratio and the
+corpus (host-repo runs: teselly, pv3, blueprint), where the 78-vs-17 ratio and the
 44-vs-7 precision are the two numbers to recompute first.
 
 One taxonomy defect surfaced by the read: ESAS-178's round is recorded

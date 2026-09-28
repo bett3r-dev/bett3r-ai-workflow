@@ -6,7 +6,7 @@ description: Scaffold an event-driven read model (projection) for querying. Use 
 
 Write the parts of a PV3 read model that the design graph cannot determine.
 
-**If this read model exists in `.esas/design.json`, run
+**If this read model exists in `.blueprint/design.json`, run
 [`scaffold-from-design`](../scaffold-from-design/SKILL.md) FIRST.** It generates the file, the
 `ReadmodelBuilder` wiring, one projector stub per `projected-to` event grouped by its owning
 events namespace, the collection name, and the registration line. What it leaves is this skill's
@@ -20,10 +20,10 @@ Only write the whole file by hand when the read model is **not** in the design l
 
 ## Project configuration
 
-This skill resolves the following placeholders from your repo's `.esas.config.json`:
+This skill resolves the following placeholders from your repo's `.blueprint.config.json`:
 
 
-| Placeholder                  | `.esas.config.json` field                                                                 | Example value                        |
+| Placeholder                  | `.blueprint.config.json` field                                                                 | Example value                        |
 | ---------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------ |
 | `<domainEventsPath>`         | `domainEventsPath`                                                                        | `src/packages/shared/teselly-domain` |
 | `<domainEventsPackageName>`  | `domainEventsPackageName`                                                                 | `@bett3r-dev/teselly-domain`         |

@@ -106,7 +106,7 @@ jobs:
       # The shipped UserPromptSubmit hook runs on every prompt in every repo
       # where the plugin is enabled, and a non-zero exit blocks the prompt.
       # Run it under dash too — `sh` is dash on Debian/Ubuntu, bash on macOS.
-      - name: Test shipped hooks (esas-pending)
+      - name: Test shipped hooks (blueprint-pending)
         run: |
           sh scripts/test-hooks.sh
           HOOK_SH=dash sh scripts/test-hooks.sh
@@ -138,11 +138,11 @@ jobs:
       # /design's board-mode preflight is a shell block inside the command's
       # markdown, so it has no compiler and no import to break loudly. This
       # extracts and runs the shipped block against fixture host repos.
-      - name: Test /design board mode (esas-design)
+      - name: Test /design board mode (blueprint-design)
         run: |
-          sh scripts/test-esas-design.sh
-          PREFLIGHT_SH=dash sh scripts/test-esas-design.sh
-          PREFLIGHT_SH=bash sh scripts/test-esas-design.sh
+          sh scripts/test-blueprint-design.sh
+          PREFLIGHT_SH=dash sh scripts/test-blueprint-design.sh
+          PREFLIGHT_SH=bash sh scripts/test-blueprint-design.sh
       # /build runs ready slices concurrently in a reusable worktree pool, and
       # the git half of that (size, provision, unconditional reset, cherry-pick
       # land, guarded teardown) is `bin/worktree-pool`. A new script under
@@ -283,7 +283,7 @@ jobs:
   # run sequentially and fail-fast, so the first red step ends the job and every
   # step after it reports `skipped` — which, on a run already headlined `fail`,
   # is indistinguishable from passing without opening the step list. That bill
-  # has been paid: `test-esas-design.sh` sat red on master for five pushes and
+  # has been paid: `test-blueprint-design.sh` sat red on master for five pushes and
   # silently removed the version gate below — the ADR-001 release contract, the
   # most load-bearing check on a plugin PR — from two real PRs, whose lanes each
   # correctly reported "the only failure is the known baseline". Which gates a

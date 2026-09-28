@@ -11,7 +11,7 @@ evidence: `design-map render scripts/fixtures/design-map/impact-map-11-forks.jso
 bar: hard
 raisedBy: ticket owner · step: design
 quote: "The schema is committed and versioned. Map payloads spell the who-level `mapActor`, never a bare `actor`."
-why: In ESAS an actor is who wrote an op (ActorId); a map's who-level is a role. A bare `actor` field lets the two be joined by accident once the board reads the same payloads (esas CONTEXT.md "Actor (map)").
+why: In BLUEPRINT an actor is who wrote an op (ActorId); a map's who-level is a role. A bare `actor` field lets the two be joined by accident once the board reads the same payloads (blueprint CONTEXT.md "Actor (map)").
 verify: Confirm the committed schema names the who-level node `mapActor` and carries a schema version; run the validator on a fixture containing a bare `actor` key anywhere in the payload and confirm it is refused.
 verdict: met
 evidence: map.schema.json:7,10,14 — `schemaVersion` required with const 1, who-level is `mapActors`; `render scripts/fixtures/design-map/bare-actor.json` → `outcome=error reason=bare-actor at=/forks/1/options/0/actor`; refusal runs before the schema (design-map.py:274-276); test-design-map.sh green.

@@ -8,7 +8,7 @@ branch: flow/orchestrator-wave-yield
 > **Grounding degraded: this repo has no `CONTEXT.md`.** Grounding fell back to `docs/adr/` and the
 > command and agent bodies, which in this repo are the source. Recommend `/seed-context`.
 >
-> Run without a lane brief (no `.work/lane.yaml`): a single interactive `/design`. No `.esas/` → no
+> Run without a lane brief (no `.work/lane.yaml`): a single interactive `/design`. No `.blueprint/` → no
 > board. Issue: [#429](https://github.com/bett3r-dev/bett3r-ai-workflow/issues/429). Base:
 > `624a569` on `flow/thin-context-rewrite` (PR #428, unlanded at design time).
 
@@ -229,8 +229,8 @@ Resolved here by spelling the work item `GH-429` everywhere — `work-docs-path`
 key, so folder, header, `mapId`, `tickets[]` and `forkId`s all agree. The cost is that `#429` and
 `gh-429`, the shapes the script documents for a GitHub issue, resolve to `docs/prs/gh-429`, which
 does not exist. That is the discoverable failure; the case-split map was the silent-until-late one.
-`map.schema.json` is a byte-identical copy of esas's and the skill forbids hand-editing it, so the
-real fix is cross-repo: either the esas vocabulary admits the `gh-<n>` shape, or `work-docs-path`
+`map.schema.json` is a byte-identical copy of blueprint's and the skill forbids hand-editing it, so the
+real fix is cross-repo: either the blueprint vocabulary admits the `gh-<n>` shape, or `work-docs-path`
 stops minting an id no map can hold.
 
 ## Provenance

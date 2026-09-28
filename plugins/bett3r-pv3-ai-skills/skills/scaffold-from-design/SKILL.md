@@ -1,5 +1,5 @@
 ---
-description: Generate the mechanical half of a slice's PV3 artifacts from the ESAS design graph, then hand the rest to the create-* skills. Use at the START of any slice that delivers designed artifacts (a policy, read model, command or event that exists in .esas/design.json) — before writing any of them by hand.
+description: Generate the mechanical half of a slice's PV3 artifacts from the BLUEPRINT design graph, then hand the rest to the create-* skills. Use at the START of any slice that delivers designed artifacts (a policy, read model, command or event that exists in .blueprint/design.json) — before writing any of them by hand.
 ---
 
 # Skill: Scaffold From Design
@@ -15,7 +15,7 @@ Run this **before** `create-policy` / `create-readmodel` / `create-schema`, not 
 
 Not to save typing. To make the design converge.
 
-`/design` proposes `sales_pol_buyer-invoice-preference-send-policy`. The ESAS extractor later
+`/design` proposes `sales_pol_buyer-invoice-preference-send-policy`. The BLUEPRINT extractor later
 re-derives an id from whatever was actually written. Drift by one word in a label or a subdomain
 and the proposal never flips to `satisfied` — the board reports a phantom artifact forever, and
 nobody notices, because the code is fine. The scaffolder imports the id function the extractor
@@ -28,7 +28,7 @@ and fails a guard later. The rule is mechanical (below), so it is computed, not 
 
 | Need | Check |
 |---|---|
-| a readable `design.json` | `.esas/design.json` in a normal checkout; `.work/design-snapshot/design.json` in a fleet lane |
+| a readable `design.json` | `.blueprint/design.json` in a normal checkout; `.work/design-snapshot/design.json` in a fleet lane |
 | a `graph.json` matching **this tree** | same two locations. In a lane, check `manifest.yaml`'s `sourceSha` against your base commit first |
 | the slice names its design nodes | `designs:` in `.work/slices.yaml` — written by `/plan` |
 
@@ -38,13 +38,13 @@ artifacts is worse than scaffolding none. Say so and write by hand.
 
 ## Step 1 — Dry run, always first
 
-The command is whatever the repo declares as `designTooling.scaffold` in `.esas.config.json`
-(`yarn esas:scaffold` in teselly). With no declaration, a PV3 repo's default is
+The command is whatever the repo declares as `designTooling.scaffold` in `.blueprint.config.json`
+(`yarn blueprint:scaffold` in teselly). With no declaration, a PV3 repo's default is
 `yarn pv3 g scaffold`. Run it from the repo root: that is where files are written and where
 existence is checked.
 
 ```bash
-# normal checkout — reads this repo's own .esas/
+# normal checkout — reads this repo's own .blueprint/
 <scaffold> --nodes <the slice's designs: ids, comma-separated>
 
 # fleet lane — reads the read-only snapshot the provisioner left
@@ -56,7 +56,7 @@ existence is checked.
 
 If the command is unknown to the repo's `pv3` (`error: unknown command 'scaffold'`), its
 `@bett3r-dev/pv3-cli` predates the scaffolder. Say so and write by hand; do not reach for the old
-`esas-pv3-scaffold` package, which no longer exists.
+`blueprint-pv3-scaffold` package, which no longer exists.
 
 Writes nothing. Prints what it *would* create, the fragments it will not write, and anything
 blocked.
@@ -74,7 +74,7 @@ an id the design no longer contains (a stale plan — re-check `slices.yaml` aga
 
 ### In a fleet lane, verify the snapshot first
 
-A worktree has no `.esas/` — the design layer belongs to one unit of work while a run spans N, and
+A worktree has no `.blueprint/` — the design layer belongs to one unit of work while a run spans N, and
 a lane must never write it. The `provisioner` therefore leaves a **read-only copy** in
 `.work/design-snapshot/`, and reading it is not writing the layer.
 
@@ -83,14 +83,14 @@ a different tree is wrong about what exists: it will report artifacts as already
 tree does not have, and anchor fragments in files that are not here. Neither is visible in the
 output. On a mismatch, hand-write the artifacts and say why.
 
-**Never create a `.esas/` in a worktree** to make this work. Nothing written in a lane reaches the
+**Never create a `.blueprint/` in a worktree** to make this work. Nothing written in a lane reaches the
 board; if the design itself is wrong, escalate to the orchestrator.
 
 ## Step 2 — Write
 
 Re-run the **same command** as step 1 with `--write` added — including
 `--design` / `--graph` if you needed them there. Dropping them writes nothing in a lane, because
-there is no `.esas/` to fall back to.
+there is no `.blueprint/` to fall back to.
 
 ```bash
 <scaffold> [--design … --graph …] --nodes <ids> --write
@@ -116,7 +116,7 @@ It is the most likely way a scaffolded slice ends up looking finished while doin
 
 ## Step 4 — Fill what the graph cannot know
 
-`EsasNode` carries no fields, so **none of this is derivable and none of it was guessed**. Every
+`BlueprintNode` carries no fields, so **none of this is derivable and none of it was guessed**. Every
 generated file states its own list in a `STILL OWED` block; the `TODO(scaffold)` markers are the
 line-level version of the same thing.
 
@@ -178,4 +178,4 @@ state file to get out of sync, because the two graphs *are* the state.
   invisible until the board reports a phantom.
 - **Do not run it un-scoped (`--nodes` omitted) with `--write`.** That scaffolds the whole design
   delta into one commit of unreachable stubs — the thing vertical slicing exists to prevent.
-- The scaffolder reads `.esas.config.json` for paths and package names, like every skill here.
+- The scaffolder reads `.blueprint.config.json` for paths and package names, like every skill here.

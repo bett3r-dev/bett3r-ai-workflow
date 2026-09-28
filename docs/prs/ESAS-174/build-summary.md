@@ -30,7 +30,7 @@ slices:
     usage: null
     postDesignDecisions: [D4]
   - id: S3
-    name: "epic oracle goes green: real esas captures for stage 7, stage 4 reads the shipped map-tree markers"
+    name: "epic oracle goes green: real blueprint captures for stage 7, stage 4 reads the shipped map-tree markers"
     origin: plan
     mode: worktree
     modeReason: null
@@ -65,7 +65,7 @@ verifyBuild:
 ---
 ## What shipped
 
-4/4 slices landed. `design-map select` (first-match table over a captures dir, probes before start) and `design-map post` (store-readback parity, `statuses=`) are in design-map.py with 931-check suite green (1 SKIP no-esas-checkout, pre-existing). The epic oracle `ESAS_CHECKOUT=<esas int156 oracle twin @de920db> sh scripts/oracles/epic-esas-156.sh` exits 0 with all 7 stages ok on the landed tree (sh and dash), after correcting stage 4 to map-tree's shipped contract and generating real esas captures for stage 7. E1 (structureVersion 1 vs 2) did not fire. plugin.json deliberately not bumped (D1).
+4/4 slices landed. `design-map select` (first-match table over a captures dir, probes before start) and `design-map post` (store-readback parity, `statuses=`) are in design-map.py with 931-check suite green (1 SKIP no-blueprint-checkout, pre-existing). The epic oracle `BLUEPRINT_CHECKOUT=<blueprint int156 oracle twin @de920db> sh scripts/oracles/epic-esas-156.sh` exits 0 with all 7 stages ok on the landed tree (sh and dash), after correcting stage 4 to map-tree's shipped contract and generating real blueprint captures for stage 7. E1 (structureVersion 1 vs 2) did not fire. plugin.json deliberately not bumped (D1).
 
 Fix rounds: 2 (oracle-wrong 1, mis-routed 1), both fresh dispatches. Follow-ups: the no-pwd.txt fallback tests do not bite on logical vs physical separately (D3); S3's `commit-not-three-files` can no longer fire (D5).
 

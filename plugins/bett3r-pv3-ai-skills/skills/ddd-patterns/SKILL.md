@@ -8,9 +8,9 @@ When working in DDD modules, follow these PV3 patterns.
 
 ## Project configuration
 
-This skill resolves placeholders from your repo's `.esas.config.json`:
+This skill resolves placeholders from your repo's `.blueprint.config.json`:
 
-| Placeholder | `.esas.config.json` field | Example value |
+| Placeholder | `.blueprint.config.json` field | Example value |
 |---|---|---|
 | `<domainEventsPath>` | `domainEventsPath` | `src/packages/shared/teselly-domain` |
 | `<domainEventsPackageName>` | `domainEventsPackageName` | `@bett3r-dev/teselly-domain` |

@@ -6,10 +6,10 @@ description: Scaffold an event-driven policy that reacts to events and triggers 
 
 Write the parts of a PV3 policy that the design graph cannot determine.
 
-**If this policy exists in `.esas/design.json`, run
+**If this policy exists in `.blueprint/design.json`, run
 [`scaffold-from-design`](../scaffold-from-design/SKILL.md) FIRST.** It generates the file, the
 builder wiring, the event namespace destructure, the placement and the registration line, and it
-derives the node id the ESAS extractor will read back — so the proposal converges instead of
+derives the node id the BLUEPRINT extractor will read back — so the proposal converges instead of
 drifting into a phantom. What it leaves is exactly this skill's subject: handler bodies, the
 dependency declaration, and redelivery safety.
 
@@ -19,9 +19,9 @@ Only write the whole file by hand when the policy is **not** in the design layer
 
 ## Project configuration
 
-Resolve these placeholders from your repo's `.esas.config.json`:
+Resolve these placeholders from your repo's `.blueprint.config.json`:
 
-| Placeholder | `.esas.config.json` field | Example value |
+| Placeholder | `.blueprint.config.json` field | Example value |
 |---|---|---|
 | `<domainEventsPath>` | `domainEventsPath` | `src/packages/shared/teselly-domain` |
 | `<domainEventsPackageName>` | `domainEventsPackageName` | `@bett3r-dev/teselly-domain` |

@@ -5,7 +5,7 @@
 #
 # Committed RED by ESAS-178 (P10/C6) while the verbs it drives were unbuilt;
 # ESAS-174 S3 corrected stages 4 and 7 to the shipped map-tree and select/post
-# contracts and made stage 7 capture from a real esas checkout.
+# contracts and made stage 7 capture from a real blueprint checkout.
 #
 # Every stage prints exactly one line:
 #   ORACLE:v1 stage=<n> outcome=ok|fail|error [reason=<reason>]
@@ -17,20 +17,20 @@
 # run that printed no verdict line at all (DESIGN-MAP:v1, or MAP-TREE:v1 for
 # stage 4's map-tree calls) — it crashed before concluding.
 #
-# Exit 0 only when all 7 stages are ok. ESAS_CHECKOUT unset/empty prints
-# `ORACLE:v1 stage=0 outcome=error reason=no-esas-checkout` and exits 2
+# Exit 0 only when all 7 stages are ok. BLUEPRINT_CHECKOUT unset/empty prints
+# `ORACLE:v1 stage=0 outcome=error reason=no-blueprint-checkout` and exits 2
 # before anything else runs.
 #
 # Run locally:  sh scripts/oracles/epic-esas-156.sh
 #               dash scripts/oracles/epic-esas-156.sh
-#               ESAS_CHECKOUT=/path/to/esas sh scripts/oracles/epic-esas-156.sh
+#               BLUEPRINT_CHECKOUT=/path/to/blueprint sh scripts/oracles/epic-esas-156.sh
 
 ROOT=$( CDPATH= cd -- "$( dirname -- "$0" )/../.." && pwd )
 DM="$ROOT/plugins/bett3r-ai-workflow/bin/design-map"
 FIX="$ROOT/scripts/fixtures/epic-esas-156"
 
-if [ -z "${ESAS_CHECKOUT:-}" ]; then
-  printf 'ORACLE:v1 stage=0 outcome=error reason=no-esas-checkout\n'
+if [ -z "${BLUEPRINT_CHECKOUT:-}" ]; then
+  printf 'ORACLE:v1 stage=0 outcome=error reason=no-blueprint-checkout\n'
   exit 2
 fi
 
@@ -376,20 +376,20 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Stage 6 — the esas half: `npx --no vitest run -c vitest.oracle.config.ts`
-# from the esas REPO ROOT ($ESAS_CHECKOUT; the config lives there and its
-# include is root-relative, packages/esas-mcp/oracles/**/*.oracle.test.ts —
-# the block's "in packages/esas-mcp" names where the test lives). Never
+# Stage 6 — the blueprint half: `npx --no vitest run -c vitest.oracle.config.ts`
+# from the blueprint REPO ROOT ($BLUEPRINT_CHECKOUT; the config lives there and its
+# include is root-relative, packages/blueprint-mcp/oracles/**/*.oracle.test.ts —
+# the block's "in packages/blueprint-mcp" names where the test lives). Never
 # installs anything: `--no` refuses a download, and a checkout without a
-# local vitest is `reason=vitest-unavailable`. The esas test writes only into
+# local vitest is `reason=vitest-unavailable`. The blueprint test writes only into
 # its own mkdtemp dir, so this stage leaves no captures behind (stage 7).
 # ---------------------------------------------------------------------------
-if [ ! -f "$ESAS_CHECKOUT/vitest.oracle.config.ts" ]; then
-  stage 6 error esas-half-missing
-elif [ ! -x "$ESAS_CHECKOUT/node_modules/.bin/vitest" ]; then
+if [ ! -f "$BLUEPRINT_CHECKOUT/vitest.oracle.config.ts" ]; then
+  stage 6 error blueprint-half-missing
+elif [ ! -x "$BLUEPRINT_CHECKOUT/node_modules/.bin/vitest" ]; then
   stage 6 error vitest-unavailable
 else
-  ( cd "$ESAS_CHECKOUT" && npx --no vitest run -c vitest.oracle.config.ts ) > "$TMP/s6.out" 2>&1
+  ( cd "$BLUEPRINT_CHECKOUT" && npx --no vitest run -c vitest.oracle.config.ts ) > "$TMP/s6.out" 2>&1
   if [ $? = 0 ]; then
     stage 6 ok
   else
@@ -402,24 +402,24 @@ fi
 # `post --expect 5 --map $S3FINAL --readback <captures>/getmap.json` ok, and
 # the posted status multiset equals stage 3's runtime output map ($S3FINAL).
 #
-# Captures are read from $ESAS_ORACLE_CAPTURES when it is set; set but not a
+# Captures are read from $BLUEPRINT_ORACLE_CAPTURES when it is set; set but not a
 # directory -> `reason=no-captures`. When it is unset, real captures are made
-# from $ESAS_CHECKOUT by scripts/oracles/capture-esas-156.mjs: esas's MCP
-# server in a fresh `git init` repo with no `.esas/`, replaying $S3FINAL's
+# from $BLUEPRINT_CHECKOUT by scripts/oracles/capture-esas-156.mjs: blueprint's MCP
+# server in a fresh `git init` repo with no `.blueprint/`, replaying $S3FINAL's
 # nodes, forks and statuses, then `get_map` (board.json is its one
 # synthesized file). A driver failure is `reason=capture-failed`, never a
 # pass. Stage 3 not ok -> `reason=prereq-failed`.
 # ---------------------------------------------------------------------------
 if [ "$S3_OK" != 1 ]; then
   RESKIND=error; RESREASON=prereq-failed
-elif [ -n "${ESAS_ORACLE_CAPTURES:-}" ]; then
-  CAP="$ESAS_ORACLE_CAPTURES"
+elif [ -n "${BLUEPRINT_ORACLE_CAPTURES:-}" ]; then
+  CAP="$BLUEPRINT_ORACLE_CAPTURES"
   if [ -d "$CAP" ]; then RESKIND=ok; else RESKIND=error; RESREASON=no-captures; fi
 elif ! command -v node >/dev/null 2>&1; then
   RESKIND=error; RESREASON=capture-failed
 else
   CAP="$TMP/s7.captures"
-  if node "$ROOT/scripts/oracles/capture-esas-156.mjs" "$ESAS_CHECKOUT" "$S3FINAL" "$CAP" "$TMP/s7-repo" > "$TMP/s7.capture.out" 2>&1; then
+  if node "$ROOT/scripts/oracles/capture-esas-156.mjs" "$BLUEPRINT_CHECKOUT" "$S3FINAL" "$CAP" "$TMP/s7-repo" > "$TMP/s7.capture.out" 2>&1; then
     RESKIND=ok
   else
     RESKIND=error; RESREASON=capture-failed

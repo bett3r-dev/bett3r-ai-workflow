@@ -24,19 +24,19 @@ Two gates, in this order. **On a no, say nothing at all**: no offer, no mention 
 
 ### The map gate
 
-A design map is posted with the `design-map` skill and needs no `.esas/`, which is why this gate comes first. If `.work/lane.yaml` exists, the run is unattended: the map gate is a silent no. Otherwise it is a yes when the drafted tree has at least one open owner fork, a decision only the owner can make. Shape: **impact** for an epic parent, **decision** for a lone ticket. A map is live when `design-map` reports `DESIGN-MAP:v1 … outcome=ok`.
+A design map is posted with the `design-map` skill and needs no `.blueprint/`, which is why this gate comes first. If `.work/lane.yaml` exists, the run is unattended: the map gate is a silent no. Otherwise it is a yes when the drafted tree has at least one open owner fork, a decision only the owner can make. Shape: **impact** for an epic parent, **decision** for a lone ticket. A map is live when `design-map` reports `DESIGN-MAP:v1 … outcome=ok`.
 
 ### The eventstorming gate
 
-No `.esas/` in this repo is a no for this gate, and silent like every no. Otherwise the board is on when it is both **possible** (`.esas/` with a `graph.json`, `esas-mcp` registered) and **warranted** (the design's forks name graph artifacts: commands, events, policies, read models, aggregates). Classify by the tree in front of you, not the label on the ticket ("frontend" is not outside the model: `ui` is a node type). Relevance runs before the preflight, whose verdict table speaks, and is never a preflight key. Re-ask at every new artifact-touching fork: a design that opens on config and turns structural at fork 4 arms then. Capability is `esas-design/PREFLIGHT.md`; everything downstream of a yes is [BOARD-SETUP.md](../skills/esas-design/BOARD-SETUP.md).
+No `.blueprint/` in this repo is a no for this gate, and silent like every no. Otherwise the board is on when it is both **possible** (`.blueprint/` with a `graph.json`, `blueprint-mcp` registered) and **warranted** (the design's forks name graph artifacts: commands, events, policies, read models, aggregates). Classify by the tree in front of you, not the label on the ticket ("frontend" is not outside the model: `ui` is a node type). Relevance runs before the preflight, whose verdict table speaks, and is never a preflight key. Re-ask at every new artifact-touching fork: a design that opens on config and turns structural at fork 4 arms then. Capability is `blueprint-design/PREFLIGHT.md`; everything downstream of a yes is [BOARD-SETUP.md](../skills/blueprint-design/BOARD-SETUP.md).
 
 ### Combining the gates
 
-Judge the five inputs and run the block; its one line is the verdict for both gates. `open_owner_forks` and `artifact_forks` count forks in the drafted tree; `epic_parent`, `lane` (`.work/lane.yaml` exists) and `esas_capable` are `1` or `0`. `map=yes` sends you to `design-map`, `es=offer` to the preflight; anything else is silence.
+Judge the five inputs and run the block; its one line is the verdict for both gates. `open_owner_forks` and `artifact_forks` count forks in the drafted tree; `epic_parent`, `lane` (`.work/lane.yaml` exists) and `blueprint_capable` are `1` or `0`. `map=yes` sends you to `design-map`, `es=offer` to the preflight; anything else is silence.
 
 <!-- BOARD-GATE:v1 -->
 ```sh
-# usage: sh board-gate.sh open_owner_forks artifact_forks epic_parent lane esas_capable
+# usage: sh board-gate.sh open_owner_forks artifact_forks epic_parent lane blueprint_capable
 map=no; shape=-; es=silent
 if [ "$4" -eq 0 ] && [ "$1" -ge 1 ]; then
   map=yes
@@ -50,7 +50,7 @@ Completion: the block has printed its line and you have acted on exactly what it
 
 ## Step 1 — Ground
 
-Under a brief, the ticket is `ticket.body` and each `handedDownFacts` entry keeps its `applies` / `verify whether it applies` label; say which mode you run under. Read the ticket, then the bounded context's `CONTEXT.md` (via `.esas.config.json` `domainEventsPath`). Where there is none, fall back through `docs/adr/` to the module headers of the symbols the ticket names, reading the headers even when the ADRs hit; write "grounding degraded: no CONTEXT.md" into the doc and recommend `/seed-context`. The glossary is evidence to verify, not ground truth.
+Under a brief, the ticket is `ticket.body` and each `handedDownFacts` entry keeps its `applies` / `verify whether it applies` label; say which mode you run under. Read the ticket, then the bounded context's `CONTEXT.md` (via `.blueprint.config.json` `domainEventsPath`). Where there is none, fall back through `docs/adr/` to the module headers of the symbols the ticket names, reading the headers even when the ADRs hit; write "grounding degraded: no CONTEXT.md" into the doc and recommend `/seed-context`. The glossary is evidence to verify, not ground truth.
 
 **Seed concerns from explicit bars in the ticket.** An explicit bar states a condition of shipping ("must not exceed 200ms"); an acceptance criterion phrased as a feature is not one. For each bar, capture it now with the `concern` skill (`raisedBy: ticket owner · step: design`, `quote:` the ticket's own sentence). When unsure whether a sentence is a bar, capture it `soft`. A ticket with no bar seeds nothing.
 
@@ -81,7 +81,7 @@ Completion: every decision in the block is marked confirmed, re-opened or correc
 
 ## Step 3 — Grill, then critique
 
-Call the Skill tool with "grill". It layers the flow's fork shape over `grilling`. Where a canonical contribution from Step 1 settles a fork, quote its claim and span in the walk and carry its citation id into the fork's map status as `resolvedBy` beside `source`: a citation that lives only in the draft is destroyed by the next regeneration (ADR-007). Where the map gate said yes, Call the Skill tool with "design-map" and post the tree as it describes. Where the eventstorming gate offered and the user took the board, `esas-design` owns that surface.
+Call the Skill tool with "grill". It layers the flow's fork shape over `grilling`. Where a canonical contribution from Step 1 settles a fork, quote its claim and span in the walk and carry its citation id into the fork's map status as `resolvedBy` beside `source`: a citation that lives only in the draft is destroyed by the next regeneration (ADR-007). Where the map gate said yes, Call the Skill tool with "design-map" and post the tree as it describes. Where the eventstorming gate offered and the user took the board, `blueprint-design` owns that surface.
 
 Call the Skill tool with "domain-modeling" only when the interview changes the model: a term is challenged, a glossary entry resolves, or a decision earns an ADR, whose number comes from the brief's `adrAllocations` where there is one.
 

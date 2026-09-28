@@ -10,9 +10,9 @@ Orchestrate the creation of a complete PV3 DDD module by composing all sub-skill
 
 ## Project configuration
 
-Resolve these placeholders from the repo's `.esas.config.json`:
+Resolve these placeholders from the repo's `.blueprint.config.json`:
 
-| Placeholder | `.esas.config.json` field | Example value |
+| Placeholder | `.blueprint.config.json` field | Example value |
 |---|---|---|
 | `<domainEventsPath>` | `domainEventsPath` | `src/packages/shared/teselly-domain` |
 | `<domainEventsPackageName>` | `domainEventsPackageName` | `@bett3r-dev/teselly-domain` |
@@ -33,7 +33,7 @@ Apply the patterns from these sibling skills (`create-schema`, `create-aggregate
 
 ## Generation Order
 
-**Step 0 — if this module's artifacts are in `.esas/design.json`, run
+**Step 0 — if this module's artifacts are in `.blueprint/design.json`, run
 [`scaffold-from-design`](../scaffold-from-design/SKILL.md) first**, scoped to the slice's
 `designs:` ids. It collapses steps 3–5 below into filling in generated files, and it is the only
 way the module's artifacts converge to `satisfied` on the board. The steps below then read as

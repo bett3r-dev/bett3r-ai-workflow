@@ -7,7 +7,7 @@ branch: xl-27/committed-work-record
 
 > **Grounding degraded: this repo has no `CONTEXT.md`.** Grounding fell back to `docs/adr/` (ADR-001…004)
 > and the command/agent bodies, which in this repo are the source. **Recommend `/seed-context`.**
-> Run without a lane brief (no `.work/lane.yaml`): a single interactive `/design`. No `.esas/` → no board.
+> Run without a lane brief (no `.work/lane.yaml`): a single interactive `/design`. No `.blueprint/` → no board.
 >
 > Ticket: [XL-27](https://teselly.atlassian.net/browse/XL-27) (parent XL-42). Target repo: `bett3r-ai-workflow`.
 > Base: `e6283b7` on `evolve/design-multi-write-contract`. Prior `.work/design.md` (#268) preserved as
@@ -29,7 +29,7 @@ not absorb the content (last three: 728–2,990 B, no forks or rejected options)
 
 **Premise check — "the store already captures `.work/`" does not rescue it.** `xp-capture`'s `.work` rules do
 KEEP `design*.md` (`glob/design`, `bett3r-xp-layer/packages/xp-capture/src/rules.ts`), but the hooks are inert
-without an executable `.xp-layer/capture`, and **neither `teselly/` nor `esas/` has one** (`ls` → no such
+without an executable `.xp-layer/capture`, and **neither `teselly/` nor `blueprint/` has one** (`ls` → no such
 file). Nothing captures these artifacts anywhere today.
 
 **Intent.** Every work item leaves a committed folder holding four artifacts — one copy each, no mirror in
@@ -243,10 +243,10 @@ one key, read by a command, never inferred from prose. Id:
 | GitHub issue `#268` | `gh-268/` |
 | no id | `<yyyy-mm-dd>-<slug>/` |
 
-**Why:** teselly/esas/pv3 already use `docs/prs/` (212/3/16 folders), and the store's corpus rules treat
+**Why:** teselly/blueprint/pv3 already use `docs/prs/` (212/3/16 folders), and the store's corpus rules treat
 the first segment as the ticket (`classify`, `xp-backfill/src/rules.ts`) — zero store change;
 `remote-ai-agents` has its own convention (*"do **not** start a `docs/adr/` directory"*), so the plugin must
-not impose one. `.esas.config.json` rejected as the home: ADR-003's store/consumer-agnostic invariant.
+not impose one. `.blueprint.config.json` rejected as the home: ADR-003's store/consumer-agnostic invariant.
 **Rejected:** fixed path (breaks project-agnosticism); required config (every repo stops at first `/design`).
 
 ### Resolved without a fork
@@ -391,7 +391,7 @@ script at the right moment — see R2.
 **In (this unit, one PR, `bett3r-ai-workflow`):**
 - `commands/design.md`, `plan.md`, `build.md`, `verify-build.md`, `merge-multi.md`, `start-multi.md`
   (limitation note), `agents/verifier.md`, `skills/critique`, `skills/handoff`, `skills/handon`,
-  `skills/esas-design/*`, `README.md` — the 26 `.work/design.md` references and the reversed principles.
+  `skills/blueprint-design/*`, `README.md` — the 26 `.work/design.md` references and the reversed principles.
 - New `skills/concern/SKILL.md`; fix `skills/record/SKILL.md`.
 - New `bin/concerns-check` + `scripts/concerns-check.py` + fixtures.
 - `scripts/run-metrics.mjs` usage-fragment output; dispatch-description attribution rule in `build.md`.
@@ -436,7 +436,7 @@ git log --oneline -S"Nothing else is kept" -- plugins                  # → 62b
 # reference count to migrate
 grep -rho '\.work/design\.md' plugins/bett3r-ai-workflow | wc -l       # → 26 (10 files: grep -rln)
 # store capture adapters absent
-ls ../teselly/.xp-layer ../esas/.xp-layer                              # → No such file or directory
+ls ../teselly/.xp-layer ../blueprint/.xp-layer                              # → No such file or directory
 # teselly corpus
 ls ../teselly/docs/prs | wc -l                                         # → 212
 for n in build-summary.md concerns.md context.md sdd.md decisions.md; do ls -d ../teselly/docs/prs/*/$n | wc -l; done

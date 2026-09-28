@@ -6,7 +6,7 @@ plugins that co-evolve:
 | Plugin | What it is | Install in |
 |--------|------------|------------|
 | [`bett3r-ai-workflow`](./plugins/bett3r-ai-workflow) | The **methodology** — a vertical-slice, dual-gated flow (start → design → plan → build → verify-build → capture-learnings → evolve). Project-agnostic; reads each host repo's conventions at runtime. | Any repo |
-| [`bett3r-pv3-ai-skills`](./plugins/bett3r-pv3-ai-skills) | The **PV3 DDD framework skills** — `create-*` scaffolders + `ddd-patterns` reference. Reads packages/paths from each repo's `.esas.config.json`. | Any PV3 repo |
+| [`bett3r-pv3-ai-skills`](./plugins/bett3r-pv3-ai-skills) | The **PV3 DDD framework skills** — `create-*` scaffolders + `ddd-patterns` reference. Reads packages/paths from each repo's `.blueprint.config.json`. | Any PV3 repo |
 
 A PV3 repo (e.g. Teselly) installs both; a non-PV3 repo installs just the workflow plugin.
 

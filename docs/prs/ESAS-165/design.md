@@ -71,7 +71,7 @@ flowchart LR
 - Whether `review:` should also be set by any command other than `/plan` — no.
 
 ## Scope
-In: `commands/plan.md`, `skills/vertical-slicing/SKILL.md`, `commands/verify-build.md`, `scripts/test-plan-candidates.sh`, `scripts/fixtures/design-map/plan-candidates.map.json` (+ plan-candidates slices fixtures), `scripts/test-flow-seams.sh`, `.github/workflows/validate-plugins.yml` (one step). Out: design-map.py, map format, `/build`, esas, plugin.json (C5). ADR: none (P9).
+In: `commands/plan.md`, `skills/vertical-slicing/SKILL.md`, `commands/verify-build.md`, `scripts/test-plan-candidates.sh`, `scripts/fixtures/design-map/plan-candidates.map.json` (+ plan-candidates slices fixtures), `scripts/test-flow-seams.sh`, `.github/workflows/validate-plugins.yml` (one step). Out: design-map.py, map format, `/build`, blueprint, plugin.json (C5). ADR: none (P9).
 
 ## Provenance
 - `git log --oneline --grep=ESAS-165` → 4b69032 (ESAS-178's candidates/check-plan commit, cites ESAS-165).

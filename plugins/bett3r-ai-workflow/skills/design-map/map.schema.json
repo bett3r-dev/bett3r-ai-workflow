@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "ESAS map vocabulary",
-  "description": "The closed sets an ESAS impact map is written in. Emitted from @bett3r-dev/esas-schema; do not hand-edit, and do not extend a set in a consumer.",
+  "title": "BLUEPRINT map vocabulary",
+  "description": "The closed sets an BLUEPRINT impact map is written in. Emitted from @bett3r-dev/blueprint-schema; do not hand-edit, and do not extend a set in a consumer.",
   "schemaVersion": 2,
   "$defs": {
     "forkStatusKind": {

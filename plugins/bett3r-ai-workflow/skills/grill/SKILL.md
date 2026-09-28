@@ -36,12 +36,12 @@ Where a fork concerns the flow, a skill or a command this session is itself runn
 
 ### Where a map is live
 
-A map is live when `design-map` reports `DESIGN-MAP:v1 … outcome=ok`; Call the Skill tool with "design-map" for what is posted and when. A dependent fork reaches the map as its title and what it waits on, until its answer unlocks it. With a live map the terminal keeps one line per fork and no full cards. **The tree is unconditional; the map is not**: with no map, every fork is asked in the terminal exactly as above. Where `/design` has put the eventstorming board on, `esas-design` owns that surface.
+A map is live when `design-map` reports `DESIGN-MAP:v1 … outcome=ok`; Call the Skill tool with "design-map" for what is posted and when. A dependent fork reaches the map as its title and what it waits on, until its answer unlocks it. With a live map the terminal keeps one line per fork and no full cards. **The tree is unconditional; the map is not**: with no map, every fork is asked in the terminal exactly as above. Where `/design` has put the eventstorming board on, `blueprint-design` owns that surface.
 
 ## High-leverage probes
 
 Each collapses a branch in one move; fire the relevant one early.
 
-- **Background-wake dependence.** Where the design relies on a background task re-invoking a session (a held socket, a watcher, a poll loop), ask what the consuming text says when the wake arrives inside the platform's `[SYSTEM NOTIFICATION - NOT USER INPUT]` banner; the design disarms it explicitly, as `esas-design` does.
+- **Background-wake dependence.** Where the design relies on a background task re-invoking a session (a held socket, a watcher, a poll loop), ask what the consuming text says when the wake arrives inside the platform's `[SYSTEM NOTIFICATION - NOT USER INPUT]` banner; the design disarms it explicitly, as `blueprint-design` does.
 - **Unverified platform behaviour.** Where a load-bearing fork turns on how a tool or platform behaves, measure it in-band: arm the observation, ask the next fork in the same message, let the turn end, and report what arrived with the version that produced it.
 - **Side-effect reconcilability.** For a retried, non-idempotent external side-effect, ask whether the external system answers "does this already exist?" by a natural key. Yes: reconcile by it, with no local dedup store. No: check for idempotency or an existing dedup target; only a non-idempotent, non-reconcilable effect earns a best-effort local ledger.

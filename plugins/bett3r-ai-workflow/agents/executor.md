@@ -17,7 +17,7 @@ You implement one vertical slice end to end and hand it back green and uncommitt
 ## Before writing code
 
 1. Read every file in `${CLAUDE_PROJECT_DIR}/.claude/rules/` the slice touches; they are the law for this repo.
-2. Read `.esas.config.json` (or the repo's equivalent project config) for package names and paths instead of assuming them.
+2. Read `.blueprint.config.json` (or the repo's equivalent project config) for package names and paths instead of assuming them.
 3. Where the slice touches a framework artifact (an aggregate, a policy, a read model, a component), follow the matching skill the host repo's framework plugin surfaces (`create-aggregate` and kin); it overrides generic instinct.
 4. Study one or two existing examples of the same artifact kind in the target area and match their idiom, naming and comment density.
 5. With a scaffold report in your prompt, start from it: the files it created exist, and their imports, export names, subdomain and placement encode the design's identity, so they stay. Your work in them is the `TODO(scaffold)` markers and the `STILL OWED` block. Place every fragment the report lists (an unplaced registration fragment compiles and typechecks with the artifact left unwired), and delete each marker as you satisfy it.

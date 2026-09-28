@@ -510,7 +510,7 @@
       "needle": "UNRESOLVED_EDGE_ENDPOINT",
       "issue": null,
       "commit": "e41fcdc",
-      "was_in": "plugins/bett3r-ai-workflow/skills/esas-design/SKILL.md",
+      "was_in": "plugins/bett3r-ai-workflow/skills/blueprint-design/SKILL.md",
       "note": "Proposed node ids do not derive the way extracted ones do \u2014 read the returned nodeIds instead of guessing a whole batch correctly."
     },
     {
@@ -882,13 +882,13 @@
       "issue": null,
       "commit": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
-      "note": "Seam B (ESAS-94). The `/design` Step 1 extension point ships no provider. The no-provider path must be SILENT, not merely harmless \u2014 a seam that announces itself in every repo not using it has become the interruption it was designed to avoid, which is exactly how the `esas-pending.sh` hook failed."
+      "note": "Seam B (ESAS-94). The `/design` Step 1 extension point ships no provider. The no-provider path must be SILENT, not merely harmless \u2014 a seam that announces itself in every repo not using it has become the interruption it was designed to avoid, which is exactly how the `blueprint-pending.sh` hook failed."
     },
     {
       "needle": "telemetry, never a trigger",
       "issue": null,
       "commit": null,
-      "was_in": "plugins/bett3r-ai-workflow/skills/esas-pending/SKILL.md",
+      "was_in": "plugins/bett3r-ai-workflow/skills/blueprint-pending/SKILL.md",
       "note": "The standing rule suppressing the UserPromptSubmit count hook, re-pinned by ESAS-94 because ADR-003 and CONTEXT-PROVIDERS.md now both quote it as the MEASURED EVIDENCE for rejecting hook injection as a context-delivery mechanism. This codebase built that surface, found it an interruption, and suppressed it; the quote is load-bearing in three artifacts now, so losing it loses the reason a rejected option stays rejected."
     },
     {
@@ -1008,7 +1008,7 @@
       "issue": null,
       "commit": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/design.md",
-      "note": "XL-70 F3: the id a recorder hands back for an answered fork lives in the fork-id-keyed sidecar beside map.json and nowhere else. map.json itself never carries it \u2014 the fork status is additionalProperties:false and refs the byte-identical copy of esas's vocabulary, so an id in the map is a cross-repo vocabulary change."
+      "note": "XL-70 F3: the id a recorder hands back for an answered fork lives in the fork-id-keyed sidecar beside map.json and nowhere else. map.json itself never carries it \u2014 the fork status is additionalProperties:false and refs the byte-identical copy of blueprint's vocabulary, so an id in the map is a cross-repo vocabulary change."
     },
     {
       "needle": "`record` is pure over files",

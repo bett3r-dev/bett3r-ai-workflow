@@ -40,7 +40,7 @@ DESIGN_MD="$PLUGIN/commands/design.md"
 PLAN_MD="$PLUGIN/commands/plan.md"
 BUILD_MD="$PLUGIN/commands/build.md"
 PROVIDERS_MD="$PLUGIN/CONTEXT-PROVIDERS.md"
-PENDING_MD="$PLUGIN/skills/esas-pending/SKILL.md"
+PENDING_MD="$PLUGIN/skills/blueprint-pending/SKILL.md"
 UNIT_LANE_MD="$PLUGIN/agents/unit-lane.md"
 PROVISIONER_MD="$PLUGIN/agents/provisioner.md"
 RUN_REPORT_MD="$PLUGIN/commands/run-report.md"
@@ -232,8 +232,8 @@ present "$PROVIDERS_MD" 'grounding degraded' \
 present "$PROVIDERS_MD" 'telemetry, never a trigger' \
   'the hook alternative is rejected quoting the standing rule verbatim'
 present "$PENDING_MD"   'telemetry, never a trigger' \
-  'and that quote still matches skills/esas-pending/SKILL.md — the evidence, not a paraphrase'
-present "$PROVIDERS_MD" 'esas-pending.sh' \
+  'and that quote still matches skills/blueprint-pending/SKILL.md — the evidence, not a paraphrase'
+present "$PROVIDERS_MD" 'blueprint-pending.sh' \
   'the rejected surface is named by the file that implements it'
 
 # Neither seam may mention the experience layer: the base flow plugin stays
@@ -1435,7 +1435,7 @@ fi
 # ZERO census alone stays green when a reader's reference is simply deleted.
 for f in commands/design.md commands/plan.md commands/verify-build.md agents/verifier.md \
          skills/handoff/SKILL.md skills/handon/SKILL.md skills/critique/SKILL.md \
-         skills/esas-design/SKILL.md skills/esas-design/BOARD-SETUP.md README.md; do
+         skills/blueprint-design/SKILL.md skills/blueprint-design/BOARD-SETUP.md README.md; do
   if [ ! -f "$CENSUS_ROOT/$f" ]; then
     fail "$f reaches the design through work-docs-path" "file not found: $f"
   elif grep -qF 'work-docs-path' "$CENSUS_ROOT/$f"; then
@@ -1657,13 +1657,13 @@ done
 # and "nothing" is exactly the passing answer.
 WDP_PY="$PLUGIN/scripts/work-docs-path.py"
 if [ ! -f "$WDP_PY" ]; then
-  fail 'work-docs-path does not read .esas.config.json (ADR-003)' 'scripts/work-docs-path.py does not exist'
-elif grep -qF '.esas.config.json' "$WDP_PY"; then
-  fail 'work-docs-path does not read .esas.config.json (ADR-003)' "scripts/work-docs-path.py names .esas.config.json"
+  fail 'work-docs-path does not read .blueprint.config.json (ADR-003)' 'scripts/work-docs-path.py does not exist'
+elif grep -qF '.blueprint.config.json' "$WDP_PY"; then
+  fail 'work-docs-path does not read .blueprint.config.json (ADR-003)' "scripts/work-docs-path.py names .blueprint.config.json"
 elif ! grep -qF '.claude", "bett3r-ai-workflow.json' "$WDP_PY"; then
   fail 'work-docs-path reads its own .claude/bett3r-ai-workflow.json' 'the config path literal is not in scripts/work-docs-path.py'
 else
-  pass 'work-docs-path reads .claude/bett3r-ai-workflow.json, not .esas.config.json (ADR-003)'
+  pass 'work-docs-path reads .claude/bett3r-ai-workflow.json, not .blueprint.config.json (ADR-003)'
 fi
 
 # ---------------------------------------------------------------------------

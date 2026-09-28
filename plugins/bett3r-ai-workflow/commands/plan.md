@@ -36,7 +36,7 @@ Call the Skill tool with "vertical-slicing". It is the method's single home: tra
 - `surface:` is counted at the base by the probe that finds the files and sites, with a positive control on its pathspec (`EVIDENCE.md`, *Probe hygiene*); over the cap, split as the skill says.
 - `seams:` named at the top level as the skill says; every slice's `seam:` names one of them.
 - Slice order follows oracle-provability, not the ticket's deploy sequence: an oracle asserting the new behaviour while the old policy is still registered is red by construction. Put the deletion first or split the oracle, and record the deploy sequence in the PR body.
-- `designs:` on each slice when the unit has a design layer (`.esas/design.json`): the node ids it builds, copied from the design file (ids look like `{subdomain}_{abbrev}_{slug}`). A scaffolded artifact's host slice comes before the artifact's own: the handler before its command, the module before its event. Without a design layer the field is absent.
+- `designs:` on each slice when the unit has a design layer (`.blueprint/design.json`): the node ids it builds, copied from the design file (ids look like `{subdomain}_{abbrev}_{slug}`). A scaffolded artifact's host slice comes before the artifact's own: the handler before its command, the module before its event. Without a design layer the field is absent.
 - `model: sonnet` only where the skill calls the slice mechanical; absent everywhere else, which `/build` routes as its table does.
 
 Done when every slice has resolved symbols, a seam, sourced scenarios, a probe and a surface within the cap, in dependency order with the tracer bullet first.

@@ -12,23 +12,23 @@ degraded: no plugin `CONTEXT.md` covers design-map; the ground is `scripts/desig
 ## Problem & intent
 ESAS-161 shipped `bin/design-map` (`render`, `check-page`, `apply-answers [--final]`) over a
 **plugin-authored** v1 schema (`layout: impactMap|decisionTree`, flat `status`/`by`/`pick`, option `key`).
-The epic needs one map spelling across repos (esas ESAS-167 D12), the vocabulary taken byte-identical from
-esas (ESAS-176), one structural writer (`write`), and the reader verbs the sibling units (165, 166) scoped
+The epic needs one map spelling across repos (blueprint ESAS-167 D12), the vocabulary taken byte-identical from
+blueprint (ESAS-176), one structural writer (`write`), and the reader verbs the sibling units (165, 166) scoped
 out to this one. The epic oracle driver lands first, RED.
 
 ## Verified at BASE (code wins)
 | Block claim | At 9c835c0 | Consequence |
 |---|---|---|
 | `scripts/test-design-map.sh`, `scripts/fixtures/design-map/` under `plugins/bett3r-ai-workflow/` | They live at **repo-root** `scripts/` (`ls scripts/test-design-map.sh`); only `design-map.py` is under the plugin | Oracle driver goes at repo-root `scripts/oracles/epic-esas-156.sh`, fixtures at `scripts/fixtures/epic-esas-156/` |
-| ESAS-176 emitted vocabulary exists | `esas@de920db:packages/esas-schema/schema/map.schema.json`, `schemaVersion: 2`, `decidedSource ∋ code`, `mapShape = impact\|decision` | D1 unblocked |
-| "re-emit and diff" (D1 staleness) | The emitter `packages/esas-schema/scripts/emit-map-schema.mjs` **writes into the checkout** and needs `build/esm` — absent in the read-only checkout | Staleness case diffs against `$ESAS_CHECKOUT/packages/esas-schema/schema/map.schema.json` (the committed emit output, which esas's own build regenerates); when `build/esm/index.js` exists it additionally serialises `serialiseMapSchema()` to stdout (no write) and diffs that too |
+| ESAS-176 emitted vocabulary exists | `blueprint@de920db:packages/blueprint-schema/schema/map.schema.json`, `schemaVersion: 2`, `decidedSource ∋ code`, `mapShape = impact\|decision` | D1 unblocked |
+| "re-emit and diff" (D1 staleness) | The emitter `packages/blueprint-schema/scripts/emit-map-schema.mjs` **writes into the checkout** and needs `build/esm` — absent in the read-only checkout | Staleness case diffs against `$BLUEPRINT_CHECKOUT/packages/blueprint-schema/schema/map.schema.json` (the committed emit output, which blueprint's own build regenerates); when `build/esm/index.js` exists it additionally serialises `serialiseMapSchema()` to stdout (no write) and diffs that too |
 | `VERBS` dispatch table, `verb=` key | `VERBS = {...}` (`design-map.py:653`), `verdict()` | Extended, not reshaped |
 | D8 stage 3 "`count` = owner 2 / recommendation 1 / moot 1" over 5 forks | Arithmetically impossible: after `--final` no fork is open, so owner+recommendation+moot = 5. And `count` is ESAS-162's verb, absent | Stage 3 reads `apply-answers --final`'s own verdict counts and asserts **owner 2 / recommendation 2 / moot 1 / open 0** (chosen + unlocked-then-picked = owner; commented-only + untouched open = recommendation). Correction recorded in the PR body |
-| AC7 "stages 1-3 and 5 ok at land time" | Stage 3 would need `count` | Satisfied via the verdict counts above; stage 4 (`map-tree`, 163) and 6-7 (`select`/`post`, 174; esas vitest) are `outcome=error reason=unknown-verb` / missing, driver exits non-zero |
+| AC7 "stages 1-3 and 5 ok at land time" | Stage 3 would need `count` | Satisfied via the verdict counts above; stage 4 (`map-tree`, 163) and 6-7 (`select`/`post`, 174; blueprint vitest) are `outcome=error reason=unknown-verb` / missing, driver exits non-zero |
 | ESAS-165 writes `candidates --map <p>`; 178 D6 writes `candidates <map>` | — | Positional is the contract (D7 §7 "no `--map` flag" spirit); `--map` is refused as unknown flag. Recorded for 165 |
 
 ## Resolved decision tree (block D1–D8, confirmed; build-level resolutions added)
-- **D1 vocabulary copy** — `skills/design-map/map.schema.json` := esas emitted bytes. Structure moves to
+- **D1 vocabulary copy** — `skills/design-map/map.schema.json` := blueprint emitted bytes. Structure moves to
   `skills/design-map/map-structure.schema.json` (`structureVersion: 2`). The structure schema names enums by
   `$ref` into `map.schema.json#/$defs/<name>`; the stdlib validator resolves that cross-file ref, so the enum
   data is read from the copy, never restated. *Rejected:* plugin enum set + parity check; one merged file.
@@ -68,7 +68,7 @@ flowchart LR
   M --> project -->|stdout| write
   M --> decisions
   M -->|--stack| render
-  vocab[esas emitted map.schema.json] -.byte copy.-> schema[skills/design-map/map.schema.json] -.$ref.-> struct[map-structure.schema.json]
+  vocab[blueprint emitted map.schema.json] -.byte copy.-> schema[skills/design-map/map.schema.json] -.$ref.-> struct[map-structure.schema.json]
 ```
 
 ## Test seams
@@ -77,8 +77,8 @@ flowchart LR
 2. `scripts/oracles/epic-esas-156.sh` — separate seam, deliberately in **no** default suite; `/merge-multi` runs it.
 
 ## Risks / gate-less seam
-- **Staleness case is SKIP in every gate run** (the gate mirror does not set `ESAS_CHECKOUT`): the copy can
-  go stale with a green gate. Mitigation: loud `SKIP reason=no-esas-checkout`; lane runs it once with the checkout.
+- **Staleness case is SKIP in every gate run** (the gate mirror does not set `BLUEPRINT_CHECKOUT`): the copy can
+  go stale with a green gate. Mitigation: loud `SKIP reason=no-blueprint-checkout`; lane runs it once with the checkout.
 - **Cross-file `$ref` in a hand-rolled validator** — if the resolver silently ignores an unresolved ref, enums
   are unchecked while tests of valid maps pass. Tracer bullet: a map with `status.kind:"closed"` must be refused.
 - v2 breaks every v1 map; none exist outside fixtures (161's `docs/prs/ESAS-161/` holds no map.json).
@@ -96,8 +96,8 @@ In: block §2 minus the `plugin.json` bump (orchestrator directive: single bump 
 `check-plugin-version-bump.sh` fails deliberately). Out: block §2 Out. No ADR (none allocated; ADR-010 not claimed).
 
 ## Provenance
-- `git -C …/esas-int156-de920db log -1 --format=%h` → `de920db`; `ls …/packages/esas-schema/schema/` → `map.schema.json`
-- `ls …/packages/esas-schema/build/esm/index.js` → absent
+- `git -C …/blueprint-int156-de920db log -1 --format=%h` → `de920db`; `ls …/packages/blueprint-schema/schema/` → `map.schema.json`
+- `ls …/packages/blueprint-schema/build/esm/index.js` → absent
 - `grep -n VERBS plugins/bett3r-ai-workflow/scripts/design-map.py` → `:653`
 - `ls scripts/test-design-map.sh scripts/fixtures/design-map` (repo root) → present; under plugin → absent
 - `work-docs-path --item ESAS-178 --owner-branch ESAS-178-design-map-prefactor` → `path=docs/prs/ESAS-178 owner=none`

@@ -206,11 +206,11 @@
   ],
   "links": [
     {
-      "esId": "cmd_esas_stackPage",
+      "esId": "cmd_blueprint_stackPage",
       "deliverableId": "D1"
     },
     {
-      "esId": "cmd_esas_decisions",
+      "esId": "cmd_blueprint_decisions",
       "deliverableId": "D2"
     }
   ]
