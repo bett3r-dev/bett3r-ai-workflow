@@ -1,6 +1,6 @@
 ---
 name: blueprint-design
-description: "BLUEPRINT board (.blueprint/, blueprint-mcp). 'look at the board' = read_changes, reconcile, mark_synced, whole. Unread edits: asked, sync first; else say you're behind. CONFLICT_PENDING_SYNC: one sync, retry whole."
+description: "Blueprint board (.blueprint/). 'look at the board' = read_changes, reconcile, mark_synced, whole. Unread edits: asked, sync first; else say you're behind. CONFLICT_PENDING_SYNC: one sync, retry whole."
 ---
 
 # Designing on the board
