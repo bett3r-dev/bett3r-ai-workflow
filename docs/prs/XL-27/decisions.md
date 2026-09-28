@@ -171,7 +171,7 @@ sources: [code:build.md Step 3 step 0 (plugins/bett3r-ai-workflow/commands/build
 rejected: verify against a PV3 scaffolder in slice 1 — this repo ships no design layer or scaffolder
 supersedes: —
 build.md tells a pool slice to run the scaffolder from the worktree with --design/--graph
-pointed at the main checkout's .esas files. This repo cannot exercise that call.
+pointed at the main checkout's .blueprint files. This repo cannot exercise that call.
 
 ## D17 — A workDocsRoot inside .work/ is refused
 kind: deviation
@@ -249,7 +249,7 @@ step: build · slice: 2 · decidedBy: verifier
 sources: [code:scripts/test-flow-seams.sh, adr:ADR-003]
 rejected: a behaviour fixture in slice 2 — the literal check is red on the regression it names
 supersedes: —
-A behaviour fixture — a config under .esas.config.json that must be ignored — would be
+A behaviour fixture — a config under .blueprint.config.json that must be ignored — would be
 sturdier than grepping the script for the config path.
 
 ## D25 — Q8, Q9: start.md's no-id slug derivation has unspecified edges

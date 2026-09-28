@@ -10,9 +10,9 @@ Generate co-located test files for PV3 DDD components using Jest and Given/When/
 
 ## Project configuration
 
-Resolve these placeholders from `.esas.config.json` at the repo root:
+Resolve these placeholders from `.blueprint.config.json` at the repo root:
 
-| Placeholder | `.esas.config.json` field | Example value |
+| Placeholder | `.blueprint.config.json` field | Example value |
 |---|---|---|
 | `<serverPath>` | `serverPath` | `src/services/server` |
 

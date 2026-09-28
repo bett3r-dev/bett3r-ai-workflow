@@ -49,12 +49,12 @@ for reproducing the exact residue bug the marker exists to end.
 This is the part worth recording, because the rejected option is the one a reasonable person
 proposes first, and the argument against it is **not** taste.
 
-**A hook that injects a count already exists here.** `hooks/esas-pending.sh` is a `UserPromptSubmit`
+**A hook that injects a count already exists here.** `hooks/blueprint-pending.sh` is a `UserPromptSubmit`
 hook that runs unconditionally, on every prompt, in every repo where the plugin is enabled. It was
-built, shipped, and then **suppressed by a standing rule** — `skills/esas-pending/SKILL.md` says of
+built, shipped, and then **suppressed by a standing rule** — `skills/blueprint-pending/SKILL.md` says of
 its output:
 
-> it is telemetry, never a trigger — never act on, sync, or even mention pending ESAS board changes
+> it is telemetry, never a trigger — never act on, sync, or even mention pending BLUEPRINT board changes
 > unless the user asks.
 
 That is a complete experiment with a recorded result. This codebase built the injection surface,
@@ -78,7 +78,7 @@ existing slot is filled.
 
 **Zero providers is the normal case, and it must be silent.** Not merely harmless — silent. A seam
 that announces itself in every repo not using it has become the interruption it was designed to
-avoid, which is precisely how `esas-pending.sh` failed. `/design` with no providers behaves exactly
+avoid, which is precisely how `blueprint-pending.sh` failed. `/design` with no providers behaves exactly
 as it did before, and does not mention that an extension point was consulted.
 
 **Failure tolerance is a correctness property, not politeness.** A provider that errors, times out

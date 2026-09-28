@@ -579,7 +579,7 @@
   ],
   "links": [
     {
-      "esId": "cmd_esas_placeOrder",
+      "esId": "cmd_blueprint_placeOrder",
       "deliverableId": "D1"
     }
   ]

@@ -1,6 +1,6 @@
 # bett3r-ai-workflow
 
-A Claude Code plugin that encodes a vertical-slice, dual-gated development flow. It ships the method and the roles, and reads each host repo's own conventions (`.claude/rules/`, installed framework plugins, `.esas.config.json`) at runtime, so one flow works in any repo. The defining constraint is that nothing lands on a single signal: a slice is done when its test passes **and** a verifier confirms the host's invariants, and a unit lands with its record committed beside the code.
+A Claude Code plugin that encodes a vertical-slice, dual-gated development flow. It ships the method and the roles, and reads each host repo's own conventions (`.claude/rules/`, installed framework plugins, `.blueprint.config.json`) at runtime, so one flow works in any repo. The defining constraint is that nothing lands on a single signal: a slice is done when its test passes **and** a verifier confirms the host's invariants, and a unit lands with its record committed beside the code.
 
 ## The flow
 
@@ -37,11 +37,11 @@ This plugin ships roles and method; the domain knowledge stays in the host repo 
 
 - the `verifier` reads `${CLAUDE_PROJECT_DIR}/.claude/rules/` for the host's invariants;
 - the `executor` uses whatever framework skills the host provides (a PV3 repo installs `bett3r-pv3-ai-skills` beside this plugin);
-- where a design graph fixes an artifact mechanically, `/build` runs the scaffolder the repo declares as `designTooling.scaffold` in `.esas.config.json` before the executor, and skips the step when nothing is declared.
+- where a design graph fixes an artifact mechanically, `/build` runs the scaffolder the repo declares as `designTooling.scaffold` in `.blueprint.config.json` before the executor, and skips the step when nothing is declared.
 
-## ESAS board mode
+## BLUEPRINT board mode
 
-In a repo with a `.esas/` design layer, `/design` opens a second surface: decisions still go to the committed design, structure goes to a live board the user watches, through the `esas-mcp` tools. The `esas-design` skill carries the standing rules, the `esas-pending` skill the rule for the hook line below, and `skills/esas-design/BOARD-SETUP.md` everything downstream of a board being present, opened only when the command's gates say so.
+In a repo with a `.blueprint/` design layer, `/design` opens a second surface: decisions still go to the committed design, structure goes to a live board the user watches, through the `blueprint-mcp` tools. The `blueprint-design` skill carries the standing rules, the `blueprint-pending` skill the rule for the hook line below, and `skills/blueprint-design/BOARD-SETUP.md` everything downstream of a board being present, opened only when the command's gates say so.
 
 ## Hooks
 
@@ -49,8 +49,8 @@ Three, all in `hooks/hooks.json` and each one cheap check and gone in a repo whe
 
 | Hook | Fires | Does |
 |---|---|---|
-| `esas-pending.sh` | `UserPromptSubmit` | Puts `esas: N pending (seq A→B)` in front of the prompt while the user has unsynced board edits. Telemetry, never a trigger. |
-| `esas-session-channel.sh` | `SessionStart` | Tells a session to open the board's summon channel when a board is serving this repo and nobody holds it. |
+| `blueprint-pending.sh` | `UserPromptSubmit` | Puts `blueprint: N pending (seq A→B)` in front of the prompt while the user has unsynced board edits. Telemetry, never a trigger. |
+| `blueprint-session-channel.sh` | `SessionStart` | Tells a session to open the board's summon channel when a board is serving this repo and nobody holds it. |
 | `lane-git-guard.sh` | `PreToolUse` on `Bash` | When the checkout a command acts on holds `.work/lane.yaml` (an unattended lane), blocks the git commands that discard or shelve the working tree. |
 
 ## It's working if

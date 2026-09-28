@@ -15,9 +15,9 @@ Grounding: this repo has no `CONTEXT.md`. Grounding came from `docs/adr/`, the m
 
 ## Problem & intent
 
-A design's map has two surfaces: the live esas board and the claude.ai artifact page. Which one to use
+A design's map has two surfaces: the live blueprint board and the claude.ai artifact page. Which one to use
 is decided by a **pure first-match table** (`design-map select`). Read-only probes run first. The one
-side effect (`start_map_session`, which creates `.esas/`) happens only after every probe passes
+side effect (`start_map_session`, which creates `.blueprint/`) happens only after every probe passes
 (ADR-009, new). A design keeps the surface it started on (`target` pinned in `map.json`). Board parity
 is proven by reading the store back (`design-map post`), not by comparing pixels.
 
@@ -29,10 +29,10 @@ is proven by reading the store back (`design-map post`), not by comparing pixels
 | `target` must be allowed in map.json (obligation on 178) | `map-structure.schema.json:18` `"target": {"enum": ["board","artifact"]}` | already shipped by 178 |
 | `write` (stdin, validated) and `feedSeq` | `write` (`design-map.py:1274`), schema carries `feedSeq` | holds |
 | ADR-009 is free | `docs/adr/` max is ADR-008 (ADR-006..008 taken by siblings) | ADR-009 claimed |
-| `status` carries `capabilities.verbFamilies` on both outcomes | cross-repo esas@de920db:`packages/esas-mcp/src/handlers.ts:724-731` | holds |
-| `map` family includes `start_map_session` | esas@de920db:`packages/esas-mcp/src/capabilities.ts` families.map | holds |
-| `LINKED_WORKTREE` refusal, and also on "undetermined" | esas@de920db:`packages/esas-store/src/start-map-session.ts:48,88` | holds. **Seam:** a non-git dir is refused as `LINKED_WORKTREE reason=undetermined`, so row 9 fires for it too. That is acceptable (artifact) but the reason reads as linked-worktree. |
-| `boardKinds` on board status | esas@de920db:`esas-store/src/board-endpoints.ts` `BOARD_KINDS` | holds |
+| `status` carries `capabilities.verbFamilies` on both outcomes | cross-repo blueprint@de920db:`packages/blueprint-mcp/src/handlers.ts:724-731` | holds |
+| `map` family includes `start_map_session` | blueprint@de920db:`packages/blueprint-mcp/src/capabilities.ts` families.map | holds |
+| `LINKED_WORKTREE` refusal, and also on "undetermined" | blueprint@de920db:`packages/blueprint-store/src/start-map-session.ts:48,88` | holds. **Seam:** a non-git dir is refused as `LINKED_WORKTREE reason=undetermined`, so row 9 fires for it too. That is acceptable (artifact) but the reason reads as linked-worktree. |
+| `boardKinds` on board status | blueprint@de920db:`blueprint-store/src/board-endpoints.ts` `BOARD_KINDS` | holds |
 | `bump plugin.json` (D8) | **Orchestrator directive: DO NOT BUMP** (CAMPAIGN-PLAN §5, one bump at merge-multi) | the block is overridden by the directive. The divergence is recorded as an escalation; `check-plugin-version-bump.sh` fails on purpose. |
 | Verb names | 161/178 shipped `apply-answers`; error outcome is `error` | adopted |
 
@@ -60,17 +60,17 @@ is proven by reading the store back (`design-map post`), not by comparing pixels
   - Stage 4: the region markers are `map-tree:v1` / `/map-tree:v1` (`map-tree.py:51-54`), not
     `map-tree:begin/end`. The awk ranges change; the out-of-region byte-equality assertion stays.
   - Stage 7: the call becomes `post --expect 5 --map "$S3FINAL" --readback "$CAPTURES/getmap.json"`.
-    Captures come from `$ESAS_ORACLE_CAPTURES` when it is set. When it is unset, the oracle **produces
-    real captures** from `$ESAS_CHECKOUT` with a committed capture driver
-    (`scripts/oracles/capture-esas-156.mjs`). The driver uses the built `esas-mcp` over
-    `InMemoryTransport`, the same entry point as esas's own oracle test, in a fresh `git init` tmp repo
-    with no `.esas/`. It captures `listTools` → `tools.txt`, `status` (the dirmissing envelope with
+    Captures come from `$BLUEPRINT_ORACLE_CAPTURES` when it is set. When it is unset, the oracle **produces
+    real captures** from `$BLUEPRINT_CHECKOUT` with a committed capture driver
+    (`scripts/oracles/capture-esas-156.mjs`). The driver uses the built `blueprint-mcp` over
+    `InMemoryTransport`, the same entry point as blueprint's own oracle test, in a fresh `git init` tmp repo
+    with no `.blueprint/`. It captures `listTools` → `tools.txt`, `status` (the dirmissing envelope with
     capabilities) → `status.json`, `start_map_session` → `start.json`, then `map_ground` +
     `map_post`/`map_choose` for stage 3's forks, then `get_map` → `getmap.json`. `board.json` is the
-    board status body shape built from esas's exported `BOARD_KINDS` with `repoPath` = the capture
+    board status body shape built from blueprint's exported `BOARD_KINDS` with `repoPath` = the capture
     repo. This is the one synthesized capture, because running a vite board in an oracle is out of
     proportion. `pwd.txt` names the capture repo.
-  - If esas refuses the plugin's fork shape at `map_post`, **only because of E1** (esas MapFile
+  - If blueprint refuses the plugin's fork shape at `map_post`, **only because of E1** (blueprint MapFile
     structureVersion 1 vs plugin 2), stage 7 stays red with a named reason. It is recorded as the
     blocking cause, and the plugin's version is not changed.
 
@@ -84,7 +84,7 @@ flowchart TD
   R1 -- no --> R2{tools.txt has status?} -- no --> ART
   R2 --> R3{capabilities.verbFamilies has map?} -- no --> ART
   R3 --> R4{map_post,get_map,start_map_session listed?} -- no --> ART
-  R4 --> R5{ok:false not ESAS_DIR_MISSING?} -- yes --> ART
+  R4 --> R5{ok:false not BLUEPRINT_DIR_MISSING?} -- yes --> ART
   R5 --> R6{board.json empty?} -- yes --> ART
   R6 --> R7{repoPath != pwd?} -- yes --> ART
   R7 --> R8{boardKinds lacks map?} -- yes --> ART
@@ -101,12 +101,12 @@ One seam: `scripts/test-design-map.sh` (already collected by the gate mirror and
 `validate-plugins.yml`). The new cases follow the existing `check`/`attr` pattern over fixtures in
 `scripts/fixtures/design-map/select/` (block §4 file list; capture dirs are assembled per case from those
 files). AC1-AC8 of the block are the oracles, verbatim. Epic: `sh scripts/oracles/epic-esas-156.sh` with
-`ESAS_CHECKOUT=/Users/tomasruiz/Documents/development/esas-int156-oracle` should exit 0. It is not a
+`BLUEPRINT_CHECKOUT=/Users/tomasruiz/Documents/development/blueprint-int156-oracle` should exit 0. It is not a
 per-unit gate, but the brief makes it this last unit's target.
 
 ## Risks / the gate-less seam
 
-- **Supplier drift:** the fixtures copy the esas shapes by hand. Mitigation: stage 7's real captures.
+- **Supplier drift:** the fixtures copy the blueprint shapes by hand. Mitigation: stage 7's real captures.
 - **E1 (structureVersion 1 vs 2):** this may make stage 7's `map_post` refuse. Tracer slice: build the
   capture driver early and learn this first.
 - The SKILL.md prose (silence contract, D5 death-mid-sitting, D9 pinning) has no automatic gate. The
@@ -134,6 +134,6 @@ driver). Out: block §2 Out list, and the `plugin.json` bump (directive).
 - `ls docs/adr` → ADR-001..008.
 - `sed -n 376,424p scripts/oracles/epic-esas-156.sh` → stage 7 call spelling.
 - `grep -n map-tree:v1 plugins/bett3r-ai-workflow/scripts/map-tree.py` → markers at lines 51-54.
-- esas: `git -C esas-int156-oracle rev-parse --short HEAD` → de920db; `capabilities.ts`, `handlers.ts:724-731`,
-  `start-map-session.ts:48,88`, `packages/esas-mcp/oracles/epic-esas-156.oracle.test.ts`.
+- blueprint: `git -C blueprint-int156-oracle rev-parse --short HEAD` → de920db; `capabilities.ts`, `handlers.ts:724-731`,
+  `start-map-session.ts:48,88`, `packages/blueprint-mcp/oracles/epic-esas-156.oracle.test.ts`.
 - Orchestrator measurement at fd52c0f: stages 1,2,3,5,6 ok; 4 error no-verdict; 7 error no-captures.

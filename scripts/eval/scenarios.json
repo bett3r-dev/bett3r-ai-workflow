@@ -82,9 +82,9 @@
     {
       "id": "board-setup-pointer-followed",
       "why": "design.md's Step 0 prints a verdict and five rows became pointers into BOARD-SETUP.md. The mcp:unregistered path ends in a session restart \u2014 the single most disruptive instruction in the flow, and the one most costly to miss.",
-      "guards_split": "commands/design.md -> skills/esas-design/BOARD-SETUP.md",
+      "guards_split": "commands/design.md -> skills/blueprint-design/BOARD-SETUP.md",
       "artifact": "plugins/bett3r-ai-workflow/commands/design.md",
-      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/design.md. You are running /design in a repo that has a .esas/ directory. The board-mode preflight has just printed 'mcp: unregistered'. The design question is structural, so relevance passed. What exactly do you do now, and what do you tell the user? Be specific about any cost to them.",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/design.md. You are running /design in a repo that has a .blueprint/ directory. The board-mode preflight has just printed 'mcp: unregistered'. The design question is structural, so relevance passed. What exactly do you do now, and what do you tell the user? Be specific about any cost to them.",
       "must_open": [
         "BOARD-SETUP.md"
       ],
@@ -348,7 +348,7 @@
     },
     {
       "id": "context-providers-reached",
-      "why": "Seam B declares an extension point in /design Step 1 and moves its whole contract behind a pointer. The rules that only exist behind it are the ones that keep it harmless: failure is tolerated (a throwing or timing-out provider must NOT fail /design), zero providers is the normal case and is silent, and a hook was rejected on this repo's own measured evidence (esas-pending.sh). A session that reads past the pointer will improvise the failure policy, and the improvised answer \u2014 surface the error, or abort grounding \u2014 is the one this seam exists to prevent.",
+      "why": "Seam B declares an extension point in /design Step 1 and moves its whole contract behind a pointer. The rules that only exist behind it are the ones that keep it harmless: failure is tolerated (a throwing or timing-out provider must NOT fail /design), zero providers is the normal case and is silent, and a hook was rejected on this repo's own measured evidence (blueprint-pending.sh). A session that reads past the pointer will improvise the failure policy, and the improvised answer \u2014 surface the error, or abort grounding \u2014 is the one this seam exists to prevent.",
       "guards_split": "commands/design.md -> CONTEXT-PROVIDERS.md",
       "artifact": "plugins/bett3r-ai-workflow/commands/design.md",
       "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/design.md. You are running it on a repo that DOES declare a context provider. You are in Step 1 (Ground). You have read the ticket and CONTEXT.md, and you now invoke the declared provider \u2014 it hangs, then raises. State concretely what you do next, what (if anything) the user sees, and what you write in the design doc. Then state what would have happened instead in a repo that declares no provider at all.",

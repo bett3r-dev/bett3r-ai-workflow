@@ -21,7 +21,7 @@ So this checks the things whose failure mode is *absence*:
      tool and no repo.
   3. No `description` exceeds the platform's ~1024-character cap. Skill
      descriptions in these plugins are not summaries — they carry *standing
-     rules* (`esas-design`'s sync ordering, `esas-pending`'s never-a-trigger
+     rules* (`blueprint-design`'s sync ordering, `blueprint-pending`'s never-a-trigger
      rule) which work precisely because the description is what stays resident
      in every session. Past the cap the tail is truncated, and truncation is
      not an error: the file stays green in every suite while the rules that

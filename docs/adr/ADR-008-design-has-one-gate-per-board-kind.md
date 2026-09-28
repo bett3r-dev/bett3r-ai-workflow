@@ -3,17 +3,17 @@
 ## Context
 
 `/design`'s Board mode used to open with a single check: does this repo have a
-`.esas/` directory at all? A `no` skipped the whole section — `"skip this
+`.blueprint/` directory at all? A `no` skipped the whole section — `"skip this
 section entirely"` — before anything about the *design itself* had been read.
 That check answers one question, "is the eventstorming board possible here",
 and it answered it **before** a second, independent question ever got asked:
 "does this design's own shape — an artifact rendered for one owner to click
-through, no `.esas/` required — call for a map at all?"
+through, no `.blueprint/` required — call for a map at all?"
 
 E2 settled that a claude.ai artifact counts as a live map exactly like a board
 does: `design-map` re-renders it on each unlock, and a design with open owner
-forks has one whether or not the repo carries `.esas/`. Folding that into the
-existing `.esas/` check would make the map conditional on eventstorming
+forks has one whether or not the repo carries `.blueprint/`. Folding that into the
+existing `.blueprint/` check would make the map conditional on eventstorming
 machinery it does not need, which is backwards — the map is the wider-reaching
 of the two, and the eventstorming board narrower.
 
@@ -24,8 +24,8 @@ board there is a **silent no**, not a smaller yes.
 ## Decision
 
 **Two gates, in order, never merged.** The map gate runs first, over every
-repo regardless of `.esas/`; the eventstorming gate runs second, and it is the
-one that carries the old `no .esas/` exit, now as a silent no *inside* its own
+repo regardless of `.blueprint/`; the eventstorming gate runs second, and it is the
+one that carries the old `no .blueprint/` exit, now as a silent no *inside* its own
 gate rather than ahead of both. "Say nothing on a no" holds per gate, not once
 for the pair — a map gate that also explained the eventstorming no would leak
 one board kind's vocabulary into the other's refusal.
@@ -34,7 +34,7 @@ one board kind's vocabulary into the other's refusal.
 `commands/design.md`'s Board mode carries a fenced `sh` block after a
 `<!-- BOARD-GATE:v1 -->` marker. Its five arguments are the model's own
 **judged** values — `open_owner_forks artifact_forks epic_parent lane
-esas_capable` — never a preflight key, never a re-read of the tree the model
+blueprint_capable` — never a preflight key, never a re-read of the tree the model
 already has open (`"relevance is not a preflight key"` stays true: this
 combinator reads no files). It prints exactly one line:
 
@@ -48,7 +48,7 @@ combination:
 - `map=yes` iff `lane=0` and `open_owner_forks>=1`.
 - `shape=impact` iff map is yes and there is an epic parent; `shape=decision`
   iff map is yes and there is no epic parent; `shape=-` otherwise.
-- `es=offer` iff `esas_capable=1` and `artifact_forks>=1`; `es=silent`
+- `es=offer` iff `blueprint_capable=1` and `artifact_forks>=1`; `es=silent`
   otherwise.
 
 **The map gate never runs unattended.** `lane=0` is one of the two conditions
@@ -67,17 +67,17 @@ alone still leaves the lane's tool list refusing the act.
   against each other. The combination has five booleans and three outputs —
   exactly the shape a table of assertions verifies mechanically and prose
   verifies by trust.
-- **Board-only.** Treat the map as a `.esas/`-scoped concept, gated the same
+- **Board-only.** Treat the map as a `.blueprint/`-scoped concept, gated the same
   way the eventstorming board is. This was live until E2 corrected it: the
-  claude.ai artifact is a map with no board and no `.esas/` in sight, so a map
-  gate scoped to `.esas/` would leave it permanently `map=no`.
+  claude.ai artifact is a map with no board and no `.blueprint/` in sight, so a map
+  gate scoped to `.blueprint/` would leave it permanently `map=no`.
 - **One combined gate.** Merge both questions into a single check, the shape
-  the original `.esas/` exit already was. Rejected because the suite's own
+  the original `.blueprint/` exit already was. Rejected because the suite's own
   regression is exactly this: collapsing the two loses the property that a map
   can be offered in a repo where eventstorming never will be, and a repo where
   eventstorming is possible but no forks exist yet should still see no map.
-- **Keeping the `no .esas/` exit first.** The map could never be offered
-  anywhere `.esas/` is absent, which is the same defect as board-only under a
+- **Keeping the `no .blueprint/` exit first.** The map could never be offered
+  anywhere `.blueprint/` is absent, which is the same defect as board-only under a
   different name — it just keeps the old ordering instead of stating a new
   rule.
 
@@ -86,7 +86,7 @@ alone still leaves the lane's tool list refusing the act.
 A needle-based guard over this file catches the block being **deleted**; it
 does not catch the block being **wrong** — a `map=yes` printed for
 `lane=1 open_owner_forks=4` reads exactly like a healthy suite until the table
-in `scripts/test-esas-design.sh` runs it and shows the value. The oracle for
+in `scripts/test-blueprint-design.sh` runs it and shows the value. The oracle for
 this ADR is that table, not a grep.
 
 The map gate reads no tree and trusts the model's own judgement of its five

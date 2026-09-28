@@ -57,8 +57,8 @@ A map is `structureVersion: 2`. Two committed files describe it:
 
   skills/design-map/map.schema.json           the vocabulary: the closed sets
       (fork status kind, decided source, node level, map shape), a
-      byte-identical copy of what esas emits
-      (packages/esas-schema/schema/map.schema.json). Never hand-edited.
+      byte-identical copy of what blueprint emits
+      (packages/blueprint-schema/schema/map.schema.json). Never hand-edited.
   skills/design-map/map-structure.schema.json the structure: nodes, forks,
       cards, options, links. It names every closed set by a `$ref` into
       map.schema.json, resolved from its own directory, so the values are
@@ -101,7 +101,7 @@ fork carries a class naming its source, one style per value of the
 vocabulary's decided source (owner, recommendation and code are three distinct
 styles), and the page's legend shows each. The owner answers on it; each answer is written to the
 artifact's `db` store as `answers/<forkId>` = `{pick, comment, updatedAt}`, the
-shape of the ESAS-156 prototype's writer (esas `docs/prs/ESAS-156/map.html`,
+shape of the ESAS-156 prototype's writer (blueprint `docs/prs/ESAS-156/map.html`,
 `saveAnswer`), so answers saved there parse unchanged; when the map carries a
 `mapId` the page also writes `map: <mapId>` into each answer. When `claude.use("db")`
 resolves null the page is read-only and says to reply in the terminal.
@@ -342,7 +342,7 @@ The `sidecar=` the verdict names is where the id a recorder hands back is
 written: `<map path without its .json>.resolved-by.json`, beside the map, a
 JSON object keyed by fork id. Beside rather than inside because the fork object
 is closed (`additionalProperties: false`), as is every `status` branch, and the
-status kind refs the byte-identical copy of what esas emits, so the id would be
+status kind refs the byte-identical copy of what blueprint emits, so the id would be
 a cross-repo vocabulary change and not a field addition; named after its own map rather than a flat
 `resolved-by.json` because a run dir holds one map per subject in a single
 directory. That file is the id's ONE home: it is never written into the map.
@@ -743,7 +743,7 @@ textarea{width:100%;min-height:54px;box-sizing:border-box;margin-top:6px}
 .btn:disabled{cursor:not-allowed;opacity:.5} .saved{font-size:12px;color:#555;margin-left:8px}
 """
 
-# The answer writer is the ESAS-156 prototype's (esas docs/prs/ESAS-156/map.html,
+# The answer writer is the ESAS-156 prototype's (blueprint docs/prs/ESAS-156/map.html,
 # saveAnswer and the db bootstrap), so an answers store written by either page
 # reads identically.
 SCRIPT = """
@@ -1930,7 +1930,7 @@ def read_json_object(path):
 
 
 def error_code(body):
-    """esas spells a tool failure `{ok:false, error:{code}}` (esas-mcp tool-result.ts);
+    """blueprint spells a tool failure `{ok:false, error:{code}}` (blueprint-mcp tool-result.ts);
     a top-level `code` is read too."""
     error = body.get("error")
     if isinstance(error, dict) and isinstance(error.get("code"), str):
@@ -1968,7 +1968,7 @@ def probe_rows(captures):
         return "mcp-no-map"
     if not all(has_tool(tools, name) for name in MAP_TOOLS):
         return "tools-missing"
-    if status.get("ok") is not True and error_code(status) != "ESAS_DIR_MISSING":
+    if status.get("ok") is not True and error_code(status) != "BLUEPRINT_DIR_MISSING":
         return "mcp-error"
     board = read_json_object(os.path.join(captures, "board.json"))
     if board is None:
@@ -2026,7 +2026,7 @@ def status_tuple(status):
 
 def readback_forks(path):
     """The forks and mapSeq of a `get_map` tool body `{ok:true, map, mapSeq}`.
-    Its map is esas's MapFile (structureVersion 1, no fork `tickets`), so only
+    Its map is blueprint's MapFile (structureVersion 1, no fork `tickets`), so only
     `forks[].status` is read; the plugin's v2 schema is never applied to it."""
     body = read_json_object(path)
     if body is None:

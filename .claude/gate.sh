@@ -181,7 +181,7 @@ EOF
 step repeat-causes fast <<'EOF'
 python3 scripts/check-repeat-causes.py
 EOF
-step hooks full 'plugins/bett3r-ai-workflow/hooks/*' 'plugins/*/hooks/*' 'scripts/test-hooks.sh' 'scripts/fixtures/esas-pending/*' <<'EOF'
+step hooks full 'plugins/bett3r-ai-workflow/hooks/*' 'plugins/*/hooks/*' 'scripts/test-hooks.sh' 'scripts/fixtures/blueprint-pending/*' <<'EOF'
 sh scripts/test-hooks.sh
 HOOK_SH=dash sh scripts/test-hooks.sh
 HOOK_SH=bash sh scripts/test-hooks.sh
@@ -200,10 +200,10 @@ EOF
 step flow-seams full 'plugins/bett3r-ai-workflow/commands/*' 'plugins/bett3r-ai-workflow/agents/*' 'plugins/bett3r-ai-workflow/skills/*' 'plugins/bett3r-ai-workflow/bin/*' 'plugins/bett3r-ai-workflow/scripts/*' 'scripts/fixtures/lane-step/*' 'docs/adr/*' 'scripts/test-flow-seams.sh' <<'EOF'
 sh scripts/test-flow-seams.sh
 EOF
-step esas-design full 'plugins/bett3r-ai-workflow/skills/esas-design/*' 'plugins/bett3r-ai-workflow/skills/esas-pending/*' 'plugins/bett3r-ai-workflow/hooks/*' 'plugins/bett3r-ai-workflow/bin/*' 'scripts/test-esas-design.sh' 'scripts/fixtures/esas-design/*' <<'EOF'
-sh scripts/test-esas-design.sh
-PREFLIGHT_SH=dash sh scripts/test-esas-design.sh
-PREFLIGHT_SH=bash sh scripts/test-esas-design.sh
+step blueprint-design full 'plugins/bett3r-ai-workflow/skills/blueprint-design/*' 'plugins/bett3r-ai-workflow/skills/blueprint-pending/*' 'plugins/bett3r-ai-workflow/hooks/*' 'plugins/bett3r-ai-workflow/bin/*' 'scripts/test-blueprint-design.sh' 'scripts/fixtures/blueprint-design/*' <<'EOF'
+sh scripts/test-blueprint-design.sh
+PREFLIGHT_SH=dash sh scripts/test-blueprint-design.sh
+PREFLIGHT_SH=bash sh scripts/test-blueprint-design.sh
 EOF
 step worktree-pool full 'plugins/bett3r-ai-workflow/bin/worktree-pool' 'plugins/bett3r-ai-workflow/commands/*' 'scripts/test-worktree-pool.sh' <<'EOF'
 sh scripts/test-worktree-pool.sh

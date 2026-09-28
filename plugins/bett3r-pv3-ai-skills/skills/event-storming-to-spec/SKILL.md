@@ -8,9 +8,9 @@ Transform structured event storming output (Mermaid flowcharts or text) into a c
 
 ## Project configuration
 
-Resolve these placeholders from the repo's `.esas.config.json`:
+Resolve these placeholders from the repo's `.blueprint.config.json`:
 
-| Placeholder | `.esas.config.json` field | Example value |
+| Placeholder | `.blueprint.config.json` field | Example value |
 |---|---|---|
 | `<domainEventsPath>` | `domainEventsPath` | `src/packages/shared/teselly-domain` |
 | `<serverPath>` | `serverPath` | `src/services/server` |

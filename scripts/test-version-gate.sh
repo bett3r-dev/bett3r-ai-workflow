@@ -66,7 +66,7 @@ ROOT=$( CDPATH= cd -- "$( dirname -- "$0" )/.." && pwd )
 GATE="$ROOT/scripts/check-plugin-version-bump.sh"
 GATE_SH=${GATE_SH:-sh}
 
-TMP=$( mktemp -d "${TMPDIR:-/tmp}/esas-version-gate-test.XXXXXX" ) || exit 1
+TMP=$( mktemp -d "${TMPDIR:-/tmp}/blueprint-version-gate-test.XXXXXX" ) || exit 1
 trap 'rm -rf "$TMP"' EXIT INT TERM
 
 passed=0

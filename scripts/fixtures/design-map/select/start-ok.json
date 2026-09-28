@@ -2,5 +2,5 @@
   "ok": true,
   "created": true,
   "repoPath": "/work/design-repo",
-  "esasDir": "/work/design-repo/.esas"
+  "blueprintDir": "/work/design-repo/.blueprint"
 }

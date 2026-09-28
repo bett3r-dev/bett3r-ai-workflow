@@ -7,7 +7,7 @@
 # ## Line 2 is the whole program, most of the time
 #
 # This is a copy of the discipline in the base plugin's
-# `hooks/esas-pending.sh`, and for the same reason: there is no per-directory
+# `hooks/blueprint-pending.sh`, and for the same reason: there is no per-directory
 # matcher for hooks. A `PreToolUse` hook on `Bash` runs **before every Bash
 # call in every repo where this plugin is enabled** — every fleet worktree,
 # every repo that has never heard of the experience layer. So the first thing
@@ -25,7 +25,7 @@
 #     no package name and no transport. If the capture CLI moves, is renamed,
 #     or is reimplemented, nothing in this plugin changes. A repo opts in by
 #     making that one file executable and opts out by removing it. (The store
-#     moved from esas to bett3r-xp-layer on 2026-09-11 with no change here; the
+#     moved from blueprint to bett3r-xp-layer on 2026-09-11 with no change here; the
 #     reference adapter is bett3r-xp-layer/.xp-layer/capture, and
 #     consumer repos have none until XL-11.)
 #

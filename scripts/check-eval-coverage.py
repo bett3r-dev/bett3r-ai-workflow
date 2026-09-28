@@ -92,7 +92,7 @@ ENTRYPOINT_GLOBS = ("commands/*.md", "agents/*.md", "skills/*/SKILL.md")
 LINK = re.compile(r"""\[[^\]]*\]\(\s*<?([^)>\s]+)>?(?:\s+["'][^"']*["'])?\s*\)""")
 
 # Any `…​.md` path written inside a `guards_split` string. The field is free-form
-# prose by design — `commands/design.md -> skills/esas-design/BOARD-SETUP.md`,
+# prose by design — `commands/design.md -> skills/blueprint-design/BOARD-SETUP.md`,
 # `agents/executor.md (+ EVIDENCE.md §2)` — so staleness is asked of the paths it
 # mentions, not of the sentence around them.
 MD_TOKEN = re.compile(r"[A-Za-z0-9_./-]+\.md")
@@ -293,7 +293,7 @@ def naming_suffix(path: str, corpus: frozenset[str]) -> str:
 def names(text: str, suffix: str) -> bool:
     """Does this `guards_split` name that target? Bounded on both sides so
     `MY-EVIDENCE.md` does not count as `EVIDENCE.md`, while a longer, more
-    explicit path (`skills/esas-design/BOARD-SETUP.md`) still does."""
+    explicit path (`skills/blueprint-design/BOARD-SETUP.md`) still does."""
     return re.search(rf"(?<![\w.\-]){re.escape(suffix)}(?![\w\-/])", text) is not None
 
 

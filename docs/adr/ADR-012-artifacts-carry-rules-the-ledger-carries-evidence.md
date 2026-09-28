@@ -45,7 +45,7 @@ The oracles now assert what a rewrite must not break and nothing else:
   blocks, the D-entry and `build-summary` grammar now in `reference/build-record.md`, the concern
   block, the `verifyBuild:` block, the PR template, `merge-multi`'s executed 1b block);
 * every verdict-line grammar, file shape and host literal in the dependency survey's must-keep list,
-  including the esas literals that moved into prose with the rewrite (`capabilities.verbFamilies`,
+  including the blueprint literals that moved into prose with the rewrite (`capabilities.verbFamilies`,
   `boardKinds`, `LINKED_WORKTREE` in `design-map/FLEET.md`);
 * every *absence* guard (the retired second lane-brief filename, `.work/design.md`, a hardcoded `docs/prs`, a
   flow-selected `--full`, an experience-layer name in the base plugin, a rogue writer of `map.json`,
@@ -53,7 +53,7 @@ The oracles now assert what a rewrite must not break and nothing else:
 * one short literal per rule, in the rule's single home, chosen to survive rewording of everything
   around it — instead of the same sentence in five files. Where the home is another file, the
   test pins the **pointer** rather than a restatement: `grill`'s map subsection is pinned on
-  `Call the Skill tool with "design-map"`, `design-map`'s wake on `` `esas-design`'s two
+  `Call the Skill tool with "design-map"`, `design-map`'s wake on `` `blueprint-design`'s two
   invariants ``, the fleet companion on `[FLEET.md](./FLEET.md)`. A second copy of the tokens
   would be a second place for them to drift;
 * the frontmatter descriptions, which the listing pays for on every turn: each carries its trigger
@@ -111,7 +111,7 @@ reached by a pointer that names the condition under which to open it: `reference
 `reference/start-multi-serial.md` (`--serial`), `reference/start-multi-tick-boundary.md` (ending a
 tick) and `reference/start-multi-sizing.md` (choosing `--max-parallel`),
 `reference/design-multi-phase-boundary.md` (ending a phase), `skills/design-map/FLEET.md` (a `/design-multi`
-sitting, a `design-lane`, or a live board), beside the existing `esas-design/BOARD-SETUP.md` and
+sitting, a `design-lane`, or a live board), beside the existing `blueprint-design/BOARD-SETUP.md` and
 `PREFLIGHT.md`. Command companions live under `reference/`, not `commands/`: `validate-plugins.py`
 treats every `commands/*.md` as a loadable command and refuses one without frontmatter, and
 `check-eval-coverage.py` counts each as an entrypoint, so a companion placed there would be a
@@ -154,7 +154,7 @@ carries a one-line reason in the PR that moved it. Counted with `wc -w`, frontma
 | `skills/vertical-slicing` | 1,200 | 1,900 |
 | `skills/full-gate` | 900 | 1,900 |
 | `skills/design-map/SKILL.md` (+ `FLEET.md` ≤ 1,200) | 2,000 | 2,500 |
-| `skills/esas-design/SKILL.md` (+ `BOARD-SETUP.md` ≤ 900) | 1,500 | 1,900 |
+| `skills/blueprint-design/SKILL.md` (+ `BOARD-SETUP.md` ≤ 900) | 1,500 | 1,900 |
 | every other skill | 200 to 600 | 900 |
 | `EVIDENCE.md`, `CONTEXT-PROVIDERS.md`, `README.md` | 1,200, 600, 1,200 | 1,500, 800, 1,500 |
 | every frontmatter `description` | | 200 characters |

@@ -1,28 +1,28 @@
 #!/usr/bin/env node
 // Capture driver for stage 7 of scripts/oracles/epic-esas-156.sh (ESAS-174
 // design.md P4). Produces the files `design-map select` and `design-map post`
-// read, from a REAL esas checkout rather than hand-copied fixtures.
+// read, from a REAL blueprint checkout rather than hand-copied fixtures.
 //
-//   node capture-esas-156.mjs <esas-checkout> <map.json> <captures-dir> <repo-dir>
+//   node capture-esas-156.mjs <blueprint-checkout> <map.json> <captures-dir> <repo-dir>
 //
 // <repo-dir> must not exist: it is created, `git init`ed, and left with no
-// `.esas/` until `start_map_session` makes one. <map.json> is the plugin map
+// `.blueprint/` until `start_map_session` makes one. <map.json> is the plugin map
 // whose nodes, forks and statuses are replayed into the store.
 //
-// esas's own launcher (packages/esas-mcp/bin/esas-mcp.mjs) runs the TypeScript
+// blueprint's own launcher (packages/blueprint-mcp/bin/blueprint-mcp.mjs) runs the TypeScript
 // sources through tsx, and its workspace packages export `./src/index.ts`, so
 // the tsc build output cannot resolve them under plain node. This driver does
 // what that launcher does: register tsx, then import `src/server.ts`. The
 // server is reached over the SDK's InMemoryTransport, as
-// packages/esas-mcp/oracles/epic-esas-156.oracle.test.ts does.
+// packages/blueprint-mcp/oracles/epic-esas-156.oracle.test.ts does.
 //
 // Written files:
 //   tools.txt    listTools names, one per line
-//   status.json  `status` before start_map_session (the ESAS_DIR_MISSING envelope)
+//   status.json  `status` before start_map_session (the BLUEPRINT_DIR_MISSING envelope)
 //   start.json   `start_map_session`
 //   getmap.json  `get_map` after the replay
 //   board.json   the one synthesized capture: readBoardStatus's body shape
-//                (sticky-notes-board board-identity.ts) with esas's BOARD_KINDS,
+//                (sticky-notes-board board-identity.ts) with blueprint's BOARD_KINDS,
 //                repoPath = <repo-dir>; no vite board is run
 //   pwd.txt      <repo-dir> as given, then its realpath
 //
@@ -34,26 +34,26 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const [ esas, mapPath, captures, repo ] = process.argv.slice( 2 );
-if ( !esas || !mapPath || !captures || !repo ){
-  process.stderr.write( 'capture-failed: usage: capture-esas-156.mjs <esas-checkout> <map.json> <captures-dir> <repo-dir>\n' );
+const [ blueprint, mapPath, captures, repo ] = process.argv.slice( 2 );
+if ( !blueprint || !mapPath || !captures || !repo ){
+  process.stderr.write( 'capture-failed: usage: capture-esas-156.mjs <blueprint-checkout> <map.json> <captures-dir> <repo-dir>\n' );
   process.exit( 2 );
 }
 
-const fromMcp = createRequire( join( esas, 'packages', 'esas-mcp', 'package.json' ));
+const fromMcp = createRequire( join( blueprint, 'packages', 'blueprint-mcp', 'package.json' ));
 const { register } = await import( pathToFileURL( fromMcp.resolve( 'tsx/esm/api' )).href );
 register();
 
 const { Client } = await import( pathToFileURL( fromMcp.resolve( '@modelcontextprotocol/sdk/client/index.js' )).href );
 const { InMemoryTransport } = await import( pathToFileURL( fromMcp.resolve( '@modelcontextprotocol/sdk/inMemory.js' )).href );
-const { createEsasMcpServer } = await import( pathToFileURL( join( esas, 'packages', 'esas-mcp', 'src', 'server.ts' )).href );
-const { createEsasStore, BOARD_KINDS } = await import( pathToFileURL( join( esas, 'packages', 'esas-store', 'src', 'index.ts' )).href );
+const { createBlueprintMcpServer } = await import( pathToFileURL( join( blueprint, 'packages', 'blueprint-mcp', 'src', 'server.ts' )).href );
+const { createBlueprintStore, BOARD_KINDS } = await import( pathToFileURL( join( blueprint, 'packages', 'blueprint-store', 'src', 'index.ts' )).href );
 
 mkdirSync( repo );
 execFileSync( 'git', [ 'init', '-q' ], { cwd: repo });
 mkdirSync( captures, { recursive: true });
 
-const server = createEsasMcpServer({ repoPath: repo });
+const server = createBlueprintMcpServer({ repoPath: repo });
 const [ clientTransport, serverTransport ] = InMemoryTransport.createLinkedPair();
 const client = new Client({ name: 'capture-esas-156', version: '0.0.0' });
 await Promise.all( [ server.connect( serverTransport ), client.connect( clientTransport ) ] );
@@ -100,7 +100,7 @@ for ( const fork of map.forks ){
 // 'ai' and can never record it (ESAS-168), and the board's own route
 // (sticky-notes-board map-routes.ts) records it by calling the store's
 // `mapChoose` with author 'human' — the same call this driver makes.
-const store = createEsasStore({ repoPath: repo });
+const store = createBlueprintStore({ repoPath: repo });
 for ( const fork of map.forks ){
   const status = fork.status;
   if ( status.kind === 'open' ) continue;

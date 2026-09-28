@@ -17,7 +17,7 @@ A design's **map snapshot** (`docs/prs/<id>/map.json`, the answered decision map
 | Fork | Decision | Verified |
 |---|---|---|
 | F1 map carriage in fleets | D+: provisioned `docs/prs/<id>/map.json` used as-is; `mapProvenance: lost` reported | decision kept, **path unreachable today**: a map.json-only folder reads `owner=unowned` (D2 stops) — escalated E162-1, owner rule needed before ESAS-166 lands |
-| F2 drift without a feed | ship inert: `drift --no-feed` → `skip reason=no-map-feed` | holds — no esas feed in plugin |
+| F2 drift without a feed | ship inert: `drift --no-feed` → `skip reason=no-map-feed` | holds — no blueprint feed in plugin |
 | D1 one writer | every map.json byte via `design-map write`/`apply-answers`; map.html via `render --out` | holds — `write` exists (`VERBS`, `design-map.py:1377`) |
 | D2 ownership | three files written only on `owner=none|self` | holds — `work-docs-path` owner verdict unchanged |
 | D3 render before staging | `render --expect n --out map.html` first; non-ok → nothing written, `blocked-on reason=<r>`; one 3-path commit | holds — render refuses `not-grounded` (ESAS-178) |
@@ -32,7 +32,7 @@ Rejected options are as recorded in the block (§1).
 
 1. **Paths drifted.** Test suites and fixtures live at REPO ROOT (`scripts/test-design-map.sh`, `scripts/fixtures/design-map/`), and ADRs at root `docs/adr/` (max ADR-005). So: `scripts/test-design-snapshot.sh`, `scripts/fixtures/design-map/…`, `docs/adr/ADR-006-*.md`; `design-map.py` stays at `plugins/bett3r-ai-workflow/scripts/`.
 2. **plugin.json bump is OUT** despite block §2/AC6: orchestrator directive (CAMPAIGN-PLAN §5) — the single bump is at `/merge-multi`. `check-plugin-version-bump.sh` fails on this branch deliberately.
-3. **Drift attribute naming.** D5/D6 name the feed-side value `mapSeq`, but AC4 expects `mapSeq=none` when the *map file* lacks `feedSeq`. AC4 is the executable half and governs: in the `drift` verdict, `mapSeq` = the map file's `feedSeq` (or `none`) and `feedSeq` = the `--feed-seq` value (or `none` with `--no-feed`). The esas-side "mapSeq" of D6 is what the caller passes as `--feed-seq`. Recorded as a deviation for the PR.
+3. **Drift attribute naming.** D5/D6 name the feed-side value `mapSeq`, but AC4 expects `mapSeq=none` when the *map file* lacks `feedSeq`. AC4 is the executable half and governs: in the `drift` verdict, `mapSeq` = the map file's `feedSeq` (or `none`) and `feedSeq` = the `--feed-seq` value (or `none` with `--no-feed`). The blueprint-side "mapSeq" of D6 is what the caller passes as `--feed-seq`. Recorded as a deviation for the PR.
 4. The CI step for the new suite is added to `.github/workflows/validate-plugins.yml` (CI disabled; run locally) — collected by no local runner otherwise.
 
 ## Seams / flow
@@ -56,7 +56,7 @@ flowchart LR
 ## Test seams
 
 - AC1: `scripts/test-work-docs-path.sh` — extend `design_pass` (`design_pass()`, line ~510) with a real `design-map` against root fixtures: owner none → HEAD lists exactly the 3 files; other → nothing; `grounded:false` with forks → nothing written, `reason=not-grounded`; pre-placed map.json committed byte-identical.
-- AC2–AC4: new `scripts/test-design-snapshot.sh` (style of `test-esas-design.sh`/`test-design-map.sh`, runs under sh/dash/bash) — count line fixture 2/1/1/1/0 → `2 of 5 forks answered by the owner (1 by code, 1 on recommendation, 1 open, 0 moot)`; `map: none`; lost provenance line; single-writer grep over `plugins/bett3r-ai-workflow/{commands,agents,skills}` with a planted positive control; drift matrix.
+- AC2–AC4: new `scripts/test-design-snapshot.sh` (style of `test-blueprint-design.sh`/`test-design-map.sh`, runs under sh/dash/bash) — count line fixture 2/1/1/1/0 → `2 of 5 forks answered by the owner (1 by code, 1 on recommendation, 1 open, 0 moot)`; `map: none`; lost provenance line; single-writer grep over `plugins/bett3r-ai-workflow/{commands,agents,skills}` with a planted positive control; drift matrix.
 - AC5: `scripts/test-flow-seams.sh` presence rows for `design-map count`, `design-map drift`, `no-map-feed` in `commands/verify-build.md`.
 
 ## Risks / the gate-less seam
@@ -75,7 +75,7 @@ flowchart LR
 
 ## Scope boundaries
 
-In: block §2 minus the plugin.json bump. Out: Board mode, `start_map_session` (ESAS-164/174); map-tree (ESAS-163); Phase C/provisioner/`mapProvenance` writer (ESAS-166); esas reads (ESAS-167/169). ADR-006 claimed (allocation P9); ESAS-166 appends.
+In: block §2 minus the plugin.json bump. Out: Board mode, `start_map_session` (ESAS-164/174); map-tree (ESAS-163); Phase C/provisioner/`mapProvenance` writer (ESAS-166); blueprint reads (ESAS-167/169). ADR-006 claimed (allocation P9); ESAS-166 appends.
 
 ## Provenance
 

@@ -45,7 +45,7 @@ The corpus those months left behind, also re-measured and unchanged from the des
 ls ../teselly/docs/prs | wc -l                                            # → 212
 for n in build-summary.md concerns.md context.md sdd.md decisions.md; do
   ls -d ../teselly/docs/prs/*/$n | wc -l; done                            # → 167 28 192 162 30
-ls ../esas/docs/prs | wc -l; ls ../pv3/docs/prs | wc -l                   # → 3, 16
+ls ../blueprint/docs/prs | wc -l; ls ../pv3/docs/prs | wc -l                   # → 3, 16
 ```
 
 **The PR bodies did not absorb it.** The design measured the last three teselly PR bodies at 728–2,990
@@ -59,7 +59,7 @@ experience layer "already captures `.work/`". Its capture rules do keep design p
 `.xp-layer/capture` in the host repo, and neither consuming repo has one. Re-measured:
 
 ```sh
-ls ../teselly/.xp-layer ../esas/.xp-layer    # → No such file or directory (both)
+ls ../teselly/.xp-layer ../blueprint/.xp-layer    # → No such file or directory (both)
 ```
 
 A rule that throws knowledge away because something else captures it is only as good as a
@@ -99,7 +99,7 @@ measured reason: the store's `junk/yaml` rule drops `*.{yaml,yml}`, so a `.yaml`
 The folder comes from one script, `bin/work-docs-path` (`scripts/work-docs-path.py`), never from prose.
 The design fixed the rule but named no mechanism. A tested script replaced ten prose copies of one rule
 (decisions.md D3). The root is `docs/prs` unless `.claude/bett3r-ai-workflow.json` sets `workDocsRoot`.
-A root inside `.work/` is refused (D17). The rule was not put in `.esas.config.json`, because ADR-003
+A root inside `.work/` is refused (D17). The rule was not put in `.blueprint.config.json`, because ADR-003
 keeps the flow store-agnostic. The folder name comes from the work item's id:
 
 | work item | folder |

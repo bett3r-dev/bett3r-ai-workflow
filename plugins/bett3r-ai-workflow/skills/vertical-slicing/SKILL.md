@@ -91,7 +91,7 @@ slices:
     touches: [paths]               # OPTIONAL hint; lead with behavior
     model: sonnet                  # OPTIONAL. Present only on mechanical slices; absent means opus.
     designs: [subdomain_pol_slug]  # OPTIONAL. Design node ids this slice delivers, when the
-                                   #   unit has an .esas/design.json. Scopes /build's scaffold.
+                                   #   unit has an .blueprint/design.json. Scopes /build's scaffold.
     origin: plan                   # plan (default, may be omitted) | verify-build (a fix slice)
     jira: TICKET-NNN               # only when published as a sub-task (--publish)
     commit: <sha>                  # written by /build at the land, pool slices only

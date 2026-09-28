@@ -8,7 +8,7 @@ Mode: single `/start` flow (no `.work/lane.yaml`). Design resolved by the owner 
 Grounding degraded: no CONTEXT.md in this repo (grounded on ADR-001, the workflow file and script headers).
 
 ## Problem & intent
-In a `/start-multi` fleet, plugin units deliberately leave `plugin.json` unbumped — they merge into `int/<run-id>` and `/merge-multi` does the single bump. But the release gate (`check-plugin-version-bump.sh`, job `version-gate`, step "Require a version bump for every touched plugin") FAILs them, and `/verify-build` Step 2 blocks on any FAIL, so every fleet PR opened over a named red step (esas campaign: plugin PRs #385–#391, int PR #392). The repo also has no `.claude/gate.sh`/`gate.mjs`, so lanes ran a hand-copied `validate-plugins.yml`.
+In a `/start-multi` fleet, plugin units deliberately leave `plugin.json` unbumped — they merge into `int/<run-id>` and `/merge-multi` does the single bump. But the release gate (`check-plugin-version-bump.sh`, job `version-gate`, step "Require a version bump for every touched plugin") FAILs them, and `/verify-build` Step 2 blocks on any FAIL, so every fleet PR opened over a named red step (blueprint campaign: plugin PRs #385–#391, int PR #392). The repo also has no `.claude/gate.sh`/`gate.mjs`, so lanes ran a hand-copied `validate-plugins.yml`.
 
 ## Verified facts
 - `/verify-build` Step 2 (`commands/verify-build.md`): the `gateDeferred: true` lane bullet and "A `FAIL` blocks Step 6" — confirmed.

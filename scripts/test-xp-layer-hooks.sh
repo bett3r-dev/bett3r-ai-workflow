@@ -5,8 +5,8 @@
 # ## Why this file had to exist before the hooks could ship
 #
 # `scripts/test-hooks.sh` is hardcoded to `plugins/bett3r-ai-workflow` and to
-# two named scripts inside it. It is the oracle for `esas-pending.sh` and
-# `esas-session-channel.sh` and **for nothing else**. Before this file, a whole
+# two named scripts inside it. It is the oracle for `blueprint-pending.sh` and
+# `blueprint-session-channel.sh` and **for nothing else**. Before this file, a whole
 # new plugin with two new hooks could have shipped with every gate in this repo
 # green, and every one of them green *correctly* — none of them collects an
 # artifact that did not exist when they were written. A gate list is a list of
@@ -26,7 +26,7 @@
 # ## How the store is stubbed
 #
 # `.xp-layer/capture` is the seam: a repo-local executable the store
-# installs. (The reference adapter lives in bett3r-xp-layer, not esas, since
+# installs. (The reference adapter lives in bett3r-xp-layer, not blueprint, since
 # 2026-09-11.) Every case here installs a **stub** that records its argv, so the
 # assertions are about what the hook *decided* and what key it computed — not
 # about any real store, which is not this repo's code and cannot be a

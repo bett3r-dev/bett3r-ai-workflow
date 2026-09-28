@@ -1,5 +1,5 @@
 #!/bin/sh
-# Oracle for the shipped UserPromptSubmit hook (hooks/esas-pending.sh).
+# Oracle for the shipped UserPromptSubmit hook (hooks/blueprint-pending.sh).
 #
 # This hook is the one artifact in the plugin that runs *unconditionally, on
 # every prompt, in every repo where the plugin is enabled* — there is no
@@ -9,11 +9,11 @@
 #   1. a non-zero exit **blocks the user's prompt** (Claude Code: "Exit code 2 -
 #      block processing, erase original prompt"), so every path here asserts
 #      exit 0 — including the corrupt and torn inputs;
-#   2. a slow path taxes every prompt in every repo, so the absent-`.esas`
+#   2. a slow path taxes every prompt in every repo, so the absent-`.blueprint`
 #      fast-path is timed.
 #
-# Fixtures under scripts/fixtures/esas-pending/ were produced by the real
-# @bett3r-dev/esas-store — see the README there. They are read-only: each case
+# Fixtures under scripts/fixtures/blueprint-pending/ were produced by the real
+# @bett3r-dev/blueprint-store — see the README there. They are read-only: each case
 # runs against a copy in a temp dir.
 #
 # Run locally:  sh scripts/test-hooks.sh
@@ -26,12 +26,12 @@
 
 ROOT=$( CDPATH= cd -- "$( dirname -- "$0" )/.." && pwd )
 PLUGIN="$ROOT/plugins/bett3r-ai-workflow"
-HOOK="$PLUGIN/hooks/esas-pending.sh"
+HOOK="$PLUGIN/hooks/blueprint-pending.sh"
 HOOKS_JSON="$PLUGIN/hooks/hooks.json"
-FIXTURES="$ROOT/scripts/fixtures/esas-pending"
+FIXTURES="$ROOT/scripts/fixtures/blueprint-pending"
 HOOK_SH=${HOOK_SH:-sh}
 
-TMP=$( mktemp -d "${TMPDIR:-/tmp}/esas-hook-test.XXXXXX" ) || exit 1
+TMP=$( mktemp -d "${TMPDIR:-/tmp}/blueprint-hook-test.XXXXXX" ) || exit 1
 trap 'rm -rf "$TMP"' EXIT INT TERM
 
 passed=0
@@ -50,13 +50,13 @@ pass(){
 }
 
 # Runs the hook against a fresh copy of $1 (a fixture name, or `-` for a repo
-# with no .esas at all) and records stdout / stderr / status in $TMP.
+# with no .blueprint at all) and records stdout / stderr / status in $TMP.
 run_hook(){
   work="$TMP/work"
   rm -rf "$work"
   mkdir -p "$work"
   if [ "$1" != '-' ]; then
-    cp -R "$FIXTURES/$1/.esas" "$work/.esas"
+    cp -R "$FIXTURES/$1/.blueprint" "$work/.blueprint"
   fi
   # The hook is spawned as `sh <script>` by hooks.json, with CLAUDE_PROJECT_DIR
   # in its environment (Claude Code sets it for every command hook). stdin is
@@ -101,7 +101,7 @@ assert_case(){
   pass "$description"
 }
 
-printf '\nesas-pending hook\n'
+printf '\nblueprint-pending hook\n'
 
 if [ ! -f "$HOOK" ]; then
   fail 'the hook script exists' "no file at $HOOK"
@@ -112,12 +112,12 @@ fi
 # ── The four oracle states ────────────────────────────────────────────────────
 
 assert_case '-' \
-  'absent .esas: silent (the fast-path exit, on every prompt in every repo)' \
+  'absent .blueprint: silent (the fast-path exit, on every prompt in every repo)' \
   ''
 
 assert_case 'pending' \
   'pending semantic human ops: one line, correct count and seq range' \
-  'esas: 2 pending (seq 1→4)'
+  'blueprint: 2 pending (seq 1→4)'
 
 assert_case 'layout-only' \
   'layout-only pending: silent — "moved 14 stickies" is not a design change' \
@@ -125,7 +125,7 @@ assert_case 'layout-only' \
 
 assert_case 'corrupt-cursor' \
   'corrupt cursor: exits 0 and degrades to unsynced (everything pending)' \
-  'esas: 3 pending (seq 0→4)'
+  'blueprint: 3 pending (seq 0→4)'
 
 # ── The rest of the contract ──────────────────────────────────────────────────
 
@@ -139,11 +139,11 @@ assert_case 'ai-only' \
 
 assert_case 'stale' \
   'stale cursor (byteOffset > size): reports EVERYTHING pending, from seq 0' \
-  'esas: 2 pending (seq 0→2)'
+  'blueprint: 2 pending (seq 0→2)'
 
 assert_case 'no-cursor' \
   'no cursor at all: nothing has been synced, so everything is pending' \
-  'esas: 2 pending (seq 0→3)'
+  'blueprint: 2 pending (seq 0→3)'
 
 assert_case 'empty-feed' \
   'empty ops.jsonl: silent' \
@@ -151,11 +151,11 @@ assert_case 'empty-feed' \
 
 assert_case 'nested-author' \
   'an ai op whose payload carries "author":"human" is not counted as human' \
-  'esas: 1 pending (seq 1→3)'
+  'blueprint: 1 pending (seq 1→3)'
 
 assert_case 'torn-tail' \
   'a torn tail is skipped, not counted and not fatal' \
-  'esas: 1 pending (seq 1→2)'
+  'blueprint: 1 pending (seq 1→2)'
 
 # The cursor is written `{ seq, byteOffset, writerId, ts }`, so a truncation in
 # the tail leaves *both* contract fields perfect while the document is
@@ -164,7 +164,7 @@ assert_case 'torn-tail' \
 # points, every time by claiming synced.
 assert_case 'torn-cursor-tail' \
   'a cursor torn in its writerId tail: both fields intact, still unsynced' \
-  'esas: 3 pending (seq 0→4)'
+  'blueprint: 3 pending (seq 0→4)'
 
 # `test` does not return false on an operand it cannot parse — it *fails*, and
 # behind `&&` that is indistinguishable from false, so the staleness branch
@@ -172,7 +172,7 @@ assert_case 'torn-cursor-tail' \
 # on stderr (checked by assert_case for every case).
 assert_case 'cursor-out-of-range' \
   'a byteOffset past 2^63 degrades to unsynced, silently' \
-  'esas: 3 pending (seq 0→4)'
+  'blueprint: 3 pending (seq 0→4)'
 
 # ── Never block a prompt, whatever the input ─────────────────────────────────
 
@@ -181,9 +181,9 @@ printf '\nhardening\n'
 hostile_case(){
   work="$TMP/work"
   rm -rf "$work"
-  mkdir -p "$work/.esas"
-  printf '%s' "$2" >"$work/.esas/ops.jsonl"
-  if [ "$3" != '-' ]; then printf '%s' "$3" >"$work/.esas/.claude-cursor"; fi
+  mkdir -p "$work/.blueprint"
+  printf '%s' "$2" >"$work/.blueprint/ops.jsonl"
+  if [ "$3" != '-' ]; then printf '%s' "$3" >"$work/.blueprint/.claude-cursor"; fi
   CLAUDE_PROJECT_DIR="$work" "$HOOK_SH" "$HOOK" >"$TMP/out" 2>"$TMP/err" </dev/null
   status=$?
   if [ "$status" -ne 0 ]; then
@@ -221,7 +221,7 @@ hostile_case 'a single-line cursor is read per-field, not per-shape' \
 # front of the user's prompt, or fail.
 work="$TMP/work"
 rm -rf "$work"; mkdir -p "$work"
-cp -R "$FIXTURES/pending/.esas" "$work/.esas"
+cp -R "$FIXTURES/pending/.blueprint" "$work/.blueprint"
 # Absolute, because `env -i PATH=/nonexistent` cannot look the interpreter up.
 hook_sh_abs=$( command -v "$HOOK_SH" )
 out=$( env -i PATH=/nonexistent CLAUDE_PROJECT_DIR="$work" "$hook_sh_abs" "$HOOK" 2>"$TMP/err" </dev/null )
@@ -236,12 +236,12 @@ fi
 
 # An unreadable feed: the hook may not read it, and may not complain either.
 work="$TMP/work"
-rm -rf "$work"; mkdir -p "$work/.esas"
-printf '{"seq":1}\n' >"$work/.esas/ops.jsonl"
-chmod 000 "$work/.esas/ops.jsonl"
+rm -rf "$work"; mkdir -p "$work/.blueprint"
+printf '{"seq":1}\n' >"$work/.blueprint/ops.jsonl"
+chmod 000 "$work/.blueprint/ops.jsonl"
 CLAUDE_PROJECT_DIR="$work" "$HOOK_SH" "$HOOK" >"$TMP/out" 2>"$TMP/err" </dev/null
 status=$?
-chmod 644 "$work/.esas/ops.jsonl"
+chmod 644 "$work/.blueprint/ops.jsonl"
 if [ "$status" -ne 0 ]; then
   fail 'an unreadable feed still exits 0' "exit status $status"
 elif [ -s "$TMP/err" ] && [ "$( id -u )" != '0' ]; then
@@ -268,12 +268,12 @@ elapsed=$(( end - start ))
 # ceiling generous enough for the slowest CI runner and still an order of
 # magnitude under the 5 s timeout for a *single* run.
 if [ "$elapsed" -gt 2 ]; then
-  fail 'absent .esas costs nothing (50 runs)' "took ${elapsed}s for 50 runs"
+  fail 'absent .blueprint costs nothing (50 runs)' "took ${elapsed}s for 50 runs"
 else
-  pass "absent .esas costs nothing: 50 runs in ${elapsed}s"
+  pass "absent .blueprint costs nothing: 50 runs in ${elapsed}s"
 fi
 
-# ── The SessionStart hook (hooks/esas-session-channel.sh) ────────────────────
+# ── The SessionStart hook (hooks/blueprint-session-channel.sh) ────────────────────
 #
 # The second hook in this plugin, and the one whose *silence* is the behaviour
 # under test. It tells a session to open the board's summon channel, and it must
@@ -285,16 +285,16 @@ fi
 #
 # So the negative cases carry the weight here. A hook that printed
 # unconditionally would pass a suite that only checked the positive one, and
-# would then fire in every session in every repo with a `.esas/`.
+# would then fire in every session in every repo with a `.blueprint/`.
 #
 # The board is a python stub on an ephemeral port rather than the real one on
 # :3727: the assertion is about how the hook *reads* an answer, and binding a
 # fixed port would make the verdict a property of what happens to be running on
 # this machine.
 
-printf '\nesas-session-channel hook (SessionStart)\n'
+printf '\nblueprint-session-channel hook (SessionStart)\n'
 
-SESSION_HOOK="$PLUGIN/hooks/esas-session-channel.sh"
+SESSION_HOOK="$PLUGIN/hooks/blueprint-session-channel.sh"
 
 session_board_pid=''
 # $1 = repoPath to answer with, $2 = the sessions count, $3 = 'pretty' to space
@@ -313,7 +313,7 @@ if sys.argv[2] != "omit":
 body = json.dumps(fields, separators=separators).encode()
 class H(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path == "/api/esas/status":
+        if self.path == "/api/blueprint/status":
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -344,18 +344,18 @@ stop_session_board(){
   session_board_pid=''
 }
 
-# Runs the hook in a work dir that has (or has not) a `.esas/`, against a given
+# Runs the hook in a work dir that has (or has not) a `.blueprint/`, against a given
 # port. stdin closed, exactly as the prompt hook is run above.
 run_session_hook(){
   swork="$TMP/swork"
   rm -rf "$swork"; mkdir -p "$swork"
-  [ "$1" = 'no-esas' ] || mkdir -p "$swork/.esas"
-  CLAUDE_PROJECT_DIR="$swork" ESAS_BOARD_PORT="$2" "$HOOK_SH" "$SESSION_HOOK" \
+  [ "$1" = 'no-blueprint' ] || mkdir -p "$swork/.blueprint"
+  CLAUDE_PROJECT_DIR="$swork" BLUEPRINT_BOARD_PORT="$2" "$HOOK_SH" "$SESSION_HOOK" \
     >"$TMP/sout" 2>"$TMP/serr" </dev/null
   session_status=$?
 }
 
-# assert_session <esas|no-esas> <port> <speaks|silent> <description>
+# assert_session <blueprint|no-blueprint> <port> <speaks|silent> <description>
 assert_session(){
   run_session_hook "$1" "$2"
   sout=$( cat "$TMP/sout" )
@@ -374,21 +374,21 @@ assert_session(){
 }
 
 if [ ! -f "$SESSION_HOOK" ]; then
-  fail 'hooks/esas-session-channel.sh ships' "no file at $SESSION_HOOK"
+  fail 'hooks/blueprint-session-channel.sh ships' "no file at $SESSION_HOOK"
 elif ! command -v python3 >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then
   fail 'the SessionStart cases need python3 and curl' 'one of them is missing on this machine'
 else
   # Line 2, the whole program most of the time. No design layer, no probe — and
   # this is the state every fleet worktree and every unrelated repo is in.
-  assert_session 'no-esas' 1 silent 'no .esas/ at all: silent, and nothing is probed'
+  assert_session 'no-blueprint' 1 silent 'no .blueprint/ at all: silent, and nothing is probed'
 
-  # A `.esas/` with nothing on the port. The board is user-launched, so this is
+  # A `.blueprint/` with nothing on the port. The board is user-launched, so this is
   # the ordinary state of a designing repo, and the one where an unconditional
   # print would tell every session to dial a dead address.
-  assert_session 'esas' 1 silent 'a design layer but no board: silent'
+  assert_session 'blueprint' 1 silent 'a design layer but no board: silent'
 
   swork="$TMP/swork"
-  rm -rf "$swork"; mkdir -p "$swork/.esas"
+  rm -rf "$swork"; mkdir -p "$swork/.blueprint"
   physical_swork=$( CDPATH= cd -- "$swork" && pwd -P )
 
   # The one state that speaks.
@@ -396,9 +396,9 @@ else
   if [ -z "$SESSION_BOARD_PORT" ]; then
     fail 'a stub board comes up for the SessionStart cases' 'the stub never printed a port'
   else
-    run_session_hook 'esas' "$SESSION_BOARD_PORT"
+    run_session_hook 'blueprint' "$SESSION_BOARD_PORT"
     case $( cat "$TMP/sout" ) in
-      *"ws://127.0.0.1:$SESSION_BOARD_PORT/api/esas/ws"*)
+      *"ws://127.0.0.1:$SESSION_BOARD_PORT/api/blueprint/ws"*)
         pass 'this checkout, sessions 0: it names the exact ws URL to open' ;;
       *)
         fail 'this checkout, sessions 0: it names the exact ws URL to open' \
@@ -415,7 +415,7 @@ else
   # about whether anyone is listening on it.
   start_session_board "$physical_swork" 0 pretty
   if [ -n "$SESSION_BOARD_PORT" ]; then
-    assert_session 'esas' "$SESSION_BOARD_PORT" speaks \
+    assert_session 'blueprint' "$SESSION_BOARD_PORT" speaks \
       'a spaced status body from this checkout still arms'
   fi
   stop_session_board
@@ -424,17 +424,17 @@ else
   # needs, in a session that may not be designing at all.
   start_session_board "$physical_swork" 1
   if [ -n "$SESSION_BOARD_PORT" ]; then
-    assert_session 'esas' "$SESSION_BOARD_PORT" silent \
+    assert_session 'blueprint' "$SESSION_BOARD_PORT" silent \
       'a channel someone already holds (sessions 1): silent'
   fi
   stop_session_board
 
   # A board on the port serving somebody else. This is the gate that makes
-  # `.esas/` insufficient: without it every session in a repo whose port
+  # `.blueprint/` insufficient: without it every session in a repo whose port
   # happens to be held opens a socket to a stranger's design.
   start_session_board "/somewhere/else" 0
   if [ -n "$SESSION_BOARD_PORT" ]; then
-    assert_session 'esas' "$SESSION_BOARD_PORT" silent \
+    assert_session 'blueprint' "$SESSION_BOARD_PORT" silent \
       "another checkout's board reporting zero sessions: silent"
   fi
   stop_session_board
@@ -443,14 +443,14 @@ else
   # Absent is unknown, never zero — it serves no channel to open.
   start_session_board "$physical_swork" omit
   if [ -n "$SESSION_BOARD_PORT" ]; then
-    assert_session 'esas' "$SESSION_BOARD_PORT" silent \
+    assert_session 'blueprint' "$SESSION_BOARD_PORT" silent \
       'a board with no `sessions` field is unknown, never zero: silent'
   fi
   stop_session_board
 
   # No curl: the probe cannot be made, so there is nothing to say. Reporting
   # anything here would be a guess printed into every session.
-  rm -rf "$swork"; mkdir -p "$swork/.esas"
+  rm -rf "$swork"; mkdir -p "$swork/.blueprint"
   session_hook_sh=$( command -v "$HOOK_SH" )
   out=$( env -i PATH=/nonexistent CLAUDE_PROJECT_DIR="$swork" "$session_hook_sh" "$SESSION_HOOK" \
          2>"$TMP/serr" </dev/null )
@@ -667,9 +667,9 @@ else
   assert_json 'it declares a UserPromptSubmit hook' '"UserPromptSubmit"'
   assert_json 'it declares a SessionStart hook' '"SessionStart"'
   assert_json 'and points that one at its shipped script too' \
-    'CLAUDE_PLUGIN_ROOT}/hooks/esas-session-channel.sh'
+    'CLAUDE_PLUGIN_ROOT}/hooks/blueprint-session-channel.sh'
   assert_json 'it sets an explicit timeout of 5s' '"timeout": *5'
-  assert_json 'it points at the shipped script via ${CLAUDE_PLUGIN_ROOT}' 'CLAUDE_PLUGIN_ROOT}/hooks/esas-pending.sh'
+  assert_json 'it points at the shipped script via ${CLAUDE_PLUGIN_ROOT}' 'CLAUDE_PLUGIN_ROOT}/hooks/blueprint-pending.sh'
   assert_json 'it declares a PreToolUse hook' '"PreToolUse"'
   assert_json 'matched on the Bash tool' '"matcher": *"Bash"'
   assert_json 'and points that one at the lane git guard' 'CLAUDE_PLUGIN_ROOT}/hooks/lane-git-guard.sh'

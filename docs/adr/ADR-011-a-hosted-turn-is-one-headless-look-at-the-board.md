@@ -4,32 +4,32 @@
 **Date:** 2026-09-17
 **Ticket:** ESAS-200
 **Depends on:** ADR-001 (plugin version is a release contract)
-**Constrains:** ESAS-205 (esas: the runner's fixed prompt and its plugin version pin)
-**Grounding:** `plugins/bett3r-ai-workflow/skills/esas-hosted-turn/SKILL.md` (new), `plugins/bett3r-ai-workflow/skills/esas-design/SKILL.md`, `scripts/needles.json`, `scripts/check-needles.py`, `scripts/validate-plugins.py`, `scripts/check-eval-coverage.py`, `scripts/check-plugin-version-bump.sh`, `plugins/bett3r-ai-workflow/README.md`, `plugins/bett3r-ai-workflow/.claude-plugin/plugin.json` — all at plugin 9c835c0
+**Constrains:** ESAS-205 (blueprint: the runner's fixed prompt and its plugin version pin)
+**Grounding:** `plugins/bett3r-ai-workflow/skills/blueprint-hosted-turn/SKILL.md` (new), `plugins/bett3r-ai-workflow/skills/blueprint-design/SKILL.md`, `scripts/needles.json`, `scripts/check-needles.py`, `scripts/validate-plugins.py`, `scripts/check-eval-coverage.py`, `scripts/check-plugin-version-bump.sh`, `plugins/bett3r-ai-workflow/README.md`, `plugins/bett3r-ai-workflow/.claude-plugin/plugin.json` — all at plugin 9c835c0
 
-The source of truth for every decision below is the resolved design block on ESAS-200 (run `design-multi-ESAS-125-…-81`, base 9c835c0). This record restates those decisions; it adds none. The codes it names are designed in sibling tickets (ESAS-73, ESAS-127, ESAS-206, ESAS-196) but not yet built in esas.
+The source of truth for every decision below is the resolved design block on ESAS-200 (run `design-multi-ESAS-125-…-81`, base 9c835c0). This record restates those decisions; it adds none. The codes it names are designed in sibling tickets (ESAS-73, ESAS-127, ESAS-206, ESAS-196) but not yet built in blueprint.
 
 ## Context
 
-The 2026-09-17 hosted-product reset puts an ESAS board on a server. A member presses summon on a hosted session, and the server starts an agent run: ESAS-205, in esas, gives Claude a fixed prompt and loads a released version of this plugin.
+The 2026-09-17 hosted-product reset puts an BLUEPRINT board on a server. A member presses summon on a hosted session, and the server starts an agent run: ESAS-205, in blueprint, gives Claude a fixed prompt and loads a released version of this plugin.
 
-Every ESAS rule the plugin has today assumes a local session. `esas-design` holds a session channel open with `Monitor` on a loopback WebSocket (its `SKILL.md` line 85). `grill` interviews a user at a terminal. `/design` writes files and commits. In a hosted run none of that exists: there is no terminal, no user at a prompt, no session channel, and the repository copy is not the place the design is committed from.
+Every BLUEPRINT rule the plugin has today assumes a local session. `blueprint-design` holds a session channel open with `Monitor` on a loopback WebSocket (its `SKILL.md` line 85). `grill` interviews a user at a terminal. `/design` writes files and commits. In a hosted run none of that exists: there is no terminal, no user at a prompt, no session channel, and the repository copy is not the place the design is committed from.
 
 Something has to tell the hosted agent what a turn is, and it has to come from the plugin the runner already loads.
 
-## Decision 1 — The hosted contract is a separate skill, `esas-hosted-turn`, not edits to `esas-design` or `grill`
+## Decision 1 — The hosted contract is a separate skill, `blueprint-hosted-turn`, not edits to `blueprint-design` or `grill`
 
 The new skill states which local behaviours it overrides, and it wins when loaded in a hosted run.
 
 *Rejected:*
-- Hosted branches inside `esas-design`. Its description is a standing rule for local sessions. Mixing two runtimes into one trigger risks local sessions following hosted rules.
-- An esas-owned system prompt. It would be a second copy of the rules that drifts from the plugin.
+- Hosted branches inside `blueprint-design`. Its description is a standing rule for local sessions. Mixing two runtimes into one trigger risks local sessions following hosted rules.
+- An blueprint-owned system prompt. It would be a second copy of the rules that drifts from the plugin.
 
 ## Decision 2 — The skill triggers on the runner's fixed prompt in a hosted run context
 
-The description names the runner's prompt — "A member pressed summon on session <id>. Follow esas-hosted-turn." — and the hosted run context: `ESAS_HOST_URL` set, no terminal.
+The description names the runner's prompt — "A member pressed summon on session <id>. Follow blueprint-hosted-turn." — and the hosted run context: `BLUEPRINT_HOST_URL` set, no terminal.
 
-*Rejected:* triggering on the presence of esas-mcp alone. esas-mcp is present in local sessions too, so the skill would fire there.
+*Rejected:* triggering on the presence of blueprint-mcp alone. blueprint-mcp is present in local sessions too, so the skill would fire there.
 
 ## Decision 3 — The skill's rules
 
@@ -73,9 +73,9 @@ A hosted turn overrides `Monitor`, the terminal interview and file writes. The r
 
 ## Decision 6 — The version bump is the release
 
-Bump the minor version of `plugin.json` (0.81.0 at base). `plugin.json` and `README.md` are shared with ESAS-126 and any other plugin PR in flight; whichever lands second rebases and re-bumps. `scripts/needles.json` is append-only. `README.md`'s skills paragraph gains "`esas-hosted-turn` (the contract a server-side agent run follows on a hosted board)".
+Bump the minor version of `plugin.json` (0.81.0 at base). `plugin.json` and `README.md` are shared with ESAS-126 and any other plugin PR in flight; whichever lands second rebases and re-bumps. `scripts/needles.json` is append-only. `README.md`'s skills paragraph gains "`blueprint-hosted-turn` (the contract a server-side agent run follows on a hosted board)".
 
-The release is confirmed after merge by the orchestrator, from a fresh session, because plugins load at session start and the session that makes the release cannot see it. The new version's `plugins/bett3r-ai-workflow/skills/esas-hosted-turn/SKILL.md` (new, created by ESAS-200) must appear in the plugin cache, and that version is recorded on ESAS-205 as its pin.
+The release is confirmed after merge by the orchestrator, from a fresh session, because plugins load at session start and the session that makes the release cannot see it. The new version's `plugins/bett3r-ai-workflow/skills/blueprint-hosted-turn/SKILL.md` (new, created by ESAS-200) must appear in the plugin cache, and that version is recorded on ESAS-205 as its pin.
 
 ## Verification
 
@@ -83,7 +83,7 @@ Presence gates only: `SKILL.md` exists and `python3 scripts/validate-plugins.py`
 
 ## Consequences
 
-- The skill names codes esas has designed but not built. A rename at build time must update the skill and its needles.
+- The skill names codes blueprint has designed but not built. A rename at build time must update the skill and its needles.
 - A description that is too broad would let local sessions trigger the skill; it must require the hosted prompt.
 - Hosted runs use the pinned version until someone re-pins, so a merged fix is not live until then.
 

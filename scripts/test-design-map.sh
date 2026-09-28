@@ -1,6 +1,6 @@
 #!/bin/sh
 # Oracle for `bin/design-map` — `validate` (a map.json against the v2 structure
-# and the esas vocabulary copy), `render` (map.json to the page the owner
+# and the blueprint vocabulary copy), `render` (map.json to the page the owner
 # answers on) and `apply-answers` (the saved answers back into fork statuses, F3).
 #
 # The page tells the owner that a fork left unanswered is taken on its
@@ -22,11 +22,11 @@
 # DM_SH selects the interpreter that runs the `bin/design-map` launcher
 # (`sh` is dash on Debian/Ubuntu, bash on macOS).
 #
-# ESAS_CHECKOUT, when set, names an esas checkout: the vocabulary copy
+# BLUEPRINT_CHECKOUT, when set, names an blueprint checkout: the vocabulary copy
 # skills/design-map/map.schema.json is compared byte for byte with its
-# packages/esas-schema/schema/map.schema.json (and with serialiseMapSchema()
-# when packages/esas-schema/build/esm/index.js exists). Unset, that case prints
-# `SKIP reason=no-esas-checkout` and is counted as skipped, never as passed.
+# packages/blueprint-schema/schema/map.schema.json (and with serialiseMapSchema()
+# when packages/blueprint-schema/build/esm/index.js exists). Unset, that case prints
+# `SKIP reason=no-blueprint-checkout` and is counted as skipped, never as passed.
 
 ROOT=$( CDPATH= cd -- "$( dirname -- "$0" )/.." && pwd )
 DM="$ROOT/plugins/bett3r-ai-workflow/bin/design-map"
@@ -228,7 +228,7 @@ expect_error 'bare actor nested inside a fork option' bare-actor \
 check 'bare actor: names where it is' "$( attr "$LINE" at )" /forks/1/card/options/0/actor "$LINE"
 page_absent 'bare actor: no page' "$TMP/c2.html"
 
-# The vocabulary is esas's emitted copy; the structure is a second file whose
+# The vocabulary is blueprint's emitted copy; the structure is a second file whose
 # enums are `$ref`s into that copy, never restated.
 SKILL_DIR="$ROOT/plugins/bett3r-ai-workflow/skills/design-map"
 VOCAB="$SKILL_DIR/map.schema.json"
@@ -271,7 +271,7 @@ walk(s)
 print(sorted(set(enums) & values), sorted(refs) == sorted(v["$defs"]))' "$VOCAB" "$STRUCTURE" 2>&1 )" '[] True'
 
 # ---------------------------------------------------------------------------
-printf 'AC1: the vocabulary copy is byte-identical to esas'"'"'s emitted schema\n'
+printf 'AC1: the vocabulary copy is byte-identical to blueprint'"'"'s emitted schema\n'
 # ---------------------------------------------------------------------------
 # stale <copy> <reference> — prints fresh or stale. The planted-byte probe runs
 # the same function, so a comparison that cannot fail is caught here.
@@ -279,13 +279,13 @@ stale(){
   if cmp -s "$1" "$2"; then printf fresh; else printf stale; fi
 }
 skipped=0
-if [ -n "${ESAS_CHECKOUT:-}" ]; then
-  EMITTED="$ESAS_CHECKOUT/packages/esas-schema/schema/map.schema.json"
+if [ -n "${BLUEPRINT_CHECKOUT:-}" ]; then
+  EMITTED="$BLUEPRINT_CHECKOUT/packages/blueprint-schema/schema/map.schema.json"
   if [ -f "$EMITTED" ]; then
-    check 'the copy equals $ESAS_CHECKOUT packages/esas-schema/schema/map.schema.json' \
+    check 'the copy equals $BLUEPRINT_CHECKOUT packages/blueprint-schema/schema/map.schema.json' \
       "$( stale "$VOCAB" "$EMITTED" )" fresh "$EMITTED"
   else
-    fail 'ESAS_CHECKOUT holds the emitted map.schema.json' "no file at $EMITTED"
+    fail 'BLUEPRINT_CHECKOUT holds the emitted map.schema.json' "no file at $EMITTED"
   fi
   cp "$VOCAB" "$TMP/planted.json"
   python3 - "$TMP/planted.json" <<'PY'
@@ -295,7 +295,7 @@ i = b.index(b"decided"); b[i] = ord("D")
 open(p, "wb").write(bytes(b))
 PY
   check 'one planted byte in a temp copy is detected as stale' "$( stale "$TMP/planted.json" "$EMITTED" )" stale
-  BUILT="$ESAS_CHECKOUT/packages/esas-schema/build/esm/index.js"
+  BUILT="$BLUEPRINT_CHECKOUT/packages/blueprint-schema/build/esm/index.js"
   if [ -f "$BUILT" ]; then
     # Serialise to stdout only: the package's emit script writes into the checkout.
     if node --input-type=module -e 'const m = await import(process.argv[1]); process.stdout.write(m.serialiseMapSchema());' \
@@ -309,7 +309,7 @@ PY
   fi
 else
   skipped=$(( skipped + 1 ))
-  printf '  \033[33m!! SKIP reason=no-esas-checkout\033[0m the vocabulary copy was NOT compared with esas (set ESAS_CHECKOUT); this is not a pass\n'
+  printf '  \033[33m!! SKIP reason=no-blueprint-checkout\033[0m the vocabulary copy was NOT compared with blueprint (set BLUEPRINT_CHECKOUT); this is not a pass\n'
 fi
 
 # ---------------------------------------------------------------------------
@@ -1188,7 +1188,7 @@ printf '\nESAS-174: select — the map target is a first-match table, probes bef
 # ---------------------------------------------------------------------------
 # `select` is pure over a captures directory (design.md P1). Each case builds
 # its own directory under $TMP from scripts/fixtures/design-map/select/ (the
-# shapes and their esas sources are in that directory's README.md), with a
+# shapes and their blueprint sources are in that directory's README.md), with a
 # synthesized pwd.txt so the repoPath comparison never reads this machine's cwd,
 # and runs from an empty cwd so no ambient .work/lane.yaml is found.
 SEL="$FIX/select"
@@ -1234,7 +1234,7 @@ expect_select(){
 # The board-ready case every row below breaks exactly one input of.
 sel_case ready status-map-ok.json tools-full.txt board-map.json start-ok.json
 
-# AC2 — an esas-mcp without capabilities is silent, on ok:true and on ESAS_DIR_MISSING.
+# AC2 — an blueprint-mcp without capabilities is silent, on ok:true and on BLUEPRINT_DIR_MISSING.
 sel_case old status-old.json tools-full.txt board-map.json -
 expect_select 'S-old' old probe artifact mcp-no-map done
 sel_case old-dirmissing status-dirmissing-old.json tools-full.txt board-map.json -
@@ -1288,7 +1288,7 @@ check 'S-order --phase start with no start.json: exit 2' "$rc" 2
 sel_case stale status-old.json tools-full.txt board-map.json start-ok.json
 expect_select 'start re-evaluates the probe rows' stale start artifact mcp-no-map done
 
-# AC5 — the E10 envelope: ESAS_DIR_MISSING carrying capabilities is not an error.
+# AC5 — the E10 envelope: BLUEPRINT_DIR_MISSING carrying capabilities is not an error.
 sel_case dirmissing-map status-dirmissing-map.json tools-full.txt board-map.json start-ok.json
 expect_select 'S-dirmissing-map' dirmissing-map probe board-candidate ok done
 
@@ -1308,8 +1308,8 @@ sel_case no-status-tool status-map-ok.json tools-full.txt board-map.json -
 grep -v '^status$' "$SEL/tools-full.txt" > "$TMP/sel/no-status-tool/captures/tools.txt"
 expect_select 'S-no-mcp (no status tool listed)' no-status-tool probe artifact no-mcp done
 sel_case prefixed status-map-ok.json - board-map.json start-ok.json
-sed 's/^/mcp__esas__/' "$SEL/tools-full.txt" > "$TMP/sel/prefixed/captures/tools.txt"
-expect_select 'session-prefixed tool names (mcp__esas__*)' prefixed start board ok done
+sed 's/^/mcp__blueprint__/' "$SEL/tools-full.txt" > "$TMP/sel/prefixed/captures/tools.txt"
+expect_select 'session-prefixed tool names (mcp__blueprint__*)' prefixed start board ok done
 expect_select 'S-tools' tools probe artifact tools-missing done
 expect_select 'S-mcp-error' mcp-error probe artifact mcp-error done
 expect_select 'S-other' other probe artifact board-other-repo done
@@ -1367,9 +1367,9 @@ expect_select 'precedence row 8 over 9-11 (no boardKinds + linked worktree)' pre
 # ---------------------------------------------------------------------------
 printf '\nESAS-174: post — the board store readback matches map.json (D7, D5)\n'
 # ---------------------------------------------------------------------------
-# The readback is the `get_map` tool body `{ok:true, map, mapSeq}` (esas-mcp
-# handlers.ts GetMapToolResult = esas-store map-write.ts MapReadResult). Its map
-# is esas's MapFile: structureVersion 1, `links` required, and forks folded by
+# The readback is the `get_map` tool body `{ok:true, map, mapSeq}` (blueprint-mcp
+# handlers.ts GetMapToolResult = blueprint-store map-write.ts MapReadResult). Its map
+# is blueprint's MapFile: structureVersion 1, `links` required, and forks folded by
 # replay.ts postedMapEntry, which carries no `tickets`. `post` compares forks
 # only, so the readback's map is never checked against the plugin's v2 schema.
 # post-map-4.json holds one fork of each status: decided(owner, A),
@@ -1406,7 +1406,7 @@ check 'S-parity flipped: statuses reports the readback' "$( attr "$LINE" statuse
 # fields `statuses=` does not print is still a fail.
 expect_post 'S-parity option differs (A->B)' getmap-4-option.json fail 1 4 status-mismatch
 expect_post 'S-parity moot reason differs' getmap-4-reason.json fail 1 4 status-mismatch
-# Only kind differs (open -> a reason-less moot, a shape esas never emits): kind
+# Only kind differs (open -> a reason-less moot, a shape blueprint never emits): kind
 # is compared as a field, not only through the fields each kind carries.
 expect_post 'S-parity kind alone differs' getmap-4-kind.json fail 1 4 status-mismatch
 
@@ -1420,7 +1420,7 @@ expect_error 'post: --expect negative' bad-expect post --expect -1 --map "$PM" -
 expect_error 'post: absent readback' readback-unreadable post --expect 4 --map "$PM" --readback "$TMP/post/none.json"
 printf 'not json {' > "$TMP/post/garbage.json"
 expect_error 'post: unparseable readback' readback-unreadable post --expect 4 --map "$PM" --readback "$TMP/post/garbage.json"
-printf '{"ok":false,"error":{"code":"ESAS_DIR_MISSING","message":"x"}}\n' > "$TMP/post/failed.json"
+printf '{"ok":false,"error":{"code":"BLUEPRINT_DIR_MISSING","message":"x"}}\n' > "$TMP/post/failed.json"
 expect_error 'post: a failed get_map body' readback-failed post --expect 4 --map "$PM" --readback "$TMP/post/failed.json"
 printf '{"ok":true,"map":{"forks":[{"id":"X-1-F1"}]},"mapSeq":3}\n' > "$TMP/post/nostatus.json"
 expect_error 'post: a fork without a status object' readback-invalid post --expect 4 --map "$PM" --readback "$TMP/post/nostatus.json"
@@ -1431,7 +1431,7 @@ expect_error 'post: invalid map.json' schema-invalid post --expect 4 --map "$SEL
 
 # AC8 (D5 readback) — the board died mid-sitting: the decided statuses come
 # back from get_map and are written through `design-map write`, the only
-# map.json writer (ADR-006). The raw get_map map cannot be written: esas holds
+# map.json writer (ADR-006). The raw get_map map cannot be written: blueprint holds
 # it at structureVersion 1 and its forks carry no `tickets`.
 cp "$SEL/post-map-4-open.json" "$TMP/post/map.json"
 python3 -c 'import json,sys; b=json.load(open(sys.argv[1])); m=b["map"]; m["feedSeq"]=b["mapSeq"]; json.dump(m,sys.stdout)' \
@@ -1564,7 +1564,7 @@ check 'the --final map is still valid' "$( attr "$LINE" outcome )" ok "$LINE" "$
 # `record` emits payloads as data and posts nothing. F3: the returned id is
 # written to a sidecar keyed by fork id BESIDE the map, and `map.json` itself
 # never carries it (the fork object is additionalProperties:false and the
-# vocabulary copy is byte-identical to what esas emits). The sidecar is named
+# vocabulary copy is byte-identical to what blueprint emits). The sidecar is named
 # after its own map, not `resolved-by.json` flat, because a run dir holds one
 # map per subject in a single directory and a flat name would cross-bind them.
 printf '\nXL-70: record emits one payload per answered fork and names the sidecar\n'
@@ -1669,7 +1669,7 @@ expect_error 'record over an unparseable sidecar' sidecar-unparseable record "$T
 
 # ---------------------------------------------------------------------------
 # skills/design-map/SKILL.md — presence oracle, in the style of
-# scripts/test-esas-design.sh (assert_md/refute_md). This is prose, not a
+# scripts/test-blueprint-design.sh (assert_md/refute_md). This is prose, not a
 # script: it catches deletion, not wrongness, as the design's own test-seams
 # table says of this exact case.
 # ---------------------------------------------------------------------------
@@ -1678,7 +1678,7 @@ printf '\nskills/design-map/SKILL.md — the F4 disarm, and the pointers to its 
 SKILL_MD="$ROOT/plugins/bett3r-ai-workflow/skills/design-map/SKILL.md"
 FLEET_MD="$ROOT/plugins/bett3r-ai-workflow/skills/design-map/FLEET.md"
 
-# Failures name the file repo-relative, mirroring test-esas-design.sh's own
+# Failures name the file repo-relative, mirroring test-blueprint-design.sh's own
 # helper (two files across the plugin are both called SKILL.md).
 assert_md(){
   file=$1
@@ -1796,12 +1796,12 @@ assert_md "$SKILL_MD" 'the testable flag a process-rule fork carries is named wh
   'testable: false'
 
 # The two invariants (an empty wake is normal; nothing is proposed off a
-# half-answered fork) have one home, skills/esas-design/SKILL.md, where
-# scripts/test-esas-design.sh pins them token by token. This skill points at
+# half-answered fork) have one home, skills/blueprint-design/SKILL.md, where
+# scripts/test-blueprint-design.sh pins them token by token. This skill points at
 # that home by name and restates neither, so the pointer is what is pinned here;
 # a second copy of the tokens would be a second place for them to drift.
-assert_md "$SKILL_MD" "the wake defers to esas-design's two invariants by name, not by restating them" \
-  "\`esas-design\`'s two invariants"
+assert_md "$SKILL_MD" "the wake defers to blueprint-design's two invariants by name, not by restating them" \
+  "\`blueprint-design\`'s two invariants"
 
 # ── skills/design-map/FLEET.md — the fleet companion ─────────────────────────
 #
@@ -1809,7 +1809,7 @@ assert_md "$SKILL_MD" "the wake defers to esas-design's two invariants by name, 
 # project | write, decisions --closed, record, select, post) live in a companion
 # beside SKILL.md, opened through a pointer that names the condition. The pointer
 # is pinned in SKILL.md; the verb lines are pinned where they now live. Three of
-# the literals are spelled in esas (`capabilities.verbFamilies`, `boardKinds`,
+# the literals are spelled in blueprint (`capabilities.verbFamilies`, `boardKinds`,
 # `LINKED_WORKTREE`): the select table transcribes them, and a paraphrase there
 # is a silent break against design-map.py, which reads them off the real bodies
 # (the select cases above execute that; this pins the prose the model reads).
@@ -1854,7 +1854,7 @@ check 'a run that printed no verdict line parses as no verdict' "$( verdict "$TM
 
 printf '\n'
 if [ "$skipped" -gt 0 ]; then
-  printf '\033[33m!! %d skipped (SKIP reason=no-esas-checkout) — not counted as passed\033[0m\n' "$skipped"
+  printf '\033[33m!! %d skipped (SKIP reason=no-blueprint-checkout) — not counted as passed\033[0m\n' "$skipped"
 fi
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"

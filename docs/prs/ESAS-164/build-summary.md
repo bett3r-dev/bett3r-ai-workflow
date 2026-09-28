@@ -51,6 +51,6 @@ verifyBuild:
   concerns: { hard: 0, soft: 0, unmet: [] }
 ---
 ## What shipped
-3/3 slices first-pass green, zero fix rounds. S1 on opus (main tree), S2 on opus and S3 on sonnet in a 2-worktree pool; both landed cleanly (the test file's two additive sections auto-merged). Post-land suite on the branch: `sh scripts/test-esas-design.sh` exit 0, see verify-build for the count. D1 (plugin.json not bumped, per fleet brief) means check-plugin-version-bump.sh fails on this branch by design. No design layer / scaffolder (no .esas/, no snapshot). One test-runner report (S3) quoted a vitest summary this suite never prints — discarded, re-run by the orchestrator: 159 passed.
+3/3 slices first-pass green, zero fix rounds. S1 on opus (main tree), S2 on opus and S3 on sonnet in a 2-worktree pool; both landed cleanly (the test file's two additive sections auto-merged). Post-land suite on the branch: `sh scripts/test-blueprint-design.sh` exit 0, see verify-build for the count. D1 (plugin.json not bumped, per fleet brief) means check-plugin-version-bump.sh fails on this branch by design. No design layer / scaffolder (no .blueprint/, no snapshot). One test-runner report (S3) quoted a vitest summary this suite never prints — discarded, re-run by the orchestrator: 159 passed.
 
 Usage not measured: no-transcripts (lane runs under the orchestrator session; run-metrics --fleet from the orchestrator).

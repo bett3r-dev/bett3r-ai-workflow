@@ -62,16 +62,16 @@ Confirm `<scratchpad>/<unit-id>/` exists and create it if it does not; worktrees
 
 ## 6 — Carry the design layer in, read-only
 
-A worktree holds no `.esas/`: that layer is scoped to one unit of work while a run spans N, and a `.esas/` here would enrol a throwaway tree in a live board session. `/build`'s scaffold step only reads, so the lane gets a **snapshot** under `.work/`; `ESAS_DIR_MISSING` in a lane is correct.
+A worktree holds no `.blueprint/`: that layer is scoped to one unit of work while a run spans N, and a `.blueprint/` here would enrol a throwaway tree in a live board session. `/build`'s scaffold step only reads, so the lane gets a **snapshot** under `.work/`; `BLUEPRINT_DIR_MISSING` in a lane is correct.
 
-Only when the **main checkout** has both `.esas/design.json` and `.esas/graph.json`; otherwise skip and say so, a normal state:
+Only when the **main checkout** has both `.blueprint/design.json` and `.blueprint/graph.json`; otherwise skip and say so, a normal state:
 
 1. Compare the main checkout's `HEAD` with the pinned base sha, and its `git status --porcelain` for tracked modifications. Match and clean: write the snapshot. Anything else: write nothing and report both shas, because a snapshot from another tree describes artifacts the lane does not have, invisibly.
 2. Copy exactly two files into `<worktree>/.work/design-snapshot/`:
 
 ```
-.esas/design.json  →  .work/design-snapshot/design.json
-.esas/graph.json   →  .work/design-snapshot/graph.json
+.blueprint/design.json  →  .work/design-snapshot/design.json
+.blueprint/graph.json   →  .work/design-snapshot/graph.json
 ```
 
 3. Write `.work/design-snapshot/manifest.yaml` beside them:

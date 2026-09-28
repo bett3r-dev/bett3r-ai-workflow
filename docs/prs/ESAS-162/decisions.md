@@ -6,7 +6,7 @@ step: build · slice: 1 · decidedBy: lane
 sources: [design:block D5/D6 and AC4, design:docs/prs/ESAS-162/design.md Corrections #3]
 rejected: mapSeq = the feed-side fold seq as D6 names it — contradicts AC4's `mapSeq=none` for a map without feedSeq
 supersedes: —
-AC4 is the executable half and governs. The esas "mapSeq" of D6 is what a caller passes as `--feed-seq`.
+AC4 is the executable half and governs. The blueprint "mapSeq" of D6 is what a caller passes as `--feed-seq`.
 
 ## D2 — Unspecified refusal reasons for count/drift
 kind: silent-seam

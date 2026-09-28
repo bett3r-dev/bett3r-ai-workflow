@@ -19,9 +19,9 @@ case; read [AGGREGATES.md](../ddd-patterns/AGGREGATES.md) before assuming yours 
 
 ## Project configuration
 
-Resolve these placeholders from the `.esas.config.json` at your repo root:
+Resolve these placeholders from the `.blueprint.config.json` at your repo root:
 
-| Placeholder | `.esas.config.json` field |
+| Placeholder | `.blueprint.config.json` field |
 |---|---|
 | `<serverPath>` | `serverPath` |
 | `<domainEventsPackageName>` | `domainEventsPackageName` |

@@ -117,7 +117,7 @@ cannot be re-verified — the projection it was checked against no longer exists
   plugin (ESAS-163's map-tree calls, ESAS-164's board mode, ESAS-166's fleet projection, ESAS-174's
   session start): each of them calls `design-map`, none of them writes the file directly. The AC3
   grep in `scripts/test-design-snapshot.sh` is the standing gate that catches a regression.
-- The consuming side (esas's `mapSeq`/feed, ESAS-167/169) is out of scope here and does not change
+- The consuming side (blueprint's `mapSeq`/feed, ESAS-167/169) is out of scope here and does not change
   this decision: until it exists, `/verify-build`'s drift step runs `--no-feed` on every
   invocation. A main checkout reports `skip reason=no-map-feed`; a fleet lane runs the same
   `--no-feed` and the PR names it `fleet-lane-no-feed`. That step is inert, not incomplete — it has nothing
