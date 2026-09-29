@@ -15,6 +15,15 @@ slices:
     verifier: pass
     redBeforeGreen: true
     postDesignDecisions: [D1]
+    usage: null
+verifyBuild:
+  usage: null
+  gate: { mode: --fast, verdict: PASS, skipped: 16, inconclusive: 0 }
+  coherence: { critical: 0, medium: 0, low: 0, shippedUnresolved: 0 }
+  fixSlicesAdded: 0
+  adrs: []
+  concerns: { hard: 0, soft: 0, unmet: [] }
 ---
 ## What shipped
 ADR-011 status is now "Superseded by blueprint ADR-107" with a short note. Only the ADR-011 file changed; no plugin bump. gate.sh is deferred to verify-build; flow-seams suite ran green (558). ADR-107's filename was verified on blueprint branch ESAS-205-runner-design-jobs only; re-check if ESAS-205 renames it at merge.
+Usage not measured: no-transcripts (run-metrics found none for this branch; fleet mode needs a unit the agents.yaml does not name).
