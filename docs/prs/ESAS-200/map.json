@@ -1,0 +1,144 @@
+{
+  "structureVersion": 2,
+  "shape": "decision",
+  "grounded": true,
+  "mapId": "ESAS-200",
+  "nodes": [],
+  "forks": [
+    {
+      "id": "ESAS-200-F1",
+      "title": "Hosted-turn contract: plugin skill, or the runner's own prompt?",
+      "tickets": [
+        "ESAS-200"
+      ],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "B"
+      },
+      "restsOn": [],
+      "card": {
+        "problem": "Under ADR-100 the runner runs claude -p in the customer's checkout (blueprint-runner.mjs:211-215) with a fixed DEFAULT_PROMPT (line 185) and --allowedTools 'mcp__blueprint Read Glob Grep' (no Skill tool). The customer's Claude need not have bett3r-ai-workflow installed. Should the hosted-turn contract be a plugin skill the runner loads, or the runner's own prompt (closing ESAS-200 into ESAS-205)?",
+        "useCases": [
+          "customer machine without the plugin runs a design job",
+          "the hosted contract changes",
+          "a local session with the plugin installed must not trigger hosted rules"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Plugin skill blueprint-hosted-turn; runner loads the plugin and allows Skill",
+            "walks": [
+              {
+                "scenario": "customer machine without the plugin",
+                "given": "a runner on a machine without bett3r-ai-workflow",
+                "when": "a design job runs",
+                "then": "the agent runs without the contract unless the runner ships or installs the plugin",
+                "text": "Given a runner on a machine without bett3r-ai-workflow, when a design job runs, then the agent runs without the contract unless the runner ships or installs the plugin."
+              }
+            ]
+          },
+          {
+            "id": "B",
+            "label": "Close ESAS-200 into ESAS-205; the server serves the instructions with each claimed job from a store the platform admin edits at runtime (bundled default on the server); ADR-011 superseded (owner reframe 2026-09-28)",
+            "walks": [
+              {
+                "scenario": "customer machine without the plugin",
+                "given": "a runner on any machine",
+                "when": "a design job runs",
+                "then": "the agent follows the headless rules and real refusal codes carried in the runner's own prompt",
+                "text": "Given a runner on any machine, when a design job runs, then the agent follows the headless rules and real refusal codes carried in the runner's own prompt."
+              }
+            ]
+          },
+          {
+            "id": "C",
+            "label": "Plugin is source; runner vendors SKILL.md and passes it via --append-system-prompt",
+            "walks": [
+              {
+                "scenario": "the hosted contract changes",
+                "given": "a change to the plugin skill",
+                "when": "it merges",
+                "then": "it reaches customers only after a plugin bump, a runner re-vendor and a runner release, guarded by a cross-repo drift check",
+                "text": "Given a change to the plugin skill, when it merges, then it reaches customers only after a plugin bump, a runner re-vendor and a runner release, guarded by a cross-repo drift check."
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "The customer-hosted runner cannot assume our workflow plugin, and a prompt the runner already ships is the only copy that reaches a plugin-less machine with zero install steps."
+        },
+        "ifOverturned": "A or C: write the blueprint-hosted-turn skill with the corrected code list (HOST_UNREACHABLE, RUN_GRANT_ENDED, PATHS_NOT_AVAILABLE_HOSTED, CONFLICT_PENDING_SYNC), amend ADR-011, bump plugin.json, and have ESAS-205 add Skill + a plugin load to runAgent."
+      }
+    },
+    {
+      "id": "ESAS-200-F2",
+      "title": "Can a runner decline or pin the server-served instructions, and does it keep a bundled fallback prompt?",
+      "tickets": [
+        "ESAS-200"
+      ],
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "A"
+      },
+      "card": {
+        "problem": "Under ESAS-200-F1 the server serves the hosted-turn instructions with each claimed job; an admin edit then goes live for every customer's agent. The runner today also carries its own DEFAULT_PROMPT (blueprint-runner.mjs:209).",
+        "useCases": [
+          "A platform admin edits the instructions",
+          "A job arrives without instruction text (older server, bug)"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Always served: no runner opt-out and no bundled fallback; a job without instructions fails with a clear error; the instruction version and hash are recorded per job",
+            "walks": [
+              {
+                "scenario": "a job with no instructions",
+                "given": "a runner claiming a job whose claim reply lacks instructions",
+                "when": "it would start the agent",
+                "then": "it reports the job failed with a named error and starts nothing",
+                "text": "Given a runner claiming a job whose claim reply lacks instructions, when it would start the agent, then it reports the job failed with a named error and starts nothing."
+              }
+            ]
+          },
+          {
+            "id": "B",
+            "label": "Served by default, with a runner flag (--instructions bundled) to use its own copy",
+            "walks": [
+              {
+                "scenario": "a customer pins instructions",
+                "given": "a runner started with --instructions bundled",
+                "when": "an admin edits the served text",
+                "then": "that runner keeps running its bundled copy",
+                "text": "Given a runner started with --instructions bundled, when an admin edits the served text, then that runner keeps running its bundled copy."
+              }
+            ],
+            "rejectedBecause": "a choice inside the runner is business logic; the runner is an interface only (owner, 2026-09-29)"
+          },
+          {
+            "id": "C",
+            "label": "Served, with the runner's bundled prompt as a fallback when none arrives",
+            "walks": [
+              {
+                "scenario": "a job with no instructions",
+                "given": "a runner with a bundled DEFAULT_PROMPT",
+                "when": "a claim reply lacks instructions",
+                "then": "it silently runs its own text",
+                "text": "Given a runner with a bundled DEFAULT_PROMPT, when a claim reply lacks instructions, then it silently runs its own text."
+              }
+            ],
+            "rejectedBecause": "the runner would decide what the agent is told"
+          }
+        ],
+        "recommendation": {
+          "option": "A",
+          "why": "Owner rule 2026-09-29: the server is the brain and the runner holds no business logic; supersedes the 'runner keeps only a fallback' clause of ESAS-200-F1."
+        },
+        "ifOverturned": "Re-add a bundled prompt and a flag in blueprint-runner; the claim contract is unchanged."
+      }
+    }
+  ]
+}

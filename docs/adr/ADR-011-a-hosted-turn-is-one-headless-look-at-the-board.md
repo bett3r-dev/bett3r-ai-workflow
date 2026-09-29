@@ -1,11 +1,13 @@
 # ADR-011: A hosted turn is one headless look at the board
 
-**Status:** Proposed
+**Status:** Superseded by blueprint ADR-107 (ADR-107-runner-is-an-interface-and-the-server-decides.md)
 **Date:** 2026-09-17
 **Ticket:** ESAS-200
 **Depends on:** ADR-001 (plugin version is a release contract)
 **Constrains:** ESAS-205 (blueprint: the runner's fixed prompt and its plugin version pin)
 **Grounding:** `plugins/bett3r-ai-workflow/skills/blueprint-hosted-turn/SKILL.md` (new), `plugins/bett3r-ai-workflow/skills/blueprint-design/SKILL.md`, `scripts/needles.json`, `scripts/check-needles.py`, `scripts/validate-plugins.py`, `scripts/check-eval-coverage.py`, `scripts/check-plugin-version-bump.sh`, `plugins/bett3r-ai-workflow/README.md`, `plugins/bett3r-ai-workflow/.claude-plugin/plugin.json` — all at plugin 9c835c0
+
+> **Superseded.** The hosted-turn contract is now the instructions the Blueprint server sends, served with each claimed design job (ESAS-205, blueprint ADR-107); no plugin skill is built. The decisions below are kept as history and are not rewritten.
 
 The source of truth for every decision below is the resolved design block on ESAS-200 (run `design-multi-ESAS-125-…-81`, base 9c835c0). This record restates those decisions; it adds none. The codes it names are designed in sibling tickets (ESAS-73, ESAS-127, ESAS-206, ESAS-196) but not yet built in blueprint.
 
