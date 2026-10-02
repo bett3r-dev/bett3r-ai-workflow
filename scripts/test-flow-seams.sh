@@ -3753,8 +3753,38 @@ for f in "$START_MULTI_MD" "$PROVISIONER_MD" "$DESIGN_MD"; do
   fi
 done
 # F3: the dry-run under-asks too: no agreed scenario is in a unit map before Phase C.
-present "$DESIGN_MULTI_MD" 'so it also under-asks: the unit maps hold no agreed scenarios until Phase C step 4 projects them' \
-  '/design-multi Step 3.5 states the under-ask direction (scenario tests cannot surface pre-sitting)'
+present "$DESIGN_MULTI_MD" 'so it also under-asks. Four kinds of block it cannot see:' \
+  '/design-multi Step 3.5 states the under-ask direction'
+present "$DESIGN_MULTI_MD" 'The unit maps hold no agreed scenarios until Phase C step 4 projects them' \
+  '/design-multi Step 3.5 under-ask 1: scenario tests cannot surface pre-sitting'
+present "$DESIGN_MULTI_MD" '**Blocks only `finish`'"'"'s re-run over the placed tree meets.**' \
+  '/design-multi Step 3.5 under-ask 2: blocks only finish'"'"'s re-run over the placed tree meets'
+present "$DESIGN_MULTI_MD" '**Elements added or changed on the board during the sitting.**' \
+  '/design-multi Step 3.5 under-ask 3: elements added on the board during the sitting'
+present "$DESIGN_MULTI_MD" '**A base that moves during the sitting.**' \
+  '/design-multi Step 3.5 under-ask 4: the base moving during the sitting'
+present "$DESIGN_MULTI_MD" 'Each of the four first appears at `/start-multi` step 0, after the owner has left, where it is an escalation' \
+  '/design-multi Step 3.5 says where the under-asked blocks surface'
+# The escalation sentence at step 0 must be true for every under-ask, so it
+# names them rather than claiming every asked block "was due at Step 3.5".
+present "$START_MULTI_MD" 'An asked block here is an escalation: either `/design-multi` Step 3.5 should have asked it, or it is one of the four under-asks Step 3.5 names' \
+  '/start-multi step 0: an asked block is an escalation, due at Step 3.5 or one of its named under-asks'
+for needle in 'a block only `finish`'"'"'s re-run over the placed tree meets' 'an element added or changed on the board during the sitting' 'a base that moved during the sitting'; do
+  present "$START_MULTI_MD" "$needle" "/start-multi step 0 names the under-ask: $needle"
+done
+hits=$( grep -nF 'An asked block was due at `/design-multi` Step 3.5' "$START_MULTI_MD" || true )
+if [ -z "$hits" ]; then
+  pass '[STRUCTURAL] /start-multi step 0 does not claim every asked block was due at Step 3.5'
+else
+  fail '[STRUCTURAL] /start-multi step 0 does not claim every asked block was due at Step 3.5' "$hits"
+fi
+DESIGN_304_MD="$ROOT/docs/prs/ESAS-304/design.md"
+if [ -f "$DESIGN_304_MD" ]; then
+  present "$DESIGN_304_MD" 'The fleet'"'"'s Step 3.5 dry-run under-asks' 'ESAS-304 design.md Risks names the Step 3.5 under-asks'
+  for needle in 'blocks only `finish`'"'"'s re-run over the placed tree meets' 'elements added or changed on the board during the sitting' 'a base that moves during the sitting'; do
+    present "$DESIGN_304_MD" "$needle" "ESAS-304 design.md Risks names: $needle"
+  done
+fi
 hits=$( grep -nF 'it can only over-ask' "$DESIGN_MULTI_MD" || true )
 if [ -z "$hits" ]; then
   pass '[STRUCTURAL] /design-multi Step 3.5 does not claim the dry-run can only over-ask'
