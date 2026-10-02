@@ -90,7 +90,7 @@ misplacement, it is confirmed repeatedly, and it is exactly what the rule above 
 Two cases still need your judgment:
 
 - **The scaffolder blocked on placement** — the policy issues into two different modules, or its
-  target handler does not exist in code yet. A cross-module policy is a design question; take it
+  target handler neither exists in code nor is a new aggregate written in the same run. A cross-module policy is a design question; take it
   to the board rather than picking a module to unblock yourself.
 - **A hand-written policy** (not in the design layer). Apply the rule yourself. Check: does
   `createCommand` / `executeCommand` target an aggregate in this module? If not, the file is in
