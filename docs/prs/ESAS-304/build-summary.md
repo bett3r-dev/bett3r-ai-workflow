@@ -15,6 +15,7 @@ slices:
     verifier: null
     redBeforeGreen: null
     postDesignDecisions: []
+    usage: null
   - id: 2
     name: "Carrier - map.json carries scenarios, observations, coverage and node description"
     origin: plan
@@ -27,6 +28,7 @@ slices:
     verifier: null
     redBeforeGreen: null
     postDesignDecisions: []
+    usage: null
   - id: 3
     name: "Design ends in the scaffold commit: /design Step 4b, the fleet commit and the gate-red verdict"
     origin: plan
@@ -39,6 +41,7 @@ slices:
     verifier: pass
     redBeforeGreen: true
     postDesignDecisions: [D1, D2, D3]
+    usage: null
   - id: 4
     name: "Downstream reads the report: /build, /plan, verifier, landing rule"
     origin: plan
@@ -51,6 +54,7 @@ slices:
     verifier: retry
     redBeforeGreen: true
     postDesignDecisions: [D4, D5]
+    usage: null
   - id: 5
     name: "Record and declare: ADR-015, glossary, version bump, and the BP designTooling declaration"
     origin: plan
@@ -63,7 +67,17 @@ slices:
     verifier: pass
     redBeforeGreen: true
     postDesignDecisions: [D6, D7, D8]
+    usage: null
+verifyBuild:
+  usage: null
+  gate: { mode: "--fast", verdict: PASS, skipped: 17, inconclusive: 0 }
+  coherence: { critical: 0, medium: 3, low: 7, shippedUnresolved: 3 }
+  fixSlicesAdded: 0
+  adrs: []
+  concerns: { hard: 0, soft: 0, unmet: [] }
 ---
 ## What shipped
 Slices 1-2 landed in an earlier invocation (no record of their attempts, so those fields are null). This invocation landed slices 3-5. Slice 3 took two fix rounds (no-design-layer skip, fleet step 0 design source, fleet lanes never scaffold, stale-graph step 0). Slice 4 took two fix rounds (check 4 scoping to a marker form no scaffolder emits; unpinned verify-build sentences); its second re-check returned RETRY on two unpinned sentences, the round-2 needles were added and confirmed red by mutation, and the suites re-ran green, but no third verifier pass ran (fix-round cap). Slice 5 added ADR-015, the glossary, plugin 0.101.0 and marketplace 0.50.0 in PL, and the designTooling declaration in BP (commit 069c741a, pushed; BP PR not openable).
 Open items for the PR body: D7 (red-base rule unbuilt), D8 (global pv3 lacks --map until ESAS-313), version and marketplace conflicts expected with 296/305/306, build.md:49 will conflict with ESAS-301, and the bett3r-pv3-ai-skills scaffold-from-design "at the START of any slice" edit lives in the PV3 plugin repo, not here.
+
+Usage not measured: fleet-unit-unresolved (run-metrics could not resolve ESAS-304 as a unit of the fleet run).
