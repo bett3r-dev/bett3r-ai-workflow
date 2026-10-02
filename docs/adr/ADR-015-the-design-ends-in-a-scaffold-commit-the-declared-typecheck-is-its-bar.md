@@ -58,7 +58,7 @@ per-service typecheck excludes emitted specs.
 **On a red base, green means no error outside the base's error set.** When the typecheck is red
 after placement, `finish` runs it again over HEAD (the docs commit) with its edits set aside, and puts
 them back. It is green only when HEAD is red too and every `error TS<n>` line now, its location aside,
-is one HEAD already printed; each other one is printed as `new-error:` and the run ends
+is one HEAD already printed, counted with multiplicity (a second copy of a base error is new); each other one is printed as `new-error:` and the run ends
 `gate-red reason=typecheck-red` (`scaffold-commit.py`, `judge_red`). It is fail-safe: a red run with no
 such line to read, on either side, is judged by its exit code, so it stays red. A green on a red base
 ends `outcome=ok typecheck=base-red`, and the report's `typecheck{}` records both exits and error

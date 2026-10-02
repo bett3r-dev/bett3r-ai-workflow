@@ -71,7 +71,8 @@ finish
   On a red base, green means no error outside the base's error set (Bar P10):
   a red typecheck runs again over HEAD with this run's edits set aside, and is
   green only when HEAD is red too and every `error TS<n>` line now (location
-  aside) is one HEAD already printed; each other is printed as `new-error:`.
+  aside) is one HEAD already printed, counted with multiplicity (a second copy
+  of a base error is new); each other is printed as `new-error:`.
   Fail-safe: a red run with no such line, on either side, stays red. A green
   on a red base ends ok with `typecheck=base-red`, the report's typecheck{}
   recording both exits and error counts. A
@@ -105,6 +106,7 @@ scaffolder's scenarioTests[], unplaced[] and scenariosExcluded[], input digests
 repo-relative when the map lies inside the repo, else as given; then the
 design and the graph) and baseSha.
 """
+import collections
 import hashlib
 import json
 import os
@@ -668,12 +670,14 @@ LOCATION = re.compile(r"\(\d+,\d+\)|:\d+:\d+")
 
 
 def error_set(run):
-    keys = set()
+    """A multiset (Counter) of error keys: a second copy of a base error is a new
+    error, as ESAS-300's `comm -13` over error lines counts it."""
+    keys = collections.Counter()
     for raw in ((run.stdout or "") + "\n" + (run.stderr or "")).splitlines():
         line = ANSI.sub("", raw)
         m = TS_ERROR.search(line)
         if m:
-            keys.add(" ".join((LOCATION.sub("", line[:m.start()]) + line[m.start():]).split()))
+            keys[" ".join((LOCATION.sub("", line[:m.start()]) + line[m.start():]).split())] += 1
     return keys
 
 
@@ -693,13 +697,15 @@ def judge_red(repo, tools, run):
     if not before:
         print("typecheck-base: red with no `error TS<n>` line to read; judged by its exit code")
         raise Refusal("gate-red", "typecheck-red")
-    new = sorted(after - before)
+    new = after - before
     if new:
-        for key in new:
-            print(f"new-error: {key}")
+        for key in sorted(new):
+            for _ in range(new[key]):
+                print(f"new-error: {key}")
         raise Refusal("gate-red", "typecheck-red")
-    print(f"typecheck: red base; {len(after)} error(s) now, none outside the base's {len(before)}")
-    return {"exit": run.returncode, "baseExit": base.returncode, "baseErrors": len(before), "errors": len(after)}
+    now, was = sum(after.values()), sum(before.values())
+    print(f"typecheck: red base; {now} error(s) now, none outside the base's {was}")
+    return {"exit": run.returncode, "baseExit": base.returncode, "baseErrors": was, "errors": now}
 
 
 def typecheck_at_base(repo, tools):

@@ -3701,7 +3701,7 @@ present "$START_MULTI_MD" 'With no `extract` declared, write no `scaffold-design
   '/start-multi step 0 writes no post-scaffold snapshot when it cannot re-extract'
 present "$PROVISIONER_MD" '**After a fleet scaffold commit, the snapshot comes from the run dir.**' \
   'provisioner step 6 snapshots from <runDir>/scaffold-design/ after a fleet scaffold commit (ESAS-300)'
-present "$PROVISIONER_MD" 'when that `manifest.yaml`'"'"'s `sourceSha` is this worktree'"'"'s base sha; otherwise write nothing and report both shas' \
+present "$PROVISIONER_MD" 'when that `manifest.yaml`'"'"'s `sourceSha` is this worktree'"'"'s `HEAD` as cut (`git -C <worktree> rev-parse HEAD`' \
   'provisioner step 6 copies the post-scaffold snapshot only when its sourceSha is the lane base'
 present "$START_MULTI_MD" '`--map` is repeatable' \
   '/start-multi names --map as repeatable (ESAS-297)'
