@@ -12,7 +12,7 @@ step: build · slice: 3 · decidedBy: verifier
 sources: [code:finish extract rewrite, design:ESAS-304-F3]
 rejected: --graph .work/design-snapshot — finish's re-extract writes .blueprint/graph.json, so a named snapshot goes stale and deferred units end gate-red placement-incomplete
 supersedes: —
-A fleet lane never scaffolds (owner F3); the claim that lane snapshots follow the scaffold commit was false and was dropped.
+A fleet lane never scaffolds (owner F3). The block's "lane graph snapshots come after this commit" was not a false claim but an unmet obligation; it is built by D9, not dropped.
 
 ## D3 — repeatable --map on scaffold-commit (inputs.maps[])
 kind: deviation
@@ -60,3 +60,11 @@ sources: [code:pv3-cli build]
 rejected: —
 supersedes: —
 A real BP prepare fails until the ESAS-313 scaffolder release; out of scope here.
+
+## D9 — lane graph snapshots come after the fleet scaffold commit, from <runDir>/scaffold-design/
+kind: silent-seam
+step: build · backfill fix · decidedBy: block (Fleet, owner answer B)
+sources: [design:Fleet (owner answer B) "lane graph snapshots come after this commit (for ESAS-300)", agent:provisioner step 6, command:start-multi step 0]
+rejected: recording it as a deviation — the obligation is small and in scope, and a lane cannot waive a block decision; snapshotting from the main checkout at BASE (D2's state) — that graph reads every placed fragment and every unit the scaffold wrote as absent
+supersedes: D2's "dropped" note
+After an ok finish with a commit, step 0 re-runs the declared extract in <scaffold-wt> (it rewrites only the gitignored graph, now over the units the re-run wrote) and copies design.json and graph.json to <runDir>/scaffold-design/ with a manifest whose sourceSha is the scaffold commit. The provisioner, holding a scaffold report, snapshots from there when sourceSha is the lane base, else writes nothing and reports both shas. No extract declared: no scaffold-design/, recorded. Pinned by needles in test-flow-seams.sh; prose only, no executable seam.

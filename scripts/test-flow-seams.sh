@@ -3690,15 +3690,19 @@ in_order '/start-multi step 0: prepare, the placing agent, finish on int/<run-id
   'record it as `baseGate`'
 present "$START_MULTI_MD" 'into its lane brief as `scaffoldReport:`' \
   '/start-multi: the lane brief gains scaffoldReport'
-# R2: a lane's graph snapshot is the main checkout's, taken on BASE; the
-# scaffold commit lives on int/<run-id>, so no snapshot is "taken after" it.
-hits=$( grep -nF 'graph snapshot is taken after this commit' "$START_MULTI_MD" || true )
-if [ -z "$hits" ]; then
-  pass '[STRUCTURAL] /start-multi does not claim lane graph snapshots are taken after the scaffold commit'
-else
-  fail '[STRUCTURAL] /start-multi does not claim lane graph snapshots are taken after the scaffold commit' "$hits" \
-       'provisioner step 6 copies the main checkout'\''s .blueprint/graph.json at BASE; the scaffold commit is on int/<run-id>.'
-fi
+# Block (Fleet, owner answer B): lane graph snapshots come after the scaffold
+# commit (for ESAS-300). Step 0 re-extracts in <scaffold-wt> after finish and
+# writes <runDir>/scaffold-design/ keyed to the scaffold commit; the provisioner
+# snapshots from there, not from the main checkout at BASE.
+in_order '/start-multi step 0: after the scaffold commit, re-extract and write <runDir>/scaffold-design/' "$START_MULTI_MD" \
+  'scaffold-commit finish --item <run-id>' 'Lane graph snapshots come after this commit (for ESAS-300)' \
+  'run the declared `designTooling.extract` there once more' '<runDir>/scaffold-design/' '`sourceSha:` the scaffold commit'
+present "$START_MULTI_MD" 'With no `extract` declared, write no `scaffold-design/` and record why' \
+  '/start-multi step 0 writes no post-scaffold snapshot when it cannot re-extract'
+present "$PROVISIONER_MD" '**After a fleet scaffold commit, the snapshot comes from the run dir.**' \
+  'provisioner step 6 snapshots from <runDir>/scaffold-design/ after a fleet scaffold commit (ESAS-300)'
+present "$PROVISIONER_MD" 'when that `manifest.yaml`'"'"'s `sourceSha` is this worktree'"'"'s base sha; otherwise write nothing and report both shas' \
+  'provisioner step 6 copies the post-scaffold snapshot only when its sourceSha is the lane base'
 present "$START_MULTI_MD" '`--map` is repeatable' \
   '/start-multi names --map as repeatable (ESAS-297)'
 present "$START_MULTI_MD" 'one `--map <runDir>/units/<id>.map.json` per unit projection on disk' \
