@@ -3824,6 +3824,20 @@ for f in "$PROVISIONER_MD" "$PLUGIN/agents/unit-lane.md" "$START_MULTI_MD"; do
   fi
 done
 
+# Block (/build Step 3.0): the PV3 skill scaffold-from-design drops "at the
+# START of any slice" and its framework default; a report-covered slice runs no scaffolder.
+SFD_MD="$ROOT/plugins/bett3r-pv3-ai-skills/skills/scaffold-from-design/SKILL.md"
+for gone in 'at the START of any slice' "a PV3 repo's default is"; do
+  hits=$( grep -niF -- "$gone" "$SFD_MD" || true )
+  if [ -z "$hits" ]; then
+    pass "[STRUCTURAL] pv3 scaffold-from-design no longer says: $gone"
+  else
+    fail "[STRUCTURAL] pv3 scaffold-from-design no longer says: $gone" "$hits"
+  fi
+done
+present "$SFD_MD" 'There is no framework default' 'pv3 scaffold-from-design states there is no framework default'
+present "$SFD_MD" 'that no committed scaffold report covers' 'pv3 scaffold-from-design is the fallback for a slice no scaffold report covers'
+
 # --- STRUCTURAL: no command outside design.md and start-multi.md invokes
 # `scaffold-commit prepare`: a census over every commands/*.md, so a new step
 # is covered without being named here. /start-multi is the fleet orchestrator,
