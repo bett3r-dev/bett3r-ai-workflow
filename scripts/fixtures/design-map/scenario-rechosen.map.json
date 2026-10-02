@@ -1,0 +1,119 @@
+{
+  "structureVersion": 2,
+  "shape": "decision",
+  "grounded": true,
+  "mapId": "ESAS-296-SCENARIOS",
+  "nodes": [
+    {
+      "id": "N1",
+      "level": "deliverable",
+      "title": "Retry failed payments",
+      "parents": []
+    }
+  ],
+  "forks": [
+    {
+      "id": "ESAS-296-F1",
+      "title": "Retry policy",
+      "tickets": [
+        "ESAS-296"
+      ],
+      "anchor": "N1",
+      "restsOn": [],
+      "card": {
+        "problem": "A failed payment needs a retry policy.",
+        "useCases": [
+          "A card payment fails once."
+        ],
+        "options": [
+          {
+            "id": "C",
+            "label": "Retry once",
+            "walks": [
+              {
+                "scenario": "Retry once",
+                "text": "it is retried once",
+                "given": "a failed payment",
+                "when": "the retry runs",
+                "then": "it is retried once"
+              },
+              {
+                "scenario": "Gives up",
+                "text": "a second failure is final",
+                "given": "a payment that failed twice",
+                "when": "the retry runs",
+                "then": "it is marked failed"
+              }
+            ]
+          },
+          {
+            "id": "D",
+            "label": "Retry forever",
+            "walks": [
+              {
+                "scenario": "Retry forever",
+                "text": "the payment is retried until it succeeds",
+                "given": "a failed payment",
+                "when": "the retry runs",
+                "then": "it is retried again"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "C",
+          "why": "One retry bounds the cost."
+        },
+        "ifOverturned": "Every derived scenario goes under review."
+      },
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "D"
+      }
+    }
+  ],
+  "links": [],
+  "scenarios": [
+    {
+      "id": "SCN-0000000A",
+      "title": "Retry once",
+      "anchors": [
+        "N1"
+      ],
+      "given": [
+        {
+          "text": "a failed payment"
+        }
+      ],
+      "when": [
+        {
+          "text": "the retry runs"
+        }
+      ],
+      "then": [
+        {
+          "text": "it is retried once"
+        }
+      ],
+      "derivedFrom": {
+        "forkId": "ESAS-296-F1",
+        "optionId": "C",
+        "walk": "Retry once",
+        "basis": {
+          "scenario": "Retry once",
+          "text": "it is retried once",
+          "given": "a failed payment",
+          "when": "the retry runs",
+          "then": "it is retried once"
+        }
+      },
+      "proposedBy": "human",
+      "status": {
+        "kind": "agreed",
+        "seq": 7,
+        "at": "2026-10-02T00:00:00.000Z"
+      }
+    }
+  ]
+}

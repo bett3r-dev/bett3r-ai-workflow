@@ -1,0 +1,49 @@
+{
+  "proposals": [
+    {
+      "key": "derived:F2/B/Board shows",
+      "forkId": "F2",
+      "optionId": "B",
+      "walk": "Board shows",
+      "source": "recommendation",
+      "state": "needs-gherkin",
+      "title": "Board shows",
+      "text": "the board shows the new card without a reload",
+      "anchors": [
+        "F2"
+      ],
+      "given": [],
+      "when": [],
+      "then": []
+    },
+    {
+      "key": "derived:F2/B/Card moved",
+      "forkId": "F2",
+      "optionId": "B",
+      "walk": "Card moved",
+      "source": "recommendation",
+      "state": "ready",
+      "title": "Card moved",
+      "text": "pushed",
+      "anchors": [
+        "F2"
+      ],
+      "given": [
+        {
+          "text": "an open board"
+        }
+      ],
+      "when": [
+        {
+          "text": "a card moves"
+        }
+      ],
+      "then": [
+        {
+          "text": "the board shows it moved"
+        }
+      ]
+    }
+  ],
+  "derived": []
+}

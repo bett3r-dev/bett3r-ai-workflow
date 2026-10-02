@@ -76,6 +76,7 @@ slices:
     probe: "<the ONE production line whose deletion must turn this oracle red>"  # REQUIRED
     scenarios:                     # REQUIRED, >=1. check-plan refuses the plan without it.
       - scenario: "<what this case is called>"
+        id: SCN-0000000A           # OPTIONAL. Only on an agreed scenario copied from map.json.
         given: "<the state the case starts in>"
         when: "<the one thing that happens>"
         then: "<what must be observably true — the assertion, not the setup>"
@@ -104,7 +105,7 @@ candidateOracles:                  # OPTIONAL. Only when a <path>/map.json exist
                                     #   [{fork, option, scenario, source, example, slice, status}]
 ```
 
-`scenarios:` is the oracle in the form nobody can quietly re-read; `oracle:` stays the narrative. Where a design map's fork was decided and its walk confirmed, that walk is the scenario. `passes` flags and the slice commits are the build's progress. `review:` and `candidateOracles:` trail `slices:` because `worktree-pool`'s parser stops at the first indent-0 line after it. `design-map check-plan` refuses a plan missing any REQUIRED field above. An env-gated oracle (one the default run excludes behind a flag or a service) names its exact invocation, flag and services, in `oracle:`, so `/verify-build` can re-run it; such a slice is certified by that invocation, not by its `passes:` flag. `model: sonnet` marks a mechanical slice: a scaffold from a framework skill, config or wiring, a test-only or guard-only slice, a mechanical prefactor; the tracer bullet, a seam and anything touching an invariant leave it absent, which `/build` routes as `opus`, and so does doubt.
+`scenarios:` is the oracle in the form nobody can quietly re-read; `oracle:` stays the narrative. Where a design map's fork was decided and its walk confirmed, that walk is the scenario. An agreed scenario the committed `map.json` carries (`design-map candidates` prints it with `"class":"agreed"`) is copied into the slice's scenarios with its `id:` and its Given/When/Then as printed, and `design-map check-plan <slices.yaml> <map.json>` accepts it unattended while the map holds it agreed and not under review and its text is still the entry's as printed. `passes` flags and the slice commits are the build's progress. `review:` and `candidateOracles:` trail `slices:` because `worktree-pool`'s parser stops at the first indent-0 line after it. `design-map check-plan` refuses a plan missing any REQUIRED field above. An env-gated oracle (one the default run excludes behind a flag or a service) names its exact invocation, flag and services, in `oracle:`, so `/verify-build` can re-run it; such a slice is certified by that invocation, not by its `passes:` flag. `model: sonnet` marks a mechanical slice: a scaffold from a framework skill, config or wiring, a test-only or guard-only slice, a mechanical prefactor; the tracer bullet, a seam and anything touching an invariant leave it absent, which `/build` routes as `opus`, and so does doubt.
 
 ## Anti-patterns
 

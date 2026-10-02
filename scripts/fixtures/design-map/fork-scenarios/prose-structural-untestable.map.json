@@ -1,0 +1,175 @@
+{
+  "structureVersion": 1,
+  "shape": "decision",
+  "grounded": true,
+  "nodes": [],
+  "forks": [
+    {
+      "id": "F2",
+      "title": "Where the board reads",
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "recommendation",
+        "option": "B"
+      },
+      "card": {
+        "problem": "p",
+        "useCases": [
+          "u"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Poll",
+            "walks": [
+              {
+                "scenario": "Board shows",
+                "text": "polls every second"
+              }
+            ],
+            "rejectedBecause": "r"
+          },
+          {
+            "id": "B",
+            "label": "Push",
+            "walks": [
+              {
+                "scenario": "Board shows",
+                "text": "the board shows the new card without a reload"
+              },
+              {
+                "scenario": "One feed",
+                "text": "every adapter writes through the one feed",
+                "kind": "structural"
+              },
+              {
+                "scenario": "Card moved",
+                "text": "pushed",
+                "kind": "behavioral",
+                "given": "an open board",
+                "when": "a card moves",
+                "then": "the board shows it moved"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "B",
+          "why": "w"
+        },
+        "ifOverturned": "o"
+      }
+    },
+    {
+      "id": "F3",
+      "title": "Release cadence",
+      "restsOn": [],
+      "testable": false,
+      "status": {
+        "kind": "decided",
+        "source": "code",
+        "option": "A"
+      },
+      "card": {
+        "problem": "p",
+        "useCases": [
+          "u"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Weekly",
+            "walks": [
+              {
+                "scenario": "Release",
+                "text": "weekly",
+                "given": "a week of merges",
+                "when": "Friday comes",
+                "then": "a release is cut"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "A",
+          "why": "w"
+        },
+        "ifOverturned": "o"
+      }
+    },
+    {
+      "id": "F4",
+      "title": "Still open",
+      "restsOn": [],
+      "status": {
+        "kind": "open"
+      },
+      "card": {
+        "problem": "p",
+        "useCases": [
+          "u"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "x",
+            "walks": [
+              {
+                "scenario": "Open walk",
+                "text": "t",
+                "given": "g",
+                "when": "w",
+                "then": "t"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "A",
+          "why": "w"
+        },
+        "ifOverturned": "o"
+      }
+    },
+    {
+      "id": "F5",
+      "title": "Moot",
+      "restsOn": [],
+      "status": {
+        "kind": "moot",
+        "reason": "dropped"
+      },
+      "card": {
+        "problem": "p",
+        "useCases": [
+          "u"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "x",
+            "walks": [
+              {
+                "scenario": "Moot walk",
+                "text": "t",
+                "given": "g",
+                "when": "w",
+                "then": "t"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "A",
+          "why": "w"
+        },
+        "ifOverturned": "o"
+      }
+    }
+  ],
+  "links": [],
+  "scenarios": [],
+  "observations": [],
+  "coverage": []
+}
