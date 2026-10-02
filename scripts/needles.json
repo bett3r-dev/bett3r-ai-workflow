@@ -1158,6 +1158,18 @@
       "note": "Pocock's retro rule, as the DEFAULT disposition of a repeat fix-round cause: classify the violation first — a mechanical one (a fixed syntactic pattern, a banned API, an import shape, a file-location rule) gets a check, and prose is reserved for genuine judgement calls. Writing the rule down a second time changes nothing about the run that would have broken it; every fix round was already classified and the tally was quoted in retros and disposed of by nobody."
     },
     {
+      "needle": "push owed: <command>",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/merge-multi.md",
+      "note": "ESAS-306 (blueprint ADR-116). A repo's declared observability.push publishes its generated KPI dashboards to a live Grafana; it runs only in an attended session after landing, and an unattended /merge-multi prints the command as owed instead of running it (a lane's provisioner once ran teselly's pusher by accident and overwrote 16 live Grafana Cloud objects)."
+    },
+    {
+      "needle": "attended, after merge only",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/verify-build.md",
+      "note": "ESAS-306 (blueprint ADR-116). A lone unit's /verify-build runs the repo's declared observability.push only when a human is present and the PR has merged into the default branch; otherwise it prints `push owed: <command>`. A fleet lane never pushes: /merge-multi step 6b owns the fleet's push, so the dashboards are not pushed twice."
+    },
+    {
       "needle": "most context pressure",
       "issue": null,
       "commit": "c5116b3",

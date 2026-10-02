@@ -245,6 +245,16 @@ The description is limited to 140 characters: drop C-ids from the end and close 
 
 A status belongs to one sha: on every later push this flow makes, re-run Step 5a's check on the new head and post again; nothing re-posts on a human's push. Advisory: a status cannot be required, so the red mark is advisory in a single flow, and nothing in this flow reads it back; `/merge-multi` is the hard block. A failed status post never blocks landing: a non-zero exit or an error body becomes one line in your report, `flow/concerns not posted: <its first error line>`. Done when the post is made or that line is written.
 
+## Step 6c — Push the KPI dashboards: attended, after merge only
+
+A design's agreed KPIs are committed as `blueprint-kpi-<map>.json` dashboards (ESAS-306, ADR-116 in blueprint), and the repo's Grafana shows them only after the repo's own declared push runs. `/merge-multi` step 6b pushes for a fleet; this step pushes for a lone unit. Read `observability` from `.blueprint.config.json` on `origin/<default>`, fetched:
+
+- **`push` declared, a human present** (no `.work/lane.yaml`, not a headless run), **and the PR merged** (`git merge-base --is-ancestor <head-sha> origin/<default>` succeeds): run the command exactly as written, from the repo root on the updated default branch, and report its output.
+- **`push` declared, otherwise** (a lane, a headless run, or a PR not merged yet): never run it. Print `push owed: <command>`, the command verbatim, for a human to run once the code is on the default branch. In a fleet unit the line is informational: `/merge-multi` step 6b owns the fleet's push, so a lane never pushes and the dashboards are not pushed twice.
+- **No `push`**: print `push: none declared`, followed by the declaration's `noPush` reason when it gives one.
+
+Done when the push output, the `push owed:` line, or `push: none declared` is printed.
+
 ## Step 7 — Put what the run cost in the PR body
 
 Paste the headline of Step 5b's report under the template (`gh pr edit --body-file`), or `Run cost: not measured — <its first error line>` if it errored:
@@ -259,6 +269,6 @@ Two lines, no tables.
 
 ## Step 8 — Report
 
-Report the PR URL; `.work/` is disposable now. Suggest `/capture-learnings` for flow learnings.
+Report the PR URL and Step 6c's push output or its line, verbatim; `.work/` is disposable now. Suggest `/capture-learnings` for flow learnings.
 
 Verdict values: `success` when the gate is green and the PR is open; `gate-red` when Step 2 returned `FAIL`; `blocked-on` when a human must resolve something first. A `SKIP` or `INCONCLUSIVE` step, like a concerns `fail` or `error`, is named in the PR and still `success`. `lane-step-record` may commit the verdict, moving the head off the sha Step 6b posted on: when it printed `recorded=empty`, say so and post Step 6b's status again, unchanged, on the new head. Then the verdict line, as the protocol says.
