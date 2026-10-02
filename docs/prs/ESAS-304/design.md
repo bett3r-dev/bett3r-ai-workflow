@@ -131,6 +131,7 @@ flowchart LR
 - Guards that glob new files (TS checkPolicyPlacement) are outside the typecheck.
 - A placed event, once extracted, becomes a modify on rename, which is not planned; reported, not fixed.
 - "Agreed = no open comment" is cosmetic for a team that never comments.
+- The fleet's Step 3.5 dry-run under-asks: it runs once, before the sitting, over an unplaced tree. Four kinds of block first surface at `/start-multi` step 0, after the owner has left, as escalations: scenario tests (no agreed scenario is projected before Phase C); blocks only `finish`'s re-run over the placed tree meets; elements added or changed on the board during the sitting; and a base that moves during the sitting (Phase C step 1 re-grounds). This leaves the F3 mitigation ("blocks surface while the owner is present") partial.
 
 ## Out of Scope
 - Test generation (298, 299, 302, 303), placeholders (289, 300), new aggregates (292), dashboards (306), the session empty state (293).

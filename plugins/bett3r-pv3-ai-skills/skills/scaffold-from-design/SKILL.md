@@ -1,5 +1,5 @@
 ---
-description: Generate the mechanical half of PV3 artifacts from the BLUEPRINT design graph, then hand the rest to the create-* skills. Use at the START of any slice that delivers designed artifacts (a policy, read model, command or event that exists in .blueprint/design.json) — before writing any of them by hand — or once over the whole agreed design delta at the end of /design.
+description: Generate the mechanical half of PV3 artifacts from the BLUEPRINT design graph, then hand the rest to the create-* skills. Use when a slice delivers designed artifacts (a policy, read model, command or event that exists in .blueprint/design.json) that no committed scaffold report covers — /design's scaffold commit normally generates them, and /build then runs no scaffolder — before writing any of them by hand.
 ---
 
 # Skill: Scaffold From Design
@@ -39,9 +39,15 @@ artifacts is worse than scaffolding none. Say so and write by hand.
 ## Step 1 — Dry run, always first
 
 The command is whatever the repo declares as `designTooling.scaffold` in `.blueprint.config.json`
-(`yarn blueprint:scaffold` in teselly). With no declaration, a PV3 repo's default is
-`yarn pv3 g scaffold`. Run it from the repo root: that is where files are written and where
-existence is checked.
+(`yarn blueprint:scaffold` in teselly). There is no framework default: with no declaration there
+is nothing to run, so say so and write by hand. Run it from the repo root: that is where files are
+written and where existence is checked.
+
+Most designed artifacts never reach this skill: `/design` ends in a scaffold commit
+(`scaffold-commit`, ADR-015) over the whole agreed design, and a slice whose nodes that commit's
+`scaffold.json` report covers runs no scaffolder in `/build`. This skill is the fallback for a
+slice with no report: a repo that declares no `designTooling.typecheck`, or a design made before
+the scaffold commit existed.
 
 ```bash
 # normal checkout — reads this repo's own .blueprint/

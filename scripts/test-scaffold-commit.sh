@@ -217,13 +217,28 @@ json.dump({"schemaVersion": 1, "subdomains": ["orders"], "nodes": nodes, "edges"
 PY
 
 # Red on a line reading BROKEN, and on a barrel export of a module that does
-# not exist (a dangling `export * from './x';`), as tsc would be.
+# not exist (a dangling `export * from './x';`), as tsc would be. A red BASE is
+# src/legacy.ts holding LEGACY_RED: one error per such line, coloured and
+# located as tsc prints it (so a placement that shifts it down the file moves
+# its location only). SC_TC_MODE=opaque prints no `error TS<n>` line for it;
+# opaque-base does so only on the base (src/events.ts without OrderShipped).
 cat > "$STUBS/typecheck.sh" <<'SH'
 printf 'typecheck\n' >> "$STUB_LOG"
+rc=0
+if [ -f src/legacy.ts ] && grep -q LEGACY_RED src/legacy.ts; then
+  if [ "${SC_TC_MODE:-}" = opaque ] || { [ "${SC_TC_MODE:-}" = opaque-base ] && ! grep -q OrderShipped src/events.ts; }; then
+    echo 'Build failed.'; exit 1
+  fi
+  for n in $( grep -n LEGACY_RED src/legacy.ts | cut -d: -f1 ); do
+    printf '\033[31msrc/legacy.ts(%s,7): error TS2322: Type string is not assignable to type number.\033[0m\n' "$n"
+  done
+  rc=2
+fi
 if grep -rn BROKEN src; then echo 'error TS2304: Cannot find name BROKEN'; exit 2; fi
 for m in $( sed -n "s|^export \* from '\./\(.*\)';\$|\1|p" src/index.ts ); do
   [ -f "src/$m.ts" ] || { echo "src/index.ts: error TS2307: Cannot find module './$m'"; exit 2; }
 done
+[ "$rc" -eq 0 ] || exit "$rc"
 echo 'typecheck: 0 errors'
 SH
 
@@ -258,6 +273,7 @@ new_repo(){
   printf "export const OrderPlaced = 'OrderPlaced';\n" > "$REPO/src/events.ts"
   printf '// barrel\n' > "$REPO/src/index.ts"
   printf '// registry\n' > "$REPO/src/registry.ts"
+  if [ -n "${NEW_REPO_LEGACY:-}" ]; then printf 'export const n: number = "LEGACY_RED";\n' > "$REPO/src/legacy.ts"; fi
   printf '{ "designTooling": { %s } }\n' "$2" > "$REPO/.blueprint.config.json"
   git -C "$REPO" add -A && git -C "$REPO" commit -qm 'chore: base'
   printf -- '---\nwork_item: ESAS-304\nbranch: master\n---\n# design\n' > "$REPO/docs/prs/ESAS-304/design.md"
@@ -374,6 +390,107 @@ check 'red: the tracked edits are restored byte for byte' \
 check 'red: the docs commit is still HEAD' "$( git -C "$REPO" rev-parse HEAD )" "$DOCS"
 check 'red: exactly one verdict line, exit non-zero' "$NV|$( [ "$rc" -ne 0 ] && echo nonzero )" '1|nonzero'
 check 'red: the typecheck output is shown' "$( grep -c 'TS2304' "$OUT" )" 1
+check 'red: on a green base, the typecheck ran again over HEAD and any red is red' \
+  "$( grep -c '^typecheck$' "$STUB_LOG" )|$( grep -cx 'typecheck-base: exit 0' "$OUT" )" '2|1'
+
+# ---------------------------------------------------------------------------
+printf '\nred base: green means no typecheck error outside the base'"'"'s error set (Bar P10)\n'
+# ---------------------------------------------------------------------------
+# ESAS-300's kixie base is red for an environmental reason, so the bar compares
+# error sets, never exit codes. HEAD here is red with one TS2322 in
+# src/legacy.ts; a line put above it moves its location and nothing else.
+# (set and unset by hand: POSIX sh keeps an assignment made before a function call)
+NEW_REPO_LEGACY=1
+new_repo redbase "$FULL_TOOLING"
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_SHIPPED,$N_SHIPPED_RM],\"edges\":[$E_SHIPPED]}}"
+check 'red base: the fixture base is red (positive control)' \
+  "$( cd "$REPO" && sh "$STUBS/typecheck.sh" > /dev/null; echo $? )" 2
+: > "$STUB_LOG"
+sc prepare --item ESAS-304
+check 'red base: prepare ok' "$( attr "$LINE" outcome )" ok "$LINE"
+agent
+printf '// shifted\n' | cat - "$REPO/src/legacy.ts" > "$TMP/legacy" && mv "$TMP/legacy" "$REPO/src/legacy.ts"
+sc finish --item ESAS-304
+check 'red base, only the base'"'"'s error: outcome=ok typecheck=base-red' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" typecheck )" 'ok base-red' "$LINE" "$( tail -12 "$OUT" )"
+check 'red base: the typecheck ran after placement, then once over HEAD' "$( grep -c '^typecheck$' "$STUB_LOG" )" 2
+check 'red base: it says no error is outside the base'"'"'s set, and names none as new' \
+  "$( grep -c "none outside the base's 1" "$OUT" )|$( grep -c '^new-error:' "$OUT" )" '1|0'
+check 'red base: one commit, holding every edit the base run set aside and put back' \
+  "$( git -C "$REPO" log --format=%s "$DOCS"..HEAD | tr '\n' '|' )$( git -C "$REPO" show --name-only --format= HEAD | sort | tr '\n' ' ' )" \
+  'chore(ESAS-304): scaffold the agreed design|docs/prs/ESAS-304/scaffold.json src/events.ts src/index.ts src/legacy.ts src/read-models/shipped-orders.ts '
+check 'red base: the tree is clean' "$( status )x" x
+check 'red base: scaffold.json records the typecheck against its base' \
+  "$( js "$REPO/$REPORT" "sorted(d['typecheck'].items())" )" "[('baseErrors', 1), ('baseExit', 2), ('errors', 1), ('exit', 2)]"
+
+# A re-run on the red base that deletes an untouched stub (a rename): the base
+# run restores HEAD, stub included, so putting the edits back must delete it again.
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_SHIPPED,{\"type\":\"read-model\",\"label\":\"ShippedOrderList\",\"subdomain\":\"orders\"}],\"edges\":[{\"from\":\"orders_evt_order-shipped\",\"to\":\"orders_rm_shipped-order-list\",\"kind\":\"projects\"}]}}"
+RB_HEAD=$( git -C "$REPO" rev-parse HEAD )
+sc prepare --item ESAS-304
+check 'red base, rename re-run: prepare ok stale=1' "$( attr "$LINE" outcome ) $( attr "$LINE" stale )" 'ok 1' "$LINE"
+: > "$STUB_LOG"
+sc finish --item ESAS-304
+check 'red base, rename re-run: finish ok typecheck=base-red, after a base run' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" typecheck ) $( grep -c '^typecheck$' "$STUB_LOG" )" 'ok base-red 2' "$LINE" "$( tail -12 "$OUT" )"
+check 'red base, rename re-run: the deleted stub stays deleted (absent on disk and in the commit)' \
+  "$( [ -e "$REPO/src/read-models/shipped-orders.ts" ] && echo present; git -C "$REPO" show --name-status --format= HEAD -- src/read-models | sort | tr '\t\n' ' |' )" \
+  'A src/read-models/shipped-order-list.ts|D src/read-models/shipped-orders.ts|'
+check 'red base, rename re-run: stale[] names the old stub' \
+  "$( js "$REPO/$REPORT" "[s['file'] for s in d['stale']]" )" "['src/read-models/shipped-orders.ts']"
+check 'red base, rename re-run: one new commit, tree clean' \
+  "$( git -C "$REPO" rev-parse HEAD~1 )|$( status )" "$RB_HEAD|"
+
+new_repo redbase-new "$FULL_TOOLING"
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_SHIPPED,$N_SHIPPED_RM],\"edges\":[$E_SHIPPED]}}"
+sc prepare --item ESAS-304
+agent broken
+sc finish --item ESAS-304
+check 'red base, a NEW error outside the base set: outcome=gate-red reason=typecheck-red' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" reason )" 'gate-red typecheck-red' "$LINE" "$( tail -12 "$OUT" )"
+check 'red base, new error: printed as new-error, the base'"'"'s own error is not' \
+  "$( grep '^new-error:' "$OUT" | tr '\n' '|' )" 'new-error: error TS2304: Cannot find name BROKEN|'
+check 'red base, new error: the tree is restored and the docs commit is HEAD' \
+  "$( status )|$( git -C "$REPO" rev-parse HEAD )" "|$DOCS"
+
+# A second copy of a base error is a new error: error sets are multisets, as
+# ESAS-300's `comm -13` over error lines counts them.
+new_repo redbase-dup "$FULL_TOOLING"
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_SHIPPED,$N_SHIPPED_RM],\"edges\":[$E_SHIPPED]}}"
+sc prepare --item ESAS-304
+agent
+printf 'export const m: number = "LEGACY_RED";\n' >> "$REPO/src/legacy.ts"
+sc finish --item ESAS-304
+check 'red base, a duplicate of a base error: outcome=gate-red reason=typecheck-red' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" reason )" 'gate-red typecheck-red' "$LINE" "$( tail -12 "$OUT" )"
+check 'red base, duplicate: exactly the one extra copy is printed as new-error' \
+  "$( grep -c '^new-error: src/legacy.ts: error TS2322' "$OUT" )" 1
+check 'red base, duplicate: the tree is restored and the docs commit is HEAD' \
+  "$( status )|$( git -C "$REPO" rev-parse HEAD )" "|$DOCS"
+
+SC_TC_MODE=opaque; export SC_TC_MODE
+new_repo redbase-opaque "$FULL_TOOLING"
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_SHIPPED,$N_SHIPPED_RM],\"edges\":[$E_SHIPPED]}}"
+sc prepare --item ESAS-304
+agent
+sc finish --item ESAS-304
+check 'red base, no error line to read after placement: fail-safe gate-red typecheck-red' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" reason )" 'gate-red typecheck-red' "$LINE" "$( tail -8 "$OUT" )"
+check 'red base, unreadable: judged by its exit code, the base never run' \
+  "$( grep -c 'judged by its exit code' "$OUT" )|$( grep -c '^typecheck$' "$STUB_LOG" )" '1|1'
+check 'red base, unreadable: the tree is restored' "$( status )x" x
+
+SC_TC_MODE=opaque-base
+new_repo redbase-opaque-base "$FULL_TOOLING"
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_SHIPPED,$N_SHIPPED_RM],\"edges\":[$E_SHIPPED]}}"
+sc prepare --item ESAS-304
+agent
+sc finish --item ESAS-304
+check 'red base, no error line to read on the BASE: fail-safe gate-red typecheck-red' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( grep -c '^typecheck-base: red with no' "$OUT" )" 'gate-red typecheck-red 1' "$LINE" "$( tail -8 "$OUT" )"
+check 'red base, unreadable base: the tree is restored and the docs commit is HEAD' \
+  "$( status )|$( git -C "$REPO" rev-parse HEAD )" "|$DOCS"
+unset SC_TC_MODE NEW_REPO_LEGACY
 
 # ---------------------------------------------------------------------------
 printf '\nasked: a block that needs a decision goes back to the grill\n'

@@ -55,10 +55,15 @@ Either one undeclared is `outcome=skipped reason=undeclared-designTooling.<key>`
 `yarn typecheck` (ESAS-304) and teselly `yarn gate --fast` (ESAS-313). Kixie's is open: its
 per-service typecheck excludes emitted specs.
 
-The design also says that on a red base, green means no error outside the base's error set.
-**The launcher does not implement that comparison**: any non-zero exit of the declared typecheck is
-`gate-red reason=typecheck-red` (`scaffold-commit.py:605-608`). A host whose declared typecheck is red
-at its base gets no scaffold commit until that comparison is built or the base is green.
+**On a red base, green means no error outside the base's error set.** When the typecheck is red
+after placement, `finish` runs it again over HEAD (the docs commit) with its edits set aside, and puts
+them back. It is green only when HEAD is red too and every `error TS<n>` line now, its location aside,
+is one HEAD already printed, counted with multiplicity (a second copy of a base error is new); each other one is printed as `new-error:` and the run ends
+`gate-red reason=typecheck-red` (`scaffold-commit.py`, `judge_red`). It is fail-safe: a red run with no
+such line to read, on either side, is judged by its exit code, so it stays red. A green on a red base
+ends `outcome=ok typecheck=base-red`, and the report's `typecheck{}` records both exits and error
+counts. This is the shape ESAS-300's kixie oracle needs: its service builds are red at base for an
+environmental reason, so it compares error sets, never exit codes.
 
 Census and ratchet guards that glob the tree are not part of a typecheck. They are the named blind spot
 of this bar, and the next scoped gate is what runs them.

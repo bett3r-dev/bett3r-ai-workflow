@@ -3690,15 +3690,19 @@ in_order '/start-multi step 0: prepare, the placing agent, finish on int/<run-id
   'record it as `baseGate`'
 present "$START_MULTI_MD" 'into its lane brief as `scaffoldReport:`' \
   '/start-multi: the lane brief gains scaffoldReport'
-# R2: a lane's graph snapshot is the main checkout's, taken on BASE; the
-# scaffold commit lives on int/<run-id>, so no snapshot is "taken after" it.
-hits=$( grep -nF 'graph snapshot is taken after this commit' "$START_MULTI_MD" || true )
-if [ -z "$hits" ]; then
-  pass '[STRUCTURAL] /start-multi does not claim lane graph snapshots are taken after the scaffold commit'
-else
-  fail '[STRUCTURAL] /start-multi does not claim lane graph snapshots are taken after the scaffold commit' "$hits" \
-       'provisioner step 6 copies the main checkout'\''s .blueprint/graph.json at BASE; the scaffold commit is on int/<run-id>.'
-fi
+# Block (Fleet, owner answer B): lane graph snapshots come after the scaffold
+# commit (for ESAS-300). Step 0 re-extracts in <scaffold-wt> after finish and
+# writes <runDir>/scaffold-design/ keyed to the scaffold commit; the provisioner
+# snapshots from there, not from the main checkout at BASE.
+in_order '/start-multi step 0: after the scaffold commit, re-extract and write <runDir>/scaffold-design/' "$START_MULTI_MD" \
+  'scaffold-commit finish --item <run-id>' 'Lane graph snapshots come after this commit (for ESAS-300)' \
+  'run the declared `designTooling.extract` there once more' '<runDir>/scaffold-design/' '`sourceSha:` the scaffold commit'
+present "$START_MULTI_MD" 'With no `extract` declared, write no `scaffold-design/` and record why' \
+  '/start-multi step 0 writes no post-scaffold snapshot when it cannot re-extract'
+present "$PROVISIONER_MD" '**After a fleet scaffold commit, the snapshot comes from the run dir.**' \
+  'provisioner step 6 snapshots from <runDir>/scaffold-design/ after a fleet scaffold commit (ESAS-300)'
+present "$PROVISIONER_MD" 'when that `manifest.yaml`'"'"'s `sourceSha` is this worktree'"'"'s `HEAD` as cut (`git -C <worktree> rev-parse HEAD`' \
+  'provisioner step 6 copies the post-scaffold snapshot only when its sourceSha is the lane base'
 present "$START_MULTI_MD" '`--map` is repeatable' \
   '/start-multi names --map as repeatable (ESAS-297)'
 present "$START_MULTI_MD" 'one `--map <runDir>/units/<id>.map.json` per unit projection on disk' \
@@ -3753,14 +3757,86 @@ for f in "$START_MULTI_MD" "$PROVISIONER_MD" "$DESIGN_MD"; do
   fi
 done
 # F3: the dry-run under-asks too: no agreed scenario is in a unit map before Phase C.
-present "$DESIGN_MULTI_MD" 'so it also under-asks: the unit maps hold no agreed scenarios until Phase C step 4 projects them' \
-  '/design-multi Step 3.5 states the under-ask direction (scenario tests cannot surface pre-sitting)'
+present "$DESIGN_MULTI_MD" 'so it also under-asks. Four kinds of block it cannot see:' \
+  '/design-multi Step 3.5 states the under-ask direction'
+present "$DESIGN_MULTI_MD" 'The unit maps hold no agreed scenarios until Phase C step 4 projects them' \
+  '/design-multi Step 3.5 under-ask 1: scenario tests cannot surface pre-sitting'
+present "$DESIGN_MULTI_MD" '**Blocks only `finish`'"'"'s re-run over the placed tree meets.**' \
+  '/design-multi Step 3.5 under-ask 2: blocks only finish'"'"'s re-run over the placed tree meets'
+present "$DESIGN_MULTI_MD" '**Elements added or changed on the board during the sitting.**' \
+  '/design-multi Step 3.5 under-ask 3: elements added on the board during the sitting'
+present "$DESIGN_MULTI_MD" '**A base that moves during the sitting.**' \
+  '/design-multi Step 3.5 under-ask 4: the base moving during the sitting'
+present "$DESIGN_MULTI_MD" 'Each of the four first appears at `/start-multi` step 0, after the owner has left, where it is an escalation' \
+  '/design-multi Step 3.5 says where the under-asked blocks surface'
+# The escalation sentence at step 0 must be true for every under-ask, so it
+# names them rather than claiming every asked block "was due at Step 3.5".
+present "$START_MULTI_MD" 'An asked block here is an escalation: either `/design-multi` Step 3.5 should have asked it, or it is one of the four under-asks Step 3.5 names' \
+  '/start-multi step 0: an asked block is an escalation, due at Step 3.5 or one of its named under-asks'
+for needle in 'a block only `finish`'"'"'s re-run over the placed tree meets' 'an element added or changed on the board during the sitting' 'a base that moved during the sitting'; do
+  present "$START_MULTI_MD" "$needle" "/start-multi step 0 names the under-ask: $needle"
+done
+hits=$( grep -nF 'An asked block was due at `/design-multi` Step 3.5' "$START_MULTI_MD" || true )
+if [ -z "$hits" ]; then
+  pass '[STRUCTURAL] /start-multi step 0 does not claim every asked block was due at Step 3.5'
+else
+  fail '[STRUCTURAL] /start-multi step 0 does not claim every asked block was due at Step 3.5' "$hits"
+fi
+DESIGN_304_MD="$ROOT/docs/prs/ESAS-304/design.md"
+if [ -f "$DESIGN_304_MD" ]; then
+  present "$DESIGN_304_MD" 'The fleet'"'"'s Step 3.5 dry-run under-asks' 'ESAS-304 design.md Risks names the Step 3.5 under-asks'
+  for needle in 'blocks only `finish`'"'"'s re-run over the placed tree meets' 'elements added or changed on the board during the sitting' 'a base that moves during the sitting'; do
+    present "$DESIGN_304_MD" "$needle" "ESAS-304 design.md Risks names: $needle"
+  done
+fi
 hits=$( grep -nF 'it can only over-ask' "$DESIGN_MULTI_MD" || true )
 if [ -z "$hits" ]; then
   pass '[STRUCTURAL] /design-multi Step 3.5 does not claim the dry-run can only over-ask'
 else
   fail '[STRUCTURAL] /design-multi Step 3.5 does not claim the dry-run can only over-ask' "$hits"
 fi
+
+# F1 (backfill): /start-multi step 0 reads the main checkout's design.json, so
+# /design-multi's canvas teardown must wait for it, and step 0 says when it may run.
+present "$DESIGN_MULTI_MD" 'only after `/start-multi` step 0 has made the fleet'"'"'s scaffold commit or recorded why it made none, and has provisioned its last lane' \
+  '/design-multi teardown waits for /start-multi step 0 (it reads design.json)'
+hits=$( grep -nF 'and only after any unit built in this checkout (`/build`' "$DESIGN_MULTI_MD" || true )
+if [ -z "$hits" ]; then
+  pass '[STRUCTURAL] /design-multi teardown is not gated on a /build in this checkout alone'
+else
+  fail '[STRUCTURAL] /design-multi teardown is not gated on a /build in this checkout alone' "$hits" \
+       'fleet units build in worktrees, so that condition never holds the teardown back from /start-multi step 0.'
+fi
+present "$START_MULTI_MD" 'is safe only past this point and once the run'"'"'s last lane is provisioned' \
+  '/start-multi step 0 says when /design-multi'"'"'s canvas teardown becomes safe'
+in_order '/start-multi step 0: the teardown is cleared only after the scaffold commit' "$START_MULTI_MD" \
+  'scaffold-commit finish --item <run-id>' 'canvas teardown (deleting the main checkout'"'"'s `.blueprint/design.json` and siblings) is safe only past this point'
+
+# Backfill (Low): step 0's scaffold worktree carries a .blueprint/, so the
+# "holds no .blueprint/" rule is scoped to lane worktrees.
+present "$PROVISIONER_MD" 'A lane worktree holds no `.blueprint/`' 'provisioner scopes "holds no .blueprint/" to a lane worktree'
+for f in "$PROVISIONER_MD" "$PLUGIN/agents/unit-lane.md" "$START_MULTI_MD"; do
+  hits=$( grep -nE '(^|[-.] )(A|Your) worktree holds no `\.blueprint/`' "$f" || true )
+  if [ -z "$hits" ]; then
+    pass "[STRUCTURAL] ${f#"$PLUGIN"/} states no unscoped \"worktree holds no .blueprint/\""
+  else
+    fail "[STRUCTURAL] ${f#"$PLUGIN"/} states no unscoped \"worktree holds no .blueprint/\"" "$hits"
+  fi
+done
+
+# Block (/build Step 3.0): the PV3 skill scaffold-from-design drops "at the
+# START of any slice" and its framework default; a report-covered slice runs no scaffolder.
+SFD_MD="$ROOT/plugins/bett3r-pv3-ai-skills/skills/scaffold-from-design/SKILL.md"
+for gone in 'at the START of any slice' "a PV3 repo's default is"; do
+  hits=$( grep -niF -- "$gone" "$SFD_MD" || true )
+  if [ -z "$hits" ]; then
+    pass "[STRUCTURAL] pv3 scaffold-from-design no longer says: $gone"
+  else
+    fail "[STRUCTURAL] pv3 scaffold-from-design no longer says: $gone" "$hits"
+  fi
+done
+present "$SFD_MD" 'There is no framework default' 'pv3 scaffold-from-design states there is no framework default'
+present "$SFD_MD" 'that no committed scaffold report covers' 'pv3 scaffold-from-design is the fallback for a slice no scaffold report covers'
 
 # --- STRUCTURAL: no command outside design.md and start-multi.md invokes
 # `scaffold-commit prepare`: a census over every commands/*.md, so a new step
@@ -3942,10 +4018,12 @@ else
     'ADR-015 records the declared-typecheck bar'
   present "$ADR_015_MD" 'This absorbs ESAS-289'\''s ask' \
     'ADR-015 says the bar absorbs ESAS-289'\''s ask'
-  # The honesty pin: the block's red-base rule is not built, and the record
-  # must say so rather than describe it as behaviour.
-  present "$ADR_015_MD" 'The launcher does not implement that comparison' \
-    'ADR-015 says the red-base error-set comparison is not built'
+  # The block's red-base rule (Bar P10) is built: the record states it as
+  # behaviour, and the fail-safe that keeps an unreadable red run red.
+  present "$ADR_015_MD" '**On a red base, green means no error outside the base'"'"'s error set.**' \
+    'ADR-015 records the red-base error-set rule (Bar P10)'
+  present "$ADR_015_MD" 'It is fail-safe: a red run with no' \
+    'ADR-015 records that an unreadable red typecheck stays red'
   present "$ADR_015_MD" '**Agreed means proposed and coherent, minus any element with an unresolved comment anchored on it.**' \
     'ADR-015 records agreed = no open comment (ESAS-304-F1)'
   present "$ADR_015_MD" '**A fleet makes one scaffold commit, on `int/<run-id>`, in `/start-multi` step 0.**' \

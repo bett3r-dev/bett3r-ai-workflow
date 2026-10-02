@@ -67,7 +67,15 @@ finish
   Needs the draft report and HEAD still at its baseSha. `--abort` restores the
   tree (outcome=gate-red reason=aborted). Otherwise runs `extract`, re-runs the
   scaffolder with --write so units deferred on a placed fragment get written,
-  runs `observe` (else prints `observe: none declared`), then the typecheck. A
+  runs `observe` (else prints `observe: none declared`), then the typecheck.
+  On a red base, green means no error outside the base's error set (Bar P10):
+  a red typecheck runs again over HEAD with this run's edits set aside, and is
+  green only when HEAD is red too and every `error TS<n>` line now (location
+  aside) is one HEAD already printed, counted with multiplicity (a second copy
+  of a base error is new); each other is printed as `new-error:`.
+  Fail-safe: a red run with no such line, on either side, stays red. A green
+  on a red base ends ok with `typecheck=base-red`, the report's typecheck{}
+  recording both exits and error counts. A
   unit still deferred on a worklist node is a placement failure
   (gate-red reason=placement-incomplete); one deferred on anything else is
   STILL OWED. placed[] is this run's placed worklist plus the committed report's
@@ -91,12 +99,14 @@ census
 
 The report, <path>/scaffold.json (<path> from work-docs-path): the final
 scaffolder JSON (`scaffolder`), manifest[] {file, node, blob}, worklist[],
-placed[], held[], stillOwed[], asked[], stale[] {file, node, barrel[]?}, edited[], observe, the
+placed[], held[], stillOwed[], asked[], stale[] {file, node, barrel[]?}, edited[], observe,
+typecheck {exit, and on a red base baseExit, baseErrors, errors}, the
 scaffolder's scenarioTests[], unplaced[] and scenariosExcluded[], input digests
 (inputs.maps[] {file, digest}, one per map in the order given, file
 repo-relative when the map lies inside the repo, else as given; then the
 design and the graph) and baseSha.
 """
+import collections
 import hashlib
 import json
 import os
@@ -604,8 +614,9 @@ def finish(repo, flags):
 
         run = run_declared(repo, tools["typecheck"])
         show_tail("typecheck", run)
+        typecheck = {"exit": run.returncode}
         if run.returncode != 0:
-            raise Refusal("gate-red", "typecheck-red")
+            typecheck = judge_red(repo, tools, run)
 
         created = by_key(draft["created"] + created_files(result), "file")
         manifest = [{"file": c["file"], "node": c["node"], "blob": blob(repo, c["file"])}
@@ -623,7 +634,7 @@ def finish(repo, flags):
             "edited": draft["edited"], "observe": observe,
             "scenarioTests": result.get("scenarioTests") or [], "unplaced": result.get("unplaced") or [],
             "scenariosExcluded": result.get("scenariosExcluded") or [],
-            "scaffolder": result,
+            "typecheck": typecheck, "scaffolder": result,
         }
         if unchanged(repo, path, report):
             restore(repo)
@@ -640,14 +651,89 @@ def finish(repo, flags):
         restore(repo)
         return crashed("finish", e, path)
     sha = git(repo, "rev-parse", "HEAD").stdout.decode().strip()
-    return verdict("finish", "ok", counts=counts_of(report), path=path, commit=sha)
+    return verdict("finish", "ok", counts=counts_of(report), path=path, commit=sha,
+                   typecheck="base-red" if typecheck["exit"] != 0 else None)
+
+
+# --- the red-base rule (Bar P10) ---------------------------------------------------
+# On a red base, green means no error outside the base's error set (for ESAS-300:
+# kixie's service builds are red at base for an environmental reason, so its
+# compile oracle compares error sets, never exit codes). An error is a line
+# carrying `error TS<n>` (tsc's shape, plain or --pretty, with any prefix a
+# workspace runner adds), keyed by the line with ANSI colour and the location
+# before the code removed: a placement that shifts a base error down its file
+# must not read as a new error. Fail-safe both ways: a red run with no error
+# line read, on either side, is judged by its exit code alone, i.e. red.
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+TS_ERROR = re.compile(r"\berror\s+TS\d+\b")
+LOCATION = re.compile(r"\(\d+,\d+\)|:\d+:\d+")
+
+
+def error_set(run):
+    """A multiset (Counter) of error keys: a second copy of a base error is a new
+    error, as ESAS-300's `comm -13` over error lines counts it."""
+    keys = collections.Counter()
+    for raw in ((run.stdout or "") + "\n" + (run.stderr or "")).splitlines():
+        line = ANSI.sub("", raw)
+        m = TS_ERROR.search(line)
+        if m:
+            keys[" ".join((LOCATION.sub("", line[:m.start()]) + line[m.start():]).split())] += 1
+    return keys
+
+
+def judge_red(repo, tools, run):
+    """A red typecheck after placement: green only when the base (HEAD, the docs
+    commit) is red too and every error now is one the base already had. Raises
+    gate-red typecheck-red otherwise; returns the typecheck record when green."""
+    after = error_set(run)
+    if not after:
+        print("typecheck: red with no `error TS<n>` line to read; judged by its exit code")
+        raise Refusal("gate-red", "typecheck-red")
+    base = typecheck_at_base(repo, tools)
+    show_tail("typecheck-base", base, 5)
+    if base.returncode == 0:
+        raise Refusal("gate-red", "typecheck-red")
+    before = error_set(base)
+    if not before:
+        print("typecheck-base: red with no `error TS<n>` line to read; judged by its exit code")
+        raise Refusal("gate-red", "typecheck-red")
+    new = after - before
+    if new:
+        for key in sorted(new):
+            for _ in range(new[key]):
+                print(f"new-error: {key}")
+        raise Refusal("gate-red", "typecheck-red")
+    now, was = sum(after.values()), sum(before.values())
+    print(f"typecheck: red base; {now} error(s) now, none outside the base's {was}")
+    return {"exit": run.returncode, "baseExit": base.returncode, "baseErrors": was, "errors": now}
+
+
+def typecheck_at_base(repo, tools):
+    """The declared typecheck over HEAD: this run's edits are set aside as a git
+    tree object, the tree restored to HEAD, the typecheck run, and the edits put
+    back exactly (new paths, tracked edits and deleted stubs alike)."""
+    git(repo, "add", "-A")
+    edits = git(repo, "write-tree").stdout.decode().strip()
+    git(repo, "reset", "-q")
+    restore(repo)
+    try:
+        return run_declared(repo, tools["typecheck"])
+    finally:
+        git(repo, "checkout", edits, "--", ".")
+        gone = git(repo, "diff", "--name-only", "-z", "--diff-filter=D", "HEAD", edits).stdout.decode().split("\0")
+        for rel in [p for p in gone if p]:
+            if os.path.isfile(os.path.join(repo, rel)):
+                os.remove(os.path.join(repo, rel))
+                prune_dirs(repo, os.path.dirname(rel))
+        git(repo, "reset", "-q")
 
 
 # What a re-run recomputes from a tree that already holds the scaffold, so it
 # differs from the first run without the outcome differing: the scaffolder's raw
 # JSON (a placed fragment is now `satisfied`), worklist[] (it is off it, and in
 # placed[]) and the graph digest (the graph is read from code the scaffold wrote).
-VOLATILE = ("baseSha", "scaffolder", "worklist")
+# typecheck{} too: a re-run's typecheck reads a tree that already holds the scaffold.
+VOLATILE = ("baseSha", "scaffolder", "worklist", "typecheck")
 
 
 def comparable(report):

@@ -62,9 +62,11 @@ Confirm `<scratchpad>/<unit-id>/` exists and create it if it does not; worktrees
 
 ## 6 — Carry the design layer in, read-only
 
-A worktree holds no `.blueprint/`: that layer is scoped to one unit of work while a run spans N, and a `.blueprint/` here would enrol a throwaway tree in a live board session. `/build`'s scaffold step only reads, so the lane gets a **snapshot** under `.work/`; `BLUEPRINT_DIR_MISSING` in a lane is correct.
+A lane worktree holds no `.blueprint/` (the one worktree that carries it is `/start-multi` step 0's scaffold worktree, for the fleet's scaffold commit only): that layer is scoped to one unit of work while a run spans N, and a `.blueprint/` here would enrol a throwaway tree in a live board session. `/build`'s scaffold step only reads, so the lane gets a **snapshot** under `.work/`; `BLUEPRINT_DIR_MISSING` in a lane is correct.
 
-Only when the **main checkout** has both `.blueprint/design.json` and `.blueprint/graph.json`; otherwise skip and say so, a normal state:
+**After a fleet scaffold commit, the snapshot comes from the run dir.** When you were handed a scaffold report and `<runDir>/scaffold-design/` holds `design.json`, `graph.json` and `manifest.yaml`, `/start-multi` step 0 wrote them from its scaffold worktree after the commit, its graph re-extracted over the scaffold: lane graph snapshots come after the scaffold commit (for ESAS-300), since a graph taken at `BASE` reads every fragment the commit placed and every unit it wrote as absent. Copy the three files byte for byte into `<worktree>/.work/design-snapshot/` when that `manifest.yaml`'s `sourceSha` is this worktree's `HEAD` as cut (`git -C <worktree> rev-parse HEAD`, the tip of `int/<run-id>` it was cut from), not the pinned `BASE`, which a scaffold commit always differs from; otherwise write nothing and report both shas. Skip the main-checkout path below either way.
+
+Otherwise, only when the **main checkout** has both `.blueprint/design.json` and `.blueprint/graph.json`; otherwise skip and say so, a normal state:
 
 1. Compare the main checkout's `HEAD` with the pinned base sha, and its `git status --porcelain` for tracked modifications. Match and clean: write the snapshot. Anything else: write nothing and report both shas, because a snapshot from another tree describes artifacts the lane does not have, invisibly.
 2. Copy exactly two files into `<worktree>/.work/design-snapshot/`:
@@ -94,7 +96,7 @@ readOnly: true          # the lane reads this; nothing writes back to the board
 
 `design-map` is the only writer of map content (ADR-006), so this is a byte copy; `/design` reuses a `map.json` as-is only when the brief says `mapProvenance: carried`.
 
-Done when your report says which holds: no design layer in the main checkout; both shas reported and nothing written; or `design-snapshot/` holds exactly `design.json`, `graph.json` and `manifest.yaml`; and `mapProvenance` is `carried` with the copy in place, or `lost` naming what was absent.
+Done when your report says which holds, and from which source (`<runDir>/scaffold-design/` or the main checkout): no design layer in the main checkout; both shas reported and nothing written; or `design-snapshot/` holds exactly `design.json`, `graph.json` and `manifest.yaml`; and `mapProvenance` is `carried` with the copy in place, or `lost` naming what was absent.
 
 ## 7 — Write the lane brief
 
