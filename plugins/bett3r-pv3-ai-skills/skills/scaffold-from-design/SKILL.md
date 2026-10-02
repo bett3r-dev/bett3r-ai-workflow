@@ -1,5 +1,5 @@
 ---
-description: Generate the mechanical half of a slice's PV3 artifacts from the BLUEPRINT design graph, then hand the rest to the create-* skills. Use at the START of any slice that delivers designed artifacts (a policy, read model, command or event that exists in .blueprint/design.json) — before writing any of them by hand.
+description: Generate the mechanical half of PV3 artifacts from the BLUEPRINT design graph, then hand the rest to the create-* skills. Use at the START of any slice that delivers designed artifacts (a policy, read model, command or event that exists in .blueprint/design.json) — before writing any of them by hand — or once over the whole agreed design delta at the end of /design.
 ---
 
 # Skill: Scaffold From Design
@@ -47,6 +47,9 @@ existence is checked.
 # normal checkout — reads this repo's own .blueprint/
 <scaffold> --nodes <the slice's designs: ids, comma-separated>
 
+# end of /design — the whole agreed design delta, no --nodes
+<scaffold>
+
 # fleet lane — reads the read-only snapshot the provisioner left
 <scaffold> \
   --design .work/design-snapshot/design.json \
@@ -70,7 +73,8 @@ hand-placing the file discards the only signal that a decision is missing.
 
 Exit codes: `0` nothing blocked · `1` the design or graph could not be read, or the slice names
 an id the design no longer contains (a stale plan — re-check `slices.yaml` against the board) ·
-`3` something was blocked.
+`3` something was blocked. `DEFERRED` and `ALREADY EXISTS` entries are not blocked and leave the
+exit code at `0`.
 
 ### In a fleet lane, verify the snapshot first
 
@@ -140,10 +144,11 @@ the right-hand column is where the work actually is.
 | Design element | Emitted | You still write |
 |---|---|---|
 | `policy` | whole file + registration | handler bodies, dependency declaration, redelivery safety |
-| `read-model` | whole file + registration | projections, queries, indexes, scope |
-| `command` on an **existing** handler | fragment | the command schema, the handler body, stream/idempotency |
+| `read-model` | whole file + registration; schema as a placeholder, `TODO(scaffold)` | the real schema, projections, queries, indexes, scope |
+| `command` on an **existing** handler | fragment + companion schema fragment (placeholder, `TODO(scaffold)`) | the real command schema, the handler body, stream/idempotency |
 | `command` on a **proposed** handler | *blocked* | scaffold the handler first — order the slices so it exists |
-| `event` | fragment | the event schema, the namespace registration, translations |
+| `event` | fragment + companion schema fragment (placeholder, `TODO(scaffold)`) | the real event schema, the namespace registration, translations |
+| `policy`, `read-model` or view naming a **proposed** node that is not written this run (an event it reacts to or projects, a command it issues, an aggregate a view reads from) | *deferred* (not written, exit 0, listed under `DEFERRED`) | place the fragments, re-extract the graph, re-run the scaffold |
 | `aggregate`, `system` | **nothing** | the whole file — use `create-aggregate` |
 | schemas, tests | **nothing** | `create-schema`, `create-tests` |
 
@@ -176,6 +181,9 @@ state file to get out of sync, because the two graphs *are* the state.
 - **Never edit a generated file to change its id-bearing identity** (its export name, its label,
   its subdomain) without changing the design. The id is the convergence contract; drift there is
   invisible until the board reports a phantom.
-- **Do not run it un-scoped (`--nodes` omitted) with `--write`.** That scaffolds the whole design
-  delta into one commit of unreachable stubs — the thing vertical slicing exists to prevent.
+- **Run it un-scoped (`--nodes` omitted) with `--write` only at the end of /design, over an agreed
+  design**, with the same safety as a slice run: dry run first, BLOCKED surfaced, every fragment
+  placed, and the commit made only once the repo typechecks. Units that wait on a fragment are
+  `DEFERRED`, not written broken: place the fragments, re-extract the graph and re-run. Inside a
+  slice, always pass `--nodes`; an un-scoped write there scaffolds other slices' artifacts.
 - The scaffolder reads `.blueprint.config.json` for paths and package names, like every skill here.
