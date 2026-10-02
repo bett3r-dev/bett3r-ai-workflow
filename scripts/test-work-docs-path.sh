@@ -687,6 +687,36 @@ check 'map snapshot, provisioned map.json + count mismatch: no page, no commit, 
 check 'map snapshot, provisioned map.json + count mismatch: kept byte-identical' \
   "$( cmp -s "$REPO/docs/prs/ESAS-4/map.json" "$DMFIX/count-2-1-1-1-0.map.json" && echo same )" same
 
+# scaffold.json, the scaffold report (ESAS-304): the folder's fourth committed
+# file, written by `scaffold-commit finish` in its OWN commit after the docs
+# commit. It never proves an owner (only design.md's header does, else a
+# provisioned map.json's mapId), and its commit leaves the docs commit's three
+# paths exactly as they were.
+git -C "$REPO" checkout -qb ESAS-5-a
+map_pass ESAS-5 ESAS-5-a "$DMFIX/count-2-1-1-1-0.map.json" 5
+docs=$( git -C "$REPO" rev-parse HEAD )
+printf '{"version": 1, "ticket": "ESAS-5"}\n' > "$REPO/docs/prs/ESAS-5/scaffold.json"
+git -C "$REPO" add -- docs/prs/ESAS-5/scaffold.json
+git -C "$REPO" -c user.name=t -c user.email=t@t commit -qm 'chore(ESAS-5): scaffold the agreed design'
+check 'scaffold report: the docs commit still names exactly design.md, map.json, map.html' \
+  "$( git -C "$REPO" show --name-only --format= "$docs" | sort | tr '\n' ' ' )" \
+  'docs/prs/ESAS-5/design.md docs/prs/ESAS-5/map.html docs/prs/ESAS-5/map.json '
+check 'scaffold report: the scaffold commit names only scaffold.json here, on the docs commit' \
+  "$( git -C "$REPO" show --name-only --format= HEAD | tr '\n' ' ' )|$( git -C "$REPO" rev-parse HEAD~1 )" \
+  "docs/prs/ESAS-5/scaffold.json |$docs"
+wdp "$REPO" --item ESAS-5 --owner-branch ESAS-5-a
+check 'scaffold report: beside the design it changes nothing, the next /design pass reads owner=self' "$( attr "$LINE" owner )" self "$LINE"
+wdp "$REPO" --item ESAS-5 --owner-branch ESAS-5-b
+check 'scaffold report: another branch still reads owner=other' "$( attr "$LINE" owner )" other "$LINE"
+mkdir -p "$REPO/docs/prs/ESAS-6"
+printf '{"version": 1, "ticket": "ESAS-6"}\n' > "$REPO/docs/prs/ESAS-6/scaffold.json"
+wdp "$REPO" --item ESAS-6 --owner-branch ESAS-6-a
+check 'scaffold report alone proves no owner: unowned, even when it names this item' "$( attr "$LINE" owner )" unowned "$LINE"
+printf '{"mapId":"ESAS-6"}\n' > "$REPO/docs/prs/ESAS-6/map.json"
+wdp "$REPO" --item ESAS-6 --owner-branch ESAS-6-a
+check 'scaffold report beside a provisioned map naming this item: the map decides, owner=none' "$( attr "$LINE" owner )" none "$LINE"
+rm -rf "$REPO/docs/prs/ESAS-6"
+
 # ---------------------------------------------------------------------------
 printf '\nthe verdict line is the contract (ADR-004)\n'
 # ---------------------------------------------------------------------------

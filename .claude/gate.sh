@@ -243,6 +243,11 @@ sh scripts/test-map-tree.sh
 MT_SH=dash dash scripts/test-map-tree.sh
 MT_SH=bash bash scripts/test-map-tree.sh
 EOF
+step scaffold-commit full 'plugins/bett3r-ai-workflow/bin/scaffold-commit' 'plugins/bett3r-ai-workflow/scripts/scaffold-commit.py' 'plugins/bett3r-ai-workflow/bin/work-docs-path' 'plugins/bett3r-ai-workflow/scripts/work-docs-path.py' 'scripts/test-scaffold-commit.sh' <<'EOF'
+sh scripts/test-scaffold-commit.sh
+SC_SH=dash dash scripts/test-scaffold-commit.sh
+SC_SH=bash bash scripts/test-scaffold-commit.sh
+EOF
 step plan-candidates full 'plugins/bett3r-ai-workflow/bin/design-map' 'plugins/bett3r-ai-workflow/bin/worktree-pool' 'plugins/bett3r-ai-workflow/commands/plan.md' 'scripts/test-plan-candidates.sh' 'scripts/fixtures/design-map/*' <<'EOF'
 sh scripts/test-plan-candidates.sh
 PC_SH=dash dash scripts/test-plan-candidates.sh
