@@ -17,7 +17,7 @@ You take **one worktree that has already been cut** and make it ready, then retu
 
 ## Your input
 
-The unit id, worktree path, repo kind (`standard` | `multi-repo` | `cross-repo/no-build`), run id and integration branch, run directory, this unit's scratchpad subdirectory, the pinned base sha, and the verdict of the base gate the orchestrator ran on the branch this worktree was cut from. Anything missing: ask, because a guessed path writes into another lane.
+The unit id, worktree path, repo kind (`standard` | `multi-repo` | `cross-repo/no-build`), run id and integration branch, run directory, this unit's scratchpad subdirectory, the pinned base sha, the verdict of the base gate the orchestrator ran on the branch this worktree was cut from, and the path of the fleet's scaffold report when `/start-multi` step 0 made the fleet's scaffold commit on `int/<run-id>` (or that it made none, and why). Anything missing: ask, because a guessed path writes into another lane.
 
 A `cross-repo/no-build` unit has no worktree: report READY and say so. A `/build` pool worktree is [`pool-provisioner`](pool-provisioner.md)'s: say so and stop.
 
@@ -118,11 +118,12 @@ unitId: <unit-id>
 integrationBranch: int/<run-id>
 gateDeferred: true
 mapProvenance: <carried|lost>   # carried: the run's projection was copied to docs/prs/<id>/map.json; lost: the run dir or projection was absent
+scaffoldReport: <the fleet's scaffold.json path on int/<run-id>, as /start-multi step 0 handed it>   # only when step 0 made the scaffold commit; absent otherwise
 ```
 
 The brief is a file in the worktree, not a message, because a `/clear`ed or resumed lane keeps the file and loses the message, and a step invoked alone by a scheduler is a fresh agent that saw no dispatch. `runDir` is how `run-metrics` finds the unit, since a lane's transcript is stamped with the orchestrator's branch. `gateDeferred: true` tells the lane's `/verify-build` to run the host gate in `--fast` mode and leave the integration run to `/merge-multi`. `sliceBudget` is the lane's context ceiling, denominated in committed slices because that is the one unit a step can count from inside and `/build`'s only clean resume point. `handedDownFacts` and `preconditions` carry their labels (`applies`, with the command that confirmed it at BASE, or `verify whether it applies`), because a fact remembered as settled is how a lane skips the check that would have disproved it. A worktree carrying an older brief filename is re-provisioned, not migrated: one brief file, one scrub path.
 
-Done when the file parses and every key above has a value.
+`scaffoldReport` is written only when step 0 made the fleet's scaffold commit, and never as `none`: a lane's `/design` Step 4b never scaffolds, and reads the key's presence as "the fleet scaffolded this branch" and its absence as "the fleet made no scaffold commit", so a key written for a fleet that made none would report a scaffold the branch does not hold. Done when the file parses and every key above has a value, `scaffoldReport` present exactly when the orchestrator handed you a report path.
 
 ## 8 — Record the base
 
@@ -135,7 +136,7 @@ A tier you did not probe is written as *not measured*, since silence about a red
 
 ## Report
 
-Status READY | BLOCKED; worktree and repo kind; upstream (`@{u}` resolved to `origin/<branch>`, set as-found or repaired and how); install and build commands with their unpiped exit status; baseline (base sha recorded; anything captured by suite and command, or **inconclusive** with why); test tiers, one line each with the probe that decided it; local config staged; lane brief written, with its `runId`; unit map (`mapProvenance: carried` with source and destination, or `mapProvenance: lost` naming which was absent); design snapshot (written, with `sourceSha`, or not written, with the reason and that this lane's designed artifacts will be hand-written); inherited state archived, and where; blockers and anomalies, where "none" is a valid answer and the field is not.
+Status READY | BLOCKED; worktree and repo kind; upstream (`@{u}` resolved to `origin/<branch>`, set as-found or repaired and how); install and build commands with their unpiped exit status; baseline (base sha recorded; anything captured by suite and command, or **inconclusive** with why); test tiers, one line each with the probe that decided it; local config staged; lane brief written, with its `runId` and `scaffoldReport: <path>` (or that the key is absent because step 0 made no scaffold commit, with the reason you were handed); unit map (`mapProvenance: carried` with source and destination, or `mapProvenance: lost` naming which was absent); design snapshot (written, with `sourceSha`, or not written, with the reason and that this lane's designed artifacts will be hand-written); inherited state archived, and where; blockers and anomalies, where "none" is a valid answer and the field is not.
 
 Your READY is a claim the orchestrator spot-checks: state what you observed, not what the commands were meant to achieve. Your returned output is the reply channel.
 

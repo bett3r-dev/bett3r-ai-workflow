@@ -835,6 +835,46 @@ else
        "rc=$rc out=$out markers=$markers got: $( printf '%s' "${got:-<no verdict>}" | tr '\n' ' ' ) $( cat "$TMP/err" )"
 fi
 
+# (e) ESAS-304: /design makes two unpushed commits, the docs commit and Step 4b's
+# scaffold commit. The verdict folds into the LAST one, the docs commit beneath
+# it keeps its message, and no commit is added.
+remote_before=$( rec_tip )
+( cd "$rec_tree" && printf 'design 2\n' > design.md && rec_git git add design.md \
+  && rec_git git commit -q -m 'docs(X-1): design' \
+  && printf '{}\n' > scaffold.json && rec_git git add scaffold.json \
+  && rec_git git commit -q -m 'chore(X-1): scaffold the agreed design' )
+docs_commit=$( git -C "$rec_tree" rev-parse HEAD~1 )
+out=$( rec_run 'LANE-STEP:v1 step=design outcome=success' ); rc=$?
+got=$( rec_msg | "$LANE_STEP" - 2>/dev/null )
+if [ "$rc" -eq 0 ] && [ "$got" = "$( printf 'step=design\noutcome=success' )" ] \
+   && [ "$out" = "recorded=folded sha=$( rec_tip )" ] \
+   && [ "$( rec_msg | sed -n 1p )" = 'chore(X-1): scaffold the agreed design' ] \
+   && [ "$( rec_tip claude/lane-x~1 )" = "$docs_commit" ] \
+   && [ "$( rec_msg claude/lane-x~1 )" = 'docs(X-1): design' ] \
+   && [ "$( rec_tip claude/lane-x~2 )" = "$remote_before" ]; then
+  pass '/design'\''s verdict folds into its last commit, the scaffold commit, and the docs commit keeps its message'
+else
+  fail '/design'\''s verdict folds into its last commit, the scaffold commit, and the docs commit keeps its message' \
+       "rc=$rc out=$out got: $( printf '%s' "${got:-<no verdict>}" | tr '\n' ' ' ) $( cat "$TMP/err" )"
+fi
+
+# (f) ESAS-304: a red Step 4b restores the tree, so the docs commit is the
+# step's last commit, and it carries `gate-red`.
+remote_before=$( rec_tip )
+( cd "$rec_tree" && printf 'design 3\n' > design.md && rec_git git add design.md \
+  && rec_git git commit -q -m 'docs(X-2): design' )
+out=$( rec_run 'LANE-STEP:v1 step=design outcome=gate-red' ); rc=$?
+got=$( rec_msg | "$LANE_STEP" - 2>/dev/null )
+if [ "$rc" -eq 0 ] && [ "$got" = "$( printf 'step=design\noutcome=gate-red' )" ] \
+   && [ "$out" = "recorded=folded sha=$( rec_tip )" ] \
+   && [ "$( rec_msg | sed -n 1p )" = 'docs(X-2): design' ] \
+   && [ "$( rec_tip claude/lane-x~1 )" = "$remote_before" ]; then
+  pass 'a /design gate-red folds into the docs commit that stands'
+else
+  fail 'a /design gate-red folds into the docs commit that stands' \
+       "rc=$rc out=$out got: $( printf '%s' "${got:-<no verdict>}" | tr '\n' ' ' ) $( cat "$TMP/err" )"
+fi
+
 # ---------------------------------------------------------------------------
 printf '\nSeam D — the lane brief (.work/lane.yaml)\n\n'
 # ---------------------------------------------------------------------------
@@ -933,7 +973,7 @@ PY
     # ask anybody for.
     missing=
     for want in ticket worktree branch base drift runners preconditions \
-                adrAllocations modelRouting handedDownFacts; do
+                adrAllocations modelRouting handedDownFacts scaffoldReport; do
       case "$brief_keys" in *" $want "*) ;; *) missing="$missing $want" ;; esac
     done
     if [ -z "$missing" ]; then
@@ -2709,6 +2749,12 @@ in_order '/verify-build ORDER: ### Slices < ### Oracle candidates (D5)' \
 # /design reuses a map as-is only on `carried`; /verify-build reports `lost`.
 present "$PROVISIONER_MD" 'mapProvenance: carried' 'provisioner writes mapProvenance: carried when it copies the projection (D10)'
 present "$PROVISIONER_MD" 'mapProvenance: lost' 'provisioner writes mapProvenance: lost when the run dir or projection is absent (D10)'
+present "$PROVISIONER_MD" 'scaffoldReport: <the fleet'\''s scaffold.json path on int/<run-id>' \
+  'provisioner'\''s lane brief carries scaffoldReport, the path /start-multi step 0 hands it (ESAS-304)'
+present "$PROVISIONER_MD" 'with its `runId` and `scaffoldReport: <path>`' \
+  'provisioner'\''s report names the scaffoldReport it wrote, or why it is absent (ESAS-304)'
+present "$PROVISIONER_MD" '`scaffoldReport` is written only when step 0 made the fleet'\''s scaffold commit, and never as `none`' \
+  'provisioner writes scaffoldReport only for a real scaffold commit: /design Step 4b reads its presence (ESAS-304)'
 present "$PROVISIONER_MD" 'docs/prs/<id>/map.json' 'provisioner names the lane map destination docs/prs/<id>/map.json (D10)'
 present "$DESIGN_MD" 'mapProvenance: carried' '/design Step 4 reuses a map as-is only on mapProvenance: carried (R2)'
 present "$DESIGN_MD" 'never re-authored in the lane' '/design Step 4: a carried map is frozen in the lane; fork changes escalate (R2, D9)'
@@ -3553,6 +3599,204 @@ else
        "still claimed in:" $( printf '%s\n' "$live" ) \
        'a run has N orchestrator ticks; a rule that says one mis-attributes every fleet report and nothing goes red.'
 fi
+
+# ---------------------------------------------------------------------------
+printf '\nESAS-304 — the design ends in the scaffold commit\n\n'
+# ---------------------------------------------------------------------------
+# `/design` Step 4b drives `scaffold-commit` (prepare, the placing agent,
+# finish) after the docs commit; a fleet makes the one scaffold commit on
+# int/<run-id> in /start-multi step 0, with the asked blocks surfaced by a
+# /design-multi Step 3.5 dry-run while the owner is in the sitting. The launcher
+# itself is executed by scripts/test-scaffold-commit.sh; what is pinned here is
+# the command text that calls it, since deletion is what a presence oracle
+# catches. Step 4b's own needles and its order live in test-work-docs-path.sh's
+# Step 4 loop, beside the docs commit they follow.
+
+# position <file> <literal> — the offset of the literal in the whitespace-
+# normalised file, 0 when absent; an ordering check compares two of these.
+position(){
+  needle=$( printf '%s' "$2" | tr '\n' ' ' | tr -s ' ' )
+  NEEDLE=$needle awk 'BEGIN{RS="\001"} { print index($0, ENVIRON["NEEDLE"]) ; exit }' "$( norm "$1" )"
+}
+# in_order <description> <file> <literal>… — every literal present, each after the one before.
+in_order(){
+  d=$1 f=$2; shift 2
+  prev=0 seen=
+  for lit in "$@"; do
+    at=$( position "$f" "$lit" )
+    seen="$seen $at"
+    if [ "${at:-0}" -eq 0 ] || [ "$at" -le "$prev" ]; then
+      fail "$d" "offsets in ${f#"$ROOT"/} (0 = absent):$seen" "  at: $lit"
+      return
+    fi
+    prev=$at
+  done
+  pass "$d"
+}
+
+# /design: the step, its gate-red verdict, the generated section, the fleet skip.
+present "$DESIGN_MD" '## Step 4b — The scaffold commit' \
+  '/design has a Step 4b, the scaffold commit'
+in_order '/design names Step 4b after the docs commit' "$DESIGN_MD" \
+  'git commit -m "docs(<id>): design"' '## Step 4b — The scaffold commit'
+present "$DESIGN_MD" 'Placement never covers registration' \
+  '/design Step 4b states that placement never covers registration'
+present "$DESIGN_MD" '`outcome=gate-red` when Step 4b'\''s `finish` ended `gate-red`' \
+  '/design'\''s verdict gains gate-red, for a red scaffold commit'
+present "$DESIGN_MD" 'Where `.work/lane.yaml` carries `scaffoldReport:`' \
+  '/design Step 4b defers to the fleet'\''s one scaffold commit in a lane'
+present "$DESIGN_MD" '**Scaffold**: written in Step 4b from the draft report; finish'\''s counts govern' \
+  'design.md gains a Scaffold section, written from the draft report, finish'\''s counts governing'
+# Zero forks (P1) and the tier rule, stated and not enforced.
+present "$DESIGN_MD" 'Every pass writes `grounded: true`' \
+  '/design always writes a grounded map'
+present "$DESIGN_MD" 'its region reads `Nothing to decide.`' \
+  'a zero-fork /design says Nothing to decide'
+present "$DESIGN_MD" '**The tier rule, stated and not enforced.**' \
+  'the map gate states the tier rule, and that it is not enforced'
+present "$DESIGN_MD" 'a design on an eventstorming board also gets an impact map; a design with decisions only gets a decision tree; a design with nothing to decide gets no map, the session still exists, and the flow continues' \
+  'the tier rule names all three tiers'
+present "$DESIGN_MD" 'design-map export-examples <path>/map.json --from' \
+  '/design Step 4.1 carries the agreed examples into the committed map'
+
+# /design-multi: the pre-sitting dry-run and the projection's export.
+present "$DESIGN_MULTI_MD" '## Step 3.5 — Scaffold dry-run' \
+  '/design-multi has a Step 3.5 scaffold dry-run'
+in_order '/design-multi runs the dry-run before the sitting' "$DESIGN_MULTI_MD" \
+  '## Step 3.5 — Scaffold dry-run' '## Step 4 — Phase B: the one sitting'
+present "$DESIGN_MULTI_MD" 'Each asked block, of either kind, becomes a sitting fork in its unit' \
+  '/design-multi: an asked block becomes a sitting fork'
+# Step 3.5 is ONE dry-run over the shared design, its maps repeated, its blocks
+# deduplicated and attributed by node, counting asked as scaffold-commit does.
+present "$DESIGN_MULTI_MD" 'run the declared scaffolder **once for the whole fleet**, without `--write`' \
+  '/design-multi Step 3.5 is one dry-run for the fleet, never written (without --write)'
+present "$DESIGN_MULTI_MD" 'one `--map` per unit map on disk, in unit order' \
+  '/design-multi Step 3.5 repeats --map, one per unit map'
+present "$DESIGN_MULTI_MD" 'Read its blocks **deduplicated by node and attributed by node**' \
+  '/design-multi Step 3.5 deduplicates and attributes the blocks by node'
+present "$DESIGN_MULTI_MD" 'every `skipped[]` entry whose reason is `blocked` or `error`, unless every one of its decision codes is `no-template`' \
+  '/design-multi Step 3.5 counts a blocked or errored skipped[] entry (not all no-template) as asked, as classify() does'
+present "$DESIGN_MULTI_MD" 'every `scenarioTests[]` entry whose `outcome` is `decision`' \
+  '/design-multi Step 3.5 counts a scenario test needing a decision as asked, as scaffold-commit classify() does'
+present "$DESIGN_MULTI_MD" 'design-map export-examples <run>/units/<id>.map.json --from' \
+  '/design-multi Phase C'\''s projection runs export-examples'
+
+# /start-multi: one commit on int/<run-id>, before the base gate (scenario
+# "Shared design commits once").
+START_MULTI_MD="$PLUGIN/commands/start-multi.md"
+in_order '/start-multi step 0: prepare, the placing agent, finish on int/<run-id>, then baseGate' "$START_MULTI_MD" \
+  'make the fleet'\''s one scaffold commit on `int/<run-id>`' \
+  'scaffold-commit prepare --item <run-id>' 'the placing agent' 'scaffold-commit finish --item <run-id>' \
+  'record it as `baseGate`'
+present "$START_MULTI_MD" 'into its lane brief as `scaffoldReport:`' \
+  '/start-multi: the lane brief gains scaffoldReport'
+# R2: a lane's graph snapshot is the main checkout's, taken on BASE; the
+# scaffold commit lives on int/<run-id>, so no snapshot is "taken after" it.
+hits=$( grep -nF 'graph snapshot is taken after this commit' "$START_MULTI_MD" || true )
+if [ -z "$hits" ]; then
+  pass '[STRUCTURAL] /start-multi does not claim lane graph snapshots are taken after the scaffold commit'
+else
+  fail '[STRUCTURAL] /start-multi does not claim lane graph snapshots are taken after the scaffold commit' "$hits" \
+       'provisioner step 6 copies the main checkout'\''s .blueprint/graph.json at BASE; the scaffold commit is on int/<run-id>.'
+fi
+present "$START_MULTI_MD" '`--map` is repeatable' \
+  '/start-multi names --map as repeatable (ESAS-297)'
+present "$START_MULTI_MD" 'one `--map <runDir>/units/<id>.map.json` per unit projection on disk' \
+  '/start-multi step 0 passes one --map per unit projection'
+present "$START_MULTI_MD" 'records each map (repo-relative when it lies inside the repo, else as given) and its digest under `inputs.maps[]`' \
+  '/start-multi step 0 says the report records each map, repo-relative inside the repo, and its digest'
+# The provisioner's input list requires the scaffold report path ("Anything
+# missing: ask"), so the step 2 dispatch list must hand it over: read from the
+# dispatch sentence alone, since step 0 names the report path too.
+grep -F 'Then dispatch the [`provisioner`]' "$START_MULTI_MD" > "$TMP/start-multi-dispatch.txt"
+present "$TMP/start-multi-dispatch.txt" 'and the scaffold report path step 0'\''s finish wrote on `int/<run-id>`, or that step 0 made no scaffold commit and why' \
+  '/start-multi step 2 dispatches the provisioner with the scaffold report path, or why there is none (ESAS-304)'
+present "$PROVISIONER_MD" 'the path of the fleet'\''s scaffold report when `/start-multi` step 0 made the fleet'\''s scaffold commit' \
+  'the provisioner'\''s input list names the scaffold report path the dispatch hands it (ESAS-304)'
+
+# F1: step 0 runs the launcher in a clean checkout on int/<run-id> (the primary
+# checkout is typically dirty, and prepare refuses a dirty tree) and carries the
+# design layer into that checkout's .blueprint/: a worktree holds none, so the
+# default would skip. R1: both verbs read the DEFAULTS, because finish's extract
+# rewrites .blueprint/graph.json and a --graph named elsewhere stays stale
+# (scripts/test-scaffold-commit.sh "fleet step 0" is the behavioural oracle).
+present "$START_MULTI_MD" 'It runs in a clean worktree checked out on `int/<run-id>`' \
+  '/start-multi step 0 runs the scaffold commit in a clean checkout on int/<run-id>'
+present "$START_MULTI_MD" '`design.json` and `graph.json` to `<scaffold-wt>/.blueprint/`' \
+  '/start-multi step 0 carries the design layer into <scaffold-wt>/.blueprint/'
+present "$START_MULTI_MD" '`scaffold-commit prepare --item <run-id> --repo <scaffold-wt>` on the launcher'\''s default `--design` and `--graph`' \
+  '/start-multi step 0 runs prepare on the default --design/--graph'
+present "$START_MULTI_MD" 'with the same `--repo`, again on the defaults' \
+  '/start-multi step 0 runs finish on the defaults too'
+hits=$( grep -nE -- '--(design|graph) \.work/design-snapshot|<scaffold-wt>/\.work/design-snapshot' "$START_MULTI_MD" || true )
+if [ -z "$hits" ]; then
+  pass '[STRUCTURAL] /start-multi step 0 names no .work/design-snapshot design layer for the scaffold commit'
+else
+  fail '[STRUCTURAL] /start-multi step 0 names no .work/design-snapshot design layer for the scaffold commit' "$hits" \
+       'finish re-extracts into .blueprint/graph.json; a --graph snapshot is never rewritten, so placement never reads satisfied.'
+fi
+present "$START_MULTI_MD" '`reason=no-design-layer`' \
+  '/start-multi step 0 records a launcher skip for no design layer as the reason there is no scaffold commit'
+# F2 (owner decision ESAS-304-F3): a lane never scaffolds. Without a
+# scaffoldReport it says so; it does not make its own commit.
+present "$TMP/start-multi-dispatch.txt" 'a lane never scaffolds' \
+  '/start-multi step 2: a lane never scaffolds, report or not (ESAS-304-F3)'
+present "$PROVISIONER_MD" 'its absence as "the fleet made no scaffold commit"' \
+  'provisioner: an absent scaffoldReport reads as no fleet scaffold commit, not as a lane commit (ESAS-304-F3)'
+for f in "$START_MULTI_MD" "$PROVISIONER_MD" "$DESIGN_MD"; do
+  hits=$( grep -nE 'makes (its own scaffold commit|no scaffold commit of its own)' "$f" || true )
+  if [ -z "$hits" ]; then
+    pass "[STRUCTURAL] ${f#"$PLUGIN"/} does not say a lane without scaffoldReport makes its own scaffold commit"
+  else
+    fail "[STRUCTURAL] ${f#"$PLUGIN"/} does not say a lane without scaffoldReport makes its own scaffold commit" "$hits" \
+         'ESAS-304-F3 rejected a per-lane scaffold commit: a fleet lane never scaffolds.'
+  fi
+done
+# F3: the dry-run under-asks too: no agreed scenario is in a unit map before Phase C.
+present "$DESIGN_MULTI_MD" 'so it also under-asks: the unit maps hold no agreed scenarios until Phase C step 4 projects them' \
+  '/design-multi Step 3.5 states the under-ask direction (scenario tests cannot surface pre-sitting)'
+hits=$( grep -nF 'it can only over-ask' "$DESIGN_MULTI_MD" || true )
+if [ -z "$hits" ]; then
+  pass '[STRUCTURAL] /design-multi Step 3.5 does not claim the dry-run can only over-ask'
+else
+  fail '[STRUCTURAL] /design-multi Step 3.5 does not claim the dry-run can only over-ask' "$hits"
+fi
+
+# --- STRUCTURAL: no command outside design.md and start-multi.md invokes
+# `scaffold-commit prepare`: a census over every commands/*.md, so a new step
+# is covered without being named here. /start-multi is the fleet orchestrator,
+# not a step, and runs it on int/<run-id> by design (ESAS-304-F3).
+# Positive control first: the same grep over the files that DO invoke it must
+# find it, or a renamed verb makes the absence pass by matching nothing.
+for f in "$DESIGN_MD" "$START_MULTI_MD"; do
+  if grep -qF 'scaffold-commit prepare' "$f"; then
+    pass "the prepare census finds the invocation in ${f#"$PLUGIN"/} (positive control)"
+  else
+    fail "the prepare census finds the invocation in ${f#"$PLUGIN"/} (positive control)" \
+         'the absence assertion below would match nothing and pass.'
+  fi
+done
+censused=0
+for f in "$PLUGIN"/commands/*.md; do
+  case "$f" in "$DESIGN_MD"|"$START_MULTI_MD") continue ;; esac
+  censused=$(( censused + 1 ))
+  hits=$( grep -nF 'scaffold-commit prepare' "$f" || true )
+  if [ -z "$hits" ]; then
+    pass "[STRUCTURAL] ${f#"$PLUGIN"/} does not invoke scaffold-commit prepare"
+  else
+    fail "[STRUCTURAL] ${f#"$PLUGIN"/} does not invoke scaffold-commit prepare" "$hits" \
+         'the scaffold commit is /design'\''s: a later step that prepares one re-asks design questions unattended.'
+  fi
+done
+# Pinned traversal: the glob must reach the per-unit steps the scenario names.
+for f in "$START_MD" "$PLAN_MD" "$BUILD_MD" "$VERIFY_BUILD_MD"; do
+  case " $( printf '%s ' "$PLUGIN"/commands/*.md ) " in
+    *" $f "*) pass "the prepare census reaches ${f#"$PLUGIN"/}" ;;
+    *) fail "the prepare census reaches ${f#"$PLUGIN"/}" 'the glob missed a named step: the absence above did not look at it.' ;;
+  esac
+done
+[ "$censused" -ge 4 ] && pass "the prepare census walked $censused command files" \
+  || fail 'the prepare census walked at least 4 command files' "walked: $censused"
 
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"

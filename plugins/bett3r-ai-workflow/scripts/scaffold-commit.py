@@ -4,9 +4,9 @@ from the agreed design, made only when the host's declared typecheck is green.
 
 /design commits its docs (`docs(<id>): design`), then runs Step 4b:
 
-  scaffold-commit prepare --item <id> [--repo DIR] [--design FILE] [--graph FILE]
+  scaffold-commit prepare --item <id> [--repo DIR] [--design FILE] [--graph FILE] [--map FILE ...]
   (an agent places the topology fragments the report's worklist[] names)
-  scaffold-commit finish  --item <id> [--repo DIR] [--design FILE] [--graph FILE] [--abort]
+  scaffold-commit finish  --item <id> [--repo DIR] [--design FILE] [--graph FILE] [--map FILE ...] [--abort]
   scaffold-commit census  --item <id> [--repo DIR]
 
 Every run ends in exactly ONE line (ADR-004: read the line, never the exit code alone):
@@ -23,9 +23,23 @@ It runs ONLY commands `.blueprint.config.json` declares under `designTooling`,
 never a framework default: `scaffold` and `typecheck` are both required (either
 missing is outcome=skipped reason=undeclared-designTooling.<key>, and nothing
 runs); `extract` and `observe` run when declared. `scaffold` is called with
-`--design <file> --graph <file> --map <path>/map.json --json [--write]`, the
-scaffold-core CLI contract; the others with no arguments. Every command runs in
-the repository root through `sh -c`.
+`--design <file> --graph <file> --map <file> [--map <file> ...] --json [--write]`,
+the scaffold-core CLI contract, whose `--map` is repeatable and read in argv
+order; the others with no arguments. Every command runs in the repository root
+through `sh -c`.
+
+--map is repeatable here too: each one is handed to the scaffolder as its own
+`--map`, in the order given (a fleet's step 0 passes one per unit projection).
+With none given the map is <path>/map.json. Every map named, or the default,
+must be a file, else outcome=error reason=map-missing (the missing path printed
+as `map-missing: <path>`) and nothing runs: a named map that is absent is a
+lost input, never one to skip. --design, --graph and --map are relative to the
+repository root; an absolute path is used as given. With no --design named and
+no .blueprint/design.json on disk the checkout has no design layer (it is
+gitignored, and a lane worktree holds none): outcome=skipped
+reason=no-design-layer, the default printed as `no-design-layer: <path>`, and
+nothing runs. A --design that is named and absent stays
+outcome=error reason=design-missing, as an absent --graph does.
 
 prepare
   Refuses a dirty tree (reason=dirty-tree): the restore below is only exact
@@ -79,7 +93,9 @@ The report, <path>/scaffold.json (<path> from work-docs-path): the final
 scaffolder JSON (`scaffolder`), manifest[] {file, node, blob}, worklist[],
 placed[], held[], stillOwed[], asked[], stale[] {file, node, barrel[]?}, edited[], observe, the
 scaffolder's scenarioTests[], unplaced[] and scenariosExcluded[], input digests
-(sha256 of map.json, the design and the graph) and baseSha.
+(inputs.maps[] {file, digest}, one per map in the order given, file
+repo-relative when the map lies inside the repo, else as given; then the
+design and the graph) and baseSha.
 """
 import hashlib
 import json
@@ -99,10 +115,13 @@ COUNT_KEYS = ("created", "appended", "placed", "stillOwed", "held", "asked", "st
 # Fragments the placing agent writes in /design; every other fragment is
 # registration (or a test) and is left for /build (ESAS-289-F3, P10).
 TOPOLOGY = ("command", "event", "invariant")
-FLAGS = {"prepare": ("item", "repo", "design", "graph"),
-         "finish": ("item", "repo", "design", "graph", "abort"),
+FLAGS = {"prepare": ("item", "repo", "design", "graph", "map"),
+         "finish": ("item", "repo", "design", "graph", "map", "abort"),
          "census": ("item", "repo")}
 BOOLEAN_FLAGS = ("abort",)
+# Flags that may be given more than once, kept as a list in argv order.
+REPEATABLE_FLAGS = ("map",)
+DEFAULT_DESIGN = ".blueprint/design.json"
 EXIT = {"ok": 0, "skipped": 0, "gate-red": 1, "error": 2, "blocked": 3}
 # The node id a proposed node takes: blueprint-schema's nodeId/slugify
 # (graph.ts) and NODE_ABBREV (nodes.ts); `invariant` is the abbreviation the
@@ -144,7 +163,10 @@ def parse_flags(verb, argv):
             continue
         if i + 1 >= len(argv) or argv[i + 1].startswith("--"):
             raise Refusal("error", f"missing-value-{name}")
-        flags[name] = argv[i + 1]
+        if name in REPEATABLE_FLAGS:
+            flags.setdefault(name, []).append(argv[i + 1])
+        else:
+            flags[name] = argv[i + 1]
         i += 2
     if "item" not in flags:
         raise Refusal("error", "missing-item")
@@ -198,14 +220,31 @@ def tooling(repo):
             and isinstance(v, str) and v.strip()}
 
 
+def recorded(repo, given):
+    """A map path as the report records it: repo-relative when it lies inside the
+    repo (a fleet passes absolute paths), else as given."""
+    rel = os.path.relpath(os.path.realpath(os.path.join(repo, given)), os.path.realpath(repo))
+    return given if rel == ".." or rel.startswith(".." + os.sep) else rel
+
+
 def inputs_of(repo, flags, path):
-    design = os.path.join(repo, flags.get("design", ".blueprint/design.json"))
+    if "design" not in flags and not os.path.isfile(os.path.join(repo, DEFAULT_DESIGN)):
+        # A checkout with no design layer (.blueprint/ is gitignored; a lane
+        # worktree or fresh clone holds none) has nothing agreed to scaffold.
+        print(f"no-design-layer: {DEFAULT_DESIGN}")
+        raise Refusal("skipped", "no-design-layer")
+    design = os.path.join(repo, flags.get("design", DEFAULT_DESIGN))
     graph = os.path.join(repo, flags.get("graph", ".blueprint/graph.json"))
-    map_path = os.path.join(repo, path, "map.json")
-    for name, file in (("map", map_path), ("design", design), ("graph", graph)):
+    named = flags.get("map") or [f"{path}/map.json"]
+    maps = [{"given": m, "file": recorded(repo, m), "path": os.path.join(repo, m)} for m in named]
+    for m in maps:
+        if not os.path.isfile(m["path"]):
+            print(f"map-missing: {m['given']}")
+            raise Refusal("error", "map-missing")
+    for name, file in (("design", design), ("graph", graph)):
         if not os.path.isfile(file):
             raise Refusal("error", f"{name}-missing")
-    return design, graph, map_path
+    return design, graph, maps
 
 
 # --- commands -------------------------------------------------------------------
@@ -224,8 +263,11 @@ def show_tail(label, run, n=20):
         print(f"  | {l}")
 
 
-def scaffold(repo, tools, design, graph, map_path, write):
-    args = ["--design", design, "--graph", graph, "--map", map_path, "--json"] + (["--write"] if write else [])
+def scaffold(repo, tools, design, graph, maps, write):
+    args = ["--design", design, "--graph", graph]
+    for m in maps:
+        args += ["--map", m["path"]]
+    args += ["--json"] + (["--write"] if write else [])
     run = run_declared(repo, tools["scaffold"], args)
     if run.returncode not in (0, 3):
         show_tail("scaffold", run)
@@ -365,7 +407,7 @@ def hold(design):
     return filtered, sorted(held, key=lambda h: h["element"])
 
 
-def scaffold_agreed(repo, tools, design_path, graph, map_path, write):
+def scaffold_agreed(repo, tools, design_path, graph, maps, write):
     """One scaffolder run over the agreed design (the held elements removed)."""
     try:
         design = read_json(design_path)
@@ -375,7 +417,7 @@ def scaffold_agreed(repo, tools, design_path, graph, map_path, write):
     with tempfile.TemporaryDirectory() as tmp:
         agreed = os.path.join(tmp, "design.json")
         write_json(agreed, filtered)
-        return scaffold(repo, tools, agreed, graph, map_path, write), held
+        return scaffold(repo, tools, agreed, graph, maps, write), held
 
 
 # --- classification -------------------------------------------------------------
@@ -431,7 +473,7 @@ def prepare(repo, flags):
     path, fid = work_docs_path(repo, flags["item"])
     if not is_clean(repo):
         raise Refusal("error", "dirty-tree")
-    design, graph, map_path = inputs_of(repo, flags, path)
+    design, graph, maps = inputs_of(repo, flags, path)
     base = git(repo, "rev-parse", "HEAD").stdout.decode().strip()
     report_file = os.path.join(repo, path, REPORT)
 
@@ -452,7 +494,7 @@ def prepare(repo, flags):
                 kept.append(entry)
         if deleted:
             extract(repo, tools)
-        dry, held = scaffold_agreed(repo, tools, design, graph, map_path, write=False)
+        dry, held = scaffold_agreed(repo, tools, design, graph, maps, write=False)
         asked, _ = classify(dry)
         if asked:
             restore(repo)
@@ -460,7 +502,7 @@ def prepare(repo, flags):
                 print(f"asked: {a['node']} {a['question']}")
             return verdict("prepare", "blocked", counts={"asked": len(asked), "held": len(held)},
                            reason="asked", path=path)
-        result, held = scaffold_agreed(repo, tools, design, graph, map_path, write=True)
+        result, held = scaffold_agreed(repo, tools, design, graph, maps, write=True)
         _, owed = classify(result)
         created = created_files(result)
         stale = [dict(d) for d in deleted if not os.path.exists(os.path.join(repo, d["file"]))]
@@ -526,9 +568,9 @@ def finish(repo, flags):
         restore(repo)
         return verdict("finish", "gate-red", counts=counts_of(draft), reason="aborted", path=path)
     try:
-        design, graph, map_path = inputs_of(repo, flags, path)
+        design, graph, maps = inputs_of(repo, flags, path)
         extract(repo, tools)
-        result, held = scaffold_agreed(repo, tools, design, graph, map_path, write=True)
+        result, held = scaffold_agreed(repo, tools, design, graph, maps, write=True)
         asked, owed = classify(result)
         if asked:
             for a in asked:
@@ -571,7 +613,8 @@ def finish(repo, flags):
         manifest = by_key(manifest + draft["carried"], "file")
         report = {
             "version": 1, "ticket": fid, "baseSha": draft["baseSha"],
-            "inputs": {"map": digest(map_path), "design": digest(design), "graph": digest(graph)},
+            "inputs": {"maps": [{"file": m["file"], "digest": digest(m["path"])} for m in maps],
+                       "design": digest(design), "graph": digest(graph)},
             "created": created, "appended": by_key(draft["appended"] + appended_lines(result, created), "file", "code"),
             "manifest": manifest, "worklist": draft["worklist"], "placed": by_key(placed, "node"),
             "held": held, "asked": [], "stillOwed": by_key(owed, "node", "reason"),

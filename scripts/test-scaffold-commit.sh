@@ -90,15 +90,22 @@ js(){ python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(eval(sy
 # --- stub commands, declared by the fixture repo's .blueprint.config.json -----
 STUBS="$TMP/stubs"; mkdir -p "$STUBS"
 STUB_LOG="$TMP/calls.log"; export STUB_LOG
+# Every --map the scaffolder received, one run per line, in argv order.
+MAP_LOG="$TMP/maps.log"; export MAP_LOG
 
-# A scaffolder speaking the scaffold-core CLI contract (--design --graph --map
-# --json [--write]; exit 3 when a unit is blocked). One rule per node type:
+# A scaffolder speaking the scaffold-core CLI contract (--design --graph, --map
+# repeatable, --json [--write]; exit 3 when a unit is blocked). It logs the
+# --map values of each run to $MAP_LOG and reads every map's scenarios, in
+# order. One rule per node type:
 #   event        -> a fragment for src/events.ts (topology, for the agent)
 #   policy       -> a fragment for src/registry.ts (registration, for /build)
 #   read-model   -> src/read-models/<slug>.ts plus a barrel line in src/index.ts,
 #                   deferred while an event it projects is not in the graph
 #   external-system -> blocked, code no-template
 #   a node whose note is "ask" -> blocked, code decision
+#   a read model whose note is "ask-when-ready" -> blocked, code decision, once
+#                   nothing it projects waits (deferred until then, so placing
+#                   the event it projects is what turns it into a block)
 # SC_STUB_MODE=oops adds a malformed "skipped" entry (a string, not an object);
 # SC_STUB_MODE=fail exits 1 before printing anything.
 # A node already in the graph is satisfied. map.json scenarios: agreed ones
@@ -112,12 +119,16 @@ with open(os.environ["STUB_LOG"], "a") as log:
 MODE = os.environ.get("SC_STUB_MODE", "")
 if MODE == "fail":
     print("scaffold: boom", file=sys.stderr); sys.exit(1)
-flags, i = {}, 0
+flags, maps, i = {}, [], 0
 while i < len(argv):
     if argv[i] in ("--json", "--write"):
         flags[argv[i]] = True; i += 1
+    elif argv[i] == "--map":
+        maps.append(argv[i + 1]); i += 2
     else:
         flags[argv[i]] = argv[i + 1]; i += 2
+with open(os.environ["MAP_LOG"], "a") as log:
+    log.write(" ".join(maps) + "\n")
 ABBR = {"event": "evt", "read-model": "rm", "policy": "pol", "external-system": "ext", "command": "cmd"}
 def slug(s):
     s = re.sub(r"([a-z0-9])([A-Z])", r"\1-\2", s)
@@ -126,7 +137,7 @@ def nid(n):
     return f"{slug(n['subdomain'])}_{ABBR[n['type']]}_{slug(n['label'])}"
 design = json.load(open(flags["--design"]))
 graph = json.load(open(flags["--graph"]))
-mp = json.load(open(flags["--map"])) if "--map" in flags else {}
+scenarios = [s for m in maps for s in json.load(open(m)).get("scenarios", [])]
 real = {n["id"] for n in graph.get("nodes", [])}
 prop = design.get("propose", {})
 edges = prop.get("edges", [])
@@ -155,13 +166,17 @@ for n in prop.get("nodes", []):
         waits = sorted(e["from"] for e in edges if e["to"] == i and e["from"] not in real)
         if waits:
             out["deferred"].append({"node": i, "artifact": "read-model", "waitsOn": waits, "reason": "projects an event not in code"}); continue
+        if n.get("note") == "ask-when-ready":
+            out["skipped"].append({"node": i, "reason": "blocked", "detail": "needs a decision",
+                                   "decisions": [{"node": i, "code": "decision", "question": f"Which store backs {label}?", "needed": "store"}]})
+            continue
         f = f"src/read-models/{slug(label)}.ts"
         if os.path.exists(f):
             out["skipped"].append({"node": i, "reason": "exists", "detail": f}); continue
         out["files"].append({"file": f, "content": f"// TODO(scaffold) [{i}]\nexport const {label} = {{}};\n", "node": i, "artifact": "read-model"})
         out["appends"].append({"kind": "barrel", "file": "src/index.ts", "anchor": "end", "node": i, "artifact": "read-model",
                                "code": f"export * from './read-models/{slug(label)}';"})
-for s in mp.get("scenarios", []):
+for s in scenarios:
     if s.get("status") == "review":
         out["scenariosExcluded"].append({"scenarioId": s["id"], "reason": "review", "review": "fork-reopened"}); continue
     entry = {"scenarioId": s["id"], "level": "unit", "testName": f"{s['id']}: {s['title']}", "presence": "absent"}
@@ -252,6 +267,7 @@ new_repo(){
   DOCS=$( git -C "$REPO" rev-parse HEAD )
   ( cd "$REPO" && python3 "$STUBS/extract.py" )
   : > "$STUB_LOG"
+  : > "$MAP_LOG"
 }
 
 # design <json> — the agreed ES design, as .blueprint/design.json holds it.
@@ -305,6 +321,8 @@ check 'prepare: the event is the worklist (one topology fragment for the agent)'
 check 'prepare: the read model waits on the event, so nothing is created yet' "$( attr "$LINE" created )" 0 "$LINE"
 check 'prepare: the scaffolder was dry-run, then run with --write, with --map <path>/map.json' \
   "$( grep -c -- '--map' "$STUB_LOG" )|$( grep -c -- '--write' "$STUB_LOG" )" '2|1'
+check 'prepare: with no --map given, both runs received exactly the default <path>/map.json' \
+  "$( tr '\n' '|' < "$MAP_LOG" )" "$REPO/docs/prs/ESAS-304/map.json|$REPO/docs/prs/ESAS-304/map.json|"
 check 'prepare: exactly one verdict line' "$NV" 1
 agent
 sc finish --item ESAS-304
@@ -326,9 +344,9 @@ check 'scaffold.json: manifest[] carries the stub with its git blob' \
   "$( js "$REPO/$REPORT" "[(m['file'], m['node'], m['blob']) for m in d['manifest']]" )" \
   "[('src/read-models/shipped-orders.ts', 'orders_rm_shipped-orders', '$( git -C "$REPO" rev-parse HEAD:src/read-models/shipped-orders.ts )')]"
 check 'scaffold.json: baseSha is the docs commit' "$( js "$REPO/$REPORT" "d['baseSha']" )" "$DOCS"
-check 'scaffold.json: input digests of map, design and graph' \
-  "$( js "$REPO/$REPORT" "sorted(d['inputs'])" )|$( js "$REPO/$REPORT" "d['inputs']['map']" )" \
-  "['design', 'graph', 'map']|sha256:$( python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$REPO/docs/prs/ESAS-304/map.json" )"
+check 'scaffold.json: input digests of the map, design and graph' \
+  "$( js "$REPO/$REPORT" "sorted(d['inputs'])" )|$( js "$REPO/$REPORT" "[m['file'] for m in d['inputs']['maps']]" )|$( js "$REPO/$REPORT" "d['inputs']['maps'][0]['digest']" )" \
+  "['design', 'graph', 'maps']|['docs/prs/ESAS-304/map.json']|sha256:$( python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$REPO/docs/prs/ESAS-304/map.json" )"
 check 'scaffold.json: observe is null when none is declared' "$( js "$REPO/$REPORT" "d['observe']" )" None
 check 'scaffold.json: carries the final scaffolder JSON' "$( js "$REPO/$REPORT" "sorted(d['scaffolder'])[:3]" )" "['appends', 'deferred', 'dropped']"
 check 'finish ran extract, scaffold --write and typecheck, in that order' \
@@ -526,6 +544,24 @@ check 'census: once both are implemented, outcome=ok notImplemented=0' \
 check 'census: exactly one verdict line' "$NV" 1
 
 # ---------------------------------------------------------------------------
+printf '\nasked at finish: placement turns a deferred unit into a block\n'
+# ---------------------------------------------------------------------------
+new_repo finish-asked "$FULL_TOOLING"
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_SHIPPED,{\"type\":\"read-model\",\"label\":\"ShippedOrders\",\"subdomain\":\"orders\",\"note\":\"ask-when-ready\"}],\"edges\":[$E_SHIPPED]}}"
+sc prepare --item ESAS-304
+check 'finish-asked: prepare ok, the read model only waits, nothing asked' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" asked )" 'ok 0' "$LINE" "$( tail -5 "$OUT" )"
+agent
+sc finish --item ESAS-304
+check 'finish-asked: outcome=blocked reason=asked asked=1' \
+  "$( attr "$LINE" verb ) $( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" asked )" 'finish blocked asked 1' "$LINE" "$( tail -5 "$OUT" )"
+check 'finish-asked: the question is printed for the grill' \
+  "$( grep -cx 'asked: orders_rm_shipped-orders Which store backs ShippedOrders?' "$OUT" )" 1 "$( cat "$OUT" )"
+check 'finish-asked: git status empty' "$( status )x" x
+check 'finish-asked: HEAD is the docs commit' "$( git -C "$REPO" rev-parse HEAD )" "$DOCS"
+check 'finish-asked: exactly one verdict line' "$NV" 1
+
+# ---------------------------------------------------------------------------
 printf '\nunplaced: the agent places nothing and a read model waits on the event\n'
 # ---------------------------------------------------------------------------
 new_repo unplaced "$FULL_TOOLING"
@@ -644,6 +680,141 @@ check 'crash in finish: outcome=error reason=exception' "$( attr "$LINE" verb ) 
   'finish error exception' "$LINE" "$( tail -5 "$OUT" )"
 check 'crash in finish: exactly one verdict line' "$NV" 1
 check 'crash in finish: git status empty, HEAD the docs commit' "$( status )x|$( git -C "$REPO" rev-parse HEAD )" "x|$DOCS"
+
+# ---------------------------------------------------------------------------
+printf '\nmaps: --map is repeatable and reaches the scaffolder in the order given\n'
+# ---------------------------------------------------------------------------
+# A fleet's step 0 passes one --map per unit projection (ESAS-297's repeatable
+# --map). The two maps live under the gitignored .blueprint/, as a run dir's
+# projections do, and are named against sort order (z before a), so a launcher
+# that sorted, deduplicated by name or kept only the last would be caught.
+sha(){ python3 -c 'import hashlib,sys; print("sha256:" + hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$1"; }
+new_repo maps "$FULL_TOOLING"
+mkdir -p "$REPO/.blueprint/units"
+printf '{"mapId": "U-2", "scenarios": [{"id":"S1","title":"ships","status":"agreed","anchor":"x"}]}\n' > "$REPO/.blueprint/units/z-first.map.json"
+printf '{"mapId": "U-1", "scenarios": [{"id":"S2","title":"lists","status":"agreed","anchor":"y"}]}\n' > "$REPO/.blueprint/units/a-second.map.json"
+Z=.blueprint/units/z-first.map.json A=.blueprint/units/a-second.map.json
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_PLACED_RM],\"edges\":[$E_PLACED]}}"
+sc prepare --item ESAS-304 --map "$Z" --map "$A"
+check 'maps: prepare with two --map is ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( tail -5 "$OUT" )"
+check 'maps: the dry-run and the --write run each received both maps, in the order given' \
+  "$( tr '\n' '|' < "$MAP_LOG" )" "$REPO/$Z $REPO/$A|$REPO/$Z $REPO/$A|"
+sc finish --item ESAS-304 --map "$Z" --map "$A"
+check 'maps: finish with two --map commits' "$( attr "$LINE" outcome ) $( git -C "$REPO" log -1 --format=%s )" \
+  'ok chore(ESAS-304): scaffold the agreed design' "$LINE" "$( tail -5 "$OUT" )"
+check 'maps: finish'"'"'s scaffolder received both maps, in the order given' \
+  "$( tail -n 1 "$MAP_LOG" )" "$REPO/$Z $REPO/$A"
+check 'maps: the default <path>/map.json is not passed when --map is given' "$( grep -c 'docs/prs/ESAS-304/map.json' "$MAP_LOG" )" 0
+check 'maps: scaffold.json inputs.maps[] records each map and its digest, in the order given' \
+  "$( js "$REPO/$REPORT" "[(m['file'], m['digest']) for m in d['inputs']['maps']]" )" \
+  "[('$Z', '$( sha "$REPO/$Z" )'), ('$A', '$( sha "$REPO/$A" )')]"
+check 'maps: the scenarios of both maps reached the report' \
+  "$( js "$REPO/$REPORT" "[t['scenarioId'] for t in d['scenarioTests']]" )" "['S1', 'S2']"
+
+# A fleet passes absolute paths: inside the repo the report records them
+# repo-relative, so the committed report names no checkout; outside, as given.
+new_repo maps-abs "$FULL_TOOLING"
+mkdir -p "$REPO/.blueprint/units" "$TMP/outside"
+printf '{"mapId": "U-1", "scenarios": []}\n' > "$REPO/.blueprint/units/u.map.json"
+printf '{"mapId": "U-2", "scenarios": []}\n' > "$TMP/outside/o.map.json"
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_PLACED_RM],\"edges\":[$E_PLACED]}}"
+sc prepare --item ESAS-304 --map "$REPO/.blueprint/units/u.map.json" --map "$TMP/outside/o.map.json"
+sc finish --item ESAS-304 --map "$REPO/.blueprint/units/u.map.json" --map "$TMP/outside/o.map.json"
+check 'maps-abs: finish ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( tail -5 "$OUT" )"
+check 'maps-abs: the scaffolder still received the paths as given' \
+  "$( tail -n 1 "$MAP_LOG" )" "$REPO/.blueprint/units/u.map.json $TMP/outside/o.map.json"
+check 'maps-abs: inputs.maps[] records the in-repo map repo-relative, the outside one as given, each with its digest' \
+  "$( js "$REPO/$REPORT" "[(m['file'], m['digest']) for m in d['inputs']['maps']]" )" \
+  "[('.blueprint/units/u.map.json', '$( sha "$REPO/.blueprint/units/u.map.json" )'), ('$TMP/outside/o.map.json', '$( sha "$TMP/outside/o.map.json" )')]"
+
+new_repo maps-missing "$FULL_TOOLING"
+mkdir -p "$REPO/.blueprint/units"
+printf '{"mapId": "U-2", "scenarios": []}\n' > "$REPO/.blueprint/units/z-first.map.json"
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_PLACED_RM],\"edges\":[$E_PLACED]}}"
+sc prepare --item ESAS-304 --map "$Z" --map .blueprint/units/nope.map.json
+check 'maps: one named map absent refuses: outcome=error reason=map-missing' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" reason )" 'error map-missing' "$LINE"
+check 'maps: the absent map is named' "$( grep -cx 'map-missing: .blueprint/units/nope.map.json' "$OUT" )" 1 "$( cat "$OUT" )"
+check 'maps: the refusal ran nothing and wrote nothing' "$( wc -l < "$STUB_LOG" | tr -d ' ' )|$( status )" '0|'
+git -C "$REPO" rm -q docs/prs/ESAS-304/map.json && git -C "$REPO" commit -qm 'docs: drop the map'
+sc prepare --item ESAS-304
+check 'maps: no --map and no <path>/map.json still refuses: reason=map-missing' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" reason )" 'error map-missing' "$LINE"
+check 'maps: the absent default is named, and nothing ran' \
+  "$( grep -cx 'map-missing: docs/prs/ESAS-304/map.json' "$OUT" )|$( wc -l < "$STUB_LOG" | tr -d ' ' )" '1|0' "$( cat "$OUT" )"
+check 'maps: exactly one verdict line' "$NV" 1
+
+# ---------------------------------------------------------------------------
+printf '\nno design layer: a checkout without .blueprint/ skips loudly; a named --design that is absent is still an error\n'
+# ---------------------------------------------------------------------------
+# A lane worktree, or a fresh clone, holds no .blueprint/ (it is gitignored):
+# with no --design named, there is nothing agreed to scaffold, which is a skip.
+new_repo no-layer "$FULL_TOOLING"
+rm -rf "$REPO/.blueprint"
+sc prepare --item ESAS-304
+check 'no-layer: no --design and no .blueprint/design.json: outcome=skipped reason=no-design-layer' \
+  "$( attr "$LINE" verb ) $( attr "$LINE" outcome ) $( attr "$LINE" reason )" 'prepare skipped no-design-layer' "$LINE" "$( cat "$OUT" )"
+check 'no-layer: the skip names the default it looked for' \
+  "$( grep -cx 'no-design-layer: .blueprint/design.json' "$OUT" )" 1 "$( cat "$OUT" )"
+check 'no-layer: exit 0, nothing ran, nothing written, one verdict line' \
+  "$rc|$( wc -l < "$STUB_LOG" | tr -d ' ' )|$( status )|$NV" '0|0||1'
+sc prepare --item ESAS-304 --design .work/design-snapshot/design.json
+check 'no-layer: a named --design that is absent is still outcome=error reason=design-missing' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $rc" 'error design-missing 2' "$LINE"
+mkdir -p "$REPO/.work/design-snapshot"
+printf '.work/\n' >> "$REPO/.git/info/exclude"
+printf '{"schemaVersion":1,"propose":{"nodes":[%s],"edges":[%s]}}\n' "$N_PLACED_RM" "$E_PLACED" > "$REPO/.work/design-snapshot/design.json"
+( cd "$REPO" && python3 "$STUBS/extract.py" ) && mv "$REPO/.blueprint/graph.json" "$REPO/.work/design-snapshot/graph.json" && rm -rf "$REPO/.blueprint"
+: > "$STUB_LOG"
+sc prepare --item ESAS-304 --design .work/design-snapshot/design.json --graph .work/design-snapshot/graph.json
+check 'no-layer: a named --design/--graph is read: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( tail -5 "$OUT" )"
+
+# ---------------------------------------------------------------------------
+printf '\nfleet step 0: the design layer carried into <scaffold-wt>/.blueprint/, both verbs on the defaults\n'
+# ---------------------------------------------------------------------------
+# /start-multi step 0's own sequence: a clean worktree on int/<run-id> cut from
+# a main checkout whose HEAD is BASE, the main checkout's design.json and
+# graph.json copied into <scaffold-wt>/.blueprint/ (gitignored, where the
+# declared extract writes), prepare and finish with no --design/--graph and one
+# absolute --map per unit, the agent placing the event between them. The read
+# model waits on that event, so finish reads it satisfied only when its
+# scaffolder re-run reads the graph extract just rewrote: a graph named
+# elsewhere is a stale snapshot, and the placed event would still read absent.
+new_repo step0-main "$FULL_TOOLING"
+MAIN=$REPO
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_SHIPPED,$N_SHIPPED_RM],\"edges\":[$E_SHIPPED]}}"
+RUN_ID=multi-ESAS-304
+WT="$TMP/step0-scaffold-wt"
+git -C "$MAIN" branch "int/$RUN_ID"
+git -C "$MAIN" worktree add -q "$WT" "int/$RUN_ID"
+check 'step0: the main checkout is on BASE with no tracked modifications (the carry condition)' \
+  "$( git -C "$MAIN" rev-parse HEAD )|$( git -C "$MAIN" status --porcelain --untracked-files=no )" "$( git -C "$WT" rev-parse HEAD )|"
+mkdir -p "$WT/.blueprint" "$TMP/step0-run/units"
+cp "$MAIN/.blueprint/design.json" "$MAIN/.blueprint/graph.json" "$WT/.blueprint/"
+printf '{"mapId": "ESAS-304", "scenarios": []}\n' > "$TMP/step0-run/units/ESAS-304.map.json"
+REPO=$WT
+: > "$STUB_LOG"
+sc prepare --item "$RUN_ID" --repo "$WT" --map "$TMP/step0-run/units/ESAS-304.map.json"
+check 'step0: prepare on the defaults is ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( tail -5 "$OUT" )"
+STEP0_REPORT="$WT/$( attr "$LINE" path )/scaffold.json"
+check 'step0: prepare'"'"'s worklist is the event' \
+  "$( js "$STEP0_REPORT" "[f['node'] for f in d['worklist']]" )" "['orders_evt_order-shipped']"
+python3 - "$STEP0_REPORT" "$WT" <<'PY'
+import json, os, sys
+for f in json.load(open(sys.argv[1]))["worklist"]:
+    with open(os.path.join(sys.argv[2], f["file"]), "a") as fh:
+        fh.write(f["code"] + "\n")
+PY
+sc finish --item "$RUN_ID" --repo "$WT" --map "$TMP/step0-run/units/ESAS-304.map.json"
+check 'step0: finish on the defaults commits (outcome=ok)' \
+  "$( attr "$LINE" outcome ) $( git -C "$WT" log -1 --format=%s )" "ok chore($RUN_ID): scaffold the agreed design" "$LINE" "$( tail -5 "$OUT" )"
+check 'step0: finish counts the placed event and owes nothing (placed>=1, stillOwed=0)' \
+  "$( [ "$( attr "$LINE" placed )" -ge 1 ] 2>/dev/null && echo placed-ok )|stillOwed=$( attr "$LINE" stillOwed )" 'placed-ok|stillOwed=0' "$LINE"
+check 'step0: scaffold.json placed[] names the event, and stillOwed[] is empty' \
+  "$( js "$STEP0_REPORT" "([p['node'] for p in d['placed']], d['stillOwed'])" )" "(['orders_evt_order-shipped'], [])"
+check 'step0: the read model that waited on the event was created in the same commit' \
+  "$( git -C "$WT" show --name-only --format= HEAD -- src/read-models | tr '\n' '|' )" 'src/read-models/shipped-orders.ts|'
+check 'step0: the main checkout is untouched' "$( git -C "$MAIN" status --porcelain | tr '\n' '|' )x" x
 
 printf '\n'
 if [ "$failed" -eq 0 ]; then
