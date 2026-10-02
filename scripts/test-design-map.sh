@@ -250,10 +250,16 @@ def names(x):
         for c in x:
             yield from names(c)
 print("mapActor" in v["$defs"]["mapNodeLevel"]["enum"] and "actor" not in set(names(s)))' "$VOCAB" "$STRUCTURE" 2>&1 )" True
-check 'the structure schema restates no vocabulary enum, and $refs every one of the four' \
-  "$( python3 -c '
+# vocab_accounting <vocabulary> <structure> prints four lists, each [] when clean: vocabulary enum
+# values the structure restates, $refs naming no vocabulary def, vocabulary defs neither $ref'd nor
+# named in DEFERRED, and DEFERRED names that are stale (no such def, or now $ref'd).
+# DEFERRED are the sets no map.json field holds yet (example status, the kpi* sets): blueprint's,
+# consumed by ESAS-304. Naming them keeps the check closed: a NEW def the structure does not $ref fails.
+vocab_accounting(){
+  python3 -c '
 import json, sys
 v = json.load(open(sys.argv[1])); s = json.load(open(sys.argv[2]))
+defs = set(v["$defs"])
 values = {e for d in v["$defs"].values() for e in d["enum"]}
 enums, refs = [], set()
 def walk(x):
@@ -268,7 +274,18 @@ def walk(x):
         for c in x:
             walk(c)
 walk(s)
-print(sorted(set(enums) & values), sorted(refs) == sorted(v["$defs"]))' "$VOCAB" "$STRUCTURE" 2>&1 )" '[] True'
+deferred = {"exampleStatusKind", "kpiDirection", "kpiFilterOutcome", "kpiKind", "kpiMode", "kpiSourceKind"}
+print(sorted(set(enums) & values), sorted(refs - defs), sorted(defs - refs - deferred), sorted((deferred - defs) | (deferred & refs)))' "$1" "$2" 2>&1
+}
+check 'the structure schema restates no vocabulary enum, $refs only defs that exist, and $refs every def not named as deferred to ESAS-304' \
+  "$( vocab_accounting "$VOCAB" "$STRUCTURE" )" '[] [] [] []'
+python3 - "$VOCAB" "$TMP/unreferenced.json" <<'PY'
+import json, sys
+v = json.load(open(sys.argv[1])); v["$defs"]["plantedKind"] = {"type": "string", "enum": ["planted"]}
+json.dump(v, open(sys.argv[2], "w"))
+PY
+check 'a def planted in a temp copy of the vocabulary, $ref'"'"'d by nothing and not deferred, is caught' \
+  "$( vocab_accounting "$TMP/unreferenced.json" "$STRUCTURE" )" "[] [] ['plantedKind'] []"
 
 # ---------------------------------------------------------------------------
 printf 'AC1: the vocabulary copy is byte-identical to blueprint'"'"'s emitted schema\n'
