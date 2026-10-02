@@ -89,6 +89,19 @@ Record every resolution as you make it (which units, which file, what was kept a
 
 Done when every unit ruled `merge` is in `int/<run-id>` at its ruled sha, every conflict and obligation has a recorded resolution, and no `*.orig` remains.
 
+**2b — Census the agreed scenarios on the integrated tree.**
+
+Every unit's tests meet only here, so a scenario a sibling owns, which a lane's `/verify-build` only warned on, is ruled here. With every unit ruled `merge` merged, run `scaffold-commit census --item <run-id> --repo <integration worktree>` on `int/<run-id>`, over the fleet's one scaffold report (`/start-multi` step 0's), and read the last line, `SCAFFOLD-COMMIT:v1 verb=census outcome=…`, not the exit code (ADR-004):
+
+- `outcome=ok` → continue.
+- `outcome=blocked` blocks step 5: each `not-implemented: <id> presence=<absent|pending>` is an agreed scenario no merged unit implemented, a pending `.todo(` test counting as none, and the integration PR body lists each line verbatim.
+- `outcome=error`, or no verdict line → blocks step 5, as `blocked` does.
+- `outcome=skipped reason=no-scaffold-report` → step 0 made no scaffold commit: the integration PR body says so, and there is nothing to census.
+
+Each `hold: <id> under review (<why>)` is an ESAS-296 hold: the integration PR body lists it on its own line, never as missing a test, and it blocks nothing. The escape is a human strike or writing the test: the owner strikes the scenario in their own words, quoted verbatim beside its id under the integration PR body's *Scenario census* (an agent's judgement strikes nothing), or the test is written (on the owning unit's branch and re-merged, as step 3 fixes a red gate) and the census re-run.
+
+Done when the census printed `outcome=ok`, every `not-implemented:` id is struck by the owner, or step 0 made no scaffold commit and the body says so.
+
 **3 — Run the gate, once, on integration.**
 
 Bump each touched plugin's `plugin.json` once on `int/<run-id>` before the gate; the version-bump step must read `PASS` there, and a `SKIP reason=deferred-to-merge-multi` is refused as red, since integration carries no `.work/lane.yaml` and a `SKIP` means a stale lane brief leaked in; remove it and re-run.
@@ -124,6 +137,10 @@ Done when the body carries one `closes` per referenced issue, the `declared − 
 ### Conflict resolutions
 - TV1-1004 × TV1-1007 in `src/foo.ts` — kept X, dropped Y, because <reason>.
 - (or "none")
+
+### Scenario census
+<step 2b's census verdict line verbatim, then each `not-implemented:` and `hold:` line on its own line,
+ or "no scaffold report">
 
 ### Gate
 <the full-gate report block, verbatim — step names, counts, baseline diff, and

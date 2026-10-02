@@ -2670,8 +2670,8 @@ present "$VERIFY_BUILD_MD" 'Its title names every C-entry it waives by id (`## D
 present "$VERIFY_BUILD_MD" 'written without backticks' '/verify-build: the waiver citation is written without backticks'
 present "$VERIFY_BUILD_MD" 'post Step 6b'\''s status again, unchanged, on the new head' \
   '/verify-build Step 9: the lane-step-record push gets the same flow/concerns status on its new head'
-present "$VERIFY_BUILD_MD" 'Among verdicts, only Step 2'\''s `FAIL` holds this step back' \
-  '/verify-build Step 6: among verdicts, only the gate FAIL holds the PR back'
+present "$VERIFY_BUILD_MD" 'Among verdicts, only Step 2'\''s `FAIL` and, in a lone unit, Step 2a'\''s block hold this step back.' \
+  '/verify-build Step 6: among verdicts, only the gate FAIL and a lone unit'\''s census block (ESAS-304) hold the PR back; a concerns verdict does not'
 present "$VERIFY_BUILD_MD" 'no concerns recorded' '/verify-build: an empty concerns.md is "no concerns recorded"'
 
 # ESAS-162 — the goal-signal line under ### Record, and the (inert) map-drift
@@ -3797,6 +3797,122 @@ for f in "$START_MD" "$PLAN_MD" "$BUILD_MD" "$VERIFY_BUILD_MD"; do
 done
 [ "$censused" -ge 4 ] && pass "the prepare census walked $censused command files" \
   || fail 'the prepare census walked at least 4 command files' "walked: $censused"
+
+# ---------------------------------------------------------------------------
+printf '\nESAS-304 — downstream reads the scaffold report\n\n'
+# ---------------------------------------------------------------------------
+# scaffold-commit (slice 1) WRITES <path>/scaffold.json; these steps READ it:
+# /build hands the executor the report's entries for the slice's designs: and
+# runs no scaffolder, /plan counts the report's files, the verifier refuses a
+# pending scenario test, and the census (executed in test-scaffold-commit.sh)
+# warns in a fleet lane, blocks a lone unit's /verify-build and /merge-multi.
+VERIFIER_MD="$PLUGIN/agents/verifier.md"
+MERGE_MULTI_MD="$PLUGIN/commands/merge-multi.md"
+
+# /build Step 3.0: the report branch first, today's path its permanent fallback.
+present "$BUILD_MD" 'With a scaffold report, run no scaffolder' \
+  '/build Step 3.0: with a scaffold report, no scaffolder runs'
+present "$BUILD_MD" 'the report'\''s entries whose `node` is in the slice'\''s `designs:`' \
+  '/build Step 3.0 hands the executor the report entries whose node is in the slice'\''s designs:'
+present "$BUILD_MD" 'Without a report, today'\''s path is the permanent fallback' \
+  '/build Step 3.0: without a report, today'\''s scaffolder path is the permanent fallback'
+in_order '/build Step 3.0 reads the report before the fallback and its skip reasons' "$BUILD_MD" \
+  '0. **Scaffold.** With a scaffold report, run no scaffolder' \
+  'Without a report, today'\''s path is the permanent fallback' \
+  'skip it and say which reason'
+
+# /plan: the report's files are intended files.
+present "$PLAN_MD" 'every `manifest[].file` and `placed[].file` whose `node` is in a slice'\''s `designs:` is in that slice'\''s intended files' \
+  '/plan adds the scaffold report'\''s files to the slice'\''s intended files'
+
+# Verifier check 4.
+present "$VERIFIER_MD" 'A delivered file that declares a scenario test pending, `.todo(` on a title starting `"<scenarioId>: "`, is RETRY' \
+  'verifier check 4 RETRYs a delivered file with .todo( on a "<scenarioId>: " title'
+present "$VERIFIER_MD" 'the match keys on the scenario id only' \
+  'verifier check 4 keys the pending rule on the scenario id only'
+# The base refusal stands: ANY TODO(scaffold) marker in a delivered file. Only a
+# marker that names a node is scoped to designs:; one that names none (PV3's bare
+# `TODO(scaffold):`, the core's `no subject` case, scaffoldTodo()) refuses
+# unscoped, so a mechanical test left `it.todo(...)` under
+# `// TODO(scaffold) cmd-happy: ...` is never waved through.
+present "$VERIFIER_MD" '4. **Scaffolded slice.** No `TODO(scaffold)` marker, no `scaffoldTodo(` call' \
+  'verifier check 4 refuses ANY TODO(scaffold) marker in a delivered file (the base clause, unnarrowed)'
+present "$VERIFIER_MD" 'A marker that names no node (the PV3 emitters'\'' bare `TODO(scaffold):`, the scaffold core'\''s `no subject` case, every `scaffoldTodo(`) refuses the file whatever the slice designs.' \
+  'verifier check 4: a marker naming no node (bare TODO(scaffold):, no subject, scaffoldTodo() is unscoped'
+present "$VERIFIER_MD" 'Only a marker that names a node, `TODO(scaffold) [<nodeId>]` or the scaffold core'\''s `TODO(scaffold) <key>: subject <nodeId>`, is scoped: it refuses when that node is in the slice'\''s `designs:`' \
+  'verifier check 4 scopes only a node-naming marker ([<nodeId>] or the core'\''s subject <id>) to designs:'
+present "$VERIFIER_MD" 'no `scaffoldTodo(` call' \
+  'verifier check 4 names scaffoldTodo( (ESAS-300'\''s typed hole)'
+# [STRUCTURAL] negative half: `.todo(` is read in check 4 alone, and no sentence
+# in verifier.md lets a pending scenario test count as delivered.
+todo_lines=$( grep -nF '.todo(' "$VERIFIER_MD" || true )
+if [ "$( printf '%s\n' "$todo_lines" | grep -c . )" -eq 1 ] \
+   && printf '%s' "$todo_lines" | grep -qE '^[0-9]+:4\. \*\*Scaffolded slice\.\*\*'; then
+  pass '[STRUCTURAL] verifier.md reads `.todo(` in check 4 only'
+else
+  fail '[STRUCTURAL] verifier.md reads `.todo(` in check 4 only' "lines: ${todo_lines:-<none>}"
+fi
+PENDING_OK='pending[^.]*(counts as|is|are) (delivered|implemented|a test|accepted)'
+# Positive control: the absence regex matches the sentence it exists to forbid.
+if printf 'a pending scenario test counts as delivered\n' | grep -qiE "$PENDING_OK"; then
+  pass 'the pending-as-delivered regex matches a synthesized offending sentence (positive control)'
+else
+  fail 'the pending-as-delivered regex matches a synthesized offending sentence (positive control)'
+fi
+hits=$( grep -niE "$PENDING_OK" "$VERIFIER_MD" || true )
+if [ -z "$hits" ]; then
+  pass '[STRUCTURAL] no check in verifier.md treats a pending scenario test as delivered'
+else
+  fail '[STRUCTURAL] no check in verifier.md treats a pending scenario test as delivered' "$hits"
+fi
+
+# /verify-build Step 2a: the stub census and the scenario census.
+present "$VERIFY_BUILD_MD" '## Step 2a — Scaffold census' \
+  '/verify-build has a Step 2a scaffold census'
+in_order '/verify-build runs the census after the gate and before the review' "$VERIFY_BUILD_MD" \
+  '## Step 2 — Run the gate' '## Step 2a — Scaffold census' '## Step 3 — Whole-PR review'
+present "$VERIFY_BUILD_MD" 'a stub whose `git hash-object <file>` equals its `blob`' \
+  '/verify-build censuses blob-identical stubs against the report'\''s manifest'
+present "$VERIFY_BUILD_MD" 'scaffold-commit census --item <work_item>' \
+  '/verify-build runs the census verb'
+present "$VERIFY_BUILD_MD" 'In a fleet lane (`.work/lane.yaml` exists), `outcome=blocked` warns and does not block' \
+  '/verify-build: a fleet lane'\''s census warns in the PR body and does not block (Cross-ticket scenario)'
+present "$VERIFY_BUILD_MD" '`/merge-multi` blocks on it at the integrated tree' \
+  '/verify-build: the fleet lane defers the block to /merge-multi (Cross-ticket scenario)'
+present "$VERIFY_BUILD_MD" 'In a lone unit (no brief), `outcome=blocked` blocks' \
+  '/verify-build: a lone unit'\''s census blocks (Unplaceable scenario)'
+present "$VERIFY_BUILD_MD" 'Steps 3 to 5b still run, Step 6 opens no PR, and the verdict is `outcome=blocked-on reason=scenario-not-implemented`, naming each id.' \
+  '/verify-build: a lone unit'\''s census block ends outcome=blocked-on reason=scenario-not-implemented, no PR'
+present "$VERIFY_BUILD_MD" '`outcome=error`, or no verdict line, is not a pass: a lone unit blocks on it as on `blocked`, a fleet lane warns.' \
+  '/verify-build: a census error or missing verdict line is not a pass (lone unit blocks, fleet lane warns)'
+present "$VERIFY_BUILD_MD" '`outcome=skipped` → as without a report.' \
+  '/verify-build: a skipped census reads as no scaffold report, not as a block'
+present "$VERIFY_BUILD_MD" 'Without one, the PR body'\''s `### Scaffold census` reads `scaffold census: no scaffold report`, and the step is done.' \
+  '/verify-build: without a scaffold report the PR body'\''s census reads "scaffold census: no scaffold report"'
+present "$VERIFY_BUILD_MD" 'each on its own line, never as missing a test' \
+  '/verify-build: an ESAS-296 hold gets its own line, never "missing a test"'
+present "$VERIFY_BUILD_MD" 'The escape is a human strike or writing the test' \
+  '/verify-build: the escape is a human strike or writing the test'
+# Step 6's holdback sentence, with the census block added, is pinned beside the
+# concerns needles above (a concerns verdict still does not hold the PR back).
+present "$VERIFY_BUILD_MD" '### Scaffold census' \
+  '/verify-build'\''s PR body carries a Scaffold census section'
+
+# /merge-multi step 2b: the block at the integrated tree.
+present "$MERGE_MULTI_MD" '**2b — Census the agreed scenarios on the integrated tree.**' \
+  '/merge-multi has a step 2b census on the integrated tree'
+in_order '/merge-multi censuses after the merge and before the gate' "$MERGE_MULTI_MD" \
+  '**2 — Merge into integration, in dependency order.**' \
+  '**2b — Census the agreed scenarios on the integrated tree.**' \
+  '**3 — Run the gate, once, on integration.**'
+present "$MERGE_MULTI_MD" 'scaffold-commit census --item <run-id>' \
+  '/merge-multi runs the census verb on the fleet'\''s report'
+present "$MERGE_MULTI_MD" '`outcome=blocked` blocks step 5' \
+  '/merge-multi blocks on an agreed scenario not implemented (Cross-ticket scenario)'
+present "$MERGE_MULTI_MD" 'lists it on its own line, never as missing a test' \
+  '/merge-multi: an ESAS-296 hold gets its own line'
+present "$MERGE_MULTI_MD" 'The escape is a human strike or writing the test' \
+  '/merge-multi: the escape is a human strike or writing the test'
 
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"
