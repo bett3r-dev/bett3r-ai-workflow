@@ -658,7 +658,8 @@ for needle in 'Run `scaffold-commit prepare --item <work_item>`' 'the placing ag
               'It re-extracts only when `designTooling.extract` is declared (else it prints `extract: none declared`)' \
               '`outcome=blocked reason=asked` — the re-run over the placed tree' 'it is handled as prepare'\''s asked case' \
               'Where `.work/lane.yaml` is present, Step 4b never scaffolds' 'say `scaffold: the fleet made no scaffold commit`' \
-              '`reason=no-design-layer`'; do
+              '`reason=no-design-layer`' \
+              'On a red base, green means no error outside the base'\''s error set' '`typecheck=base-red`' 'printed as `new-error:`'; do
   check "/design Step 4b states: $needle" "$( grep -cF -- "$needle" "$TMP/step4b" | sed 's/^[1-9][0-9]*$/present/' )" present
 done
 # R3: a fleet lane never scaffolds (Step 4b's first paragraph), so no lane

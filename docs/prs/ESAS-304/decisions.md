@@ -45,13 +45,13 @@ sources: [code:parseTestsConfig (pv3 emit/tests.ts)]
 rejected: the brief's string header — the parser refuses it
 supersedes: —
 
-## D7 — the red-base error-set rule ("green means no error outside the base's error set") is NOT built
-kind: shipped-finding
-step: build · slice: 5 · decidedBy: verifier
-sources: [design:Bar (P10), adr:ADR-015]
-rejected: —
-supersedes: —
-scaffold-commit treats any non-zero typecheck as gate-red typecheck-red. Disclosed in ADR-015 and pinned by a needle; it cannot fire today (BP typecheck is green at base, KX declares none). Owed to the PR body and a follow-up for ESAS-300.
+## D7 — the red-base error-set rule is built: a red typecheck is compared against HEAD's error set
+kind: silent-seam
+step: build · backfill fix · decidedBy: block (Bar P10)
+sources: [design:Bar (P10), ESAS-300 block (error sets not exit codes; owner ESAS-304 fog), code:judge_red (scaffold-commit.py)]
+rejected: recording it as deferred (decidedBy verifier) — only an owner can set aside a block decision, so that deferral was invalid; capturing the base set in prepare — doubles the typecheck on every green base, where the lazy re-run costs only when red
+supersedes: the earlier D7 ("NOT built", shipped-finding)
+On a red finish typecheck, the launcher sets the edits aside as a git tree object, restores HEAD, runs the declared typecheck there, and puts the edits back. Green only when HEAD is red too and every `error TS<n>` line now (ANSI colour and the location before the code removed) is in HEAD's set; each other is printed `new-error:`. Fail-safe: a red run with no such line, on either side, stays red. A green on a red base ends ok with `typecheck=base-red`; the report records typecheck{exit, baseExit, baseErrors, errors}. Pinned by the red-base cases in scripts/test-scaffold-commit.sh and by ADR-015.
 
 ## D8 — environment gap: the installed global pv3 `g scaffold` lacks --map
 kind: shipped-finding

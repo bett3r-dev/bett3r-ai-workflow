@@ -3942,10 +3942,12 @@ else
     'ADR-015 records the declared-typecheck bar'
   present "$ADR_015_MD" 'This absorbs ESAS-289'\''s ask' \
     'ADR-015 says the bar absorbs ESAS-289'\''s ask'
-  # The honesty pin: the block's red-base rule is not built, and the record
-  # must say so rather than describe it as behaviour.
-  present "$ADR_015_MD" 'The launcher does not implement that comparison' \
-    'ADR-015 says the red-base error-set comparison is not built'
+  # The block's red-base rule (Bar P10) is built: the record states it as
+  # behaviour, and the fail-safe that keeps an unreadable red run red.
+  present "$ADR_015_MD" '**On a red base, green means no error outside the base'"'"'s error set.**' \
+    'ADR-015 records the red-base error-set rule (Bar P10)'
+  present "$ADR_015_MD" 'It is fail-safe: a red run with no' \
+    'ADR-015 records that an unreadable red typecheck stays red'
   present "$ADR_015_MD" '**Agreed means proposed and coherent, minus any element with an unresolved comment anchored on it.**' \
     'ADR-015 records agreed = no open comment (ESAS-304-F1)'
   present "$ADR_015_MD" '**A fleet makes one scaffold commit, on `int/<run-id>`, in `/start-multi` step 0.**' \
