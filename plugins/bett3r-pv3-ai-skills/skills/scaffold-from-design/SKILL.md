@@ -117,6 +117,12 @@ tooling tried to merge generated code into edited files; its merge step degraded
 generated one" and silently overwrote hand-written work. Nothing here rewrites a file it did not
 create: the only write to one is a presence-guarded export line appended at the end of a barrel.
 
+**Place the test fragments too.** When the repo declares `designTooling.tests`, the scaffold report
+has a `TESTS` section. A test file it wrote is create-only like any other file; a test for a file
+that already exists comes back under `FRAGMENTS`, `it.todo` cases behind a `TODO(scaffold)` marker. Place
+each one inside the top-level `describe` of the file its `where:` names. If the section reads `TESTS - not
+configured`, the repo declares no convention and there is nothing to place.
+
 **Place every registration fragment.** An artifact nothing registers compiles, typechecks, and is
 never wired to the event bus — it simply never runs, which looks exactly like a wrong projection.
 It is the most likely way a scaffolded slice ends up looking finished while doing nothing.

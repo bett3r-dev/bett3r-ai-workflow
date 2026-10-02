@@ -29,8 +29,8 @@ only (rendering, route guards, input devices, navigation) — one smoke per jour
 
 Two in-process shapes this skill produces:
 - **Unit / component** — aggregate invariants, policy reactions, readmodel
-  projectors, pure functions, via `createTestPorts()` + `testCommandHandler()` /
-  `testPolicy()` (mock infrastructure).
+  projectors, pure functions, via `await createTestPorts()` + `testCommandHandler()` /
+  `testPolicy()` / `testReadmodel()` (mock infrastructure).
 - **In-process API / pipeline (integration test)** — when the behavior spans
   aggregate→policy→readmodel (a full backend pipeline / bulk flow). Name it
   **`*.integration.test.ts`** and put it in an integration suite under the host
@@ -55,7 +55,9 @@ Tests are co-located next to their source file:
   myProcess.policy.test.ts      # <-- test file
 ```
 
-**NOT** in a separate `test/` or `__tests__/` directory.
+Co-location is the default shown here and holds only where the host declares it
+(`designTooling.tests` in `.blueprint.config.json`); a host that declares a `directory` placement
+puts tests there instead, so follow the host's declaration.
 
 ## Test Structure
 
@@ -64,8 +66,8 @@ describe( 'MyComponent', () => {
   // Setup
   let ports: any;
 
-  beforeEach(() => {
-    ports = createTestPorts();
+  beforeEach( async () => {
+    ports = await createTestPorts();
     jest.clearAllMocks();
   });
 
@@ -98,8 +100,8 @@ describe( 'MyAggregate', () => {
   let ports: any;
   let aggregate: ReturnType<typeof MyAggregate>;
 
-  beforeEach(() => {
-    ports = createTestPorts();
+  beforeEach( async () => {
+    ports = await createTestPorts();
     aggregate = MyAggregate( ports );
   });
 
@@ -141,8 +143,8 @@ describe( 'MyPolicy', () => {
   let ports: any;
   let mockClientLibrary: any;
 
-  beforeEach(() => {
-    ports = createTestPorts();
+  beforeEach( async () => {
+    ports = await createTestPorts();
     mockClientLibrary = {
       commands: {
         DoSomething: jest.fn().mockResolvedValue( undefined )
@@ -188,7 +190,7 @@ describe( 'MyReadmodel', () => {
   let ports: any;
   let mockCollection: any;
 
-  beforeEach(() => {
+  beforeEach( async () => {
     mockCollection = {
       upsert: jest.fn().mockResolvedValue( undefined ),
       query: jest.fn().mockResolvedValue([]),
@@ -196,7 +198,7 @@ describe( 'MyReadmodel', () => {
       ensureIndex: jest.fn().mockResolvedValue( undefined )
     };
 
-    ports = createTestPorts();
+    ports = await createTestPorts();
     ports.database.getCollection = jest.fn().mockReturnValue( mockCollection );
   });
 
@@ -325,8 +327,8 @@ await runWithExecutionContext(
 ## Critical Constraints
 
 - **Every invariant/error test must assert the specific error code** — `.rejects.toBeDefined()` or `.rejects.toThrow()` without a code check is not acceptable when the test title or spec names a specific error code. Use `expect(promise).rejects.toMatchObject({ code: 'ERROR_CODE' })` or the project's `expectRejectsWithCode` helper. This applies to both hand-thrown `BadRequestError`s AND framework invariants — e.g. `invariants.stateExists()` rejects with `{ code: 'STATE_NOT_EXISTS' }` and must be asserted the same way.
-- **Co-located tests** — `*.test.ts` next to source file, NOT in separate directory
-- **Use `createTestPorts()`** — From `@bett3r-dev/pv3-library-tests` when available
+- **Co-located tests** — `*.test.ts` next to source file, unless the host declares otherwise (`designTooling.tests`)
+- **Use `await createTestPorts()`** (it is async) — From `@bett3r-dev/pv3-library-tests` when available
 - **Mock external dependencies** — Client library, external APIs, ports.endpoints
 - **Test real domain logic** — Don't mock the component under test
 - **Given/When/Then separators** — Use `═══` comment separators for readability
