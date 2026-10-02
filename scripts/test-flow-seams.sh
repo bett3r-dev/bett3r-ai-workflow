@@ -3794,7 +3794,7 @@ fi
 
 # F1 (backfill): /start-multi step 0 reads the main checkout's design.json, so
 # /design-multi's canvas teardown must wait for it, and step 0 says when it may run.
-present "$DESIGN_MULTI_MD" 'only after `/start-multi` step 0 has made the fleet'"'"'s scaffold commit or recorded why it made none' \
+present "$DESIGN_MULTI_MD" 'only after `/start-multi` step 0 has made the fleet'"'"'s scaffold commit or recorded why it made none, and has provisioned its last lane' \
   '/design-multi teardown waits for /start-multi step 0 (it reads design.json)'
 hits=$( grep -nF 'and only after any unit built in this checkout (`/build`' "$DESIGN_MULTI_MD" || true )
 if [ -z "$hits" ]; then
@@ -3803,10 +3803,10 @@ else
   fail '[STRUCTURAL] /design-multi teardown is not gated on a /build in this checkout alone' "$hits" \
        'fleet units build in worktrees, so that condition never holds the teardown back from /start-multi step 0.'
 fi
-present "$START_MULTI_MD" 'canvas teardown (deleting its `.blueprint/design.json` and siblings) is safe once this point is reached' \
+present "$START_MULTI_MD" 'is safe only past this point and once the run'"'"'s last lane is provisioned' \
   '/start-multi step 0 says when /design-multi'"'"'s canvas teardown becomes safe'
 in_order '/start-multi step 0: the teardown is cleared only after the scaffold commit' "$START_MULTI_MD" \
-  'scaffold-commit finish --item <run-id>' 'canvas teardown (deleting its `.blueprint/design.json` and siblings) is safe'
+  'scaffold-commit finish --item <run-id>' 'canvas teardown (deleting the main checkout'"'"'s `.blueprint/design.json` and siblings) is safe only past this point'
 
 # --- STRUCTURAL: no command outside design.md and start-multi.md invokes
 # `scaffold-commit prepare`: a census over every commands/*.md, so a new step
