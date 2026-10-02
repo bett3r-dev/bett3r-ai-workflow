@@ -3812,6 +3812,18 @@ present "$START_MULTI_MD" 'is safe only past this point and once the run'"'"'s l
 in_order '/start-multi step 0: the teardown is cleared only after the scaffold commit' "$START_MULTI_MD" \
   'scaffold-commit finish --item <run-id>' 'canvas teardown (deleting the main checkout'"'"'s `.blueprint/design.json` and siblings) is safe only past this point'
 
+# Backfill (Low): step 0's scaffold worktree carries a .blueprint/, so the
+# "holds no .blueprint/" rule is scoped to lane worktrees.
+present "$PROVISIONER_MD" 'A lane worktree holds no `.blueprint/`' 'provisioner scopes "holds no .blueprint/" to a lane worktree'
+for f in "$PROVISIONER_MD" "$PLUGIN/agents/unit-lane.md" "$START_MULTI_MD"; do
+  hits=$( grep -nE '(^|[-.] )(A|Your) worktree holds no `\.blueprint/`' "$f" || true )
+  if [ -z "$hits" ]; then
+    pass "[STRUCTURAL] ${f#"$PLUGIN"/} states no unscoped \"worktree holds no .blueprint/\""
+  else
+    fail "[STRUCTURAL] ${f#"$PLUGIN"/} states no unscoped \"worktree holds no .blueprint/\"" "$hits"
+  fi
+done
+
 # --- STRUCTURAL: no command outside design.md and start-multi.md invokes
 # `scaffold-commit prepare`: a census over every commands/*.md, so a new step
 # is covered without being named here. /start-multi is the fleet orchestrator,
