@@ -3914,6 +3914,55 @@ present "$MERGE_MULTI_MD" 'lists it on its own line, never as missing a test' \
 present "$MERGE_MULTI_MD" 'The escape is a human strike or writing the test' \
   '/merge-multi: the escape is a human strike or writing the test'
 
+# ---------------------------------------------------------------------------
+printf '\nADR-015 and the glossary — the record of the design-end scaffold commit (ESAS-304)\n\n'
+# ---------------------------------------------------------------------------
+# ESAS-304 moved scaffolding from a per-slice /build step to one commit at the
+# end of /design, and the block defers its ADR and glossary deltas to build.
+# The behaviour is pinned above and in scripts/test-scaffold-commit.sh; what is
+# pinned here is the RECORD, one literal per clause the block lists, because a
+# record that loses a clause in a tidy-up is still a file that exists.
+ADR_015_MD="$ROOT/docs/adr/ADR-015-the-design-ends-in-a-scaffold-commit-the-declared-typecheck-is-its-bar.md"
+README_MD="$PLUGIN/README.md"
+if [ ! -s "$ADR_015_MD" ]; then
+  fail 'docs/adr/ADR-015 exists and is non-empty (positive control)' \
+       "no ${ADR_015_MD#"$ROOT"/}" \
+       'ADR-015 is the number reserved for ESAS-304; every ADR-015 assertion below would pass vacuously on a missing file.'
+else
+  pass 'docs/adr/ADR-015 exists and is non-empty (positive control)'
+  present "$ADR_015_MD" '# The design ends in a scaffold commit, and the declared typecheck is its bar' \
+    'ADR-015 states the decision in its H1, as its siblings do'
+  present "$ADR_015_MD" '## Status' \
+    'ADR-015 carries the Status section every accepted ADR here ends on'
+  present "$ADR_015_MD" '**`/design` ends in one commit of everything derivable from the agreed design, made on top of its docs commit.**' \
+    'ADR-015 records the design-end commit'
+  present "$ADR_015_MD" '**The placing agent writes topology fragments only (commands, events, their schemas and invariant wiring), and never registration.**' \
+    'ADR-015 records topology-only placement (ESAS-289-F3)'
+  present "$ADR_015_MD" '**The bar is the typecheck the host declares as `designTooling.typecheck`, not its build.**' \
+    'ADR-015 records the declared-typecheck bar'
+  present "$ADR_015_MD" 'This absorbs ESAS-289'\''s ask' \
+    'ADR-015 says the bar absorbs ESAS-289'\''s ask'
+  # The honesty pin: the block's red-base rule is not built, and the record
+  # must say so rather than describe it as behaviour.
+  present "$ADR_015_MD" 'The launcher does not implement that comparison' \
+    'ADR-015 says the red-base error-set comparison is not built'
+  present "$ADR_015_MD" '**Agreed means proposed and coherent, minus any element with an unresolved comment anchored on it.**' \
+    'ADR-015 records agreed = no open comment (ESAS-304-F1)'
+  present "$ADR_015_MD" '**A fleet makes one scaffold commit, on `int/<run-id>`, in `/start-multi` step 0.**' \
+    'ADR-015 records the one fleet commit (ESAS-304-F3)'
+  present "$ADR_015_MD" '**An agreed scenario with no implemented test warns on a fleet unit'\''s PR and blocks at the integrated tree.**' \
+    'ADR-015 records the landing rule (ESAS-304-F4)'
+  present "$ADR_015_MD" '**This overrides the scaffold CLIs'\'' "slice-scoped by design".**' \
+    'ADR-015 records the override of the CLIs'\'' "slice-scoped by design"'
+fi
+
+present "$README_MD" '## Glossary' 'the plugin README has a Glossary section'
+for term in 'Scaffold commit' 'Scaffold report' 'Untouched stub' 'Held element' \
+            'Asked vs still-owed block' 'Topology vs registration fragment'; do
+  present "$README_MD" "**$term**" "the README glossary defines \"$term\" (ESAS-304)"
+done
+present "$README_MD" 'docs/adr/ADR-015' 'the README glossary points at ADR-015 for the why'
+
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"
   exit 0
