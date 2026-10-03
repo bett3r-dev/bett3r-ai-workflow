@@ -1,0 +1,41 @@
+{
+  "structureVersion": 2,
+  "shape": "decision",
+  "grounded": true,
+  "mapId": "ESAS-930",
+  "nodes": [
+    { "id": "goal", "level": "goal", "title": "Carry the agreed examples into the committed map", "parents": [] }
+  ],
+  "forks": [
+    {
+      "id": "ESAS-930-F1",
+      "title": "How agreed examples reach the scaffold",
+      "tickets": ["ESAS-930"],
+      "anchor": "goal",
+      "restsOn": [],
+      "status": { "kind": "decided", "source": "owner", "option": "A" },
+      "card": {
+        "problem": "Agreed examples live only in the session feed.",
+        "useCases": ["Compile in a lane"],
+        "options": [
+          {
+            "id": "A",
+            "label": "The committed map carries them",
+            "walks": [
+              {
+                "scenario": "committed input",
+                "text": "Given an agreed observation; when /design writes map.json; then it is in the committed file.",
+                "kind": "behavioral",
+                "given": "an agreed observation in the feed",
+                "when": "/design writes map.json",
+                "then": "the observation is in the committed file"
+              }
+            ]
+          }
+        ],
+        "recommendation": { "option": "A", "why": "The only committed record a lane can read." },
+        "ifOverturned": "Lanes cannot compile."
+      }
+    }
+  ]
+}

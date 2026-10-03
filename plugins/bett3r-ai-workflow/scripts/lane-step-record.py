@@ -24,7 +24,11 @@ Which commit carries it — three paths, in this order (#371):
     script never force-pushes: a hosted venue refuses one, and a commit anyone
     else can see is never rewritten. Merge-commit repos keep every commit a lane
     makes, so an empty verdict commit per step was pure history noise (TV2-21:
-    4 of them per run).
+    4 of them per run). A step that makes more than one commit is folded into
+    its LAST: `/design` commits its docs, then Step 4b's scaffold commit
+    (ESAS-304), which carries the verdict, the docs commit beneath it keeping
+    its message; a red Step 4b leaves the docs commit as the last, and it
+    carries `gate-red`.
   * **skipped** — `/start` or `/plan` ends `success` with nothing unpushed. Such
     a step has no commit to carry the verdict, and none is needed: the delegated
     scheduler (remote-ai-agents `src/delegated/tick.ts`, `classifyBranchVerdict`)

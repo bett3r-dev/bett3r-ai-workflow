@@ -28,6 +28,7 @@
     DESIGN-MAP:v1 outcome=drifted verb=drift mapSeq=<n|none> feedSeq=<n>
     DESIGN-MAP:v1 outcome=skip verb=drift mapSeq=<n|none> feedSeq=none reason=no-map-feed
     DESIGN-MAP:v1 outcome=ok verb=select target=<board|artifact|board-candidate> reason=<r> probe=<skipped|done>
+    DESIGN-MAP:v1 outcome=ok verb=export-examples scenarios=<n> observations=<n> coverage=<n> unagreed=<n> map=<path>
     DESIGN-MAP:v1 outcome=error verb=<verb> reason=<reason> [key=value ...]
 
 Read the line, never the exit code alone (ADR-004): 0 for ok, 1 for fail
@@ -52,6 +53,7 @@ Usage:
   design-map count <map.json> [--lane <lane.yaml>] [--line]
   design-map drift <map.json> (--feed-seq <n> | --no-feed)
   design-map select --phase probe|start --captures <dir> [--map <map.json>] [--lane <lane.yaml>]
+  design-map export-examples <map.json> --from <get_map.json>
 
 A map is `structureVersion: 2`. Two committed files describe it:
 
@@ -80,6 +82,20 @@ reason=schema-invalid. After the schema, the checks JSON Schema cannot express:
 
 `validate` runs the bare-actor check (below), the schema and these checks,
 and writes nothing; it accepts an ungrounded map.
+
+A map may also carry `scenarios`, `observations` and `coverage` (blueprint's
+MapScenario, MapObservation and CoverageLink) and a node `description`; the
+schema checks their shape and nothing else here does.
+
+`export-examples` is how those arrays are filled (ESAS-304 P2, ESAS-306-F3): it
+reads a `get_map` tool body `{ok:true, map, mapSeq}` (--from) and replaces the
+map's three arrays whole with its entries whose status is agreed, each spelled
+in blueprint's fields only, keys sorted, sorted by id; coverage keeps the pairs
+of a carried scenario's supersedes lineage, named by the carried scenario. Same
+inputs, same bytes, in any checkout. unagreed= counts the scenarios and
+observations left out. Reasons: missing-map, missing-from, from-unreadable,
+from-failed (code=), from-invalid, and the validate reasons, for the map before
+and after; every refusal leaves it byte-identical.
 
 `write` is the only structural authoring path. It reads a full map on stdin,
 runs the same checks as `validate`, and replaces the target whole: a temporary
@@ -424,7 +440,7 @@ def verdict(outcome, **attrs):
 
 
 BOOLEAN_FLAGS = ("final", "stack", "closed", "line", "no-feed")
-VALUE_FLAGS = ("expect", "out", "ticket", "lane", "feed-seq", "phase", "captures", "map", "readback")
+VALUE_FLAGS = ("expect", "out", "ticket", "lane", "feed-seq", "phase", "captures", "map", "readback", "from")
 
 
 def parse_args(args):
@@ -474,6 +490,7 @@ TYPES = {
     "string": lambda v: isinstance(v, str),
     "boolean": lambda v: isinstance(v, bool),
     "integer": lambda v: isinstance(v, int) and not isinstance(v, bool),
+    "number": lambda v: isinstance(v, (int, float)) and not isinstance(v, bool),
 }
 
 
@@ -2068,17 +2085,105 @@ def post(positional, flags):
     return attrs
 
 
+# --- export-examples (ESAS-304 P2, ESAS-306-F3) -------------------------------
+
+# The fields of blueprint's MapScenario and MapObservation (blueprint-schema
+# map-structure.ts), in the order an exported entry spells them; any other key a
+# get_map body decorates an entry with is not carried.
+SCENARIO_FIELDS = ("id", "title", "anchors", "given", "when", "then", "examples", "derivedFrom",
+                   "supersedes", "proposedBy", "status")
+OBSERVATION_FIELDS = ("id", "title", "anchors", "kpi", "expect", "supersedes", "proposedBy", "status")
+
+
+def canonical(value):
+    """The value with every object's keys sorted, so the bytes written never
+    depend on the key order the feed spelled."""
+    return json.loads(json.dumps(value, sort_keys=True, ensure_ascii=False))
+
+
+def feed_examples(path):
+    """The scenarios, observations and coverage of a `get_map` tool body
+    `{ok:true, map, mapSeq}`; an array the map does not hold reads as []
+    (blueprint's withExampleArrays)."""
+    body = read_json_object(path)
+    if body is None:
+        raise Refusal("from-unreadable")
+    if body.get("ok") is not True:
+        raise Refusal("from-failed", code=error_code(body) or "-")
+    payload = body.get("map")
+    if not isinstance(payload, dict):
+        raise Refusal("from-invalid")
+    arrays = []
+    for key in ("scenarios", "observations", "coverage"):
+        value = payload.get(key, [])
+        if not isinstance(value, list) or not all(isinstance(e, dict) for e in value):
+            raise Refusal("from-invalid", at=pointer(("map", key)))
+        arrays.append(value)
+    return arrays
+
+
+def lineage_roots(scenarios):
+    """Each scenario id's lineage root, joining scenarios along every supersedes
+    pointer that names a scenario in the feed (blueprint coverage-links.ts)."""
+    parent = {s.get("id"): s.get("id") for s in scenarios}
+
+    def root_of(sid):
+        while sid in parent and parent[sid] != sid:
+            sid = parent[sid]
+        return sid
+    for s in scenarios:
+        if s.get("supersedes") in parent:
+            parent[root_of(s.get("id"))] = root_of(s["supersedes"])
+    return root_of
+
+
+def export_examples(positional, flags):
+    """Replace the map's scenarios, observations and coverage with the agreed
+    entries of a get_map body: sorted by id, keys canonical, written whole. A
+    coverage pair counts for its scenario's whole lineage (ESAS-295), so a pair
+    recorded on a retired predecessor is carried on the agreed member."""
+    if not positional:
+        raise Refusal("missing-map")
+    if "from" not in flags:
+        raise Refusal("missing-from")
+    map_path = positional[0]
+    payload = load_map(map_path)
+    validate(payload)
+    scenarios, observations, coverage = feed_examples(flags["from"])
+
+    def agreed(entries, fields):
+        kept = [canonical({k: e[k] for k in fields if k in e}) for e in entries
+                if isinstance(e.get("status"), dict) and e["status"].get("kind") == "agreed"]
+        return sorted(kept, key=lambda e: str(e.get("id")))
+    out_scenarios = agreed(scenarios, SCENARIO_FIELDS)
+    out_observations = agreed(observations, OBSERVATION_FIELDS)
+    root_of = lineage_roots(scenarios)
+    carried = {}
+    for s in out_scenarios:
+        carried.setdefault(root_of(s["id"]), []).append(s["id"])
+    pairs = {(c.get("esId"), sid) for c in coverage for sid in carried.get(root_of(c.get("scenarioId")), [])}
+    out_coverage = [{"esId": es, "scenarioId": sid} for es, sid in sorted(pairs, key=lambda p: (str(p[0]), p[1]))]
+    for key, value in (("scenarios", out_scenarios), ("observations", out_observations), ("coverage", out_coverage)):
+        payload[key] = value
+    validate(payload)
+    write_map(map_path, payload)
+    unagreed = len(scenarios) + len(observations) - len(out_scenarios) - len(out_observations)
+    return dict(scenarios=len(out_scenarios), observations=len(out_observations),
+                coverage=len(out_coverage), unagreed=unagreed, map=map_path)
+
+
 VERBS = {"validate": validate_map, "write": write, "render": render, "check-page": check,
          "apply-answers": apply_answers, "candidates": candidates, "check-plan": check_plan,
          "project": project, "decisions": decisions, "record": record, "count": count, "drift": drift,
-         "select": select, "post": post}
+         "select": select, "post": post, "export-examples": export_examples}
 # The flags each verb takes; any other parsed flag is reason=unknown-flag-<name>.
 # `candidates` and `check-plan` take positional arguments only, so `--map`
 # (the wording ESAS-165's block used) is refused as unknown-flag-map.
 FLAGS = {"validate": (), "write": (), "render": ("expect", "out", "stack"), "check-page": ("expect",),
          "apply-answers": ("final",), "candidates": (), "check-plan": (), "project": ("ticket",),
          "decisions": ("closed",), "record": (), "count": ("lane", "line"), "drift": ("feed-seq", "no-feed"),
-         "select": ("phase", "captures", "map", "lane"), "post": ("expect", "map", "readback")}
+         "select": ("phase", "captures", "map", "lane"), "post": ("expect", "map", "readback"),
+         "export-examples": ("from",)}
 
 
 def main(argv):

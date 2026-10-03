@@ -639,6 +639,46 @@ for needle in 'design-map write <path>/map.json' 'design-map render <path>/map.j
               '-- <path>/design.md <path>/map.json <path>/map.html' 'never derived from the file'; do
   check "/design Step 4 states: $needle" "$( grep -cF -- "$needle" "$TMP/step4" | sed 's/^[1-9][0-9]*$/present/' )" present
 done
+# Step 4.1 (ESAS-304): the committed map carries the board's agreed examples.
+for needle in 'design-map export-examples <path>/map.json --from' 'Every pass writes `grounded: true`' \
+              'remove the `map.json` this pass wrote, exactly as a refused render does in item 2'; do
+  check "/design Step 4 states: $needle" "$( grep -cF -- "$needle" "$TMP/step4" | sed 's/^[1-9][0-9]*$/present/' )" present
+done
+# Step 4b (ESAS-304): the scaffold commit, after the docs commit above. Its own
+# section, so a needle cannot be satisfied by Step 4's prose; then the order the
+# design fixes: the docs commit, prepare, the placing agent, finish.
+# The prepare and finish needles are the INVOCATIONS ("Run `…`"): the `--abort`
+# sentence also spells `scaffold-commit finish --item <work_item>`, and a bare
+# needle let it stand in for a deleted finish call (the slice's probe, once green).
+awk '/^## Step 4b/{f=1} /^## Step 5/{f=0} f' "$ROOT/plugins/bett3r-ai-workflow/commands/design.md" > "$TMP/step4b"
+for needle in 'Run `scaffold-commit prepare --item <work_item>`' 'the placing agent' 'Placement never covers registration' \
+              'run `scaffold-commit finish --item <work_item>` and act on its line' 'chore(<id>): scaffold the agreed design' \
+              'goes back to the grill' 'Each one goes back to the grill as a fork (Step 3), then Step 4 and this step run again.' 'STILL OWED' \
+              'The step ends `gate-red`' 'the docs commit stands' \
+              'It re-extracts only when `designTooling.extract` is declared (else it prints `extract: none declared`)' \
+              '`outcome=blocked reason=asked` — the re-run over the placed tree' 'it is handled as prepare'\''s asked case' \
+              'Where `.work/lane.yaml` is present, Step 4b never scaffolds' 'say `scaffold: the fleet made no scaffold commit`' \
+              '`reason=no-design-layer`' \
+              'On a red base, green means no error outside the base'\''s error set' '`typecheck=base-red`' 'printed as `new-error:`'; do
+  check "/design Step 4b states: $needle" "$( grep -cF -- "$needle" "$TMP/step4b" | sed 's/^[1-9][0-9]*$/present/' )" present
+done
+# R3: a fleet lane never scaffolds (Step 4b's first paragraph), so no lane
+# branch of Step 4b's asked case, nor of the Verdict, is reachable: neither is stated.
+for gone in 'in a lane the step ends `blocked-on`' 'a question a lane cannot answer'; do
+  check "[STRUCTURAL] /design states no unreachable lane branch of Step 4b: $gone" \
+    "$( grep -cF -- "$gone" "$ROOT/plugins/bett3r-ai-workflow/commands/design.md" )" 0
+done
+firstline(){ grep -nF -- "$1" "$2" | head -n 1 | cut -d: -f1; }
+docs_at=$( firstline 'git commit -m "docs(<id>): design"' "$ROOT/plugins/bett3r-ai-workflow/commands/design.md" )
+step4b_at=$( firstline '## Step 4b' "$ROOT/plugins/bett3r-ai-workflow/commands/design.md" )
+prep_at=$( firstline 'Run `scaffold-commit prepare' "$TMP/step4b" )
+place_at=$( firstline 'the placing agent' "$TMP/step4b" )
+fin_at=$( firstline 'run `scaffold-commit finish --item <work_item>` and act' "$TMP/step4b" )
+order=unordered
+[ -n "$docs_at" ] && [ -n "$step4b_at" ] && [ -n "$prep_at" ] && [ -n "$place_at" ] && [ -n "$fin_at" ] \
+  && [ "$docs_at" -lt "$step4b_at" ] && [ "$prep_at" -lt "$place_at" ] && [ "$place_at" -lt "$fin_at" ] && order=ordered
+check '/design: docs commit, then Step 4b: prepare, the placing agent, finish' "$order" ordered \
+  "docs commit line=${docs_at:-absent} Step 4b line=${step4b_at:-absent} prepare=${prep_at:-absent} place=${place_at:-absent} finish=${fin_at:-absent} (finish/prepare/place lines within Step 4b)"
 
 new_repo mapsnap
 git -C "$REPO" checkout -qb master
@@ -686,6 +726,36 @@ check 'map snapshot, provisioned map.json + count mismatch: no page, no commit, 
   "$( exists3 "$REPO/docs/prs/ESAS-4" )|$( git -C "$REPO" status --porcelain )" 'design.md map.json end|?? docs/prs/ESAS-4/map.json'
 check 'map snapshot, provisioned map.json + count mismatch: kept byte-identical' \
   "$( cmp -s "$REPO/docs/prs/ESAS-4/map.json" "$DMFIX/count-2-1-1-1-0.map.json" && echo same )" same
+
+# scaffold.json, the scaffold report (ESAS-304): the folder's fourth committed
+# file, written by `scaffold-commit finish` in its OWN commit after the docs
+# commit. It never proves an owner (only design.md's header does, else a
+# provisioned map.json's mapId), and its commit leaves the docs commit's three
+# paths exactly as they were.
+git -C "$REPO" checkout -qb ESAS-5-a
+map_pass ESAS-5 ESAS-5-a "$DMFIX/count-2-1-1-1-0.map.json" 5
+docs=$( git -C "$REPO" rev-parse HEAD )
+printf '{"version": 1, "ticket": "ESAS-5"}\n' > "$REPO/docs/prs/ESAS-5/scaffold.json"
+git -C "$REPO" add -- docs/prs/ESAS-5/scaffold.json
+git -C "$REPO" -c user.name=t -c user.email=t@t commit -qm 'chore(ESAS-5): scaffold the agreed design'
+check 'scaffold report: the docs commit still names exactly design.md, map.json, map.html' \
+  "$( git -C "$REPO" show --name-only --format= "$docs" | sort | tr '\n' ' ' )" \
+  'docs/prs/ESAS-5/design.md docs/prs/ESAS-5/map.html docs/prs/ESAS-5/map.json '
+check 'scaffold report: the scaffold commit names only scaffold.json here, on the docs commit' \
+  "$( git -C "$REPO" show --name-only --format= HEAD | tr '\n' ' ' )|$( git -C "$REPO" rev-parse HEAD~1 )" \
+  "docs/prs/ESAS-5/scaffold.json |$docs"
+wdp "$REPO" --item ESAS-5 --owner-branch ESAS-5-a
+check 'scaffold report: beside the design it changes nothing, the next /design pass reads owner=self' "$( attr "$LINE" owner )" self "$LINE"
+wdp "$REPO" --item ESAS-5 --owner-branch ESAS-5-b
+check 'scaffold report: another branch still reads owner=other' "$( attr "$LINE" owner )" other "$LINE"
+mkdir -p "$REPO/docs/prs/ESAS-6"
+printf '{"version": 1, "ticket": "ESAS-6"}\n' > "$REPO/docs/prs/ESAS-6/scaffold.json"
+wdp "$REPO" --item ESAS-6 --owner-branch ESAS-6-a
+check 'scaffold report alone proves no owner: unowned, even when it names this item' "$( attr "$LINE" owner )" unowned "$LINE"
+printf '{"mapId":"ESAS-6"}\n' > "$REPO/docs/prs/ESAS-6/map.json"
+wdp "$REPO" --item ESAS-6 --owner-branch ESAS-6-a
+check 'scaffold report beside a provisioned map naming this item: the map decides, owner=none' "$( attr "$LINE" owner )" none "$LINE"
+rm -rf "$REPO/docs/prs/ESAS-6"
 
 # ---------------------------------------------------------------------------
 printf '\nthe verdict line is the contract (ADR-004)\n'

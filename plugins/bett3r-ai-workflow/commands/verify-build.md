@@ -33,6 +33,21 @@ Read `.work/slices.yaml` and `<path>/design.md`. Every slice is `passes: true` w
 
 Record the report block verbatim, `GATE-MODE:` line included, for the PR body. A `FAIL` blocks Step 6; a step red on the base too is pre-existing, named and left alone; `SKIP` and `INCONCLUSIVE` steps are named and do not block. Done when the report block is recorded with its mode and verdict.
 
+## Step 2a — Scaffold census
+
+The scaffold report is `<path>/scaffold.json`, or in a fleet lane the fleet's, at the brief's `scaffoldReport:` (`/start-multi` step 0 made it under the run id). Without one, the PR body's `### Scaffold census` reads `scaffold census: no scaffold report`, and the step is done.
+
+**Untouched stubs.** For each `manifest[]` entry whose file still exists, a stub whose `git hash-object <file>` equals its `blob` is byte-identical to what the scaffold commit wrote: nothing filled it. List each as `untouched stub: <file> (<node>)`. It is reported and blocks nothing; the blocks are the verifier's check 4 (a marker in a file a slice delivers) and the scenario census below.
+
+**Agreed scenarios.** Run `scaffold-commit census --item <work_item>` (in a fleet lane, `--item <runId>` from the brief) and read its last line, `SCAFFOLD-COMMIT:v1 verb=census outcome=…`, never its exit code. Each `not-implemented: <id> presence=<absent|pending>` is an agreed scenario with no implemented test; a pending `.todo(` test counts as none. Each `hold: <id> under review (<why>)` is an ESAS-296 hold: the PR body lists the holds each on its own line, never as missing a test, and a hold blocks nothing.
+
+- In a fleet lane (`.work/lane.yaml` exists), `outcome=blocked` warns and does not block: the PR body lists every `not-implemented:` line verbatim, because a sibling unit may own the scenario, and `/merge-multi` blocks on it at the integrated tree.
+- In a lone unit (no brief), `outcome=blocked` blocks: Steps 3 to 5b still run, Step 6 opens no PR, and the verdict is `outcome=blocked-on reason=scenario-not-implemented`, naming each id.
+- `outcome=error`, or no verdict line, is not a pass: a lone unit blocks on it as on `blocked`, a fleet lane warns.
+- `outcome=skipped` → as without a report.
+
+The escape is a human strike or writing the test: the owner strikes the scenario in their own words, recorded as Step 5a records a waiver (a `kind: waiver` D-entry naming the scenario id), or the test is written and the census re-run. An agent's judgement strikes nothing. Done when every census line is in the PR body's `### Scaffold census`, and in a lone unit every `not-implemented:` id is implemented or struck.
+
 ## Step 3 — Whole-PR review
 
 **Resolve the base.** When the diff's file count is several times the union of `touches:` in `.work/slices.yaml`, `git branch -r --contains <first-branch-commit>` names the parent and `git merge-base <candidate> HEAD` is `<resolved-base>` for every later step.
@@ -145,7 +160,7 @@ Push the branch, then open the PR ready for review in a Bash call:
 gh pr create --base <resolved-base> --title "<TICKET-ID> — <title>" --body-file "${TMPDIR:-/tmp}/pr-body.md"
 ```
 
-No `--draft`. Then compare the PR's `changed_files` and `commits` with `git log <resolved-base>..HEAD` and retarget with `gh pr edit --base <true-base>` on a mismatch. Step 5a's `fail` or `error` fills the *Unmet hard concerns* section and Step 6b's status. Among verdicts, only Step 2's `FAIL` holds this step back.
+No `--draft`. Then compare the PR's `changed_files` and `commits` with `git log <resolved-base>..HEAD` and retarget with `gh pr edit --base <true-base>` on a mismatch. Step 5a's `fail` or `error` fills the *Unmet hard concerns* section and Step 6b's status. Among verdicts, only Step 2's `FAIL` and, in a lone unit, Step 2a's block hold this step back.
 
 **Report mergeability, not "opened".** Re-fetch `origin/<default>`: a moved base voids every gate that read the diff, so re-run those locally and report that; a red CI job hides every step after it, so run those locally by name and report each as `RAN LOCALLY: <step> exit N`. Read `gh pr view --json mergeable,mergeStateStatus` after a short settle. Fix a conflict by rebasing this branch in its own worktree, touching no other branch or stacked-on history.
 
@@ -188,6 +203,10 @@ lane.yaml carries `mapProvenance: lost` → Oracle candidates: none (owner answe
 slices.yaml has no `candidateOracles` key → Oracle candidates: none (no map.json)
 `review: unattended` → one bullet per unconfirmed candidate — `<fork>` / `<option>`: <scenario> — e.g. <example>
 `review: human` → Oracle candidates: <confirmed> confirmed, <rejected> rejected>
+
+### Scaffold census
+<Step 2a: `scaffold census: no scaffold report`, or the census verdict line verbatim, then each
+`untouched stub:`, `not-implemented:` and `hold:` line on its own line>
 
 ### Unmet hard concerns
 <only when Step 5a's outcome is fail or error; omit the section on pass.

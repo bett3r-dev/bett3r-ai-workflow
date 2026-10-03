@@ -28,6 +28,9 @@ The map is validated first by the SIBLING launcher `<plugin>/bin/design-map
 validate` (never the copy on PATH, which may be an older plugin cache), read
 through its `DESIGN-MAP:v1` verdict line.
 
+A ticket with no fork in the map is reason=no-forks, except on a grounded map
+holding no fork at all (ESAS-304): its body is the one line `Nothing to decide.`.
+
 The last line printed is the verdict (ADR-004); the exit code is a cross-check:
     MAP-TREE:v1 outcome=ok verb=render ticket=<K> forks=<n> owner=<n> code=<n> recommendation=<n> open=<n> moot=<n>
     MAP-TREE:v1 outcome=fresh|stale|tampered verb=check ... path=<file>          exit 0 | 1 | 1
@@ -53,6 +56,8 @@ START_INLINE = re.compile(r"^`map-tree:v1((?: [^\s=`]+=[^\s`]+)*)`$")
 END_INLINE = "`/map-tree:v1`"
 END_COMMENT = "<!-- /map-tree:v1 -->"
 COUNT_KEYS = ("forks", "owner", "code", "recommendation", "open", "moot")
+# The whole body of a grounded zero-fork map's region, in either dialect.
+NOTHING_TO_DECIDE = "Nothing to decide."
 
 
 class Refusal(Exception):
@@ -361,11 +366,15 @@ def main(argv):
             raise Refusal("map-unreadable")
         validate(flags["map"])
         with open(flags["map"], encoding="utf-8") as fh:
-            forks = project(json.load(fh), ticket)
+            payload = json.load(fh)
+        forks = project(payload, ticket)
         counts = counts_of(forks)
-        if not forks:
+        # ESAS-304 (P1): a grounded map holding no fork at all is a design with
+        # nothing to decide, and says so. An ungrounded one, or one whose forks
+        # all belong to other tickets, is still refused.
+        if not forks and not (payload["grounded"] is True and not payload["forks"]):
             raise Refusal("no-forks")
-        body = render_body(forks, dialect)
+        body = render_body(forks, dialect) if forks else NOTHING_TO_DECIDE
         src = src_hash(forks)
 
         if verb == "render":

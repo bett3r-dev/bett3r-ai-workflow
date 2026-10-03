@@ -1,0 +1,11 @@
+#!/bin/sh
+# Launcher for scripts/scaffold-commit.py — the design-end scaffold commit
+# (ESAS-304): `prepare` dry-runs the declared scaffolder and writes the
+# mechanical half, `finish` re-extracts, re-scaffolds, runs the declared
+# typecheck and commits on green or restores the tree on red, `census` lists
+# the report's agreed scenarios with no implemented test. Ends in a
+# `SCAFFOLD-COMMIT:v1` verdict line.
+#
+# Same shape and the same reason as `map-tree` next door: `bin/` is on PATH,
+# `CLAUDE_PLUGIN_ROOT` is not.
+exec python3 "$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)/scripts/scaffold-commit.py" "$@"

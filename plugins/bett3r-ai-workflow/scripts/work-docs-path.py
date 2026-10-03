@@ -113,6 +113,14 @@ falls back to its map.json's mapId (below). The verdict gains `owner=`:
             key, or an empty/missing work_item or branch (a design written
             before headers existed lands here)
 
+The folder's committed files: `design.md`, `map.json` and `map.html`, committed
+together by `/design` as `docs(<id>): design`, and `scaffold.json`, the scaffold
+report (ESAS-304), committed after them in its own commit by `scaffold-commit
+finish` as `chore(<id>): scaffold the agreed design`. Only design.md's header,
+else a provisioned map.json's mapId, proves an owner: a scaffold.json never
+does, so a folder holding only one reads `unowned`, and one beside a design or
+a map changes nothing.
+
 Only `self` licenses an overwrite; `other` and `unowned` both mean stop. The
 header grammar is `key: value` lines; other keys are ignored, a value may be
 quoted, and ` #…` after a value is a comment (a branch name has no whitespace).

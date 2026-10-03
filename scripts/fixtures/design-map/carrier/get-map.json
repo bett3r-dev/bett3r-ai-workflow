@@ -1,0 +1,271 @@
+{
+  "ok": true,
+  "map": {
+    "structureVersion": 1,
+    "shape": "decision",
+    "grounded": true,
+    "nodes": [
+      {
+        "id": "goal",
+        "level": "goal",
+        "title": "Carry the agreed examples into the committed map",
+        "parents": []
+      }
+    ],
+    "forks": [
+      {
+        "id": "ESAS-930-F1",
+        "title": "How agreed examples reach the scaffold",
+        "anchor": "goal",
+        "restsOn": [],
+        "status": {
+          "kind": "decided",
+          "source": "owner",
+          "option": "A"
+        }
+      }
+    ],
+    "links": [],
+    "scenarios": [
+      {
+        "id": "SCN-0000000A",
+        "title": "Observation committed in the map",
+        "anchors": [
+          "ESAS-930-F1"
+        ],
+        "given": [
+          {
+            "text": "an agreed observation in the feed"
+          }
+        ],
+        "when": [
+          {
+            "text": "/design writes map.json"
+          }
+        ],
+        "then": [
+          {
+            "text": "the observation is in the committed file"
+          }
+        ],
+        "derivedFrom": {
+          "forkId": "ESAS-930-F1",
+          "optionId": "A",
+          "walk": "committed input",
+          "basis": {
+            "scenario": "committed input",
+            "text": "Given an agreed observation; when /design writes map.json; then it is in the committed file.",
+            "kind": "behavioral",
+            "given": "an agreed observation in the feed",
+            "when": "/design writes map.json",
+            "then": "the observation is in the committed file"
+          }
+        },
+        "proposedBy": "human",
+        "status": {
+          "kind": "agreed",
+          "seq": 7,
+          "at": "2026-10-01T10:00:00.000Z",
+          "principal": "owner@example.com"
+        }
+      },
+      {
+        "id": "SCN-0000000B",
+        "title": "A proposal nobody agreed",
+        "anchors": [
+          "goal"
+        ],
+        "given": [
+          {
+            "text": "a proposed scenario"
+          }
+        ],
+        "when": [
+          {
+            "text": "the export runs"
+          }
+        ],
+        "then": [
+          {
+            "text": "it is not carried"
+          }
+        ],
+        "proposedBy": "ai",
+        "status": {
+          "kind": "proposed"
+        }
+      },
+      {
+        "id": "SCN-0000000C",
+        "title": "A retired predecessor",
+        "anchors": [
+          "goal"
+        ],
+        "given": [
+          {
+            "text": "an old scenario"
+          }
+        ],
+        "when": [
+          {
+            "text": "a successor is agreed"
+          }
+        ],
+        "then": [
+          {
+            "text": "it is retired"
+          }
+        ],
+        "proposedBy": "human",
+        "status": {
+          "kind": "struck",
+          "reason": "superseded by SCN-0000000D"
+        }
+      },
+      {
+        "id": "SCN-0000000D",
+        "title": "The agreed successor",
+        "anchors": [
+          "goal"
+        ],
+        "given": [
+          {
+            "text": "role <role>"
+          }
+        ],
+        "when": [
+          {
+            "text": "the export runs"
+          }
+        ],
+        "then": [
+          {
+            "text": "the successor is carried"
+          }
+        ],
+        "examples": {
+          "columns": [
+            "role"
+          ],
+          "rows": [
+            [
+              "owner"
+            ],
+            [
+              "member"
+            ]
+          ]
+        },
+        "supersedes": "SCN-0000000C",
+        "proposedBy": "human",
+        "status": {
+          "kind": "agreed",
+          "seq": 9,
+          "at": "2026-10-01T11:00:00.000Z"
+        }
+      }
+    ],
+    "observations": [
+      {
+        "id": "OBS-0000000A",
+        "title": "Scaffold commits stay green",
+        "anchors": [
+          "goal"
+        ],
+        "kpi": {
+          "mode": "define",
+          "definition": {
+            "kind": "ratio",
+            "unit": "%",
+            "source": {
+              "kind": "events",
+              "numerator": {
+                "esIds": [
+                  "ev-scaffold-committed"
+                ],
+                "filters": {
+                  "outcome": "ok"
+                }
+              },
+              "denominator": {
+                "esIds": [
+                  "ev-scaffold-committed"
+                ]
+              }
+            }
+          }
+        },
+        "expect": {
+          "direction": "up",
+          "target": 0.95,
+          "baseline": 0.5,
+          "window": "30d"
+        },
+        "proposedBy": "human",
+        "status": {
+          "kind": "agreed",
+          "seq": 8,
+          "at": "2026-10-01T10:30:00.000Z"
+        }
+      },
+      {
+        "id": "OBS-0000000B",
+        "title": "A proposed observation",
+        "anchors": [
+          "goal"
+        ],
+        "kpi": {
+          "mode": "reference",
+          "ref": "apm.latency"
+        },
+        "expect": {
+          "direction": "down",
+          "target": 200,
+          "window": "7d"
+        },
+        "proposedBy": "ai",
+        "status": {
+          "kind": "proposed"
+        }
+      },
+      {
+        "id": "OBS-0000000C",
+        "title": "Design sessions end in a scaffold",
+        "anchors": [
+          "goal"
+        ],
+        "kpi": {
+          "mode": "reference",
+          "ref": "dash.scaffold-rate",
+          "label": "scaffold rate"
+        },
+        "expect": {
+          "direction": "hold",
+          "target": 1,
+          "window": "14d"
+        },
+        "proposedBy": "human",
+        "status": {
+          "kind": "agreed",
+          "seq": 10,
+          "at": "2026-10-01T12:00:00.000Z"
+        }
+      }
+    ],
+    "coverage": [
+      {
+        "esId": "ev-1",
+        "scenarioId": "SCN-0000000A"
+      },
+      {
+        "esId": "ev-2",
+        "scenarioId": "SCN-0000000B"
+      },
+      {
+        "esId": "ev-3",
+        "scenarioId": "SCN-0000000C"
+      }
+    ]
+  },
+  "mapSeq": 12
+}

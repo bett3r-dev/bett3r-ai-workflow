@@ -1,0 +1,11 @@
+{
+  "structureVersion": 2,
+  "shape": "decision",
+  "grounded": true,
+  "mapId": "ESAS-930",
+  "nodes": [
+    { "id": "goal", "level": "goal", "title": "Carry the agreed examples into the committed map", "parents": [] }
+  ],
+  "forks": [],
+  "scenarios": []
+}
