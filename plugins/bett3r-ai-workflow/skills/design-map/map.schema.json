@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "BLUEPRINT map vocabulary",
   "description": "The closed sets an BLUEPRINT impact map is written in. Emitted from @bett3r-dev/blueprint-schema; do not hand-edit, and do not extend a set in a consumer.",
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "$defs": {
     "forkStatusKind": {
       "type": "string",
@@ -38,6 +38,67 @@
       "enum": [
         "impact",
         "decision"
+      ]
+    },
+    "exampleStatusKind": {
+      "type": "string",
+      "description": "Where a scenario or observation stands; only a human agrees one.",
+      "enum": [
+        "proposed",
+        "agreed",
+        "struck"
+      ]
+    },
+    "kpiMode": {
+      "type": "string",
+      "description": "Whether an observation defines a new KPI or references one the APM already tracks.",
+      "enum": [
+        "define",
+        "reference"
+      ]
+    },
+    "kpiKind": {
+      "type": "string",
+      "description": "What a defined KPI measures.",
+      "enum": [
+        "counter",
+        "rate",
+        "ratio",
+        "duration-percentile",
+        "gauge"
+      ]
+    },
+    "kpiDirection": {
+      "type": "string",
+      "description": "Which way an observation expects its KPI to move.",
+      "enum": [
+        "up",
+        "down",
+        "hold"
+      ]
+    },
+    "kpiSourceKind": {
+      "type": "string",
+      "description": "Where a defined KPI is read from: eventstorming ids, or a query on a logical datasource role.",
+      "enum": [
+        "events",
+        "query"
+      ]
+    },
+    "kpiFilterOutcome": {
+      "type": "string",
+      "description": "The logical outcome a KPI event side may be filtered on.",
+      "enum": [
+        "ok",
+        "rejected"
+      ]
+    },
+    "walkKind": {
+      "type": "string",
+      "description": "Whether a fork option's walk describes behaviour or structure.",
+      "enum": [
+        "behavioral",
+        "structural"
       ]
     }
   }

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/bett3r-dev/bett3r-ai-workflow/plugins/bett3r-ai-workflow/skills/design-map/map-structure.schema.json",
   "title": "map.json structure (structureVersion 2)",
-  "$comment": "The structure of a design's map.json: nodes, forks and their cards, spelled as blueprint MapFile (ESAS-167 D12) plus the plugin-only tickets, mapId, feedSeq, target and the two fork-status additions resolvedBy (decided) and reason (open). Every closed set (fork status kind, decided source, node level, map shape) is a $ref into map.schema.json, the byte-identical copy of the vocabulary blueprint emits; no value set is restated here. scripts/design-map.py validates against this file with the standard library, resolving map.schema.json from this file's directory; it implements type, const, enum, required, properties, additionalProperties:false, items, minItems, minLength, minimum, pattern, $ref (#/<pointer>, or <file>#/<pointer> for a file in this directory), allOf, oneOf and if/then, and reads $schema, $id, $defs, title, description and $comment as annotations — nothing else; with no oneOf branch matching, it reports the violation of the one branch whose const properties the value carries. What JSON Schema cannot say (unique ids, references that resolve, a decided option naming a card option) is checked by the script after this file.",
+  "$comment": "The structure of a design's map.json: nodes, forks and their cards, spelled as blueprint MapFile (ESAS-167 D12) plus the plugin-only tickets, mapId, feedSeq, target and the two fork-status additions resolvedBy (decided) and reason (open). Every closed set (fork status kind, decided source, node level, map shape, walk kind) is a $ref into map.schema.json, the byte-identical copy of the vocabulary blueprint emits; no value set is restated here. scripts/design-map.py validates against this file with the standard library, resolving map.schema.json from this file's directory; it implements type, const, enum, required, properties, additionalProperties:false, items, minItems, minLength, minimum, pattern, $ref (#/<pointer>, or <file>#/<pointer> for a file in this directory), allOf, oneOf and if/then, and reads $schema, $id, $defs, title, description and $comment as annotations — nothing else; with no oneOf branch matching, it reports the violation of the one branch whose const properties the value carries. What JSON Schema cannot say (unique ids, references that resolve, a decided option naming a card option) is checked by the script after this file.",
   "type": "object",
   "required": ["structureVersion", "grounded", "nodes", "forks"],
   "additionalProperties": false,
@@ -135,7 +135,7 @@
             "properties": {
               "scenario": { "$ref": "#/$defs/text" },
               "text": { "$ref": "#/$defs/text" },
-              "kind": { "enum": ["behavioral", "structural"] },
+              "kind": { "$ref": "map.schema.json#/$defs/walkKind" },
               "given": { "$ref": "#/$defs/text" },
               "when": { "$ref": "#/$defs/text" },
               "then": { "$ref": "#/$defs/text" }
