@@ -8,14 +8,22 @@ Scaffold an event-sourced aggregate using PV3's `AggregateBuilder`.
 
 **Read [`ddd-patterns` → AGGREGATES.md](../ddd-patterns/AGGREGATES.md) before writing the file.** It is this skill's reference half: command-handler options, `idempotency.check` semantics, transactional side-writes and the UNIQUE-constraint lock, event-namespace coverage, system/admin-only and tenant-but-not-row-scoped aggregates, lifecycle status guards, and the idempotency-predicate null-safety bug. Changing an *existing* aggregate's fields also means [SCHEMAS.md](../ddd-patterns/SCHEMAS.md) → *Renaming a persisted field*.
 
-**What the scaffolder does and does not do here.** It never generates an aggregate file — an
-aggregate's reducers and invariants are judgment, and there is nothing in the graph to derive them
-from. But a **new command on an aggregate that already exists** is generated, as a fragment: the
-`commandBuilder()` block with its `.withSchema(...)` and `.produces([...])`, for you to place
-inside `.withCommands({…})`. What it deliberately does not guess is the part that matters most —
-the handler body, the invariants, the idempotency check, and any stream override. A generated
-command declaration that emits its event unconditionally is correct **only** for the simplest
-case; read [AGGREGATES.md](../ddd-patterns/AGGREGATES.md) before assuming yours is one.
+**What the scaffolder does and does not do here.** A **new aggregate on the board** is generated
+as files: `<serverPath>/src/modules/<subdomain>/<stem>.aggregate.ts`
+(`AggregateBuilder( <Stem>AggregateSchema, <Stem>Events )`), its domain files `<stem>.events.ts`,
+`<stem>.types.ts` and `<stem>-integration.types.ts` with placeholder schemas marked
+`TODO(scaffold)`, and one guarded export line per file at the end of the subdomain's domain barrel.
+The commands and events the design gives it are rendered into those files in the same run: a
+`commandBuilder()` entry per command, an `Event({…})` and a stub reducer per event. A new subdomain
+also gets its domain barrel and module `index.ts`. `scopeInvariant()` is applied only when
+`domainUtilsPackageName` is declared. A label without `Aggregate`, in a repo whose aggregates all
+carry it, is blocked with the rename. A **new command on an aggregate that already exists** is a
+fragment: the `commandBuilder()` block with its `.withSchema(...)` and `.produces([...])`, for you to
+place inside `.withCommands({…})`. In both cases it deliberately does not guess the part that
+matters most: the reducer bodies (each stub keeps the state unchanged), the handler body, the
+invariants, the idempotency check, and any stream override. A generated command declaration that
+emits its event unconditionally is correct **only** for the simplest case; read
+[AGGREGATES.md](../ddd-patterns/AGGREGATES.md) before assuming yours is one.
 
 ## Project configuration
 

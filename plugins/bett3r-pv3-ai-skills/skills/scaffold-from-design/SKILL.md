@@ -100,8 +100,11 @@ there is no `.blueprint/` to fall back to.
 <scaffold> [--design … --graph …] --nodes <ids> --write
 ```
 
-**Only files are written. Fragments never are.** A file is emitted only when its host file does
-not exist, so this cannot overwrite anything — enforced by the `wx` open flag, not by a check.
+**Only files are written, plus guarded barrel lines. Fragments never are.** A file is emitted only
+when its host file does not exist, so this cannot overwrite anything — enforced by the `wx` open
+flag, not by a check. The one write to an existing file is a barrel line for a new aggregate: one
+export line appended at the **end** of an existing barrel, only when no line there is exactly that
+line (the report lists it under `APPENDED`).
 
 ## Step 3 — Place the fragments yourself
 
@@ -111,8 +114,14 @@ module `index.ts`. The tool prints the code, the imports, and a structural ancho
 
 This split is deliberate and is not a limitation to route around. The previous generation of this
 tooling tried to merge generated code into edited files; its merge step degraded to "use the
-generated one" and silently overwrote hand-written work. Nothing here opens a file it did not
-create.
+generated one" and silently overwrote hand-written work. Nothing here rewrites a file it did not
+create: the only write to one is a presence-guarded export line appended at the end of a barrel.
+
+**Place the test fragments too.** When the repo declares `designTooling.tests`, the scaffold report
+has a `TESTS` section. A test file it wrote is create-only like any other file; a test for a file
+that already exists comes back under `FRAGMENTS`, `it.todo` cases behind a `TODO(scaffold)` marker. Place
+each one inside the top-level `describe` of the file its `where:` names. If the section reads `TESTS - not
+configured`, the repo declares no convention and there is nothing to place.
 
 **Place every registration fragment.** An artifact nothing registers compiles, typechecks, and is
 never wired to the event bus — it simply never runs, which looks exactly like a wrong projection.
@@ -146,10 +155,14 @@ the right-hand column is where the work actually is.
 | `policy` | whole file + registration | handler bodies, dependency declaration, redelivery safety |
 | `read-model` | whole file + registration; schema as a placeholder, `TODO(scaffold)` | the real schema, projections, queries, indexes, scope |
 | `command` on an **existing** handler | fragment + companion schema fragment (placeholder, `TODO(scaffold)`) | the real command schema, the handler body, stream/idempotency |
-| `command` on a **proposed** handler | *blocked* | scaffold the handler first — order the slices so it exists |
-| `event` | fragment + companion schema fragment (placeholder, `TODO(scaffold)`) | the real event schema, the namespace registration, translations |
+| `command` on a **proposed** aggregate in the same run | rendered into the aggregate's new file (`HOSTED`) + its placeholder schema in `<stem>-integration.types.ts` | the real command schema, the handler body, stream/idempotency |
+| `command` on a proposed handler the run does not write (a refused aggregate, a `system`, or one left out of `--nodes`) | *blocked*, naming the handler | unblock the handler, or add its id to `--nodes` |
+| `event` of an **existing** aggregate | fragment + companion schema fragment (placeholder, `TODO(scaffold)`) | the real event schema, the namespace registration, translations |
+| `event` of a **proposed** aggregate in the same run | rendered into that aggregate's own new events file, never a sibling's (`HOSTED`), + placeholder schema + a stub reducer | the real event schema, the reducer, translations |
 | `policy`, `read-model` or view naming a **proposed** node that is not written this run (an event it reacts to or projects, a command it issues, an aggregate a view reads from) | *deferred* (not written, exit 0, listed under `DEFERRED`) | place the fragments, re-extract the graph, re-run the scaffold |
-| `aggregate`, `system` | **nothing** | the whole file — use `create-aggregate` |
+| `aggregate` | its file (`AggregateBuilder( <Stem>AggregateSchema, <Stem>Events )`) + `<stem>.events.ts`, `<stem>.types.ts`, `<stem>-integration.types.ts` (placeholders, `TODO(scaffold)`) + guarded barrel lines; a new subdomain also gets its domain barrel and module `index.ts`; registration into an existing module is a fragment | reducers, handler bodies, invariants, scope (`scopeInvariant()` only when `domainUtilsPackageName` is declared) — use `create-aggregate` |
+| `aggregate` labelled without `Aggregate` where every aggregate in code carries it | *blocked*, with the exact rename | rename it on the board |
+| `system` | **nothing** (*blocked*, no template) | the whole file |
 | schemas, tests | **nothing** | `create-schema`, `create-tests` |
 
 ## Placement, and why it is computed
