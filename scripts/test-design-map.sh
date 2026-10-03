@@ -874,9 +874,11 @@ if grep -q 'must never appear' "$CANDLINES"; then
 else
   pass 'candidates: no candidate comes from a rejected option'
 fi
-check 'candidates: fixed key order fork,option,scenario,source,example' \
+# ESAS-296: a walk line passes the walk's given/when/then through, after the
+# five keys it always carried.
+check 'candidates: fixed key order fork,option,scenario,source,example,given,when,then' \
   "$( head -n1 "$CANDLINES" | python3 -c 'import json,sys; print(",".join(json.loads(sys.stdin.read()).keys()))' )" \
-  fork,option,scenario,source,example
+  fork,option,scenario,source,example,given,when,then
 
 expect_error 'candidates: --map is refused as an unknown flag' unknown-flag-map \
   candidates --map "$CAND"
@@ -2012,6 +2014,193 @@ expect_error 'export-examples: a feed whose scenarios is not a list' from-invali
 expect_error 'export-examples: --expect is not its flag' unknown-flag-expect export-examples "$TMP/exp/first.json" --from "$CAR/get-map.json" --expect 1
 expect_error 'export-examples: an invalid target map' schema-invalid export-examples "$TMP/car-status-kind.json" --from "$CAR/get-map.json"
 holds_cmp 'export-examples: every refusal leaves the map byte-identical' "$TMP/exp/keep.json" "$TMP/exp/first.json"
+
+# ---------------------------------------------------------------------------
+printf 'ESAS-296: fork-derived scenarios — one derivation, pinned to blueprint'"'"'s fixture set\n'
+# ---------------------------------------------------------------------------
+# blueprint derives a decided fork's proposed scenarios and judges every stored
+# derived one on read (blueprint-schema fork-scenarios.ts, ADR-113); design-map
+# carries the same derivation in Python. One shared fixture set (map in,
+# proposals and reasons out) pins the two: blueprint's vitest drives the TS over
+# it, the driver below drives the Python over this byte-identical copy.
+FSC="$FIX/fork-scenarios"
+check 'control: the PL copy holds 18 maps, each with its expected file' \
+  "$( ls "$FSC"/*.map.json | wc -l | tr -d ' ' ) $( ls "$FSC"/*.expected.json | wc -l | tr -d ' ' ) $( ls "$FSC" | wc -l | tr -d ' ' )" '18 18 36'
+
+# derive_all <dir> — runs design-map.py's fork_scenarios over every <case>.map.json
+# in <dir> and compares the JSON.stringify(_, null, 2) + "\n" bytes with
+# <case>.expected.json. Prints match=<n> total=<n> differs=<cases|none>.
+derive_all(){
+  python3 - "$ROOT/plugins/bett3r-ai-workflow/scripts/design-map.py" "$1" <<'PY'
+import importlib.util, json, os, sys
+spec = importlib.util.spec_from_file_location("design_map", sys.argv[1])
+dm = importlib.util.module_from_spec(spec); spec.loader.exec_module(dm)
+d = sys.argv[2]
+cases = sorted(f[:-len(".map.json")] for f in os.listdir(d) if f.endswith(".map.json"))
+differs = []
+for case in cases:
+    with open(os.path.join(d, case + ".map.json"), encoding="utf-8") as fh:
+        report = dm.fork_scenarios(json.load(fh))
+    with open(os.path.join(d, case + ".expected.json"), "rb") as fh:
+        expected = fh.read()
+    if (json.dumps(report, indent=2, ensure_ascii=False) + "\n").encode("utf-8") != expected:
+        differs.append(case)
+print(f"match={len(cases) - len(differs)} total={len(cases)} differs={','.join(differs) or 'none'}")
+PY
+}
+check 'the Python derivation reproduces every expected file byte for byte' \
+  "$( derive_all "$FSC" 2>&1 )" 'match=18 total=18 differs=none'
+mkdir -p "$TMP/fsc"
+cp "$FSC"/* "$TMP/fsc/"
+python3 - "$TMP/fsc/review-option-changed.expected.json" <<'PY'
+import sys
+p = sys.argv[1]; b = open(p, "rb").read()
+open(p, "wb").write(b.replace(b'"option-changed"', b'"reopened"'))
+PY
+check 'one reason planted in a temp copy of an expected file is caught' \
+  "$( derive_all "$TMP/fsc" 2>&1 )" 'match=17 total=18 differs=review-option-changed'
+
+# same_set <a> <b> — fresh when both directories list the same names and every
+# file is byte-identical (cmp), else stale.
+same_set(){
+  if [ "$( ls "$1" )" != "$( ls "$2" )" ]; then printf stale; return; fi
+  for zf in "$1"/*; do
+    cmp -s "$zf" "$2/$( basename "$zf" )" || { printf stale; return; }
+  done
+  printf fresh
+}
+if [ -n "${BLUEPRINT_CHECKOUT:-}" ]; then
+  BP_FSC="$BLUEPRINT_CHECKOUT/src/packages/backend/blueprint-schema/__tests__/fixtures/fork-scenarios"
+  if [ -d "$BP_FSC" ]; then
+    check 'the fixture set equals $BLUEPRINT_CHECKOUT blueprint-schema __tests__/fixtures/fork-scenarios (cmp)' \
+      "$( same_set "$FSC" "$BP_FSC" )" fresh "$BP_FSC"
+    check 'the planted temp copy is detected as stale' "$( same_set "$TMP/fsc" "$BP_FSC" )" stale
+  else
+    fail 'BLUEPRINT_CHECKOUT holds the fork-scenarios fixture set' "no directory at $BP_FSC"
+  fi
+else
+  skipped=$(( skipped + 1 ))
+  printf '  \033[33m!! SKIP reason=no-blueprint-checkout\033[0m the fork-scenarios fixture set was NOT compared with blueprint (set BLUEPRINT_CHECKOUT); this is not a pass\n'
+fi
+
+printf 'ESAS-296: validate — the scenarios slot, and one label per walk\n'
+dm validate "$FIX/scenario-agreed.map.json"
+check 'validate: a stored scenario with derivedFrom walk and basis is a valid map' \
+  "$( attr "$LINE" outcome ) exit=$rc" 'ok exit=0' "$( cat "$OUT" )"
+# The source identity of a derived scenario is (fork, option, walk label): two
+# walks sharing a label in one option would make it ambiguous which one a stored
+# scenario was derived from.
+dm validate "$FIX/scenario-duplicate-walk.map.json"
+check 'validate: two walks of one option sharing a label are refused' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" id ) $( attr "$LINE" option ) $( attr "$LINE" at ) exit=$rc" \
+  'error duplicate-walk-scenario ESAS-296-F1 C /forks/0/card/options/0/walks/1 exit=2' "$( cat "$OUT" )"
+dm candidates "$FIX/scenario-duplicate-walk.map.json"
+check 'candidates: the same refusal, before any line' "$( attr "$LINE" reason ) lines=$( grep -c '^{' "$OUT" )" 'duplicate-walk-scenario lines=0' "$( cat "$OUT" )"
+
+printf 'ESAS-296: candidates — an agreed stored scenario is class agreed; one under review is skipped\n'
+# lines_where <file> <python predicate over the line dict l> — the matching JSON lines, re-dumped sorted.
+lines_where(){
+  python3 - "$1" "$2" <<'PY'
+import json, sys
+for raw in open(sys.argv[1], encoding="utf-8"):
+    if raw.startswith("{"):
+        l = json.loads(raw)
+        if eval(sys.argv[2]):
+            print(json.dumps(l, sort_keys=True, ensure_ascii=False))
+PY
+}
+dm candidates "$FIX/scenario-agreed.map.json"
+check 'candidates over an agreed derived scenario: counts' \
+  "$( attr "$LINE" outcome ) candidates=$( attr "$LINE" candidates ) agreed=$( attr "$LINE" agreed ) skipped-review=$( attr "$LINE" skipped-review ) exit=$rc" \
+  'ok candidates=1 agreed=1 skipped-review=0 exit=0' "$( cat "$OUT" )"
+check 'candidates: the agreed scenario is emitted as class agreed with its id and Given/When/Then' \
+  "$( lines_where "$OUT" 'l.get("class") == "agreed"' )" \
+  '{"class": "agreed", "fork": "ESAS-296-F1", "given": "a failed payment", "id": "SCN-0000000A", "option": "C", "scenario": "Retry once", "source": "owner", "then": "it is retried once", "when": "the retry runs"}' \
+  "$( cat "$OUT" )"
+check 'candidates: the agreed walk is not offered a second time as a walk line' \
+  "$( lines_where "$OUT" 'l.get("scenario") == "Retry once"' | wc -l | tr -d ' ' )" 1 "$( cat "$OUT" )"
+check 'candidates: the walk with no stored scenario is a walk line, its Given/When/Then passed through' \
+  "$( lines_where "$OUT" '"class" not in l' )" \
+  '{"example": "a second failure is final", "fork": "ESAS-296-F1", "given": "a payment that failed twice", "option": "C", "scenario": "Gives up", "source": "owner", "then": "it is marked failed", "when": "the retry runs"}' \
+  "$( cat "$OUT" )"
+check 'candidates: an agreed line keeps the documented key order' \
+  "$( grep '"class":"agreed"' "$OUT" | python3 -c 'import json,sys; print(",".join(json.loads(sys.stdin.read()).keys()))' )" \
+  class,id,fork,option,scenario,source,given,when,then
+
+# Re-chosen: the owner overturned C for D. The scenario agreed on C now rests on
+# a decision that no longer holds (option-changed); it stops feeding tests.
+dm candidates "$FIX/scenario-rechosen.map.json"
+check 'candidates over a re-chosen fork: the stored scenario is skipped and counted' \
+  "$( attr "$LINE" outcome ) candidates=$( attr "$LINE" candidates ) agreed=$( attr "$LINE" agreed ) skipped-review=$( attr "$LINE" skipped-review ) exit=$rc" \
+  'ok candidates=1 agreed=0 skipped-review=1 exit=0' "$( cat "$OUT" )"
+check 'candidates: no line names the scenario under review' "$( grep -c 'SCN-0000000A' "$OUT" | tr -d ' ' )" 0 "$( cat "$OUT" )"
+check 'candidates: the new option D offers its walk' \
+  "$( lines_where "$OUT" 'True' | sed -n 's/.*"option": "\([A-Z]\)".*"scenario": "\([^"]*\)".*/\1:\2/p' )" 'D:Retry forever' "$( cat "$OUT" )"
+
+# Mixed: a proposed stored scenario is a candidate carrying its id; a struck one
+# is never re-offered (blueprint's derivation never re-proposes a struck triple);
+# an agreed authored scenario (no derivedFrom) is emitted too.
+dm candidates "$FIX/scenario-mixed.map.json"
+check 'candidates over the mixed map: counts' \
+  "$( attr "$LINE" outcome ) candidates=$( attr "$LINE" candidates ) agreed=$( attr "$LINE" agreed ) skipped-review=$( attr "$LINE" skipped-review ) skipped-struck=$( attr "$LINE" skipped-struck ) exit=$rc" \
+  'ok candidates=1 agreed=1 skipped-review=0 skipped-struck=1 exit=0' "$( cat "$OUT" )"
+check 'candidates: a proposed stored scenario is a candidate with its id' \
+  "$( lines_where "$OUT" 'l.get("class") == "candidate"' )" \
+  '{"class": "candidate", "example": "it is retried once", "fork": "ESAS-296-F1", "given": "a failed payment", "id": "SCN-0000000A", "option": "C", "scenario": "Retry once", "source": "owner", "then": "it is retried once", "when": "the retry runs"}' \
+  "$( cat "$OUT" )"
+check 'candidates: the struck walk is not re-offered' "$( grep -c 'Gives up' "$OUT" | tr -d ' ' )" 0 "$( cat "$OUT" )"
+check 'candidates: an agreed authored scenario is emitted, its two given steps joined with "and"' \
+  "$( lines_where "$OUT" 'l.get("class") == "agreed"' )" \
+  '{"class": "agreed", "fork": null, "given": "a retried payment and a customer email on file", "id": "SCN-0000000C", "option": null, "scenario": "Receipt is sent", "source": null, "then": "a receipt is emailed", "when": "the retry succeeds"}' \
+  "$( cat "$OUT" )"
+
+# EMPIRICAL at the design base: the ESAS-1-F5 line dropped its walk's given.
+dm candidates "$FIX/candidates.map.json"
+check 'candidates: the code-decided ESAS-1-F5 walk line now carries its given/when/then' \
+  "$( lines_where "$OUT" 'l["fork"] == "ESAS-1-F5"' )" \
+  '{"example": "A is applied by the code", "fork": "ESAS-1-F5", "given": "the code already takes A", "option": "A", "scenario": "the code takes option A", "source": "code", "then": "A is applied by the code", "when": "the plan is cut"}' \
+  "$( cat "$OUT" )"
+check 'candidates: a map with no stored scenario reads agreed=0 skipped-review=0' \
+  "agreed=$( attr "$LINE" agreed ) skipped-review=$( attr "$LINE" skipped-review )" 'agreed=0 skipped-review=0' "$LINE"
+
+printf 'ESAS-296: check-plan <slices.yaml> <map.json> — an agreed id is confirmed, unattended\n'
+dm check-plan "$CPFIX/agreed-id-unsourced.yaml" "$FIX/scenario-agreed.map.json"
+check 'check-plan: a scenario naming an agreed id needs no expected_from of its own with the map' \
+  "$( attr "$LINE" outcome ) review=$( attr "$LINE" review ) exit=$rc" 'ok review=unattended exit=0' "$( cat "$OUT" )"
+dm check-plan "$CPFIX/agreed-id-unsourced.yaml"
+check 'check-plan: the same plan without the map is refused as today' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" why ) exit=$rc" 'fail scenario-unsourced no-expected-from exit=1' "$( cat "$OUT" )"
+dm check-plan "$CPFIX/agreed-id-unsourced.yaml" "$FIX/scenario-rechosen.map.json"
+check 'check-plan: an id the map holds under review confirms nothing' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) exit=$rc" 'fail scenario-unsourced exit=1' "$( cat "$OUT" )"
+dm check-plan "$CPFIX/agreed-id-unsourced.yaml" "$FIX/scenario-mixed.map.json"
+check 'check-plan: an id the map holds only proposed confirms nothing' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) exit=$rc" 'fail scenario-unsourced exit=1' "$( cat "$OUT" )"
+# Laundering: the agreed id with a `then` that is not the map entry's. The
+# id alone confirms nothing; only the text the human agreed does.
+dm check-plan "$CPFIX/agreed-id-unsourced-laundered.yaml" "$FIX/scenario-agreed.map.json"
+check 'check-plan: an agreed id whose text differs from the map entry still needs expected_from' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" why ) exit=$rc" 'fail scenario-unsourced no-expected-from exit=1' "$( cat "$OUT" )"
+check 'control: the laundered fixture differs from the agreed one only in its then (and probe)' \
+  "$( diff "$CPFIX/agreed-id-unsourced.yaml" "$CPFIX/agreed-id-unsourced-laundered.yaml" | grep -c '^[<>]' | tr -d ' ' )" 4 \
+  "$( diff "$CPFIX/agreed-id-unsourced.yaml" "$CPFIX/agreed-id-unsourced-laundered.yaml" )"
+# Each compared field is pinned on its own: the agreed copy with ONE field
+# rewritten (scenario, given, when or then) is no longer the text the human
+# agreed, so it needs an expected_from like any other scenario.
+for field in scenario given when then; do
+  sed "s/^        $field: .*/        $field: a second failure is final/" \
+      "$CPFIX/agreed-id-unsourced.yaml" > "$TMP/agreed-id-unsourced-only-$field.yaml"
+  dm check-plan "$TMP/agreed-id-unsourced-only-$field.yaml" "$FIX/scenario-agreed.map.json"
+  check "check-plan: an agreed id whose $field alone differs from the map entry still needs expected_from" \
+    "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" why ) exit=$rc" 'fail scenario-unsourced no-expected-from exit=1' "$( cat "$OUT" )"
+  check "control: that plan differs from the agreed copy only in its $field line" \
+    "$( diff "$CPFIX/agreed-id-unsourced.yaml" "$TMP/agreed-id-unsourced-only-$field.yaml" | grep '^>' | tr -d '\n' )" \
+    ">         $field: a second failure is final" "$( diff "$CPFIX/agreed-id-unsourced.yaml" "$TMP/agreed-id-unsourced-only-$field.yaml" )"
+done
+expect_error 'check-plan: a map that does not validate' schema-invalid \
+  check-plan "$CPFIX/agreed-id-unsourced.yaml" "$FIX/v1-map.json"
+expect_error 'check-plan: an unreadable map' map-unreadable \
+  check-plan "$CPFIX/agreed-id-unsourced.yaml" "$TMP/no-such-map.json"
 
 # ---------------------------------------------------------------------------
 printf 'the verdict line, not the exit code\n'

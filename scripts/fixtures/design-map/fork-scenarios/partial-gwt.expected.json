@@ -1,0 +1,69 @@
+{
+  "proposals": [
+    {
+      "key": "derived:F/C/Retry once",
+      "forkId": "F",
+      "optionId": "C",
+      "walk": "Retry once",
+      "source": "owner",
+      "state": "needs-gherkin",
+      "title": "Retry once",
+      "text": "one retry",
+      "anchors": [
+        "N1"
+      ],
+      "given": [],
+      "when": [],
+      "then": []
+    },
+    {
+      "key": "derived:F/C/Retry twice",
+      "forkId": "F",
+      "optionId": "C",
+      "walk": "Retry twice",
+      "source": "owner",
+      "state": "needs-gherkin",
+      "title": "Retry twice",
+      "text": "two retries",
+      "anchors": [
+        "N1"
+      ],
+      "given": [],
+      "when": [],
+      "then": []
+    },
+    {
+      "key": "derived:F/C/Retry thrice",
+      "forkId": "F",
+      "optionId": "C",
+      "walk": "Retry thrice",
+      "source": "owner",
+      "state": "needs-gherkin",
+      "title": "Retry thrice",
+      "text": "three retries",
+      "anchors": [
+        "N1"
+      ],
+      "given": [],
+      "when": [],
+      "then": []
+    },
+    {
+      "key": "derived:F/C/Retry fourth",
+      "forkId": "F",
+      "optionId": "C",
+      "walk": "Retry fourth",
+      "source": "owner",
+      "state": "needs-gherkin",
+      "title": "Retry fourth",
+      "text": "four retries",
+      "anchors": [
+        "N1"
+      ],
+      "given": [],
+      "when": [],
+      "then": []
+    }
+  ],
+  "derived": []
+}

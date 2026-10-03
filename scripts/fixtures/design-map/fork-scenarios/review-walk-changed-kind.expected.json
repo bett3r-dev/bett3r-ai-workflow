@@ -1,0 +1,38 @@
+{
+  "proposals": [
+    {
+      "key": "derived:F/C/Gives up",
+      "forkId": "F",
+      "optionId": "C",
+      "walk": "Gives up",
+      "source": "owner",
+      "state": "ready",
+      "title": "Gives up",
+      "text": "then stops",
+      "anchors": [
+        "N1"
+      ],
+      "given": [
+        {
+          "text": "a payment failed twice"
+        }
+      ],
+      "when": [
+        {
+          "text": "the retry runs"
+        }
+      ],
+      "then": [
+        {
+          "text": "it is marked failed"
+        }
+      ]
+    }
+  ],
+  "derived": [
+    {
+      "scenarioId": "SCN-0000000A",
+      "reviewReason": "walk-changed"
+    }
+  ]
+}

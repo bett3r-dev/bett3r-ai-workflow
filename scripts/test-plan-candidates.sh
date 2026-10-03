@@ -293,6 +293,68 @@ check 'control: that fixture carries no expected_from at all' \
       "$( grep -c 'expected_from' "$PLANS/scenario-structural.yaml" )" 0 "$( cat "$PLANS/scenario-structural.yaml" )"
 
 # ---------------------------------------------------------------------------
+printf 'ESAS-296: an agreed scenario in map.json is confirmed, unattended\n'
+# ---------------------------------------------------------------------------
+# A human agreed SCN-0000000A on the board; the export carried it into map.json.
+# An unattended plan copies it into a slice scenario with its id. Its `then` is
+# also the text of an unconfirmed walk candidate the plan lists, so without the
+# map the AC2 refusal (candidate-in-oracle) is what stands; with the map the id
+# is read back as agreed and unflagged, and the copy is not a promotion.
+AGREED="$FIX/scenario-agreed.map.json"
+run "$DM" check-plan "$PLANS/agreed-id.yaml" "$AGREED"
+check 'an unattended slice citing an agreed id passes check-plan with the map' \
+      "$( attr "$LINE" outcome ) review=$( attr "$LINE" review ) exit=$rc" 'ok review=unattended exit=0' "$( cat "$OUT" )"
+run "$DM" check-plan "$PLANS/agreed-id.yaml"
+check 'the same plan without the map is refused, as today' \
+      "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" slice ) exit=$rc" 'fail candidate-in-oracle 1 exit=1' "$( cat "$OUT" )"
+# Fail closed: the owner re-chose the fork, so the agreed scenario is under
+# review (option-changed) and confirms nothing.
+run "$DM" check-plan "$PLANS/agreed-id.yaml" "$FIX/scenario-rechosen.map.json"
+check 'with the fork re-chosen the agreed id is under review, and the refusal stands' \
+      "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) exit=$rc" 'fail candidate-in-oracle exit=1' "$( cat "$OUT" )"
+check 'control: the plan really copies an unconfirmed candidate example into the cited scenario' \
+      "$( grep -c 'it is retried once' "$PLANS/agreed-id.yaml" | tr -d ' ' )" 2 "$PLANS/agreed-id.yaml"
+# Laundering: the agreed id on a scenario whose title and `then` are not the
+# map entry's but an unconfirmed candidate's example. The id alone confirms
+# nothing; check-plan compares scenario/given/when/then with the map entry's
+# title and joined steps, so the refusal stands even with the map.
+run "$DM" check-plan "$PLANS/agreed-id-laundered.yaml" "$AGREED"
+check 'an agreed id carrying text the map does not hold is refused, map or no map' \
+      "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" slice ) exit=$rc" 'fail candidate-in-oracle 1 exit=1' "$( cat "$OUT" )"
+check 'control: the laundered scenario cites the agreed id and the candidate example' \
+      "$( grep -c -e 'id: SCN-0000000A' -e 'then: a second failure is final' "$PLANS/agreed-id-laundered.yaml" | tr -d ' ' )" 2 "$PLANS/agreed-id-laundered.yaml"
+# Each compared field is pinned on its own: a copy that is the agreed text
+# except for ONE field, which carries the unconfirmed candidate example, is
+# refused. Built from the laundered fixture with its scenario and `then` put
+# back to the map entry's, so the faithful copy passes (the control) and each
+# variant differs from it in exactly the one line under test.
+sed -e 's/^        scenario: Gives up$/        scenario: Retry once/' \
+    -e 's/^        then: a second failure is final$/        then: it is retried once/' \
+    "$PLANS/agreed-id-laundered.yaml" > "$TMP/agreed-id-faithful.yaml"
+run "$DM" check-plan "$TMP/agreed-id-faithful.yaml" "$AGREED"
+check 'control: the agreed text verbatim beside an unconfirmed candidate passes with the map' \
+      "$( attr "$LINE" outcome ) exit=$rc" 'ok exit=0' "$( cat "$OUT" )"
+for field in scenario given when then; do
+  sed "s/^        $field: .*/        $field: a second failure is final/" \
+      "$TMP/agreed-id-faithful.yaml" > "$TMP/agreed-id-only-$field.yaml"
+  run "$DM" check-plan "$TMP/agreed-id-only-$field.yaml" "$AGREED"
+  check "an agreed id whose $field alone carries the candidate example is refused" \
+        "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" slice ) exit=$rc" 'fail candidate-in-oracle 1 exit=1' "$( cat "$OUT" )"
+  check "control: that plan differs from the faithful copy only in its $field line" \
+        "$( diff "$TMP/agreed-id-faithful.yaml" "$TMP/agreed-id-only-$field.yaml" | grep '^>' | tr -d '\n' )" \
+        ">         $field: a second failure is final" "$( diff "$TMP/agreed-id-faithful.yaml" "$TMP/agreed-id-only-$field.yaml" )"
+done
+# The exemption covers only the compared fields: the agreed text verbatim plus
+# a `text:` carrying the candidate example is still a promotion.
+awk '{print} /^        then: it is retried once$/{print "        text: it is retried once"}' \
+    "$PLANS/agreed-id.yaml" > "$TMP/agreed-id-text.yaml"
+run "$DM" check-plan "$TMP/agreed-id-text.yaml" "$AGREED"
+check 'an agreed scenario with a text: field carrying a candidate example is refused' \
+      "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) exit=$rc" 'fail candidate-in-oracle exit=1' "$( cat "$OUT" )"
+check 'control: the derived plan adds exactly the text: line' \
+      "$( diff "$PLANS/agreed-id.yaml" "$TMP/agreed-id-text.yaml" | grep -c '^>' | tr -d ' ' )" 1 "$( cat "$TMP/agreed-id-text.yaml" )"
+
+# ---------------------------------------------------------------------------
 printf 'AC5: the trailing review/candidateOracles block does not change pool width\n'
 # ---------------------------------------------------------------------------
 cat > "$TMP/bare.yaml" <<'Y'

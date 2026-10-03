@@ -6,7 +6,7 @@
     DESIGN-MAP:v1 outcome=ok verb=render expected=<n> payload=<n> rendered=<n> page=<path>
     DESIGN-MAP:v1 outcome=ok verb=render maps=<n> forks=<n> expected=<n> page=<path>   (--stack)
     DESIGN-MAP:v1 outcome=ok verb=apply-answers final=<bool> open=<n> owner=<n> recommendation=<n> code=<n> moot=<n> otherMap=<n> commented=<ids|none> map=<path>
-    DESIGN-MAP:v1 outcome=ok verb=candidates forks=<n> candidates=<n> skipped-open=<n> skipped-moot=<n> skipped-nowalk=<n> skipped-untestable=<n>
+    DESIGN-MAP:v1 outcome=ok verb=candidates forks=<n> candidates=<n> skipped-open=<n> skipped-moot=<n> skipped-nowalk=<n> skipped-untestable=<n> agreed=<n> skipped-review=<n> skipped-struck=<n>
     DESIGN-MAP:v1 outcome=ok verb=check-plan review=<human|unattended|none> candidates=<n> scenarios=<n> seams=<n> probed=<n>
     DESIGN-MAP:v1 outcome=fail verb=check-plan reason=unattended-confirmed
     DESIGN-MAP:v1 outcome=fail verb=check-plan reason=candidate-in-oracle slice=<id>
@@ -45,7 +45,7 @@ Usage:
   design-map check-page <map.json> <page.html> --expect <n>
   design-map apply-answers <map.json> <answers-dir> [--final]
   design-map candidates <map.json>
-  design-map check-plan <slices.yaml>
+  design-map check-plan <slices.yaml> [<map.json>]
   design-map render --stack <m1> <m2>... --expect <n1> <n2>... --out <page.html>
   design-map project --ticket <K> <map.json>...   (the map, then the verdict, on stdout)
   design-map decisions <map.json> [--closed]
@@ -72,6 +72,10 @@ reason=schema-invalid. After the schema, the checks JSON Schema cannot express:
   duplicate-node-id (id=)            two nodes share an id
   duplicate-fork-id (id=)            two forks share an id
   duplicate-option-id (id= option=)  one fork's card repeats an option id
+  duplicate-walk-scenario (id= option= at=)
+                                     one option repeats a walk's scenario
+                                     label, the name a stored scenario's
+                                     derivedFrom.walk uses for it (ESAS-296)
   unknown-option (id= at=)           a decided status, or the card's
                                      recommendation, names no option of that card
   decided-title-only (id=)           a fork with no card is decided: there is
@@ -199,10 +203,33 @@ it, never writing anything. For each fork it prints zero or more compact JSON
 lines, one per walk of the fork's status.option — never a rejected option's
 walk, since a rejected option is a confidently-wrong oracle:
 
-  {"fork": <id>, "option": <id>, "scenario": <text>, "source": <decided source>, "example": <walk text>}
+  {"fork": <id>, "option": <id>, "scenario": <text>, "source": <decided source>, "example": <walk text>,
+   "given": <text>, "when": <text>, "then": <text>}
 
 in that fixed key order (documented here rather than sorted, so a reader can
-diff two runs by eye). A fork is skipped and counted, never printed, when:
+diff two runs by eye); given/when/then are the walk's own and are absent from
+a structural walk's line (ESAS-296).
+
+A map's stored scenarios (`scenarios`, ESAS-287/304) come first (ESAS-296). A
+walk of the chosen option that a stored scenario names in its derivedFrom
+(fork, option, walk label) yields that scenario instead of the walk line,
+judged on read against its fork the way blueprint judges it (fork_scenarios
+below, the twin of blueprint-schema fork-scenarios.ts):
+
+  {"class": "agreed", "id": <SCN id>, "fork": <id>, "option": <id>, "scenario": <title>,
+   "source": <decided source>, "given": <text>, "when": <text>, "then": <text>}
+
+for an agreed one (counted agreed=); a proposed one is the same line with
+"class": "candidate" and the walk's text as "example" after "source" (null
+when no walk reached it; counted in candidates=). given/when/then are the scenario's steps, their texts joined
+with " and ". A struck one is never offered again (skipped-struck=); one under
+review (option-changed, reopened, moot, fork-gone, walk-changed, walk-gone) is
+not printed and is counted skipped-review=: it feeds no test until a human
+strikes or supersedes it, and a re-choose back clears it by itself. The stored
+scenarios no chosen walk reached are judged the same way after the forks, in
+map order: an agreed authored one (no derivedFrom) is printed with "fork",
+"option" and "source" null. A walk with no stored scenario is the walk line
+above. A fork is skipped and counted, never printed, when:
 
   skipped-open        status.kind is "open" (the owner has not reached it)
   skipped-moot         status.kind is "moot" (never named in the output)
@@ -220,7 +247,9 @@ moment it can be fixed cheaply:
   decided-nowalk        decided, and the chosen option carries no walk at all:
                         a choice somebody made that nobody can test
   walk-unstructured     decided, and a walk of the chosen option is prose —
-                        no given/when/then, and not `kind: structural`.
+                        no given/when/then, and not `kind: structural` —
+                        and no stored scenario names it (the stored scenario,
+                        with its own given/when/then steps, is offered instead).
                         Reported as walk=<index>, never the scenario text:
                         every attribute on a verdict line is space-free by
                         contract, and a refusal nobody can parse reads
@@ -294,6 +323,18 @@ The seam block is the unit's answer to "where do we test this", written once:
 fewest, highest, existing over new. `at:` records where it is; `why:` is owed
 by every seam after the first and by every new one, so adding a seam costs a
 justification and the ideal number stays one.
+
+With a second argument, the committed map.json (ESAS-296), check-plan first
+validates it (validate's refusals, as outcome=error) and reads the scenarios it
+holds agreed and not under review. A slice scenario whose `id:` is one of them
+AND whose scenario/given/when/then equal that entry's title and step texts
+(joined with " and ", as `candidates` prints them) is a human's confirmation
+already: those four fields are exempt from candidate-in-oracle (a `text:` is
+still searched), and with no `expected_from:` of its own its source is the map
+entry (map.json#scenarios/<id>/examples when the entry has examples, else spec
+"scenario <id>"), so scenario-unsourced does not fire for it. An agreed id over
+any other text, and an id the map holds proposed, struck or under review,
+confirms nothing; without the map every rule above applies as before.
 
 else `outcome=ok review=<the top-level review, or "none"> candidates=<the
 length of candidateOracles, 0 if the key is absent> scenarios=<n> seams=<n>`. Other reasons, all
@@ -684,8 +725,16 @@ def check_semantics(payload):
             if card["recommendation"]["option"] not in options:
                 raise Refusal("unknown-option", id=fid, at=pointer(("forks", i, "card", "recommendation", "option")))
             for j, option in enumerate(card["options"]):
+                labels = set()
                 for k, walk in enumerate(option["walks"]):
                     at = ("forks", i, "card", "options", j, "walks", k)
+                    # A stored scenario names the walk it was derived from by
+                    # (fork, option, walk label) (ESAS-296): a repeated label
+                    # would leave it naming two walks.
+                    if walk["scenario"] in labels:
+                        raise Refusal("duplicate-walk-scenario", id=fid, option=option["id"],
+                                      at=pointer(at))
+                    labels.add(walk["scenario"])
                     gwt = [f for f in ("given", "when", "then") if f in walk]
                     # Partial is the shape to refuse loudest. A walk carrying a
                     # `given` and a `when` and no `then` reads, at a glance and
@@ -1320,10 +1369,12 @@ def validate_map(positional, flags):
 
 # --- candidates / check-plan (ESAS-165 D1-D3, AC2, AC3) ----------------------
 
-def fork_candidates(fork):
-    """The candidate lines a decided fork offers, and which counter (if any)
-    it is skipped under. testable:false wins over zero-walk when both hold
-    (documented precedence; ESAS-165 leaves the tie loose)."""
+def fork_candidates(fork, stored):
+    """The lines a decided fork offers, and which counter (if any) it is
+    skipped under. testable:false wins over zero-walk when both hold
+    (documented precedence; ESAS-165 leaves the tie loose). A walk a stored
+    scenario was derived from (`stored`, keyed by fork_scenario_key) yields
+    that scenario, as ("stored", scenario, walk), instead of its walk line."""
     status = fork["status"]
     if status["kind"] == "open":
         return [], "open"
@@ -1343,6 +1394,12 @@ def fork_candidates(fork):
         raise Refusal("decided-nowalk", outcome="fail", id=fork["id"], option=status["option"])
     lines = []
     for index, walk in enumerate(option["walks"]):
+        matches = stored.get(fork_scenario_key(fork["id"], status["option"], walk["scenario"]))
+        if matches:
+            # The human's stored scenario stands in for the walk, so a prose
+            # walk somebody completed on the board is not refused below.
+            lines += [("stored", scenario, walk) for scenario in matches]
+            continue
         if walk.get("kind") != "structural" and not all(f in walk for f in ("given", "when", "then")):
             # check_semantics already refused a PARTIAL triple, so this walk
             # carries none of it: prose, the form an executor reads and writes
@@ -1359,10 +1416,136 @@ def fork_candidates(fork):
             # downstream as no refusal at all.
             raise Refusal("walk-unstructured", outcome="fail", id=fork["id"],
                           option=status["option"], walk=index)
-        lines.append(
-            {"fork": fork["id"], "option": status["option"], "scenario": walk["scenario"],
-             "source": status["source"], "example": walk["text"]})
+        line = {"fork": fork["id"], "option": status["option"], "scenario": walk["scenario"],
+                "source": status["source"], "example": walk["text"]}
+        # ESAS-296: the walk's Given/When/Then pass through (a structural walk
+        # carries none), after the five keys the line always had.
+        line.update((f, walk[f]) for f in ("given", "when", "then") if f in walk)
+        lines.append(("walk", line, walk))
     return lines, None
+
+
+def step_text(steps):
+    """A stored scenario's steps as the one string a slice scenario's
+    given/when/then holds: the step texts joined with " and "."""
+    return " and ".join(step["text"] for step in steps)
+
+
+def stored_line(scenario, forks, walk):
+    """The line a stored scenario is emitted as: class agreed, or class
+    candidate (a proposed one, carrying its walk's text as `example` the way a
+    walk line does). An authored scenario names no fork, option or source."""
+    derived = scenario.get("derivedFrom")
+    fork = forks.get(derived["forkId"]) if derived else None
+    agreed = scenario["status"]["kind"] == "agreed"
+    line = {"class": "agreed" if agreed else "candidate", "id": scenario["id"],
+            "fork": derived["forkId"] if derived else None,
+            "option": derived["optionId"] if derived else None,
+            "scenario": scenario["title"],
+            "source": fork["status"].get("source") if fork else None}
+    if not agreed:
+        line["example"] = walk["text"] if walk else None
+    for f in ("given", "when", "then"):
+        line[f] = step_text(scenario[f])
+    return line
+
+
+# --- fork-derived scenarios (ESAS-296, ADR-113) ------------------------------
+# The Python twin of blueprint-schema's joinForkScenarios (fork-scenarios.ts).
+# Judged on read, never persisted. The two are pinned to one shared fixture set
+# (scripts/fixtures/design-map/fork-scenarios/, a byte copy of blueprint's
+# __tests__/fixtures/fork-scenarios/): change one derivation and that set says so.
+# review_reason and fork_scenario_key are shared with `candidates`
+# (review_reason also with check-plan's agreed_ids). The proposal half,
+# fork_scenarios proper, is used by no verb: it exists as the pinned test twin of the TS derivation, so the fixture set
+# can catch the two drifting apart.
+
+FORK_SCENARIO_KEY_PREFIX = "derived:"
+
+
+def fork_scenario_key(fork_id, option_id, walk):
+    return f"{FORK_SCENARIO_KEY_PREFIX}{fork_id}/{option_id}/{walk}"
+
+
+def is_structural(walk):
+    return walk.get("kind") == "structural"
+
+
+def has_gherkin(walk):
+    return all(f in walk for f in ("given", "when", "then"))
+
+
+def steps_of(text):
+    return [] if text is None else [{"text": text}]
+
+
+def same_walk(walk, basis):
+    """The walk's fields a basis records; `kind` absent reads as behavioral."""
+    return (walk.get("text") == basis.get("text")
+            and is_structural(walk) == is_structural(basis)
+            and all(walk.get(f) == basis.get(f) for f in ("given", "when", "then")))
+
+
+def review_reason(derived_from, forks):
+    """Why a stored derived scenario is under review, or None when its fork still stands."""
+    fork = forks.get(derived_from["forkId"])
+    if fork is None:
+        return "fork-gone"
+    status = fork["status"]
+    if status["kind"] == "open":
+        return "reopened"
+    if status["kind"] == "moot":
+        return "moot"
+    if status["option"] != derived_from["optionId"]:
+        return "option-changed"
+    # A derivation from before ESAS-296 names no walk; judged on fork and option alone.
+    if "walk" not in derived_from:
+        return None
+    option = next((o for o in (fork.get("card") or {}).get("options", [])
+                   if o["id"] == derived_from["optionId"]), None)
+    walk = next((w for w in (option or {}).get("walks", [])
+                 if w["scenario"] == derived_from["walk"]), None)
+    if walk is None:
+        return "walk-gone"
+    if "basis" in derived_from and not same_walk(walk, derived_from["basis"]):
+        return "walk-changed"
+    return None
+
+
+def fork_scenarios(payload):
+    """Every decided, testable fork proposes one scenario per behavioural walk of
+    its chosen option, in map order, unless a stored scenario already names that
+    (fork, option, walk) in any status; and every stored scenario with
+    derivedFrom is judged against its fork, in map order. Keys in the order
+    blueprint's object literals spell them, so the JSON is byte-comparable."""
+    scenarios = payload.get("scenarios") or []
+    stored = {fork_scenario_key(d["forkId"], d["optionId"], d["walk"])
+              for d in (s.get("derivedFrom") for s in scenarios) if d is not None and "walk" in d}
+    proposals = []
+    for fork in payload["forks"]:
+        status = fork["status"]
+        if status["kind"] != "decided" or fork.get("testable") is False:
+            continue
+        chosen = [w for o in (fork.get("card") or {}).get("options", [])
+                  if o["id"] == status["option"] for w in o["walks"]]
+        for walk in chosen:
+            key = fork_scenario_key(fork["id"], status["option"], walk["scenario"])
+            if is_structural(walk) or key in stored:
+                continue
+            ready = has_gherkin(walk)
+            proposals.append({
+                "key": key, "forkId": fork["id"], "optionId": status["option"],
+                "walk": walk["scenario"], "source": status["source"],
+                "state": "ready" if ready else "needs-gherkin",
+                "title": walk["scenario"], "text": walk["text"],
+                "anchors": [fork.get("anchor", fork["id"])],
+                "given": steps_of(walk.get("given")) if ready else [],
+                "when": steps_of(walk.get("when")) if ready else [],
+                "then": steps_of(walk.get("then")) if ready else []})
+    forks = {f["id"]: f for f in payload["forks"]}
+    derived = [{"scenarioId": s["id"], "reviewReason": review_reason(s["derivedFrom"], forks)}
+               for s in scenarios if s.get("derivedFrom") is not None]
+    return {"proposals": proposals, "derived": derived}
 
 
 def candidates(positional, flags):
@@ -1370,21 +1553,60 @@ def candidates(positional, flags):
         raise Refusal("missing-map")
     payload = load_map(positional[0])
     validate(payload)
+    scenarios = payload.get("scenarios") or []
+    forks = {f["id"]: f for f in payload["forks"]}
+    stored = {}
+    for scenario in scenarios:
+        derived = scenario.get("derivedFrom")
+        if derived is not None and "walk" in derived:
+            key = fork_scenario_key(derived["forkId"], derived["optionId"], derived["walk"])
+            stored.setdefault(key, []).append(scenario)
     skipped = {"open": 0, "moot": 0, "nowalk": 0, "untestable": 0}
-    total = 0
+    counts = {"candidates": 0, "agreed": 0, "skipped-review": 0, "skipped-struck": 0}
+    emitted = set()
+
+    def emit(scenario, walk):
+        # Fail closed (ESAS-296): a struck scenario is never offered again, and
+        # one whose fork no longer stands is under review and feeds nothing.
+        emitted.add(id(scenario))
+        derived = scenario.get("derivedFrom")
+        if scenario["status"]["kind"] == "struck":
+            counts["skipped-struck"] += 1
+            return
+        if derived is not None and review_reason(derived, forks) is not None:
+            counts["skipped-review"] += 1
+            return
+        line = stored_line(scenario, forks, walk)
+        counts["agreed" if line["class"] == "agreed" else "candidates"] += 1
+        write_line(line)
+
     for fork in payload["forks"]:
-        lines, skip = fork_candidates(fork)
+        lines, skip = fork_candidates(fork, stored)
         if skip:
             skipped[skip] += 1
             continue
-        for line in lines:
-            # Fixed key order (documented in the module header), not sorted:
-            # fork, option, scenario, source, example.
-            sys.stdout.write(json.dumps(line, ensure_ascii=False, sort_keys=False,
-                                         separators=(",", ":")) + "\n")
-            total += 1
-    return dict(forks=len(payload["forks"]), candidates=total,
-                **{f"skipped-{k}": v for k, v in skipped.items()})
+        for kind, line, walk in lines:
+            if kind == "stored":
+                emit(line, walk)
+                continue
+            write_line(line)
+            counts["candidates"] += 1
+    # The stored scenarios no chosen walk reached: authored ones, ones whose
+    # fork was re-chosen, reopened, made moot or removed, or whose walk changed
+    # or went, and ones on a fork skipped above. Map order.
+    for scenario in scenarios:
+        if id(scenario) not in emitted:
+            emit(scenario, None)
+    return dict(forks=len(payload["forks"]), candidates=counts["candidates"],
+                **{f"skipped-{k}": v for k, v in skipped.items()},
+                agreed=counts["agreed"], **{"skipped-review": counts["skipped-review"],
+                                            "skipped-struck": counts["skipped-struck"]})
+
+
+def write_line(line):
+    # Fixed key order (documented in the module header), not sorted.
+    sys.stdout.write(json.dumps(line, ensure_ascii=False, sort_keys=False,
+                                separators=(",", ":")) + "\n")
 
 
 def check_plan(positional, flags):
@@ -1406,6 +1628,7 @@ def check_plan(positional, flags):
         raise Refusal("plan-unparseable")
     if not isinstance(doc, dict):
         raise Refusal("plan-unparseable")
+    confirmed = agreed_ids(positional[1]) if len(positional) > 1 else {}
     review = doc.get("review")
     raw_candidates = doc.get("candidateOracles") or []
     if not isinstance(raw_candidates, list):
@@ -1433,8 +1656,15 @@ def check_plan(positional, flags):
         # a rename as the whole of the bypass.
         haystacks = [sl.get("oracle")]
         for sc in sl.get("scenarios") or []:
-            if isinstance(sc, dict):
-                haystacks += [sc.get(f) for f in ("scenario", "text", "given", "when", "then")]
+            # A scenario carrying the text the map holds agreed is a human's
+            # confirmation already (ESAS-296), so a candidate example inside
+            # that text is no promotion. Only the compared fields are exempt:
+            # a `text:` the map never held is searched either way.
+            if not isinstance(sc, dict):
+                continue
+            fields = ("text",) if is_confirmed(sc, confirmed) else (
+                "scenario", "text", "given", "when", "then")
+            haystacks += [sc.get(f) for f in fields]
         for haystack in haystacks:
             if not isinstance(haystack, str):
                 continue
@@ -1445,15 +1675,40 @@ def check_plan(positional, flags):
                                   slice="unknown" if slice_id is None else slice_id)
     scened = check_scenarios(raw_slices)
     seams = check_seams(doc, raw_slices)
-    probed = check_adequacy(raw_slices)
+    probed = check_adequacy(raw_slices, confirmed)
     return dict(review=review if review else "none", candidates=len(raw_candidates),
                 scenarios=scened, seams=seams, probed=probed)
+
+
+def agreed_ids(map_path):
+    """The scenarios a committed map.json holds agreed and not under review
+    (ESAS-296): an authored one, or a derived one whose fork still stands on its
+    option and walk. Keyed by id, each to the text a human agreed, spelled the
+    way `candidates` prints it: the title as `scenario`, each step list joined
+    by step_text. The map is validated first, with validate's refusals."""
+    payload = load_map(map_path)
+    validate(payload)
+    forks = {f["id"]: f for f in payload["forks"]}
+    return {s["id"]: {"scenario": s["title"],
+                      **{f: step_text(s[f]) for f in ("given", "when", "then")}}
+            for s in payload.get("scenarios") or []
+            if s["status"]["kind"] == "agreed"
+            and (s.get("derivedFrom") is None or review_reason(s["derivedFrom"], forks) is None)}
+
+
+def is_confirmed(sc, confirmed):
+    """A slice scenario is confirmed only when its id is agreed in the map AND
+    its scenario/given/when/then are the agreed text exactly (plan.md: copied
+    "as printed"). The id alone is a label anyone can write; a scenario that
+    carries it over other text is checked like any other scenario."""
+    agreed = confirmed.get(sc.get("id")) if isinstance(sc.get("id"), str) else None
+    return agreed is not None and all(sc.get(f) == text for f, text in agreed.items())
 
 
 EXPECTED_FROM = ("literal", "worked-example", "spec", "existing-behaviour")
 
 
-def check_adequacy(raw_slices):
+def check_adequacy(raw_slices, confirmed=None):
     """Oracle adequacy: an oracle can be green, at the named seam, and still prove nothing.
 
     RED -> GREEN cannot catch any of these three - each one is genuinely red
@@ -1503,6 +1758,11 @@ def check_adequacy(raw_slices):
             if not isinstance(sc, dict) or sc.get("kind", "behavioral") != "behavioral":
                 continue
             source = sc.get("expected_from")
+            # A scenario the map holds agreed is its own source: the map entry,
+            # map.json#scenarios/<id>/examples when it has examples, else spec
+            # "scenario <id>" (ESAS-296). One that names a source is still checked.
+            if source is None and is_confirmed(sc, confirmed or {}):
+                continue
             if not (isinstance(source, str) and source.strip()):
                 raise Refusal("scenario-unsourced", outcome="fail", slice=where,
                               why="no-expected-from")
