@@ -10,10 +10,21 @@ Scaffold type definitions, event schemas, and aggregate schemas for a PV3 DDD mo
 
 **The scaffolder cannot help here, and that is structural.** An BLUEPRINT node carries a label, a
 subdomain and a resource key — it has **no fields**. So every schema is hand-written, and a
-scaffolded artifact does not compile until you write it: `<Name>CommandSchema` for a generated
-command fragment, `<Name>EventSchema` for a generated event fragment, `<Name>ReadmodelSchema` /
-`<Name>ReadmodelType` for a generated read model. Those names are not suggestions — the generated
-files already import them, so they are the contract.
+scaffolded artifact carries a **placeholder** schema until you write the real one: `<Name>CommandSchema`
+for a generated command fragment, `<Name>EventSchema` for a generated event fragment,
+`<Name>ReadmodelSchema` for a generated read model. The scaffold emits each as `S.shape({})` (a read
+model gets `id` and `accountId`), marked `TODO(scaffold)` and listed in `STILL OWED`, so the commit
+builds. Those names are the contract. Finishing one depends on where the placeholder sits:
+
+- **Inline in a file the scaffold wrote** (a read model or view in the server module):
+  write the real schema in the domain package, switch that file's import to the domain package's
+  export, then delete the inline placeholder and its `TODO(scaffold)` marker.
+- **A companion schema fragment you placed in the domain types module** (a command or event): it
+  already is the export the command or event imports. Replace its empty shape in place and delete
+  the `TODO(scaffold)` marker; there is no import to switch. If its anchor says `INFERRED`, confirm
+  the module first. The fragment's target is a guess in one of two ways: the events file's sibling
+  name, when the events file imports no `.types` module, or the domain package directory, when the
+  subdomain has no events file in the graph at all and so no types module to name.
 
 Run this skill straight after [`scaffold-from-design`](../scaffold-from-design/SKILL.md); it is
 the first item in every generated file's `STILL OWED` block.

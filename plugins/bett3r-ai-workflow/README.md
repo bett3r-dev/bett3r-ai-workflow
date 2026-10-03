@@ -37,11 +37,22 @@ This plugin ships roles and method; the domain knowledge stays in the host repo 
 
 - the `verifier` reads `${CLAUDE_PROJECT_DIR}/.claude/rules/` for the host's invariants;
 - the `executor` uses whatever framework skills the host provides (a PV3 repo installs `bett3r-pv3-ai-skills` beside this plugin);
-- where a design graph fixes an artifact mechanically, `/build` runs the scaffolder the repo declares as `designTooling.scaffold` in `.blueprint.config.json` before the executor, and skips the step when nothing is declared.
+- where a design graph fixes an artifact mechanically, `/design` ends in a scaffold commit made by the scaffolder the repo declares as `designTooling.scaffold` in `.blueprint.config.json`, gated by its declared `designTooling.typecheck`, and skips it when either is undeclared; without a scaffold report, `/build` runs that scaffolder per slice before the executor.
 
 ## BLUEPRINT board mode
 
 In a repo with a `.blueprint/` design layer, `/design` opens a second surface: decisions still go to the committed design, structure goes to a live board the user watches, through the `blueprint-mcp` tools. The `blueprint-design` skill carries the standing rules, the `blueprint-pending` skill the rule for the hook line below, and `skills/blueprint-design/BOARD-SETUP.md` everything downstream of a board being present, opened only when the command's gates say so.
+
+## Glossary
+
+The design-end scaffold's terms. Why it is shaped this way is in `docs/adr/ADR-015` at the repo root.
+
+- **Scaffold commit**: the one commit `/design` Step 4b makes on top of the docs commit, `chore(<id>): scaffold the agreed design`, holding everything derivable from the agreed design. It is made only when the repo's declared `designTooling.typecheck` is green; a fleet makes one, on `int/<run-id>`, in `/start-multi` step 0.
+- **Scaffold report**: `scaffold.json`, committed beside `design.md` in the work-docs folder. It records what the scaffold commit wrote and what it left: `manifest[]`, `placed[]`, `held[]`, `stillOwed[]`, `asked[]`, `stale[]`, `edited[]`, the scenario tests, the input digests and the base sha. `/build` hands an executor the entries for its slice instead of running a scaffolder.
+- **Untouched stub**: a scaffolded file whose `git hash-object` still equals the blob its manifest entry recorded. A re-run deletes untouched stubs before it scaffolds again, so one the design no longer derives is gone (`stale[]`); a stub that differs is edited, and is reported and never touched.
+- **Held element**: a proposed node or edge whose comment thread has a remark that is neither resolved nor a reaction, and every edge touching a held node. It is not agreed yet, so the scaffold leaves it out and lists it under `held[]`.
+- **Asked vs still-owed block**: the two kinds of scaffolder block. An asked block is a missing decision: it stops the scaffold commit and goes back to the owner. A still-owed block has code `no-template`, nothing to decide: it is reported as STILL OWED and the commit proceeds.
+- **Topology vs registration fragment**: a fragment is a piece of code the scaffolder hands back for an existing file instead of writing it. Topology fragments (commands, events, their schemas, invariant wiring) are placed by an agent in `/design`, before the scaffold commit; every other fragment is registration or a test, and stays STILL OWED for the slice that wires it in `/build`.
 
 ## Hooks
 

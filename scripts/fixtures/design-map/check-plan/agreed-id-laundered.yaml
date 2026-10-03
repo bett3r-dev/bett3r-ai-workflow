@@ -1,0 +1,27 @@
+seams:
+  - name: the launcher's verdict line
+    at: plugins/bett3r-ai-workflow/bin/design-map:1
+    kind: existing
+ticket: ESAS-296
+review: unattended
+candidateOracles:
+  - fork: ESAS-296-F1
+    option: B
+    scenario: Gives up
+    source: owner
+    example: a second failure is final
+    slice: null
+    status: unconfirmed
+slices:
+  - id: 1
+    probe: delete the agreed-text comparison in is_confirmed; the oracle must go red
+    seam: the launcher's verdict line
+    name: "slice one"
+    oracle: |
+      a failed payment is retried exactly once
+    scenarios:
+      - id: SCN-0000000A
+        scenario: Gives up
+        given: a failed payment
+        when: the retry runs
+        then: a second failure is final

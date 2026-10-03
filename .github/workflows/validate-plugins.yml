@@ -221,6 +221,16 @@ jobs:
           sh scripts/test-map-tree.sh
           MT_SH=dash dash scripts/test-map-tree.sh
           MT_SH=bash bash scripts/test-map-tree.sh
+      # The design-end scaffold commit (ESAS-304): prepare/finish/census over a
+      # real git fixture with a stub scaffolder, extractor and typecheck. The
+      # load-bearing case is red after placement: the tree must come back exactly
+      # (a launcher that commits red, or leaves it dirty, passes every other
+      # check). SC_SH varies the launcher's interpreter.
+      - name: Test the scaffold commit (prepare + finish + census, throwaway git repo)
+        run: |
+          sh scripts/test-scaffold-commit.sh
+          SC_SH=dash dash scripts/test-scaffold-commit.sh
+          SC_SH=bash bash scripts/test-scaffold-commit.sh
       # The candidate-oracle shape of slices.yaml (ESAS-165): which map walks
       # /plan may offer, check-plan's refusals of an unattended plan, and that
       # the trailing review:/candidateOracles: block leaves the pool width alone.

@@ -1,0 +1,9 @@
+{
+  "structureVersion": 2,
+  "grounded": false,
+  "mapId": "ESAS-920",
+  "nodes": [
+    { "id": "goal", "level": "goal", "title": "Ship the change with nothing left to decide", "parents": [] }
+  ],
+  "forks": []
+}

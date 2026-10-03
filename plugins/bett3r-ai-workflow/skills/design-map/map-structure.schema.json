@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/bett3r-dev/bett3r-ai-workflow/plugins/bett3r-ai-workflow/skills/design-map/map-structure.schema.json",
   "title": "map.json structure (structureVersion 2)",
-  "$comment": "The structure of a design's map.json: nodes, forks and their cards, spelled as blueprint MapFile (ESAS-167 D12) plus the plugin-only tickets, mapId, feedSeq, target and the two fork-status additions resolvedBy (decided) and reason (open). Every closed set (fork status kind, decided source, node level, map shape) is a $ref into map.schema.json, the byte-identical copy of the vocabulary blueprint emits; no value set is restated here. scripts/design-map.py validates against this file with the standard library, resolving map.schema.json from this file's directory; it implements type, const, enum, required, properties, additionalProperties:false, items, minItems, minLength, minimum, pattern, $ref (#/<pointer>, or <file>#/<pointer> for a file in this directory), allOf, oneOf and if/then, and reads $schema, $id, $defs, title, description and $comment as annotations — nothing else; with no oneOf branch matching, it reports the violation of the one branch whose const properties the value carries. What JSON Schema cannot say (unique ids, references that resolve, a decided option naming a card option) is checked by the script after this file.",
+  "$comment": "The structure of a design's map.json: nodes, forks and their cards, spelled as blueprint MapFile (ESAS-167 D12) plus the plugin-only tickets, mapId, feedSeq, target and the two fork-status additions resolvedBy (decided) and reason (open). The optional scenarios, observations and coverage (ESAS-304) are blueprint MapScenario, MapObservation and CoverageLink, the agreed entries design-map export-examples carries. Every closed set (fork status kind, decided source, node level, map shape, walk kind, example status kind and the kpi sets) is a $ref into map.schema.json, the byte-identical copy of the vocabulary blueprint emits; no value set is restated here. scripts/design-map.py validates against this file with the standard library, resolving map.schema.json from this file's directory; it implements type (object, array, string, boolean, integer, number), const, enum, required, properties, additionalProperties:false, items, minItems, minLength, minimum, pattern, $ref (#/<pointer>, or <file>#/<pointer> for a file in this directory), allOf, oneOf and if/then, and reads $schema, $id, $defs, title, description and $comment as annotations — nothing else; with no oneOf branch matching, it reports the violation of the one branch whose const properties the value carries. What JSON Schema cannot say (unique ids, references that resolve, a decided option naming a card option) is checked by the script after this file.",
   "type": "object",
   "required": ["structureVersion", "grounded", "nodes", "forks"],
   "additionalProperties": false,
@@ -13,6 +13,9 @@
     "nodes": { "type": "array", "items": { "$ref": "#/$defs/node" } },
     "forks": { "type": "array", "items": { "$ref": "#/$defs/fork" } },
     "links": { "type": "array", "items": { "$ref": "#/$defs/link" } },
+    "scenarios": { "type": "array", "items": { "$ref": "#/$defs/scenario" } },
+    "observations": { "type": "array", "items": { "$ref": "#/$defs/observation" } },
+    "coverage": { "type": "array", "items": { "$ref": "#/$defs/coverageLink" } },
     "mapId": { "$ref": "#/$defs/id" },
     "feedSeq": { "type": "integer", "minimum": 0 },
     "target": { "enum": ["board", "artifact"] }
@@ -34,6 +37,10 @@
         "level": { "$ref": "map.schema.json#/$defs/mapNodeLevel" },
         "title": { "$ref": "#/$defs/text" },
         "parents": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+        "description": {
+          "$comment": "ESAS-287: optional prose a node post carries through the fold (blueprint MapNode.description), rendered by ESAS-293.",
+          "$ref": "#/$defs/text"
+        },
         "struck": {
           "type": "object",
           "required": ["reason"],
@@ -126,7 +133,7 @@
         "id": { "$ref": "#/$defs/id" },
         "label": { "$ref": "#/$defs/text" },
         "walks": {
-          "$comment": "scenario+text is the wire shape blueprint renders and is unchanged. given/when/then and kind are ADDITIVE and optional here on purpose: blueprint types MapOptionWalk structurally with no runtime validator, so extra keys pass through a board untouched, and every map written before this change still validates. The obligation they carry is enforced at the promotion boundary instead — `candidates` refuses to turn an unstructured walk into a slice oracle — because that is the only moment a walk becomes a test somebody writes.",
+          "$comment": "scenario+text is the wire shape blueprint renders and is unchanged. given/when/then and kind are ADDITIVE and optional here on purpose: every map written before this change still validates, and blueprint's MapOptionWalk carries the same optional keys since ESAS-296 (its MCP zod once stripped them). The obligation they carry is enforced at the promotion boundary instead — `candidates` refuses to turn an unstructured walk into a slice oracle — because that is the only moment a walk becomes a test somebody writes.",
           "type": "array",
           "items": {
             "type": "object",
@@ -135,7 +142,7 @@
             "properties": {
               "scenario": { "$ref": "#/$defs/text" },
               "text": { "$ref": "#/$defs/text" },
-              "kind": { "enum": ["behavioral", "structural"] },
+              "kind": { "$ref": "map.schema.json#/$defs/walkKind" },
               "given": { "$ref": "#/$defs/text" },
               "when": { "$ref": "#/$defs/text" },
               "then": { "$ref": "#/$defs/text" }
@@ -154,6 +161,203 @@
       "properties": {
         "esId": { "$ref": "#/$defs/text" },
         "deliverableId": { "$ref": "#/$defs/id" }
+      }
+    },
+    "scenarioId": { "type": "string", "pattern": "^SCN-[0-9A-HJKMNP-TV-Z]{8}$" },
+    "observationId": { "type": "string", "pattern": "^OBS-[0-9A-HJKMNP-TV-Z]{8}$" },
+    "number": { "type": "number" },
+    "exampleStatus": {
+      "$comment": "blueprint ExampleStatus. kind is checked against the vocabulary first, as for a fork status; the oneOf then fixes which fields each kind carries.",
+      "type": "object",
+      "required": ["kind"],
+      "properties": { "kind": { "$ref": "map.schema.json#/$defs/exampleStatusKind" } },
+      "oneOf": [
+        {
+          "required": ["kind"],
+          "additionalProperties": false,
+          "properties": { "kind": { "const": "proposed" } }
+        },
+        {
+          "required": ["kind", "seq", "at"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "agreed" },
+            "seq": { "type": "integer", "minimum": 0 },
+            "at": { "$ref": "#/$defs/text" },
+            "principal": { "$ref": "#/$defs/text" }
+          }
+        },
+        {
+          "required": ["kind", "reason"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "struck" },
+            "reason": { "$ref": "#/$defs/text" }
+          }
+        }
+      ]
+    },
+    "proposedBy": {
+      "$comment": "blueprint DesignAuthor. Its value set is not in the vocabulary copy, and this file restates none, so only a non-empty string is checked here.",
+      "$ref": "#/$defs/text"
+    },
+    "gherkinStep": {
+      "type": "object",
+      "required": ["text"],
+      "additionalProperties": false,
+      "properties": { "text": { "$ref": "#/$defs/text" } }
+    },
+    "gherkinSteps": { "type": "array", "items": { "$ref": "#/$defs/gherkinStep" } },
+    "scenarioDerivation": {
+      "$comment": "blueprint ScenarioDerivation: the fork option a stored scenario was derived from. walk (the walk's scenario label) and basis (the walk as derived, in the option walk shape) are ESAS-296's optional additions.",
+      "type": "object",
+      "required": ["forkId", "optionId"],
+      "additionalProperties": false,
+      "properties": {
+        "forkId": { "$ref": "#/$defs/id" },
+        "optionId": { "$ref": "#/$defs/id" },
+        "walk": { "$ref": "#/$defs/text" },
+        "basis": { "$ref": "#/$defs/option/properties/walks/items" }
+      }
+    },
+    "scenario": {
+      "$comment": "blueprint MapScenario (src/packages/backend/blueprint-schema/src/map-structure.ts), as design-map export-examples copies an agreed one from the store (ESAS-304).",
+      "type": "object",
+      "required": ["id", "title", "anchors", "given", "when", "then", "proposedBy", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/scenarioId" },
+        "title": { "$ref": "#/$defs/text" },
+        "anchors": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+        "given": { "$ref": "#/$defs/gherkinSteps" },
+        "when": { "$ref": "#/$defs/gherkinSteps" },
+        "then": { "$ref": "#/$defs/gherkinSteps" },
+        "examples": {
+          "type": "object",
+          "required": ["columns", "rows"],
+          "additionalProperties": false,
+          "properties": {
+            "columns": { "type": "array", "items": { "$ref": "#/$defs/text" } },
+            "rows": { "type": "array", "items": { "type": "array", "items": { "type": "string" } } }
+          }
+        },
+        "derivedFrom": { "$ref": "#/$defs/scenarioDerivation" },
+        "supersedes": { "$ref": "#/$defs/scenarioId" },
+        "proposedBy": { "$ref": "#/$defs/proposedBy" },
+        "status": { "$ref": "#/$defs/exampleStatus" }
+      }
+    },
+    "kpiEventSide": {
+      "type": "object",
+      "required": ["esIds"],
+      "additionalProperties": false,
+      "properties": {
+        "esIds": { "type": "array", "items": { "$ref": "#/$defs/text" } },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "outcome": { "$ref": "map.schema.json#/$defs/kpiFilterOutcome" },
+            "errorCode": { "$ref": "#/$defs/text" }
+          }
+        }
+      }
+    },
+    "kpiSource": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": { "kind": { "$ref": "map.schema.json#/$defs/kpiSourceKind" } },
+      "oneOf": [
+        {
+          "required": ["kind", "numerator"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "events" },
+            "numerator": { "$ref": "#/$defs/kpiEventSide" },
+            "denominator": { "$ref": "#/$defs/kpiEventSide" }
+          }
+        },
+        {
+          "required": ["kind", "datasource", "expr"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "query" },
+            "datasource": { "$ref": "#/$defs/text" },
+            "expr": { "$ref": "#/$defs/text" }
+          }
+        }
+      ]
+    },
+    "kpiDefinition": {
+      "type": "object",
+      "required": ["kind", "unit", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "$ref": "map.schema.json#/$defs/kpiKind" },
+        "unit": { "$ref": "#/$defs/text" },
+        "percentile": { "$ref": "#/$defs/number" },
+        "source": { "$ref": "#/$defs/kpiSource" }
+      }
+    },
+    "observationKpi": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": { "mode": { "$ref": "map.schema.json#/$defs/kpiMode" } },
+      "oneOf": [
+        {
+          "required": ["mode", "definition"],
+          "additionalProperties": false,
+          "properties": {
+            "mode": { "const": "define" },
+            "definition": { "$ref": "#/$defs/kpiDefinition" }
+          }
+        },
+        {
+          "required": ["mode", "ref"],
+          "additionalProperties": false,
+          "properties": {
+            "mode": { "const": "reference" },
+            "ref": { "$ref": "#/$defs/text" },
+            "label": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "kpiExpectation": {
+      "type": "object",
+      "required": ["direction", "target", "window"],
+      "additionalProperties": false,
+      "properties": {
+        "direction": { "$ref": "map.schema.json#/$defs/kpiDirection" },
+        "target": { "$ref": "#/$defs/number" },
+        "baseline": { "$ref": "#/$defs/number" },
+        "window": { "$ref": "#/$defs/text" }
+      }
+    },
+    "observation": {
+      "$comment": "blueprint MapObservation (src/packages/backend/blueprint-schema/src/map-structure.ts), as design-map export-examples copies an agreed one from the store (ESAS-304, for ESAS-306).",
+      "type": "object",
+      "required": ["id", "title", "anchors", "kpi", "expect", "proposedBy", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/observationId" },
+        "title": { "$ref": "#/$defs/text" },
+        "anchors": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+        "kpi": { "$ref": "#/$defs/observationKpi" },
+        "expect": { "$ref": "#/$defs/kpiExpectation" },
+        "supersedes": { "$ref": "#/$defs/observationId" },
+        "proposedBy": { "$ref": "#/$defs/proposedBy" },
+        "status": { "$ref": "#/$defs/exampleStatus" }
+      }
+    },
+    "coverageLink": {
+      "$comment": "blueprint CoverageLink (ESAS-295): an eventstorming element id to the scenario that covers it.",
+      "type": "object",
+      "required": ["esId", "scenarioId"],
+      "additionalProperties": false,
+      "properties": {
+        "esId": { "$ref": "#/$defs/text" },
+        "scenarioId": { "$ref": "#/$defs/scenarioId" }
       }
     }
   }

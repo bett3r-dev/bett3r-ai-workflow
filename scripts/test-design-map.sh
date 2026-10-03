@@ -250,10 +250,16 @@ def names(x):
         for c in x:
             yield from names(c)
 print("mapActor" in v["$defs"]["mapNodeLevel"]["enum"] and "actor" not in set(names(s)))' "$VOCAB" "$STRUCTURE" 2>&1 )" True
-check 'the structure schema restates no vocabulary enum, and $refs every one of the four' \
-  "$( python3 -c '
+# vocab_accounting <vocabulary> <structure> prints four lists, each [] when clean: vocabulary enum
+# values the structure restates, $refs naming no vocabulary def, vocabulary defs neither $ref'd nor
+# named in DEFERRED, and DEFERRED names that are stale (no such def, or now $ref'd).
+# DEFERRED names the sets no map.json field holds yet; empty since ESAS-304 gave example status and
+# the kpi* sets their map.json home. Naming any keeps the check closed: a NEW def the structure does not $ref fails.
+vocab_accounting(){
+  python3 -c '
 import json, sys
 v = json.load(open(sys.argv[1])); s = json.load(open(sys.argv[2]))
+defs = set(v["$defs"])
 values = {e for d in v["$defs"].values() for e in d["enum"]}
 enums, refs = [], set()
 def walk(x):
@@ -268,7 +274,18 @@ def walk(x):
         for c in x:
             walk(c)
 walk(s)
-print(sorted(set(enums) & values), sorted(refs) == sorted(v["$defs"]))' "$VOCAB" "$STRUCTURE" 2>&1 )" '[] True'
+deferred = set()
+print(sorted(set(enums) & values), sorted(refs - defs), sorted(defs - refs - deferred), sorted((deferred - defs) | (deferred & refs)))' "$1" "$2" 2>&1
+}
+check 'the structure schema restates no vocabulary enum, $refs only defs that exist, and $refs every def not named as deferred' \
+  "$( vocab_accounting "$VOCAB" "$STRUCTURE" )" '[] [] [] []'
+python3 - "$VOCAB" "$TMP/unreferenced.json" <<'PY'
+import json, sys
+v = json.load(open(sys.argv[1])); v["$defs"]["plantedKind"] = {"type": "string", "enum": ["planted"]}
+json.dump(v, open(sys.argv[2], "w"))
+PY
+check 'a def planted in a temp copy of the vocabulary, $ref'"'"'d by nothing and not deferred, is caught' \
+  "$( vocab_accounting "$TMP/unreferenced.json" "$STRUCTURE" )" "[] [] ['plantedKind'] []"
 
 # ---------------------------------------------------------------------------
 printf 'AC1: the vocabulary copy is byte-identical to blueprint'"'"'s emitted schema\n'
@@ -857,9 +874,11 @@ if grep -q 'must never appear' "$CANDLINES"; then
 else
   pass 'candidates: no candidate comes from a rejected option'
 fi
-check 'candidates: fixed key order fork,option,scenario,source,example' \
+# ESAS-296: a walk line passes the walk's given/when/then through, after the
+# five keys it always carried.
+check 'candidates: fixed key order fork,option,scenario,source,example,given,when,then' \
   "$( head -n1 "$CANDLINES" | python3 -c 'import json,sys; print(",".join(json.loads(sys.stdin.read()).keys()))' )" \
-  fork,option,scenario,source,example
+  fork,option,scenario,source,example,given,when,then
 
 expect_error 'candidates: --map is refused as an unknown flag' unknown-flag-map \
   candidates --map "$CAND"
@@ -1835,6 +1854,353 @@ else
   refute_md "$FLEET_MD" 'the companion does not restate the F4 disarm (one home: SKILL.md)' \
     'the notification is the doorbell'
 fi
+
+# ---------------------------------------------------------------------------
+printf 'CARRIER: map.json carries scenarios, observations and coverage (ESAS-304 P2)\n'
+# ---------------------------------------------------------------------------
+# The committed map.json is the one carrier of agreed examples to a lane (ESAS-306-F3):
+# the structure schema takes optional scenarios[], observations[] and coverage[] in
+# blueprint's MapScenario / MapObservation / CoverageLink shapes, and `export-examples`
+# copies the agreed stored entries of a get_map body into it, nothing else.
+CAR="$FIX/carrier"
+dm validate "$CAR/scenarios-empty.map.json"
+check 'a structureVersion 2 map with scenarios: [] validates' "$( attr "$LINE" outcome )" ok "$LINE"
+check 'scenarios: [] validates: forks=0' "$( attr "$LINE" forks )" 0 "$LINE"
+dm validate "$CAR/examples.map.json"
+check 'a map carrying every example shape and a node description validates' "$( attr "$LINE" outcome )" ok "$LINE"
+
+# mutate <name> <python statement over m> — a temp copy of examples.map.json, edited.
+mutate(){
+  python3 - "$CAR/examples.map.json" "$TMP/car-$1.json" "$2" <<'PY'
+import json, sys
+m = json.load(open(sys.argv[1]))
+exec(sys.argv[3])
+json.dump(m, open(sys.argv[2], "w"), indent=2)
+PY
+}
+# car_invalid <name> <statement> <at> <rule>
+car_invalid(){
+  mutate "$1" "$2"
+  expect_error "carrier negative $1" schema-invalid validate "$TMP/car-$1.json"
+  check "carrier negative $1: at" "$( attr "$LINE" at )" "$3" "$LINE"
+  check "carrier negative $1: rule" "$( attr "$LINE" rule )" "$4" "$LINE"
+}
+car_invalid status-kind 'm["scenarios"][0]["status"]["kind"] = "accepted"' /scenarios/0/status/kind enum
+car_invalid agreed-no-seq 'del m["scenarios"][0]["status"]["seq"]' /scenarios/0/status/seq required
+car_invalid scenario-extra-key 'm["scenarios"][1]["covers"] = ["ev-1"]' /scenarios/1/covers additionalProperties
+car_invalid scenario-id-prefix 'm["scenarios"][0]["id"] = "OBS-0000000A"' /scenarios/0/id pattern
+car_invalid derived-extra-key 'm["scenarios"][0]["derivedFrom"]["label"] = "x"' /scenarios/0/derivedFrom/label additionalProperties
+car_invalid basis-not-a-walk 'del m["scenarios"][0]["derivedFrom"]["basis"]["text"]' /scenarios/0/derivedFrom/basis/text required
+car_invalid step-bare-string 'm["scenarios"][0]["given"] = ["an agreed observation"]' /scenarios/0/given/0 type
+car_invalid kpi-mode 'm["observations"][0]["kpi"]["mode"] = "derive"' /observations/0/kpi/mode enum
+car_invalid kpi-define-no-definition 'del m["observations"][0]["kpi"]["definition"]' /observations/0/kpi/definition required
+car_invalid kpi-kind 'm["observations"][0]["kpi"]["definition"]["kind"] = "histogram"' /observations/0/kpi/definition/kind enum
+car_invalid filter-outcome 'm["observations"][0]["kpi"]["definition"]["source"]["numerator"]["filters"]["outcome"] = "error"' \
+  /observations/0/kpi/definition/source/numerator/filters/outcome enum
+car_invalid expect-target-text 'm["observations"][0]["expect"]["target"] = "high"' /observations/0/expect/target type
+car_invalid expect-direction 'm["observations"][2]["expect"]["direction"] = "flat"' /observations/2/expect/direction enum
+car_invalid coverage-no-scenario 'del m["coverage"][0]["scenarioId"]' /coverage/0/scenarioId required
+car_invalid node-description-empty 'm["nodes"][0]["description"] = ""' /nodes/0/description minLength
+car_invalid observations-not-array 'm["observations"] = {}' /observations type
+
+# export-examples: agreed stored entries only, written whole and deterministically.
+mkdir -p "$TMP/exp/a" "$TMP/exp/b"
+cp "$CAR/export-target.map.json" "$TMP/exp/a/map.json"
+cp "$CAR/export-target.map.json" "$TMP/exp/b/map.json"
+dm export-examples "$TMP/exp/a/map.json" --from "$CAR/get-map.json"
+check 'export-examples: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE"
+check 'export-examples: scenarios=2 (the agreed SCN-0000000A and SCN-0000000D)' "$( attr "$LINE" scenarios )" 2 "$LINE"
+check 'export-examples: observations=2 (the agreed OBS-0000000A and OBS-0000000C)' "$( attr "$LINE" observations )" 2 "$LINE"
+check 'export-examples: coverage=2' "$( attr "$LINE" coverage )" 2 "$LINE"
+check 'export-examples: unagreed=3 dropped' "$( attr "$LINE" unagreed )" 3 "$LINE"
+# examples <map> — the ids the committed file carries, and its coverage pairs.
+examples(){
+  python3 -c '
+import json, sys
+m = json.load(open(sys.argv[1]))
+print(",".join(s["id"] for s in m.get("scenarios", [])), ",".join(o["id"] for o in m.get("observations", [])),
+      ",".join(c["esId"] + ">" + c["scenarioId"] for c in m.get("coverage", [])))' "$1" 2>&1
+}
+check 'export-examples: the committed file carries the agreed examples only' \
+  "$( examples "$TMP/exp/a/map.json" )" \
+  'SCN-0000000A,SCN-0000000D OBS-0000000A,OBS-0000000C ev-1>SCN-0000000A,ev-3>SCN-0000000D'
+check 'export-examples: the agreed observation is carried whole' \
+  "$( python3 -c 'import json,sys; o=json.load(open(sys.argv[1]))["observations"][0]; print(o["kpi"]["definition"]["source"]["numerator"]["filters"]["outcome"], o["expect"]["target"], o["status"]["seq"])' "$TMP/exp/a/map.json" 2>&1 )" \
+  'ok 0.95 8'
+check 'export-examples: derivedFrom keeps walk and basis' \
+  "$( python3 -c 'import json,sys; d=json.load(open(sys.argv[1]))["scenarios"][0]["derivedFrom"]; print(d["walk"], d["basis"]["kind"])' "$TMP/exp/a/map.json" 2>&1 )" \
+  'committed input behavioral'
+check 'export-examples: the forks and nodes are untouched' \
+  "$( python3 -c 'import json,sys; a=json.load(open(sys.argv[1])); b=json.load(open(sys.argv[2])); print(all(a[k]==b[k] for k in b))' "$TMP/exp/a/map.json" "$CAR/export-target.map.json" 2>&1 )" True
+dm validate "$TMP/exp/a/map.json"
+check 'export-examples: the written map validates' "$( attr "$LINE" outcome )" ok "$LINE"
+dm export-examples "$TMP/exp/b/map.json" --from "$CAR/get-map-shuffled.json"
+check 'export-examples in another checkout, the feed in another order: ok' "$( attr "$LINE" outcome )" ok "$LINE"
+holds_cmp(){
+  if cmp -s "$2" "$3"; then pass "$1"; else fail "$1" "$( diff "$2" "$3" | head -n 10 )"; fi
+}
+holds_cmp 'export-examples: byte-identical in another checkout' "$TMP/exp/a/map.json" "$TMP/exp/b/map.json"
+cp "$TMP/exp/a/map.json" "$TMP/exp/first.json"
+dm export-examples "$TMP/exp/a/map.json" --from "$CAR/get-map.json"
+holds_cmp 'export-examples: a second run over its own output is byte-identical' "$TMP/exp/first.json" "$TMP/exp/a/map.json"
+dm export-examples "$TMP/exp/a/map.json" --from "$CAR/get-map-struck.json"
+check 'export-examples: a struck observation leaves the committed file' \
+  "$( examples "$TMP/exp/a/map.json" )" \
+  'SCN-0000000A,SCN-0000000D OBS-0000000C ev-1>SCN-0000000A,ev-3>SCN-0000000D'
+
+# feed <name> <python statement over b> — a temp copy of get-map.json, edited.
+feed(){
+  python3 - "$CAR/get-map.json" "$TMP/exp/feed-$1.json" "$2" <<'PY'
+import json, sys
+b = json.load(open(sys.argv[1]))
+exec(sys.argv[3])
+json.dump(b, open(sys.argv[2], "w"), indent=2)
+PY
+}
+# export_fresh <name> — export feed-<name>.json into a fresh copy of the target map.
+export_fresh(){
+  mkdir -p "$TMP/exp/$1"
+  cp "$CAR/export-target.map.json" "$TMP/exp/$1/map.json"
+  dm export-examples "$TMP/exp/$1/map.json" --from "$TMP/exp/feed-$1.json"
+}
+# Every object inside every entry spelled with its keys reversed: the written
+# bytes may not depend on the key order a feed spells (nested objects included).
+feed reversed '
+def rev(v):
+    if isinstance(v, dict):
+        return {k: rev(v[k]) for k in reversed(list(v))}
+    return [rev(x) for x in v] if isinstance(v, list) else v
+for k in ("scenarios", "observations", "coverage"):
+    b["map"][k] = [rev(e) for e in b["map"][k]]'
+export_fresh reversed
+check 'export-examples, every key reversed inside each entry: ok' "$( attr "$LINE" outcome )" ok "$LINE"
+holds_cmp 'export-examples: key order in the feed does not reach the bytes' "$TMP/exp/first.json" "$TMP/exp/reversed/map.json"
+# A get_map body decorates entries with keys MapScenario/MapObservation do not hold; none is carried.
+feed extras '
+for k in ("scenarios", "observations"):
+    for e in b["map"][k]:
+        e["reviewReason"] = "stale"
+        e["derived"] = {"from": "board"}'
+export_fresh extras
+check 'export-examples, entries carrying reviewReason and derived: ok' "$( attr "$LINE" outcome )" ok "$LINE"
+holds_cmp 'export-examples: wire extras are dropped, the output equals the clean feed'"'"'s' "$TMP/exp/first.json" "$TMP/exp/extras/map.json"
+# A referenced KPI's label is any string, the empty one included (blueprint map-write.ts checkObservationShape).
+feed ref-label '
+o = next(o for o in b["map"]["observations"] if o["id"] == "OBS-0000000C")
+o["kpi"] = {"mode": "reference", "ref": "apm.x", "label": ""}'
+export_fresh ref-label
+check 'export-examples, an agreed reference KPI with label "": ok' "$( attr "$LINE" outcome )" ok "$LINE"
+check 'export-examples: the empty label is carried' \
+  "$( python3 -c 'import json,sys; print(json.dumps(json.load(open(sys.argv[1]))["observations"][1]["kpi"], sort_keys=True))' "$TMP/exp/ref-label/map.json" 2>&1 )" \
+  '{"label": "", "mode": "reference", "ref": "apm.x"}'
+# The merged map is validated before it is written: an agreed entry the schema refuses leaves the map as it was.
+feed empty-title '
+next(s for s in b["map"]["scenarios"] if s["id"] == "SCN-0000000A")["title"] = ""'
+mkdir -p "$TMP/exp/empty-title"
+cp "$TMP/exp/first.json" "$TMP/exp/empty-title/map.json"
+dm export-examples "$TMP/exp/empty-title/map.json" --from "$TMP/exp/feed-empty-title.json"
+check 'export-examples, an agreed scenario titled "": reason=schema-invalid' "$( attr "$LINE" reason )" schema-invalid "$LINE"
+check 'export-examples, an agreed scenario titled "": at' "$( attr "$LINE" at )" /scenarios/0/title "$LINE"
+holds_cmp 'export-examples, an agreed scenario titled "": the map is byte-identical' "$TMP/exp/first.json" "$TMP/exp/empty-title/map.json"
+
+cp "$TMP/exp/first.json" "$TMP/exp/keep.json"
+expect_error 'export-examples: no --from' missing-from export-examples "$TMP/exp/first.json"
+expect_error 'export-examples: no map' missing-map export-examples --from "$CAR/get-map.json"
+expect_error 'export-examples: an unreadable --from' from-unreadable export-examples "$TMP/exp/first.json" --from "$TMP/nope.json"
+expect_error 'export-examples: a failed get_map' from-failed export-examples "$TMP/exp/first.json" --from "$CAR/get-map-failed.json"
+check 'export-examples: a failed get_map names its code' "$( attr "$LINE" code )" MAP_NOT_FOUND "$LINE"
+printf '{"ok":true,"map":{"scenarios":{}},"mapSeq":1}\n' > "$TMP/exp/bad-feed.json"
+expect_error 'export-examples: a feed whose scenarios is not a list' from-invalid export-examples "$TMP/exp/first.json" --from "$TMP/exp/bad-feed.json"
+expect_error 'export-examples: --expect is not its flag' unknown-flag-expect export-examples "$TMP/exp/first.json" --from "$CAR/get-map.json" --expect 1
+expect_error 'export-examples: an invalid target map' schema-invalid export-examples "$TMP/car-status-kind.json" --from "$CAR/get-map.json"
+holds_cmp 'export-examples: every refusal leaves the map byte-identical' "$TMP/exp/keep.json" "$TMP/exp/first.json"
+
+# ---------------------------------------------------------------------------
+printf 'ESAS-296: fork-derived scenarios — one derivation, pinned to blueprint'"'"'s fixture set\n'
+# ---------------------------------------------------------------------------
+# blueprint derives a decided fork's proposed scenarios and judges every stored
+# derived one on read (blueprint-schema fork-scenarios.ts, ADR-113); design-map
+# carries the same derivation in Python. One shared fixture set (map in,
+# proposals and reasons out) pins the two: blueprint's vitest drives the TS over
+# it, the driver below drives the Python over this byte-identical copy.
+FSC="$FIX/fork-scenarios"
+check 'control: the PL copy holds 18 maps, each with its expected file' \
+  "$( ls "$FSC"/*.map.json | wc -l | tr -d ' ' ) $( ls "$FSC"/*.expected.json | wc -l | tr -d ' ' ) $( ls "$FSC" | wc -l | tr -d ' ' )" '18 18 36'
+
+# derive_all <dir> — runs design-map.py's fork_scenarios over every <case>.map.json
+# in <dir> and compares the JSON.stringify(_, null, 2) + "\n" bytes with
+# <case>.expected.json. Prints match=<n> total=<n> differs=<cases|none>.
+derive_all(){
+  python3 - "$ROOT/plugins/bett3r-ai-workflow/scripts/design-map.py" "$1" <<'PY'
+import importlib.util, json, os, sys
+spec = importlib.util.spec_from_file_location("design_map", sys.argv[1])
+dm = importlib.util.module_from_spec(spec); spec.loader.exec_module(dm)
+d = sys.argv[2]
+cases = sorted(f[:-len(".map.json")] for f in os.listdir(d) if f.endswith(".map.json"))
+differs = []
+for case in cases:
+    with open(os.path.join(d, case + ".map.json"), encoding="utf-8") as fh:
+        report = dm.fork_scenarios(json.load(fh))
+    with open(os.path.join(d, case + ".expected.json"), "rb") as fh:
+        expected = fh.read()
+    if (json.dumps(report, indent=2, ensure_ascii=False) + "\n").encode("utf-8") != expected:
+        differs.append(case)
+print(f"match={len(cases) - len(differs)} total={len(cases)} differs={','.join(differs) or 'none'}")
+PY
+}
+check 'the Python derivation reproduces every expected file byte for byte' \
+  "$( derive_all "$FSC" 2>&1 )" 'match=18 total=18 differs=none'
+mkdir -p "$TMP/fsc"
+cp "$FSC"/* "$TMP/fsc/"
+python3 - "$TMP/fsc/review-option-changed.expected.json" <<'PY'
+import sys
+p = sys.argv[1]; b = open(p, "rb").read()
+open(p, "wb").write(b.replace(b'"option-changed"', b'"reopened"'))
+PY
+check 'one reason planted in a temp copy of an expected file is caught' \
+  "$( derive_all "$TMP/fsc" 2>&1 )" 'match=17 total=18 differs=review-option-changed'
+
+# same_set <a> <b> — fresh when both directories list the same names and every
+# file is byte-identical (cmp), else stale.
+same_set(){
+  if [ "$( ls "$1" )" != "$( ls "$2" )" ]; then printf stale; return; fi
+  for zf in "$1"/*; do
+    cmp -s "$zf" "$2/$( basename "$zf" )" || { printf stale; return; }
+  done
+  printf fresh
+}
+if [ -n "${BLUEPRINT_CHECKOUT:-}" ]; then
+  BP_FSC="$BLUEPRINT_CHECKOUT/src/packages/backend/blueprint-schema/__tests__/fixtures/fork-scenarios"
+  if [ -d "$BP_FSC" ]; then
+    check 'the fixture set equals $BLUEPRINT_CHECKOUT blueprint-schema __tests__/fixtures/fork-scenarios (cmp)' \
+      "$( same_set "$FSC" "$BP_FSC" )" fresh "$BP_FSC"
+    check 'the planted temp copy is detected as stale' "$( same_set "$TMP/fsc" "$BP_FSC" )" stale
+  else
+    fail 'BLUEPRINT_CHECKOUT holds the fork-scenarios fixture set' "no directory at $BP_FSC"
+  fi
+else
+  skipped=$(( skipped + 1 ))
+  printf '  \033[33m!! SKIP reason=no-blueprint-checkout\033[0m the fork-scenarios fixture set was NOT compared with blueprint (set BLUEPRINT_CHECKOUT); this is not a pass\n'
+fi
+
+printf 'ESAS-296: validate — the scenarios slot, and one label per walk\n'
+dm validate "$FIX/scenario-agreed.map.json"
+check 'validate: a stored scenario with derivedFrom walk and basis is a valid map' \
+  "$( attr "$LINE" outcome ) exit=$rc" 'ok exit=0' "$( cat "$OUT" )"
+# The source identity of a derived scenario is (fork, option, walk label): two
+# walks sharing a label in one option would make it ambiguous which one a stored
+# scenario was derived from.
+dm validate "$FIX/scenario-duplicate-walk.map.json"
+check 'validate: two walks of one option sharing a label are refused' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" id ) $( attr "$LINE" option ) $( attr "$LINE" at ) exit=$rc" \
+  'error duplicate-walk-scenario ESAS-296-F1 C /forks/0/card/options/0/walks/1 exit=2' "$( cat "$OUT" )"
+dm candidates "$FIX/scenario-duplicate-walk.map.json"
+check 'candidates: the same refusal, before any line' "$( attr "$LINE" reason ) lines=$( grep -c '^{' "$OUT" )" 'duplicate-walk-scenario lines=0' "$( cat "$OUT" )"
+
+printf 'ESAS-296: candidates — an agreed stored scenario is class agreed; one under review is skipped\n'
+# lines_where <file> <python predicate over the line dict l> — the matching JSON lines, re-dumped sorted.
+lines_where(){
+  python3 - "$1" "$2" <<'PY'
+import json, sys
+for raw in open(sys.argv[1], encoding="utf-8"):
+    if raw.startswith("{"):
+        l = json.loads(raw)
+        if eval(sys.argv[2]):
+            print(json.dumps(l, sort_keys=True, ensure_ascii=False))
+PY
+}
+dm candidates "$FIX/scenario-agreed.map.json"
+check 'candidates over an agreed derived scenario: counts' \
+  "$( attr "$LINE" outcome ) candidates=$( attr "$LINE" candidates ) agreed=$( attr "$LINE" agreed ) skipped-review=$( attr "$LINE" skipped-review ) exit=$rc" \
+  'ok candidates=1 agreed=1 skipped-review=0 exit=0' "$( cat "$OUT" )"
+check 'candidates: the agreed scenario is emitted as class agreed with its id and Given/When/Then' \
+  "$( lines_where "$OUT" 'l.get("class") == "agreed"' )" \
+  '{"class": "agreed", "fork": "ESAS-296-F1", "given": "a failed payment", "id": "SCN-0000000A", "option": "C", "scenario": "Retry once", "source": "owner", "then": "it is retried once", "when": "the retry runs"}' \
+  "$( cat "$OUT" )"
+check 'candidates: the agreed walk is not offered a second time as a walk line' \
+  "$( lines_where "$OUT" 'l.get("scenario") == "Retry once"' | wc -l | tr -d ' ' )" 1 "$( cat "$OUT" )"
+check 'candidates: the walk with no stored scenario is a walk line, its Given/When/Then passed through' \
+  "$( lines_where "$OUT" '"class" not in l' )" \
+  '{"example": "a second failure is final", "fork": "ESAS-296-F1", "given": "a payment that failed twice", "option": "C", "scenario": "Gives up", "source": "owner", "then": "it is marked failed", "when": "the retry runs"}' \
+  "$( cat "$OUT" )"
+check 'candidates: an agreed line keeps the documented key order' \
+  "$( grep '"class":"agreed"' "$OUT" | python3 -c 'import json,sys; print(",".join(json.loads(sys.stdin.read()).keys()))' )" \
+  class,id,fork,option,scenario,source,given,when,then
+
+# Re-chosen: the owner overturned C for D. The scenario agreed on C now rests on
+# a decision that no longer holds (option-changed); it stops feeding tests.
+dm candidates "$FIX/scenario-rechosen.map.json"
+check 'candidates over a re-chosen fork: the stored scenario is skipped and counted' \
+  "$( attr "$LINE" outcome ) candidates=$( attr "$LINE" candidates ) agreed=$( attr "$LINE" agreed ) skipped-review=$( attr "$LINE" skipped-review ) exit=$rc" \
+  'ok candidates=1 agreed=0 skipped-review=1 exit=0' "$( cat "$OUT" )"
+check 'candidates: no line names the scenario under review' "$( grep -c 'SCN-0000000A' "$OUT" | tr -d ' ' )" 0 "$( cat "$OUT" )"
+check 'candidates: the new option D offers its walk' \
+  "$( lines_where "$OUT" 'True' | sed -n 's/.*"option": "\([A-Z]\)".*"scenario": "\([^"]*\)".*/\1:\2/p' )" 'D:Retry forever' "$( cat "$OUT" )"
+
+# Mixed: a proposed stored scenario is a candidate carrying its id; a struck one
+# is never re-offered (blueprint's derivation never re-proposes a struck triple);
+# an agreed authored scenario (no derivedFrom) is emitted too.
+dm candidates "$FIX/scenario-mixed.map.json"
+check 'candidates over the mixed map: counts' \
+  "$( attr "$LINE" outcome ) candidates=$( attr "$LINE" candidates ) agreed=$( attr "$LINE" agreed ) skipped-review=$( attr "$LINE" skipped-review ) skipped-struck=$( attr "$LINE" skipped-struck ) exit=$rc" \
+  'ok candidates=1 agreed=1 skipped-review=0 skipped-struck=1 exit=0' "$( cat "$OUT" )"
+check 'candidates: a proposed stored scenario is a candidate with its id' \
+  "$( lines_where "$OUT" 'l.get("class") == "candidate"' )" \
+  '{"class": "candidate", "example": "it is retried once", "fork": "ESAS-296-F1", "given": "a failed payment", "id": "SCN-0000000A", "option": "C", "scenario": "Retry once", "source": "owner", "then": "it is retried once", "when": "the retry runs"}' \
+  "$( cat "$OUT" )"
+check 'candidates: the struck walk is not re-offered' "$( grep -c 'Gives up' "$OUT" | tr -d ' ' )" 0 "$( cat "$OUT" )"
+check 'candidates: an agreed authored scenario is emitted, its two given steps joined with "and"' \
+  "$( lines_where "$OUT" 'l.get("class") == "agreed"' )" \
+  '{"class": "agreed", "fork": null, "given": "a retried payment and a customer email on file", "id": "SCN-0000000C", "option": null, "scenario": "Receipt is sent", "source": null, "then": "a receipt is emailed", "when": "the retry succeeds"}' \
+  "$( cat "$OUT" )"
+
+# EMPIRICAL at the design base: the ESAS-1-F5 line dropped its walk's given.
+dm candidates "$FIX/candidates.map.json"
+check 'candidates: the code-decided ESAS-1-F5 walk line now carries its given/when/then' \
+  "$( lines_where "$OUT" 'l["fork"] == "ESAS-1-F5"' )" \
+  '{"example": "A is applied by the code", "fork": "ESAS-1-F5", "given": "the code already takes A", "option": "A", "scenario": "the code takes option A", "source": "code", "then": "A is applied by the code", "when": "the plan is cut"}' \
+  "$( cat "$OUT" )"
+check 'candidates: a map with no stored scenario reads agreed=0 skipped-review=0' \
+  "agreed=$( attr "$LINE" agreed ) skipped-review=$( attr "$LINE" skipped-review )" 'agreed=0 skipped-review=0' "$LINE"
+
+printf 'ESAS-296: check-plan <slices.yaml> <map.json> — an agreed id is confirmed, unattended\n'
+dm check-plan "$CPFIX/agreed-id-unsourced.yaml" "$FIX/scenario-agreed.map.json"
+check 'check-plan: a scenario naming an agreed id needs no expected_from of its own with the map' \
+  "$( attr "$LINE" outcome ) review=$( attr "$LINE" review ) exit=$rc" 'ok review=unattended exit=0' "$( cat "$OUT" )"
+dm check-plan "$CPFIX/agreed-id-unsourced.yaml"
+check 'check-plan: the same plan without the map is refused as today' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" why ) exit=$rc" 'fail scenario-unsourced no-expected-from exit=1' "$( cat "$OUT" )"
+dm check-plan "$CPFIX/agreed-id-unsourced.yaml" "$FIX/scenario-rechosen.map.json"
+check 'check-plan: an id the map holds under review confirms nothing' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) exit=$rc" 'fail scenario-unsourced exit=1' "$( cat "$OUT" )"
+dm check-plan "$CPFIX/agreed-id-unsourced.yaml" "$FIX/scenario-mixed.map.json"
+check 'check-plan: an id the map holds only proposed confirms nothing' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) exit=$rc" 'fail scenario-unsourced exit=1' "$( cat "$OUT" )"
+# Laundering: the agreed id with a `then` that is not the map entry's. The
+# id alone confirms nothing; only the text the human agreed does.
+dm check-plan "$CPFIX/agreed-id-unsourced-laundered.yaml" "$FIX/scenario-agreed.map.json"
+check 'check-plan: an agreed id whose text differs from the map entry still needs expected_from' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" why ) exit=$rc" 'fail scenario-unsourced no-expected-from exit=1' "$( cat "$OUT" )"
+check 'control: the laundered fixture differs from the agreed one only in its then (and probe)' \
+  "$( diff "$CPFIX/agreed-id-unsourced.yaml" "$CPFIX/agreed-id-unsourced-laundered.yaml" | grep -c '^[<>]' | tr -d ' ' )" 4 \
+  "$( diff "$CPFIX/agreed-id-unsourced.yaml" "$CPFIX/agreed-id-unsourced-laundered.yaml" )"
+# Each compared field is pinned on its own: the agreed copy with ONE field
+# rewritten (scenario, given, when or then) is no longer the text the human
+# agreed, so it needs an expected_from like any other scenario.
+for field in scenario given when then; do
+  sed "s/^        $field: .*/        $field: a second failure is final/" \
+      "$CPFIX/agreed-id-unsourced.yaml" > "$TMP/agreed-id-unsourced-only-$field.yaml"
+  dm check-plan "$TMP/agreed-id-unsourced-only-$field.yaml" "$FIX/scenario-agreed.map.json"
+  check "check-plan: an agreed id whose $field alone differs from the map entry still needs expected_from" \
+    "$( attr "$LINE" outcome ) $( attr "$LINE" reason ) $( attr "$LINE" why ) exit=$rc" 'fail scenario-unsourced no-expected-from exit=1' "$( cat "$OUT" )"
+  check "control: that plan differs from the agreed copy only in its $field line" \
+    "$( diff "$CPFIX/agreed-id-unsourced.yaml" "$TMP/agreed-id-unsourced-only-$field.yaml" | grep '^>' | tr -d '\n' )" \
+    ">         $field: a second failure is final" "$( diff "$CPFIX/agreed-id-unsourced.yaml" "$TMP/agreed-id-unsourced-only-$field.yaml" )"
+done
+expect_error 'check-plan: a map that does not validate' schema-invalid \
+  check-plan "$CPFIX/agreed-id-unsourced.yaml" "$FIX/v1-map.json"
+expect_error 'check-plan: an unreadable map' map-unreadable \
+  check-plan "$CPFIX/agreed-id-unsourced.yaml" "$TMP/no-such-map.json"
 
 # ---------------------------------------------------------------------------
 printf 'the verdict line, not the exit code\n'

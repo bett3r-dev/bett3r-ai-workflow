@@ -1,0 +1,19 @@
+seams:
+  - name: the launcher's verdict line
+    at: plugins/bett3r-ai-workflow/bin/design-map:1
+    kind: existing
+ticket: ESAS-296
+review: unattended
+slices:
+  - id: 1
+    probe: delete the map-backed source in check_adequacy; the oracle must go red
+    seam: the launcher's verdict line
+    name: "slice one"
+    oracle: |
+      a failed payment is retried exactly once
+    scenarios:
+      - id: SCN-0000000A
+        scenario: Retry once
+        given: a failed payment
+        when: the retry runs
+        then: it is retried once

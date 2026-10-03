@@ -1,0 +1,27 @@
+seams:
+  - name: the launcher's verdict line
+    at: plugins/bett3r-ai-workflow/bin/design-map:1
+    kind: existing
+ticket: ESAS-296
+review: unattended
+candidateOracles:
+  - fork: ESAS-296-F1
+    option: C
+    scenario: Retry once
+    source: owner
+    example: it is retried once
+    slice: null
+    status: unconfirmed
+slices:
+  - id: 1
+    probe: delete the agreed-id exemption in check_plan; the oracle must go red
+    seam: the launcher's verdict line
+    name: "slice one"
+    oracle: |
+      a failed payment is retried exactly once
+    scenarios:
+      - id: SCN-0000000A
+        scenario: Retry once
+        given: a failed payment
+        when: the retry runs
+        then: it is retried once

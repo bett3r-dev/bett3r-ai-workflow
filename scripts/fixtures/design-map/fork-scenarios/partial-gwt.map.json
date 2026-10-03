@@ -1,0 +1,112 @@
+{
+  "structureVersion": 1,
+  "shape": "decision",
+  "grounded": true,
+  "nodes": [
+    {
+      "id": "N1",
+      "level": "how",
+      "title": "Retry failed payments",
+      "parents": []
+    }
+  ],
+  "forks": [
+    {
+      "id": "F",
+      "title": "Retry policy",
+      "anchor": "N1",
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "C"
+      },
+      "card": {
+        "problem": "p",
+        "useCases": [
+          "u"
+        ],
+        "options": [
+          {
+            "id": "C",
+            "label": "Retry once",
+            "walks": [
+              {
+                "scenario": "Retry once",
+                "text": "one retry",
+                "given": "a failed payment"
+              },
+              {
+                "scenario": "Retry twice",
+                "text": "two retries",
+                "given": "a failed payment",
+                "when": "the retry runs"
+              },
+              {
+                "scenario": "Retry thrice",
+                "text": "three retries",
+                "given": "a failed payment",
+                "then": "it is retried three times"
+              },
+              {
+                "scenario": "Retry fourth",
+                "text": "four retries",
+                "when": "the retry runs",
+                "then": "it is retried four times"
+              }
+            ]
+          },
+          {
+            "id": "D",
+            "label": "Retry forever",
+            "walks": [
+              {
+                "scenario": "Retry forever",
+                "text": "never stops",
+                "given": "a failed payment",
+                "when": "the retry runs",
+                "then": "it is retried again"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "C",
+          "why": "w"
+        },
+        "ifOverturned": "o"
+      }
+    }
+  ],
+  "links": [],
+  "scenarios": [
+    {
+      "id": "SCN-0000000B",
+      "title": "Authored",
+      "anchors": [
+        "N1"
+      ],
+      "given": [
+        {
+          "text": "g"
+        }
+      ],
+      "when": [
+        {
+          "text": "w"
+        }
+      ],
+      "then": [
+        {
+          "text": "t"
+        }
+      ],
+      "proposedBy": "human",
+      "status": {
+        "kind": "proposed"
+      }
+    }
+  ],
+  "observations": [],
+  "coverage": []
+}

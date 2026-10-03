@@ -1,0 +1,142 @@
+{
+  "structureVersion": 1,
+  "shape": "decision",
+  "grounded": true,
+  "nodes": [
+    {
+      "id": "N1",
+      "level": "how",
+      "title": "Retry failed payments",
+      "parents": []
+    }
+  ],
+  "forks": [
+    {
+      "id": "F",
+      "title": "Retry policy",
+      "anchor": "N1",
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "C"
+      },
+      "card": {
+        "problem": "p",
+        "useCases": [
+          "u"
+        ],
+        "options": [
+          {
+            "id": "C",
+            "label": "Retry once",
+            "walks": [
+              {
+                "scenario": "Retry once",
+                "text": "one retry",
+                "given": "a failed payment",
+                "when": "the retry runs",
+                "then": "it is retried twice"
+              },
+              {
+                "scenario": "Gives up",
+                "text": "then stops",
+                "given": "a payment failed twice",
+                "when": "the retry runs",
+                "then": "it is marked failed"
+              }
+            ]
+          },
+          {
+            "id": "D",
+            "label": "Retry forever",
+            "walks": [
+              {
+                "scenario": "Retry forever",
+                "text": "never stops",
+                "given": "a failed payment",
+                "when": "the retry runs",
+                "then": "it is retried again"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "C",
+          "why": "w"
+        },
+        "ifOverturned": "o"
+      }
+    }
+  ],
+  "links": [],
+  "scenarios": [
+    {
+      "id": "SCN-0000000A",
+      "title": "Retry once",
+      "anchors": [
+        "N1"
+      ],
+      "given": [
+        {
+          "text": "a failed payment"
+        }
+      ],
+      "when": [
+        {
+          "text": "the retry runs"
+        }
+      ],
+      "then": [
+        {
+          "text": "it is retried once"
+        }
+      ],
+      "derivedFrom": {
+        "forkId": "F",
+        "optionId": "C",
+        "walk": "Retry once",
+        "basis": {
+          "text": "one retry",
+          "given": "a failed payment",
+          "when": "the retry runs",
+          "then": "it is retried once"
+        }
+      },
+      "proposedBy": "human",
+      "status": {
+        "kind": "agreed",
+        "seq": 7,
+        "at": "2026-10-02T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "SCN-0000000B",
+      "title": "Authored",
+      "anchors": [
+        "N1"
+      ],
+      "given": [
+        {
+          "text": "g"
+        }
+      ],
+      "when": [
+        {
+          "text": "w"
+        }
+      ],
+      "then": [
+        {
+          "text": "t"
+        }
+      ],
+      "proposedBy": "human",
+      "status": {
+        "kind": "proposed"
+      }
+    }
+  ],
+  "observations": [],
+  "coverage": []
+}

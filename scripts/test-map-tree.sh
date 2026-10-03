@@ -514,6 +514,50 @@ check 'T10: the verdict line key set is unchanged by the rendered reason' \
   "$( printf '%s\n' "$LINE" | tr ' ' '\n' | sed -n 's/=.*//p' | tr '\n' ' ' )" \
   'outcome verb ticket forks owner code recommendation open moot path ' "$LINE"
 
+# ---------------------------------------------------------------------------
+printf 'T11: a grounded zero-fork map says Nothing to decide (ESAS-304 P1)\n'
+# ---------------------------------------------------------------------------
+# A /design with nothing to decide still commits a grounded map holding only the
+# goal node; its decision region reads exactly "Nothing to decide." instead of
+# refusing reason=no-forks. An ungrounded zero-fork map is still refused, and so
+# is a map whose forks all belong to another ticket (the T1 no-forks case).
+ZF="$FIX/zero-fork.map.json"
+ZU="$FIX/zero-fork-ungrounded.map.json"
+# region_body <file> — the lines between the inline start marker and its end.
+region_body(){
+  awk '/^`map-tree:v1 /{p=1; next} $0=="`/map-tree:v1`"{p=0} p' "$1"
+}
+Z="$TMP/t11.md"
+cp "$FIX/design.md" "$Z"
+mt write --map "$ZF" --ticket ESAS-920 "$Z" --insert-after "$H"
+expect 'T11 zero-fork write' written 0
+check 'T11 zero-fork write: forks=0' "$( attr "$LINE" forks )" 0 "$LINE"
+check 'T11 zero-fork write: the region body is exactly Nothing to decide.' \
+  "$( region_body "$Z" )" 'Nothing to decide.'
+check 'T11 zero-fork write: one region written' \
+  "$( grep -c '^<!-- map-tree:v1 ticket=ESAS-920 gen=2 src=sha256:[0-9a-f]\{64\} out=sha256:[0-9a-f]\{64\} -->$' "$Z" )" 1
+mt check --map "$ZF" --ticket ESAS-920 "$Z"
+expect 'T11 zero-fork check after write' fresh 0
+mt render --map "$ZF" --ticket ESAS-920
+expect 'T11 zero-fork render' ok 0
+check 'T11 zero-fork render: the body is exactly Nothing to decide.' \
+  "$( sed '$d' "$OUT" )" 'Nothing to decide.'
+mt render --map "$ZF" --ticket ESAS-920 --dialect jira
+expect 'T11 zero-fork render (jira)' ok 0
+check 'T11 zero-fork render (jira): the body is exactly Nothing to decide.' \
+  "$( sed '$d' "$OUT" )" 'Nothing to decide.'
+
+ZN="$TMP/t11-ungrounded.md"
+cp "$FIX/design.md" "$ZN"
+mt write --map "$ZU" --ticket ESAS-920 "$ZN" --insert-after "$H"
+expect 'T11 ungrounded zero-fork write: still refused' error 2 no-forks
+holds 'T11 ungrounded zero-fork write: file byte-identical' cmp "$ZN" "$FIX/design.md"
+mt render --map "$ZU" --ticket ESAS-920
+expect 'T11 ungrounded zero-fork render: still refused' error 2 no-forks
+mt write --map "$MAP" --ticket ESAS-999 "$ZN" --insert-after "$H"
+expect 'T11 grounded map whose forks are all another ticket'"'"'s: still refused' error 2 no-forks
+holds 'T11 another ticket'"'"'s forks: file byte-identical' cmp "$ZN" "$FIX/design.md"
+
 printf '\n'
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"

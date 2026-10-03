@@ -1,5 +1,5 @@
 ---
-description: Generate the mechanical half of a slice's PV3 artifacts from the BLUEPRINT design graph, then hand the rest to the create-* skills. Use at the START of any slice that delivers designed artifacts (a policy, read model, command or event that exists in .blueprint/design.json) — before writing any of them by hand.
+description: Generate the mechanical half of PV3 artifacts from the BLUEPRINT design graph, then hand the rest to the create-* skills. Use when a slice delivers designed artifacts (a policy, read model, command or event that exists in .blueprint/design.json) that no committed scaffold report covers — /design's scaffold commit normally generates them, and /build then runs no scaffolder — before writing any of them by hand.
 ---
 
 # Skill: Scaffold From Design
@@ -39,13 +39,22 @@ artifacts is worse than scaffolding none. Say so and write by hand.
 ## Step 1 — Dry run, always first
 
 The command is whatever the repo declares as `designTooling.scaffold` in `.blueprint.config.json`
-(`yarn blueprint:scaffold` in teselly). With no declaration, a PV3 repo's default is
-`yarn pv3 g scaffold`. Run it from the repo root: that is where files are written and where
-existence is checked.
+(`yarn blueprint:scaffold` in teselly). There is no framework default: with no declaration there
+is nothing to run, so say so and write by hand. Run it from the repo root: that is where files are
+written and where existence is checked.
+
+Most designed artifacts never reach this skill: `/design` ends in a scaffold commit
+(`scaffold-commit`, ADR-015) over the whole agreed design, and a slice whose nodes that commit's
+`scaffold.json` report covers runs no scaffolder in `/build`. This skill is the fallback for a
+slice with no report: a repo that declares no `designTooling.typecheck`, or a design made before
+the scaffold commit existed.
 
 ```bash
 # normal checkout — reads this repo's own .blueprint/
 <scaffold> --nodes <the slice's designs: ids, comma-separated>
+
+# end of /design — the whole agreed design delta, no --nodes
+<scaffold>
 
 # fleet lane — reads the read-only snapshot the provisioner left
 <scaffold> \
@@ -70,7 +79,8 @@ hand-placing the file discards the only signal that a decision is missing.
 
 Exit codes: `0` nothing blocked · `1` the design or graph could not be read, or the slice names
 an id the design no longer contains (a stale plan — re-check `slices.yaml` against the board) ·
-`3` something was blocked.
+`3` something was blocked. `DEFERRED` and `ALREADY EXISTS` entries are not blocked and leave the
+exit code at `0`.
 
 ### In a fleet lane, verify the snapshot first
 
@@ -96,8 +106,11 @@ there is no `.blueprint/` to fall back to.
 <scaffold> [--design … --graph …] --nodes <ids> --write
 ```
 
-**Only files are written. Fragments never are.** A file is emitted only when its host file does
-not exist, so this cannot overwrite anything — enforced by the `wx` open flag, not by a check.
+**Only files are written, plus guarded barrel lines. Fragments never are.** A file is emitted only
+when its host file does not exist, so this cannot overwrite anything — enforced by the `wx` open
+flag, not by a check. The one write to an existing file is a barrel line for a new aggregate: one
+export line appended at the **end** of an existing barrel, only when no line there is exactly that
+line (the report lists it under `APPENDED`).
 
 ## Step 3 — Place the fragments yourself
 
@@ -107,8 +120,14 @@ module `index.ts`. The tool prints the code, the imports, and a structural ancho
 
 This split is deliberate and is not a limitation to route around. The previous generation of this
 tooling tried to merge generated code into edited files; its merge step degraded to "use the
-generated one" and silently overwrote hand-written work. Nothing here opens a file it did not
-create.
+generated one" and silently overwrote hand-written work. Nothing here rewrites a file it did not
+create: the only write to one is a presence-guarded export line appended at the end of a barrel.
+
+**Place the test fragments too.** When the repo declares `designTooling.tests`, the scaffold report
+has a `TESTS` section. A test file it wrote is create-only like any other file; a test for a file
+that already exists comes back under `FRAGMENTS`, `it.todo` cases behind a `TODO(scaffold)` marker. Place
+each one inside the top-level `describe` of the file its `where:` names. If the section reads `TESTS - not
+configured`, the repo declares no convention and there is nothing to place.
 
 **Place every registration fragment.** An artifact nothing registers compiles, typechecks, and is
 never wired to the event bus — it simply never runs, which looks exactly like a wrong projection.
@@ -140,11 +159,17 @@ the right-hand column is where the work actually is.
 | Design element | Emitted | You still write |
 |---|---|---|
 | `policy` | whole file + registration | handler bodies, dependency declaration, redelivery safety |
-| `read-model` | whole file + registration | projections, queries, indexes, scope |
-| `command` on an **existing** handler | fragment | the command schema, the handler body, stream/idempotency |
-| `command` on a **proposed** handler | *blocked* | scaffold the handler first — order the slices so it exists |
-| `event` | fragment | the event schema, the namespace registration, translations |
-| `aggregate`, `system` | **nothing** | the whole file — use `create-aggregate` |
+| `read-model` | whole file + registration; schema as a placeholder, `TODO(scaffold)` | the real schema, projections, queries, indexes, scope |
+| `command` on an **existing** handler | fragment + companion schema fragment (placeholder, `TODO(scaffold)`) | the real command schema, the handler body, stream/idempotency |
+| `command` on a **proposed** aggregate in the same run | rendered into the aggregate's new file (`HOSTED`) + its placeholder schema in `<stem>-integration.types.ts` | the real command schema, the handler body, stream/idempotency |
+| `command` on a proposed handler the run does not write (a refused aggregate, a `system`, or one left out of `--nodes`) | *blocked*, naming the handler | unblock the handler, or add its id to `--nodes` |
+| `event` of an **existing** aggregate | fragment + companion schema fragment (placeholder, `TODO(scaffold)`) | the real event schema, the namespace registration, translations |
+| `event` of a **proposed** aggregate in the same run | rendered into that aggregate's own new events file, never a sibling's (`HOSTED`), + placeholder schema + a stub reducer | the real event schema, the reducer, translations |
+| `policy`, `read-model` or view naming a **proposed** node that is not written this run (an event it reacts to or projects, a command it issues, an aggregate a view reads from) | *deferred* (not written, exit 0, listed under `DEFERRED`) | place the fragments, re-extract the graph, re-run the scaffold |
+| `aggregate` | its file (`AggregateBuilder( <Stem>AggregateSchema, <Stem>Events )`) + `<stem>.events.ts`, `<stem>.types.ts`, `<stem>-integration.types.ts` (placeholders, `TODO(scaffold)`) + guarded barrel lines; a new subdomain also gets its domain barrel and module `index.ts`; registration into an existing module is a fragment | reducers, handler bodies, invariants, scope (`scopeInvariant()` only when `domainUtilsPackageName` is declared) — use `create-aggregate` |
+| `invariant` (a proposed rule, with `guarded-by` edges from the commands it guards) | a named stub beside the handler of a guarded command (PV3: a named factory; kixie: a `check<Name>` helper) + one wiring fragment per guarded command (PV3: `.withInvariant( <factory>())`; kixie: the helper call). A `generic` invariant (a rule a framework library supplies) gets the wiring only. *Deferred* (not written, exit 0, listed under `DEFERRED`) when no command it guards is named, when no guarded command has a handler in code or planned this run, or when the adapter has no invariant template. The wiring for one guarded command is *deferred* on its own, the stub still placed, when that command has no handler in code or planned this run; a `generic` invariant's wiring is deferred per command the same way. A stub or wiring hosted in a handler this run plans is *blocked* when that handler is blocked, as any hosted unit is. An invariant never refuses the design | the rule itself, and the error code the stub rejects with |
+| `aggregate` labelled without `Aggregate` where every aggregate in code carries it | *blocked*, with the exact rename | rename it on the board |
+| `system` | **nothing** (*blocked*, no template) | the whole file |
 | schemas, tests | **nothing** | `create-schema`, `create-tests` |
 
 ## Placement, and why it is computed
@@ -176,6 +201,9 @@ state file to get out of sync, because the two graphs *are* the state.
 - **Never edit a generated file to change its id-bearing identity** (its export name, its label,
   its subdomain) without changing the design. The id is the convergence contract; drift there is
   invisible until the board reports a phantom.
-- **Do not run it un-scoped (`--nodes` omitted) with `--write`.** That scaffolds the whole design
-  delta into one commit of unreachable stubs — the thing vertical slicing exists to prevent.
+- **Run it un-scoped (`--nodes` omitted) with `--write` only at the end of /design, over an agreed
+  design**, with the same safety as a slice run: dry run first, BLOCKED surfaced, every fragment
+  placed, and the commit made only once the repo typechecks. Units that wait on a fragment are
+  `DEFERRED`, not written broken: place the fragments, re-extract the graph and re-run. Inside a
+  slice, always pass `--nodes`; an un-scoped write there scaffolds other slices' artifacts.
 - The scaffolder reads `.blueprint.config.json` for paths and package names, like every skill here.

@@ -835,6 +835,46 @@ else
        "rc=$rc out=$out markers=$markers got: $( printf '%s' "${got:-<no verdict>}" | tr '\n' ' ' ) $( cat "$TMP/err" )"
 fi
 
+# (e) ESAS-304: /design makes two unpushed commits, the docs commit and Step 4b's
+# scaffold commit. The verdict folds into the LAST one, the docs commit beneath
+# it keeps its message, and no commit is added.
+remote_before=$( rec_tip )
+( cd "$rec_tree" && printf 'design 2\n' > design.md && rec_git git add design.md \
+  && rec_git git commit -q -m 'docs(X-1): design' \
+  && printf '{}\n' > scaffold.json && rec_git git add scaffold.json \
+  && rec_git git commit -q -m 'chore(X-1): scaffold the agreed design' )
+docs_commit=$( git -C "$rec_tree" rev-parse HEAD~1 )
+out=$( rec_run 'LANE-STEP:v1 step=design outcome=success' ); rc=$?
+got=$( rec_msg | "$LANE_STEP" - 2>/dev/null )
+if [ "$rc" -eq 0 ] && [ "$got" = "$( printf 'step=design\noutcome=success' )" ] \
+   && [ "$out" = "recorded=folded sha=$( rec_tip )" ] \
+   && [ "$( rec_msg | sed -n 1p )" = 'chore(X-1): scaffold the agreed design' ] \
+   && [ "$( rec_tip claude/lane-x~1 )" = "$docs_commit" ] \
+   && [ "$( rec_msg claude/lane-x~1 )" = 'docs(X-1): design' ] \
+   && [ "$( rec_tip claude/lane-x~2 )" = "$remote_before" ]; then
+  pass '/design'\''s verdict folds into its last commit, the scaffold commit, and the docs commit keeps its message'
+else
+  fail '/design'\''s verdict folds into its last commit, the scaffold commit, and the docs commit keeps its message' \
+       "rc=$rc out=$out got: $( printf '%s' "${got:-<no verdict>}" | tr '\n' ' ' ) $( cat "$TMP/err" )"
+fi
+
+# (f) ESAS-304: a red Step 4b restores the tree, so the docs commit is the
+# step's last commit, and it carries `gate-red`.
+remote_before=$( rec_tip )
+( cd "$rec_tree" && printf 'design 3\n' > design.md && rec_git git add design.md \
+  && rec_git git commit -q -m 'docs(X-2): design' )
+out=$( rec_run 'LANE-STEP:v1 step=design outcome=gate-red' ); rc=$?
+got=$( rec_msg | "$LANE_STEP" - 2>/dev/null )
+if [ "$rc" -eq 0 ] && [ "$got" = "$( printf 'step=design\noutcome=gate-red' )" ] \
+   && [ "$out" = "recorded=folded sha=$( rec_tip )" ] \
+   && [ "$( rec_msg | sed -n 1p )" = 'docs(X-2): design' ] \
+   && [ "$( rec_tip claude/lane-x~1 )" = "$remote_before" ]; then
+  pass 'a /design gate-red folds into the docs commit that stands'
+else
+  fail 'a /design gate-red folds into the docs commit that stands' \
+       "rc=$rc out=$out got: $( printf '%s' "${got:-<no verdict>}" | tr '\n' ' ' ) $( cat "$TMP/err" )"
+fi
+
 # ---------------------------------------------------------------------------
 printf '\nSeam D — the lane brief (.work/lane.yaml)\n\n'
 # ---------------------------------------------------------------------------
@@ -933,7 +973,7 @@ PY
     # ask anybody for.
     missing=
     for want in ticket worktree branch base drift runners preconditions \
-                adrAllocations modelRouting handedDownFacts; do
+                adrAllocations modelRouting handedDownFacts scaffoldReport; do
       case "$brief_keys" in *" $want "*) ;; *) missing="$missing $want" ;; esac
     done
     if [ -z "$missing" ]; then
@@ -2630,8 +2670,8 @@ present "$VERIFY_BUILD_MD" 'Its title names every C-entry it waives by id (`## D
 present "$VERIFY_BUILD_MD" 'written without backticks' '/verify-build: the waiver citation is written without backticks'
 present "$VERIFY_BUILD_MD" 'post Step 6b'\''s status again, unchanged, on the new head' \
   '/verify-build Step 9: the lane-step-record push gets the same flow/concerns status on its new head'
-present "$VERIFY_BUILD_MD" 'Among verdicts, only Step 2'\''s `FAIL` holds this step back' \
-  '/verify-build Step 6: among verdicts, only the gate FAIL holds the PR back'
+present "$VERIFY_BUILD_MD" 'Among verdicts, only Step 2'\''s `FAIL` and, in a lone unit, Step 2a'\''s block hold this step back.' \
+  '/verify-build Step 6: among verdicts, only the gate FAIL and a lone unit'\''s census block (ESAS-304) hold the PR back; a concerns verdict does not'
 present "$VERIFY_BUILD_MD" 'no concerns recorded' '/verify-build: an empty concerns.md is "no concerns recorded"'
 
 # ESAS-162 — the goal-signal line under ### Record, and the (inert) map-drift
@@ -2709,6 +2749,12 @@ in_order '/verify-build ORDER: ### Slices < ### Oracle candidates (D5)' \
 # /design reuses a map as-is only on `carried`; /verify-build reports `lost`.
 present "$PROVISIONER_MD" 'mapProvenance: carried' 'provisioner writes mapProvenance: carried when it copies the projection (D10)'
 present "$PROVISIONER_MD" 'mapProvenance: lost' 'provisioner writes mapProvenance: lost when the run dir or projection is absent (D10)'
+present "$PROVISIONER_MD" 'scaffoldReport: <the fleet'\''s scaffold.json path on int/<run-id>' \
+  'provisioner'\''s lane brief carries scaffoldReport, the path /start-multi step 0 hands it (ESAS-304)'
+present "$PROVISIONER_MD" 'with its `runId` and `scaffoldReport: <path>`' \
+  'provisioner'\''s report names the scaffoldReport it wrote, or why it is absent (ESAS-304)'
+present "$PROVISIONER_MD" '`scaffoldReport` is written only when step 0 made the fleet'\''s scaffold commit, and never as `none`' \
+  'provisioner writes scaffoldReport only for a real scaffold commit: /design Step 4b reads its presence (ESAS-304)'
 present "$PROVISIONER_MD" 'docs/prs/<id>/map.json' 'provisioner names the lane map destination docs/prs/<id>/map.json (D10)'
 present "$DESIGN_MD" 'mapProvenance: carried' '/design Step 4 reuses a map as-is only on mapProvenance: carried (R2)'
 present "$DESIGN_MD" 'never re-authored in the lane' '/design Step 4: a carried map is frozen in the lane; fork changes escalate (R2, D9)'
@@ -3553,6 +3599,447 @@ else
        "still claimed in:" $( printf '%s\n' "$live" ) \
        'a run has N orchestrator ticks; a rule that says one mis-attributes every fleet report and nothing goes red.'
 fi
+
+# ---------------------------------------------------------------------------
+printf '\nESAS-304 — the design ends in the scaffold commit\n\n'
+# ---------------------------------------------------------------------------
+# `/design` Step 4b drives `scaffold-commit` (prepare, the placing agent,
+# finish) after the docs commit; a fleet makes the one scaffold commit on
+# int/<run-id> in /start-multi step 0, with the asked blocks surfaced by a
+# /design-multi Step 3.5 dry-run while the owner is in the sitting. The launcher
+# itself is executed by scripts/test-scaffold-commit.sh; what is pinned here is
+# the command text that calls it, since deletion is what a presence oracle
+# catches. Step 4b's own needles and its order live in test-work-docs-path.sh's
+# Step 4 loop, beside the docs commit they follow.
+
+# position <file> <literal> — the offset of the literal in the whitespace-
+# normalised file, 0 when absent; an ordering check compares two of these.
+position(){
+  needle=$( printf '%s' "$2" | tr '\n' ' ' | tr -s ' ' )
+  NEEDLE=$needle awk 'BEGIN{RS="\001"} { print index($0, ENVIRON["NEEDLE"]) ; exit }' "$( norm "$1" )"
+}
+# in_order <description> <file> <literal>… — every literal present, each after the one before.
+in_order(){
+  d=$1 f=$2; shift 2
+  prev=0 seen=
+  for lit in "$@"; do
+    at=$( position "$f" "$lit" )
+    seen="$seen $at"
+    if [ "${at:-0}" -eq 0 ] || [ "$at" -le "$prev" ]; then
+      fail "$d" "offsets in ${f#"$ROOT"/} (0 = absent):$seen" "  at: $lit"
+      return
+    fi
+    prev=$at
+  done
+  pass "$d"
+}
+
+# /design: the step, its gate-red verdict, the generated section, the fleet skip.
+present "$DESIGN_MD" '## Step 4b — The scaffold commit' \
+  '/design has a Step 4b, the scaffold commit'
+in_order '/design names Step 4b after the docs commit' "$DESIGN_MD" \
+  'git commit -m "docs(<id>): design"' '## Step 4b — The scaffold commit'
+present "$DESIGN_MD" 'Placement never covers registration' \
+  '/design Step 4b states that placement never covers registration'
+present "$DESIGN_MD" '`outcome=gate-red` when Step 4b'\''s `finish` ended `gate-red`' \
+  '/design'\''s verdict gains gate-red, for a red scaffold commit'
+present "$DESIGN_MD" 'Where `.work/lane.yaml` carries `scaffoldReport:`' \
+  '/design Step 4b defers to the fleet'\''s one scaffold commit in a lane'
+present "$DESIGN_MD" '**Scaffold**: written in Step 4b from the draft report; finish'\''s counts govern' \
+  'design.md gains a Scaffold section, written from the draft report, finish'\''s counts governing'
+# Zero forks (P1) and the tier rule, stated and not enforced.
+present "$DESIGN_MD" 'Every pass writes `grounded: true`' \
+  '/design always writes a grounded map'
+present "$DESIGN_MD" 'its region reads `Nothing to decide.`' \
+  'a zero-fork /design says Nothing to decide'
+present "$DESIGN_MD" '**The tier rule, stated and not enforced.**' \
+  'the map gate states the tier rule, and that it is not enforced'
+present "$DESIGN_MD" 'a design on an eventstorming board also gets an impact map; a design with decisions only gets a decision tree; a design with nothing to decide gets no map, the session still exists, and the flow continues' \
+  'the tier rule names all three tiers'
+present "$DESIGN_MD" 'design-map export-examples <path>/map.json --from' \
+  '/design Step 4.1 carries the agreed examples into the committed map'
+
+# /design-multi: the pre-sitting dry-run and the projection's export.
+present "$DESIGN_MULTI_MD" '## Step 3.5 — Scaffold dry-run' \
+  '/design-multi has a Step 3.5 scaffold dry-run'
+in_order '/design-multi runs the dry-run before the sitting' "$DESIGN_MULTI_MD" \
+  '## Step 3.5 — Scaffold dry-run' '## Step 4 — Phase B: the one sitting'
+present "$DESIGN_MULTI_MD" 'Each asked block, of either kind, becomes a sitting fork in its unit' \
+  '/design-multi: an asked block becomes a sitting fork'
+# Step 3.5 is ONE dry-run over the shared design, its maps repeated, its blocks
+# deduplicated and attributed by node, counting asked as scaffold-commit does.
+present "$DESIGN_MULTI_MD" 'run the declared scaffolder **once for the whole fleet**, without `--write`' \
+  '/design-multi Step 3.5 is one dry-run for the fleet, never written (without --write)'
+present "$DESIGN_MULTI_MD" 'one `--map` per unit map on disk, in unit order' \
+  '/design-multi Step 3.5 repeats --map, one per unit map'
+present "$DESIGN_MULTI_MD" 'Read its blocks **deduplicated by node and attributed by node**' \
+  '/design-multi Step 3.5 deduplicates and attributes the blocks by node'
+present "$DESIGN_MULTI_MD" 'every `skipped[]` entry whose reason is `blocked` or `error`, unless every one of its decision codes is `no-template`' \
+  '/design-multi Step 3.5 counts a blocked or errored skipped[] entry (not all no-template) as asked, as classify() does'
+present "$DESIGN_MULTI_MD" 'every `scenarioTests[]` entry whose `outcome` is `decision`' \
+  '/design-multi Step 3.5 counts a scenario test needing a decision as asked, as scaffold-commit classify() does'
+present "$DESIGN_MULTI_MD" 'design-map export-examples <run>/units/<id>.map.json --from' \
+  '/design-multi Phase C'\''s projection runs export-examples'
+
+# /start-multi: one commit on int/<run-id>, before the base gate (scenario
+# "Shared design commits once").
+START_MULTI_MD="$PLUGIN/commands/start-multi.md"
+in_order '/start-multi step 0: prepare, the placing agent, finish on int/<run-id>, then baseGate' "$START_MULTI_MD" \
+  'make the fleet'\''s one scaffold commit on `int/<run-id>`' \
+  'scaffold-commit prepare --item <run-id>' 'the placing agent' 'scaffold-commit finish --item <run-id>' \
+  'record it as `baseGate`'
+present "$START_MULTI_MD" 'into its lane brief as `scaffoldReport:`' \
+  '/start-multi: the lane brief gains scaffoldReport'
+# Block (Fleet, owner answer B): lane graph snapshots come after the scaffold
+# commit (for ESAS-300). Step 0 re-extracts in <scaffold-wt> after finish and
+# writes <runDir>/scaffold-design/ keyed to the scaffold commit; the provisioner
+# snapshots from there, not from the main checkout at BASE.
+in_order '/start-multi step 0: after the scaffold commit, re-extract and write <runDir>/scaffold-design/' "$START_MULTI_MD" \
+  'scaffold-commit finish --item <run-id>' 'Lane graph snapshots come after this commit (for ESAS-300)' \
+  'run the declared `designTooling.extract` there once more' '<runDir>/scaffold-design/' '`sourceSha:` the scaffold commit'
+present "$START_MULTI_MD" 'With no `extract` declared, write no `scaffold-design/` and record why' \
+  '/start-multi step 0 writes no post-scaffold snapshot when it cannot re-extract'
+present "$PROVISIONER_MD" '**After a fleet scaffold commit, the snapshot comes from the run dir.**' \
+  'provisioner step 6 snapshots from <runDir>/scaffold-design/ after a fleet scaffold commit (ESAS-300)'
+present "$PROVISIONER_MD" 'when that `manifest.yaml`'"'"'s `sourceSha` is this worktree'"'"'s `HEAD` as cut (`git -C <worktree> rev-parse HEAD`' \
+  'provisioner step 6 copies the post-scaffold snapshot only when its sourceSha is the lane base'
+present "$START_MULTI_MD" '`--map` is repeatable' \
+  '/start-multi names --map as repeatable (ESAS-297)'
+present "$START_MULTI_MD" 'one `--map <runDir>/units/<id>.map.json` per unit projection on disk' \
+  '/start-multi step 0 passes one --map per unit projection'
+present "$START_MULTI_MD" 'records each map (repo-relative when it lies inside the repo, else as given) and its digest under `inputs.maps[]`' \
+  '/start-multi step 0 says the report records each map, repo-relative inside the repo, and its digest'
+# The provisioner's input list requires the scaffold report path ("Anything
+# missing: ask"), so the step 2 dispatch list must hand it over: read from the
+# dispatch sentence alone, since step 0 names the report path too.
+grep -F 'Then dispatch the [`provisioner`]' "$START_MULTI_MD" > "$TMP/start-multi-dispatch.txt"
+present "$TMP/start-multi-dispatch.txt" 'and the scaffold report path step 0'\''s finish wrote on `int/<run-id>`, or that step 0 made no scaffold commit and why' \
+  '/start-multi step 2 dispatches the provisioner with the scaffold report path, or why there is none (ESAS-304)'
+present "$PROVISIONER_MD" 'the path of the fleet'\''s scaffold report when `/start-multi` step 0 made the fleet'\''s scaffold commit' \
+  'the provisioner'\''s input list names the scaffold report path the dispatch hands it (ESAS-304)'
+
+# F1: step 0 runs the launcher in a clean checkout on int/<run-id> (the primary
+# checkout is typically dirty, and prepare refuses a dirty tree) and carries the
+# design layer into that checkout's .blueprint/: a worktree holds none, so the
+# default would skip. R1: both verbs read the DEFAULTS, because finish's extract
+# rewrites .blueprint/graph.json and a --graph named elsewhere stays stale
+# (scripts/test-scaffold-commit.sh "fleet step 0" is the behavioural oracle).
+present "$START_MULTI_MD" 'It runs in a clean worktree checked out on `int/<run-id>`' \
+  '/start-multi step 0 runs the scaffold commit in a clean checkout on int/<run-id>'
+present "$START_MULTI_MD" '`design.json` and `graph.json` to `<scaffold-wt>/.blueprint/`' \
+  '/start-multi step 0 carries the design layer into <scaffold-wt>/.blueprint/'
+present "$START_MULTI_MD" '`scaffold-commit prepare --item <run-id> --repo <scaffold-wt>` on the launcher'\''s default `--design` and `--graph`' \
+  '/start-multi step 0 runs prepare on the default --design/--graph'
+present "$START_MULTI_MD" 'with the same `--repo`, again on the defaults' \
+  '/start-multi step 0 runs finish on the defaults too'
+hits=$( grep -nE -- '--(design|graph) \.work/design-snapshot|<scaffold-wt>/\.work/design-snapshot' "$START_MULTI_MD" || true )
+if [ -z "$hits" ]; then
+  pass '[STRUCTURAL] /start-multi step 0 names no .work/design-snapshot design layer for the scaffold commit'
+else
+  fail '[STRUCTURAL] /start-multi step 0 names no .work/design-snapshot design layer for the scaffold commit' "$hits" \
+       'finish re-extracts into .blueprint/graph.json; a --graph snapshot is never rewritten, so placement never reads satisfied.'
+fi
+present "$START_MULTI_MD" '`reason=no-design-layer`' \
+  '/start-multi step 0 records a launcher skip for no design layer as the reason there is no scaffold commit'
+# F2 (owner decision ESAS-304-F3): a lane never scaffolds. Without a
+# scaffoldReport it says so; it does not make its own commit.
+present "$TMP/start-multi-dispatch.txt" 'a lane never scaffolds' \
+  '/start-multi step 2: a lane never scaffolds, report or not (ESAS-304-F3)'
+present "$PROVISIONER_MD" 'its absence as "the fleet made no scaffold commit"' \
+  'provisioner: an absent scaffoldReport reads as no fleet scaffold commit, not as a lane commit (ESAS-304-F3)'
+for f in "$START_MULTI_MD" "$PROVISIONER_MD" "$DESIGN_MD"; do
+  hits=$( grep -nE 'makes (its own scaffold commit|no scaffold commit of its own)' "$f" || true )
+  if [ -z "$hits" ]; then
+    pass "[STRUCTURAL] ${f#"$PLUGIN"/} does not say a lane without scaffoldReport makes its own scaffold commit"
+  else
+    fail "[STRUCTURAL] ${f#"$PLUGIN"/} does not say a lane without scaffoldReport makes its own scaffold commit" "$hits" \
+         'ESAS-304-F3 rejected a per-lane scaffold commit: a fleet lane never scaffolds.'
+  fi
+done
+# F3: the dry-run under-asks too: no agreed scenario is in a unit map before Phase C.
+present "$DESIGN_MULTI_MD" 'so it also under-asks. Four kinds of block it cannot see:' \
+  '/design-multi Step 3.5 states the under-ask direction'
+present "$DESIGN_MULTI_MD" 'The unit maps hold no agreed scenarios until Phase C step 4 projects them' \
+  '/design-multi Step 3.5 under-ask 1: scenario tests cannot surface pre-sitting'
+present "$DESIGN_MULTI_MD" '**Blocks only `finish`'"'"'s re-run over the placed tree meets.**' \
+  '/design-multi Step 3.5 under-ask 2: blocks only finish'"'"'s re-run over the placed tree meets'
+present "$DESIGN_MULTI_MD" '**Elements added or changed on the board during the sitting.**' \
+  '/design-multi Step 3.5 under-ask 3: elements added on the board during the sitting'
+present "$DESIGN_MULTI_MD" '**A base that moves during the sitting.**' \
+  '/design-multi Step 3.5 under-ask 4: the base moving during the sitting'
+present "$DESIGN_MULTI_MD" 'Each of the four first appears at `/start-multi` step 0, after the owner has left, where it is an escalation' \
+  '/design-multi Step 3.5 says where the under-asked blocks surface'
+# The escalation sentence at step 0 must be true for every under-ask, so it
+# names them rather than claiming every asked block "was due at Step 3.5".
+present "$START_MULTI_MD" 'An asked block here is an escalation: either `/design-multi` Step 3.5 should have asked it, or it is one of the four under-asks Step 3.5 names' \
+  '/start-multi step 0: an asked block is an escalation, due at Step 3.5 or one of its named under-asks'
+for needle in 'a block only `finish`'"'"'s re-run over the placed tree meets' 'an element added or changed on the board during the sitting' 'a base that moved during the sitting'; do
+  present "$START_MULTI_MD" "$needle" "/start-multi step 0 names the under-ask: $needle"
+done
+hits=$( grep -nF 'An asked block was due at `/design-multi` Step 3.5' "$START_MULTI_MD" || true )
+if [ -z "$hits" ]; then
+  pass '[STRUCTURAL] /start-multi step 0 does not claim every asked block was due at Step 3.5'
+else
+  fail '[STRUCTURAL] /start-multi step 0 does not claim every asked block was due at Step 3.5' "$hits"
+fi
+DESIGN_304_MD="$ROOT/docs/prs/ESAS-304/design.md"
+if [ -f "$DESIGN_304_MD" ]; then
+  present "$DESIGN_304_MD" 'The fleet'"'"'s Step 3.5 dry-run under-asks' 'ESAS-304 design.md Risks names the Step 3.5 under-asks'
+  for needle in 'blocks only `finish`'"'"'s re-run over the placed tree meets' 'elements added or changed on the board during the sitting' 'a base that moves during the sitting'; do
+    present "$DESIGN_304_MD" "$needle" "ESAS-304 design.md Risks names: $needle"
+  done
+fi
+hits=$( grep -nF 'it can only over-ask' "$DESIGN_MULTI_MD" || true )
+if [ -z "$hits" ]; then
+  pass '[STRUCTURAL] /design-multi Step 3.5 does not claim the dry-run can only over-ask'
+else
+  fail '[STRUCTURAL] /design-multi Step 3.5 does not claim the dry-run can only over-ask' "$hits"
+fi
+
+# F1 (backfill): /start-multi step 0 reads the main checkout's design.json, so
+# /design-multi's canvas teardown must wait for it, and step 0 says when it may run.
+present "$DESIGN_MULTI_MD" 'only after `/start-multi` step 0 has made the fleet'"'"'s scaffold commit or recorded why it made none, and has provisioned its last lane' \
+  '/design-multi teardown waits for /start-multi step 0 (it reads design.json)'
+hits=$( grep -nF 'and only after any unit built in this checkout (`/build`' "$DESIGN_MULTI_MD" || true )
+if [ -z "$hits" ]; then
+  pass '[STRUCTURAL] /design-multi teardown is not gated on a /build in this checkout alone'
+else
+  fail '[STRUCTURAL] /design-multi teardown is not gated on a /build in this checkout alone' "$hits" \
+       'fleet units build in worktrees, so that condition never holds the teardown back from /start-multi step 0.'
+fi
+present "$START_MULTI_MD" 'is safe only past this point and once the run'"'"'s last lane is provisioned' \
+  '/start-multi step 0 says when /design-multi'"'"'s canvas teardown becomes safe'
+in_order '/start-multi step 0: the teardown is cleared only after the scaffold commit' "$START_MULTI_MD" \
+  'scaffold-commit finish --item <run-id>' 'canvas teardown (deleting the main checkout'"'"'s `.blueprint/design.json` and siblings) is safe only past this point'
+
+# Backfill (Low): step 0's scaffold worktree carries a .blueprint/, so the
+# "holds no .blueprint/" rule is scoped to lane worktrees.
+present "$PROVISIONER_MD" 'A lane worktree holds no `.blueprint/`' 'provisioner scopes "holds no .blueprint/" to a lane worktree'
+for f in "$PROVISIONER_MD" "$PLUGIN/agents/unit-lane.md" "$START_MULTI_MD"; do
+  hits=$( grep -nE '(^|[-.] )(A|Your) worktree holds no `\.blueprint/`' "$f" || true )
+  if [ -z "$hits" ]; then
+    pass "[STRUCTURAL] ${f#"$PLUGIN"/} states no unscoped \"worktree holds no .blueprint/\""
+  else
+    fail "[STRUCTURAL] ${f#"$PLUGIN"/} states no unscoped \"worktree holds no .blueprint/\"" "$hits"
+  fi
+done
+
+# Block (/build Step 3.0): the PV3 skill scaffold-from-design drops "at the
+# START of any slice" and its framework default; a report-covered slice runs no scaffolder.
+SFD_MD="$ROOT/plugins/bett3r-pv3-ai-skills/skills/scaffold-from-design/SKILL.md"
+for gone in 'at the START of any slice' "a PV3 repo's default is"; do
+  hits=$( grep -niF -- "$gone" "$SFD_MD" || true )
+  if [ -z "$hits" ]; then
+    pass "[STRUCTURAL] pv3 scaffold-from-design no longer says: $gone"
+  else
+    fail "[STRUCTURAL] pv3 scaffold-from-design no longer says: $gone" "$hits"
+  fi
+done
+present "$SFD_MD" 'There is no framework default' 'pv3 scaffold-from-design states there is no framework default'
+present "$SFD_MD" 'that no committed scaffold report covers' 'pv3 scaffold-from-design is the fallback for a slice no scaffold report covers'
+
+# --- STRUCTURAL: no command outside design.md and start-multi.md invokes
+# `scaffold-commit prepare`: a census over every commands/*.md, so a new step
+# is covered without being named here. /start-multi is the fleet orchestrator,
+# not a step, and runs it on int/<run-id> by design (ESAS-304-F3).
+# Positive control first: the same grep over the files that DO invoke it must
+# find it, or a renamed verb makes the absence pass by matching nothing.
+for f in "$DESIGN_MD" "$START_MULTI_MD"; do
+  if grep -qF 'scaffold-commit prepare' "$f"; then
+    pass "the prepare census finds the invocation in ${f#"$PLUGIN"/} (positive control)"
+  else
+    fail "the prepare census finds the invocation in ${f#"$PLUGIN"/} (positive control)" \
+         'the absence assertion below would match nothing and pass.'
+  fi
+done
+censused=0
+for f in "$PLUGIN"/commands/*.md; do
+  case "$f" in "$DESIGN_MD"|"$START_MULTI_MD") continue ;; esac
+  censused=$(( censused + 1 ))
+  hits=$( grep -nF 'scaffold-commit prepare' "$f" || true )
+  if [ -z "$hits" ]; then
+    pass "[STRUCTURAL] ${f#"$PLUGIN"/} does not invoke scaffold-commit prepare"
+  else
+    fail "[STRUCTURAL] ${f#"$PLUGIN"/} does not invoke scaffold-commit prepare" "$hits" \
+         'the scaffold commit is /design'\''s: a later step that prepares one re-asks design questions unattended.'
+  fi
+done
+# Pinned traversal: the glob must reach the per-unit steps the scenario names.
+for f in "$START_MD" "$PLAN_MD" "$BUILD_MD" "$VERIFY_BUILD_MD"; do
+  case " $( printf '%s ' "$PLUGIN"/commands/*.md ) " in
+    *" $f "*) pass "the prepare census reaches ${f#"$PLUGIN"/}" ;;
+    *) fail "the prepare census reaches ${f#"$PLUGIN"/}" 'the glob missed a named step: the absence above did not look at it.' ;;
+  esac
+done
+[ "$censused" -ge 4 ] && pass "the prepare census walked $censused command files" \
+  || fail 'the prepare census walked at least 4 command files' "walked: $censused"
+
+# ---------------------------------------------------------------------------
+printf '\nESAS-304 — downstream reads the scaffold report\n\n'
+# ---------------------------------------------------------------------------
+# scaffold-commit (slice 1) WRITES <path>/scaffold.json; these steps READ it:
+# /build hands the executor the report's entries for the slice's designs: and
+# runs no scaffolder, /plan counts the report's files, the verifier refuses a
+# pending scenario test, and the census (executed in test-scaffold-commit.sh)
+# warns in a fleet lane, blocks a lone unit's /verify-build and /merge-multi.
+VERIFIER_MD="$PLUGIN/agents/verifier.md"
+MERGE_MULTI_MD="$PLUGIN/commands/merge-multi.md"
+
+# /build Step 3.0: the report branch first, today's path its permanent fallback.
+present "$BUILD_MD" 'With a scaffold report, run no scaffolder' \
+  '/build Step 3.0: with a scaffold report, no scaffolder runs'
+present "$BUILD_MD" 'the report'\''s entries whose `node` is in the slice'\''s `designs:`' \
+  '/build Step 3.0 hands the executor the report entries whose node is in the slice'\''s designs:'
+present "$BUILD_MD" 'Without a report, today'\''s path is the permanent fallback' \
+  '/build Step 3.0: without a report, today'\''s scaffolder path is the permanent fallback'
+in_order '/build Step 3.0 reads the report before the fallback and its skip reasons' "$BUILD_MD" \
+  '0. **Scaffold.** With a scaffold report, run no scaffolder' \
+  'Without a report, today'\''s path is the permanent fallback' \
+  'skip it and say which reason'
+
+# /plan: the report's files are intended files.
+present "$PLAN_MD" 'every `manifest[].file` and `placed[].file` whose `node` is in a slice'\''s `designs:` is in that slice'\''s intended files' \
+  '/plan adds the scaffold report'\''s files to the slice'\''s intended files'
+
+# Verifier check 4.
+present "$VERIFIER_MD" 'A delivered file that declares a scenario test pending, `.todo(` on a title starting `"<scenarioId>: "`, is RETRY' \
+  'verifier check 4 RETRYs a delivered file with .todo( on a "<scenarioId>: " title'
+present "$VERIFIER_MD" 'the match keys on the scenario id only' \
+  'verifier check 4 keys the pending rule on the scenario id only'
+# The base refusal stands: ANY TODO(scaffold) marker in a delivered file. Only a
+# marker that names a node is scoped to designs:; one that names none (PV3's bare
+# `TODO(scaffold):`, the core's `no subject` case, scaffoldTodo()) refuses
+# unscoped, so a mechanical test left `it.todo(...)` under
+# `// TODO(scaffold) cmd-happy: ...` is never waved through.
+present "$VERIFIER_MD" '4. **Scaffolded slice.** No `TODO(scaffold)` marker, no `scaffoldTodo(` call' \
+  'verifier check 4 refuses ANY TODO(scaffold) marker in a delivered file (the base clause, unnarrowed)'
+present "$VERIFIER_MD" 'A marker that names no node (the PV3 emitters'\'' bare `TODO(scaffold):`, the scaffold core'\''s `no subject` case, every `scaffoldTodo(`) refuses the file whatever the slice designs.' \
+  'verifier check 4: a marker naming no node (bare TODO(scaffold):, no subject, scaffoldTodo() is unscoped'
+present "$VERIFIER_MD" 'Only a marker that names a node, `TODO(scaffold) [<nodeId>]` or the scaffold core'\''s `TODO(scaffold) <key>: subject <nodeId>`, is scoped: it refuses when that node is in the slice'\''s `designs:`' \
+  'verifier check 4 scopes only a node-naming marker ([<nodeId>] or the core'\''s subject <id>) to designs:'
+present "$VERIFIER_MD" 'no `scaffoldTodo(` call' \
+  'verifier check 4 names scaffoldTodo( (ESAS-300'\''s typed hole)'
+# [STRUCTURAL] negative half: `.todo(` is read in check 4 alone, and no sentence
+# in verifier.md lets a pending scenario test count as delivered.
+todo_lines=$( grep -nF '.todo(' "$VERIFIER_MD" || true )
+if [ "$( printf '%s\n' "$todo_lines" | grep -c . )" -eq 1 ] \
+   && printf '%s' "$todo_lines" | grep -qE '^[0-9]+:4\. \*\*Scaffolded slice\.\*\*'; then
+  pass '[STRUCTURAL] verifier.md reads `.todo(` in check 4 only'
+else
+  fail '[STRUCTURAL] verifier.md reads `.todo(` in check 4 only' "lines: ${todo_lines:-<none>}"
+fi
+PENDING_OK='pending[^.]*(counts as|is|are) (delivered|implemented|a test|accepted)'
+# Positive control: the absence regex matches the sentence it exists to forbid.
+if printf 'a pending scenario test counts as delivered\n' | grep -qiE "$PENDING_OK"; then
+  pass 'the pending-as-delivered regex matches a synthesized offending sentence (positive control)'
+else
+  fail 'the pending-as-delivered regex matches a synthesized offending sentence (positive control)'
+fi
+hits=$( grep -niE "$PENDING_OK" "$VERIFIER_MD" || true )
+if [ -z "$hits" ]; then
+  pass '[STRUCTURAL] no check in verifier.md treats a pending scenario test as delivered'
+else
+  fail '[STRUCTURAL] no check in verifier.md treats a pending scenario test as delivered' "$hits"
+fi
+
+# /verify-build Step 2a: the stub census and the scenario census.
+present "$VERIFY_BUILD_MD" '## Step 2a — Scaffold census' \
+  '/verify-build has a Step 2a scaffold census'
+in_order '/verify-build runs the census after the gate and before the review' "$VERIFY_BUILD_MD" \
+  '## Step 2 — Run the gate' '## Step 2a — Scaffold census' '## Step 3 — Whole-PR review'
+present "$VERIFY_BUILD_MD" 'a stub whose `git hash-object <file>` equals its `blob`' \
+  '/verify-build censuses blob-identical stubs against the report'\''s manifest'
+present "$VERIFY_BUILD_MD" 'scaffold-commit census --item <work_item>' \
+  '/verify-build runs the census verb'
+present "$VERIFY_BUILD_MD" 'In a fleet lane (`.work/lane.yaml` exists), `outcome=blocked` warns and does not block' \
+  '/verify-build: a fleet lane'\''s census warns in the PR body and does not block (Cross-ticket scenario)'
+present "$VERIFY_BUILD_MD" '`/merge-multi` blocks on it at the integrated tree' \
+  '/verify-build: the fleet lane defers the block to /merge-multi (Cross-ticket scenario)'
+present "$VERIFY_BUILD_MD" 'In a lone unit (no brief), `outcome=blocked` blocks' \
+  '/verify-build: a lone unit'\''s census blocks (Unplaceable scenario)'
+present "$VERIFY_BUILD_MD" 'Steps 3 to 5b still run, Step 6 opens no PR, and the verdict is `outcome=blocked-on reason=scenario-not-implemented`, naming each id.' \
+  '/verify-build: a lone unit'\''s census block ends outcome=blocked-on reason=scenario-not-implemented, no PR'
+present "$VERIFY_BUILD_MD" '`outcome=error`, or no verdict line, is not a pass: a lone unit blocks on it as on `blocked`, a fleet lane warns.' \
+  '/verify-build: a census error or missing verdict line is not a pass (lone unit blocks, fleet lane warns)'
+present "$VERIFY_BUILD_MD" '`outcome=skipped` → as without a report.' \
+  '/verify-build: a skipped census reads as no scaffold report, not as a block'
+present "$VERIFY_BUILD_MD" 'Without one, the PR body'\''s `### Scaffold census` reads `scaffold census: no scaffold report`, and the step is done.' \
+  '/verify-build: without a scaffold report the PR body'\''s census reads "scaffold census: no scaffold report"'
+present "$VERIFY_BUILD_MD" 'each on its own line, never as missing a test' \
+  '/verify-build: an ESAS-296 hold gets its own line, never "missing a test"'
+present "$VERIFY_BUILD_MD" 'The escape is a human strike or writing the test' \
+  '/verify-build: the escape is a human strike or writing the test'
+# Step 6's holdback sentence, with the census block added, is pinned beside the
+# concerns needles above (a concerns verdict still does not hold the PR back).
+present "$VERIFY_BUILD_MD" '### Scaffold census' \
+  '/verify-build'\''s PR body carries a Scaffold census section'
+
+# /merge-multi step 2b: the block at the integrated tree.
+present "$MERGE_MULTI_MD" '**2b — Census the agreed scenarios on the integrated tree.**' \
+  '/merge-multi has a step 2b census on the integrated tree'
+in_order '/merge-multi censuses after the merge and before the gate' "$MERGE_MULTI_MD" \
+  '**2 — Merge into integration, in dependency order.**' \
+  '**2b — Census the agreed scenarios on the integrated tree.**' \
+  '**3 — Run the gate, once, on integration.**'
+present "$MERGE_MULTI_MD" 'scaffold-commit census --item <run-id>' \
+  '/merge-multi runs the census verb on the fleet'\''s report'
+present "$MERGE_MULTI_MD" '`outcome=blocked` blocks step 5' \
+  '/merge-multi blocks on an agreed scenario not implemented (Cross-ticket scenario)'
+present "$MERGE_MULTI_MD" 'lists it on its own line, never as missing a test' \
+  '/merge-multi: an ESAS-296 hold gets its own line'
+present "$MERGE_MULTI_MD" 'The escape is a human strike or writing the test' \
+  '/merge-multi: the escape is a human strike or writing the test'
+
+# ---------------------------------------------------------------------------
+printf '\nADR-015 and the glossary — the record of the design-end scaffold commit (ESAS-304)\n\n'
+# ---------------------------------------------------------------------------
+# ESAS-304 moved scaffolding from a per-slice /build step to one commit at the
+# end of /design, and the block defers its ADR and glossary deltas to build.
+# The behaviour is pinned above and in scripts/test-scaffold-commit.sh; what is
+# pinned here is the RECORD, one literal per clause the block lists, because a
+# record that loses a clause in a tidy-up is still a file that exists.
+ADR_015_MD="$ROOT/docs/adr/ADR-015-the-design-ends-in-a-scaffold-commit-the-declared-typecheck-is-its-bar.md"
+README_MD="$PLUGIN/README.md"
+if [ ! -s "$ADR_015_MD" ]; then
+  fail 'docs/adr/ADR-015 exists and is non-empty (positive control)' \
+       "no ${ADR_015_MD#"$ROOT"/}" \
+       'ADR-015 is the number reserved for ESAS-304; every ADR-015 assertion below would pass vacuously on a missing file.'
+else
+  pass 'docs/adr/ADR-015 exists and is non-empty (positive control)'
+  present "$ADR_015_MD" '# The design ends in a scaffold commit, and the declared typecheck is its bar' \
+    'ADR-015 states the decision in its H1, as its siblings do'
+  present "$ADR_015_MD" '## Status' \
+    'ADR-015 carries the Status section every accepted ADR here ends on'
+  present "$ADR_015_MD" '**`/design` ends in one commit of everything derivable from the agreed design, made on top of its docs commit.**' \
+    'ADR-015 records the design-end commit'
+  present "$ADR_015_MD" '**The placing agent writes topology fragments only (commands, events, their schemas and invariant wiring), and never registration.**' \
+    'ADR-015 records topology-only placement (ESAS-289-F3)'
+  present "$ADR_015_MD" '**The bar is the typecheck the host declares as `designTooling.typecheck`, not its build.**' \
+    'ADR-015 records the declared-typecheck bar'
+  present "$ADR_015_MD" 'This absorbs ESAS-289'\''s ask' \
+    'ADR-015 says the bar absorbs ESAS-289'\''s ask'
+  # The block's red-base rule (Bar P10) is built: the record states it as
+  # behaviour, and the fail-safe that keeps an unreadable red run red.
+  present "$ADR_015_MD" '**On a red base, green means no error outside the base'"'"'s error set.**' \
+    'ADR-015 records the red-base error-set rule (Bar P10)'
+  present "$ADR_015_MD" 'It is fail-safe: a red run with no' \
+    'ADR-015 records that an unreadable red typecheck stays red'
+  present "$ADR_015_MD" '**Agreed means proposed and coherent, minus any element with an unresolved comment anchored on it.**' \
+    'ADR-015 records agreed = no open comment (ESAS-304-F1)'
+  present "$ADR_015_MD" '**A fleet makes one scaffold commit, on `int/<run-id>`, in `/start-multi` step 0.**' \
+    'ADR-015 records the one fleet commit (ESAS-304-F3)'
+  present "$ADR_015_MD" '**An agreed scenario with no implemented test warns on a fleet unit'\''s PR and blocks at the integrated tree.**' \
+    'ADR-015 records the landing rule (ESAS-304-F4)'
+  present "$ADR_015_MD" '**This overrides the scaffold CLIs'\'' "slice-scoped by design".**' \
+    'ADR-015 records the override of the CLIs'\'' "slice-scoped by design"'
+fi
+
+present "$README_MD" '## Glossary' 'the plugin README has a Glossary section'
+for term in 'Scaffold commit' 'Scaffold report' 'Untouched stub' 'Held element' \
+            'Asked vs still-owed block' 'Topology vs registration fragment'; do
+  present "$README_MD" "**$term**" "the README glossary defines \"$term\" (ESAS-304)"
+done
+present "$README_MD" 'docs/adr/ADR-015' 'the README glossary points at ADR-015 for the why'
 
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"

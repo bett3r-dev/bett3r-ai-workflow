@@ -1,0 +1,38 @@
+{
+  "proposals": [
+    {
+      "key": "derived:F/D/Retry forever",
+      "forkId": "F",
+      "optionId": "D",
+      "walk": "Retry forever",
+      "source": "owner",
+      "state": "ready",
+      "title": "Retry forever",
+      "text": "never stops",
+      "anchors": [
+        "N1"
+      ],
+      "given": [
+        {
+          "text": "a failed payment"
+        }
+      ],
+      "when": [
+        {
+          "text": "the retry runs"
+        }
+      ],
+      "then": [
+        {
+          "text": "it is retried again"
+        }
+      ]
+    }
+  ],
+  "derived": [
+    {
+      "scenarioId": "SCN-0000000A",
+      "reviewReason": "option-changed"
+    }
+  ]
+}

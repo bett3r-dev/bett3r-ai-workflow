@@ -1,0 +1,70 @@
+{
+  "structureVersion": 1,
+  "shape": "decision",
+  "grounded": true,
+  "nodes": [
+    {
+      "id": "N-retry",
+      "level": "how",
+      "title": "Retry failed payments",
+      "parents": []
+    }
+  ],
+  "forks": [
+    {
+      "id": "F1",
+      "title": "Retry policy",
+      "anchor": "N-retry",
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "C"
+      },
+      "card": {
+        "problem": "p",
+        "useCases": [
+          "u"
+        ],
+        "options": [
+          {
+            "id": "A",
+            "label": "Never retry",
+            "walks": [
+              {
+                "scenario": "Payment fails",
+                "text": "left failed",
+                "given": "a payment that failed once",
+                "when": "the retry runs",
+                "then": "the payment stays failed"
+              }
+            ],
+            "rejectedBecause": "r"
+          },
+          {
+            "id": "C",
+            "label": "Retry after 30s",
+            "walks": [
+              {
+                "scenario": "Payment fails",
+                "text": "retried after 30s",
+                "given": "a payment that failed once",
+                "when": "the retry runs",
+                "then": "the payment is retried after 30 seconds"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "C",
+          "why": "w"
+        },
+        "ifOverturned": "o"
+      }
+    }
+  ],
+  "links": [],
+  "scenarios": [],
+  "observations": [],
+  "coverage": []
+}
