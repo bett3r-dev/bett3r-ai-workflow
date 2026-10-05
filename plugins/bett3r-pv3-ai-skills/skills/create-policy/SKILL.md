@@ -124,7 +124,7 @@ The client-library seam is the intended registration path; direct aggregate acce
 
 **Canonical two-step pattern:**
 
-1. Gateway system emits a **raw event** (`GatewayXCallbackReceived`) with the external payload verbatim.
+1. The gateway recorder (`RecorderBuilder`, a `.recorder.ts` file) emits a **raw event** (`GatewayXCallbackReceived`) with the external payload verbatim.
 2. A **separate policy** reacts and dispatches the aggregate command that emits domain events.
 
 A handler that calls `executeCommand` and returns `[]` should have an empty or omitted `produces` — the downstream aggregate's events are NOT this handler's output and belong to a different stream.

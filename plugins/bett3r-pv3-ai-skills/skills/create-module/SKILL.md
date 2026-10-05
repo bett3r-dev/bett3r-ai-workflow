@@ -171,7 +171,7 @@ npx jest <serverPath>/src/modules/<module-name>/ --verbose
 - **No `*.controller.ts`** — PV3 handles routing internally
 - **No `*.module.ts`** — Replaced by `index.ts` `create()` function
 - **No `*.service.ts` for readmodels** — PV3 ReadmodelBuilder handles projection inline
-- **Every artifact factory takes EXACTLY `( ports )`** — aggregate, policy, readmodel, system. Never a second constructor argument. The MDU/lift loader instantiates artifacts as `factory( ports )`; an injected dep is `undefined` in any lifted deployment unit. Single-consumer infra → a lazy library singleton via `getX( ports )`, never the global `Ports` type. See the `ddd-patterns` skill → "Artifact Constructor Signature — the MDU/Lift Contract".
+- **Every artifact factory takes EXACTLY `( ports )`** — aggregate, policy, readmodel, recorder. Never a second constructor argument. The MDU/lift loader instantiates artifacts as `factory( ports )`; an injected dep is `undefined` in any lifted deployment unit. Single-consumer infra → a lazy library singleton via `getX( ports )`, never the global `Ports` type. See the `ddd-patterns` skill → "Artifact Constructor Signature — the MDU/Lift Contract".
 - **Co-located tests** — `*.test.ts` next to source, not in separate directory
 - **Events in the domain package** — NOT in the server module
 - **Types in the domain package** — NOT in the server module
@@ -209,7 +209,7 @@ After completion, return:
 - [ ] Schemas generated first (other components depend on them)
 - [ ] Events have friendlyName with es/en/pt
 - [ ] Aggregate uses AggregateBuilder pattern
-- [ ] Every artifact factory (aggregate/policy/readmodel/system) takes EXACTLY `( ports )` — no second constructor argument (MDU/lift contract)
+- [ ] Every artifact factory (aggregate/policy/readmodel/recorder) takes EXACTLY `( ports )` — no second constructor argument (MDU/lift contract)
 - [ ] Aggregate has `scopeInvariant()` via `.withCommandTemplate()` (unless internal/system)
 - [ ] Aggregate creation event reducer captures `ownerId: metadata?.userId`
 - [ ] Policies use PolicyBuilder pattern

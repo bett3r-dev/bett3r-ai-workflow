@@ -50,7 +50,7 @@ export const MyComponent = ( ports: Ports ) => {
 
 ### Artifact Constructor Signature — the MDU/Lift Contract
 
-**Every artifact factory — aggregate, policy, readmodel, system — takes EXACTLY `( ports )`. Never add a second constructor parameter or inject a dependency any other way.**
+**Every artifact factory — aggregate, policy, readmodel, recorder — takes EXACTLY `( ports )`. Never add a second constructor parameter or inject a dependency any other way.**
 
 This is a hard deployment invariant, not style. PV3's manifest loader (`@bett3r-dev/pv3` → `selectiveLoader.ts:loadFromManifest`) instantiates every lifted artifact uniformly as `factory( scopedPorts )` — one argument, always. `MyPolicy( ports, something )` receives `undefined` for `something` in any lifted deployment unit: it works in the monolith, passes unit tests and single-process E2E, then breaks **silently in production** under MDU distribution. No build, type, or test gate catches it.
 

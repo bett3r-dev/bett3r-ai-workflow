@@ -132,4 +132,4 @@ A policy belongs in the **subdomain whose state it changes**, not the one that e
 
 `produces` must **only list events the handler itself writes to the event store** — never downstream side-effects of aggregate commands it dispatches. A gateway system handler that calls `executeCommand(SomeAggregate, 'DoSomething')` and returns `[]` must NOT list the downstream aggregate's events (they belong to a different stream); declare empty/omitted `produces`.
 
-**Canonical gateway ACL two-step:** (1) the gateway system emits a **raw gateway event** (e.g. `GatewayCallbackReceived`) capturing the external payload verbatim; (2) a **separate policy** reacts to it and dispatches the aggregate command (e.g. `RecordCallbackOutcome`), which emits the domain event.
+**Canonical gateway ACL two-step:** (1) the gateway recorder (`RecorderBuilder`, a `.recorder.ts` file) emits a **raw gateway event** (e.g. `GatewayCallbackReceived`) capturing the external payload verbatim; (2) a **separate policy** reacts to it and dispatches the aggregate command (e.g. `RecordCallbackOutcome`), which emits the domain event.
