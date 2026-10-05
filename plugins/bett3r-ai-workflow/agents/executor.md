@@ -49,7 +49,10 @@ Write the failing test, then only enough code to pass it: one seam, one test, on
 
 ## Before reporting COMPLETED
 
-- Re-read every docblock, comment and doc sentence you wrote and probe each as a claim: open the source it names and quote the words that support it, or mark it unsupported. "The line exists" and "the line says it" are different checks, and a table of resolving `file:line`s is only the first.
+Run the verifier's two per-slice checks yourself before handing off; a gap closed here costs a test instead of a fix round.
+
+- **Pin every clause, every slice.** For each behaviour clause your diff adds (a branch, a guard, a field of a definition, an ordering, a rule a comment or doc states), delete or invert it in a throwaway clone (`cp -c -R` on APFS, else `rsync` with `.git` stripped) and run only the slice's oracle there, wrapped in `timeout 600`. It goes red by assertion, or the clause gets a test now. Report the **clause table**: clause (`file:line`) → mutation → the test and assertion that caught it. A test-or-guard slice's mutation table is this table. A timed-out mutant is reported as such, never waited out.
+- Re-read every docblock, comment, README line and ADR sentence you wrote and probe each as a claim: open the source it names and quote the words that support it, or cut the sentence to what the code does. A sentence describing behaviour names the test that pins it, or it goes. "The line exists" and "the line says it" are different checks, and a table of resolving `file:line`s is only the first.
 - Typecheck the packages you changed; it passes. Name pre-existing errors in unrelated files separately from yours.
 - Confirm your tracked changes match the slice's intended files; an out-of-scope tracked change is surfaced in the report.
 
@@ -61,7 +64,7 @@ Findings come back to you, continued in this context or in a fresh brief. Fix th
 
 Redirect every build, test and git command's output to a file and read the tail: `yarn build > "$TMPDIR/gate-build.log" 2>&1; tail -40 "$TMPDIR/gate-build.log"`. Read the verdict as `full-gate` does. A log read into your context is re-sent on every later turn, so `grep` it for the specific failure instead of reading it again. Read the region of a source file you need, not the whole file.
 
-**Waiting.** Wait in one blocking call: `Monitor` on the file or transcript the work writes, or a bounded `until <condition>; do sleep 10; done` inside a single foreground Bash call. A background `sleep` or a re-issued timer is a whole extra turn at full context. Printing your verdict line ends the run: take no turn after it.
+**Waiting.** Wait in one blocking call: `Monitor` on the file or transcript the work writes, or a bounded `until <condition>; do sleep 10; done` inside a single foreground Bash call, whose condition is the thing awaited (the verdict file exists, the agent's transcript stopped growing). A fixed-count loop (`for i in $(seq 1 58); do sleep 10; done`) is not a wait: it sleeps on after the agent finished. A background `sleep` or a re-issued timer is a whole extra turn at full context. Printing your verdict line ends the run: take no turn after it.
 
 ## Report
 
@@ -78,6 +81,8 @@ Redirect every build, test and git command's output to a file and read the tail:
 **RED evidence:** [the failure message the oracle printed before implementation, expected and actual values included; or the mutation table for a test-or-guard slice. If you could not get a clean RED, say so.]
 
 **Probe:** [the line removed, the assertion that fired, the values; or "stayed green", as a finding]
+
+**Clause table:** [one row per behaviour clause the diff adds: `file:line` → mutation → the test and assertion that went red; a clause no test pins is listed with the test you added for it]
 
 **Typecheck:** [pass, or the exact errors, yours and pre-existing separated]
 

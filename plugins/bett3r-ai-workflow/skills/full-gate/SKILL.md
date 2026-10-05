@@ -52,7 +52,7 @@ A new gate is `.mjs`: Node is present wherever this flow runs, `spawnSync(..., {
 - A venue without the repo's secrets certifies partially by construction: name each `INCONCLUSIVE` step and why, and where making one step runnable disables another, name the pair, since the two verdicts are not additive.
 - The verdict names its blind spot in the same breath: every `SKIP` and `INCONCLUSIVE` by name, every tier the repo excludes on purpose, and on a scoped run the suites and tree-counting guards it did not select. A scoped `PASS` certifies this branch's diff and its importers, not the tree.
 
-**Waiting.** Wait in one blocking call: `Monitor` on the file or transcript the work writes, or a bounded `until <condition>; do sleep 10; done` inside a single foreground Bash call. A background `sleep` or a re-issued timer is a whole extra turn at full context. Printing your verdict line ends the run: take no turn after it.
+**Waiting.** Wait in one blocking call: `Monitor` on the file or transcript the work writes, or a bounded `until <condition>; do sleep 10; done` inside a single foreground Bash call, whose condition is the thing awaited (the verdict file exists, the agent's transcript stopped growing). A fixed-count loop (`for i in $(seq 1 58); do sleep 10; done`) is not a wait: it sleeps on after the agent finished. A background `sleep` or a re-issued timer is a whole extra turn at full context. Printing your verdict line ends the run: take no turn after it.
 
 ## Reporting
 

@@ -29,7 +29,9 @@ You are the judgment half of the dual gate. The test gate proves the behaviour r
 7. **Tenant scope.** An endpoint over "my rows" derives the tenant from the authenticated user and pushes it into the query filter; construct the two-tenant repro rather than trusting the comment. Single-tenant harnesses cannot see this class.
 8. **Platform mechanisms.** When the behaviour depends on a background task, hook, notification, watcher or timeout, arm it and read what arrives; a wake wrapped in a `[SYSTEM NOTIFICATION - NOT USER INPUT]` banner is a refusal a text review passes and the running mechanism deadlocks on.
 
-**Mutation is yours to run, in a throwaway copy** (`rsync` with `.git` stripped; byte-verify the worktree unchanged before and after). Read the executor's probe and mutation table by [EVIDENCE.md](../EVIDENCE.md) §2: one mutation per clause, the assertion that catches each, which consumers it reached, controls for an absence guard. A probe that did not go red is a finding, not a failed errand: establish why. The two recurring answers are a test that composes its own subject (so it cannot be an oracle for the production wiring; ask separately what guards the real composition) and redundancy that hides which seam is load-bearing. A hand-built fixture for an event with a real in-repo producer is a finding; where the gate is "behaviour unchanged", question the corpus before the code.
+**Mutation is yours to run, in a throwaway copy** (`cp -c -R` on APFS, else `rsync` with `.git` stripped; byte-verify the worktree unchanged before and after). Read the executor's probe and clause table by [EVIDENCE.md](../EVIDENCE.md) §2: one mutation per clause, the assertion that catches each, which consumers it reached, controls for an absence guard. Re-run the rows that carry the slice's risk and mutate every clause the table leaves out.
+
+**Bound every probe.** Make one clone per verification and mutate, run and restore inside it, never a fresh copy per mutant. Run the slice's oracle, or the one suite that collects the mutated file, never the repo-wide runner, and wrap each run in `timeout 600`. A mutant that times out is a finding (`mutant <n> timed out: <command>`), reported and not waited out. A probe that did not go red is a finding, not a failed errand: establish why. The two recurring answers are a test that composes its own subject (so it cannot be an oracle for the production wiring; ask separately what guards the real composition) and redundancy that hides which seam is load-bearing. A hand-built fixture for an event with a real in-repo producer is a finding; where the gate is "behaviour unchanged", question the corpus before the code.
 
 ## Falsify the claims, the diff's and the design's
 
@@ -89,7 +91,7 @@ Your prompt says re-check mode when you already returned RETRY on this slice and
 
 **Recommendation:**
 - **PASS**: the slice is correct; the agent that dispatched you may commit it.
-- **RETRY**: specific, fixable issues, listed so the executor can act on each.
+- **RETRY**: specific, fixable issues, listed so the executor can act on each. Tag a finding `[doc]` when its whole fix is rewording prose (a README line, an ADR sentence, a comment) with no change to code, tests or anything a test reads; `/build` runs a RETRY whose every finding is `[doc]` without a re-check. A finding whose fix is "add the test that pins this sentence" is not `[doc]`.
 - **ESCALATE**: beyond a fix round (a wrong slice boundary, a design tension, contamination) in the slice's own work; an environment gap or a pre-existing failure is named, not escalated.
 
 ## Boundaries

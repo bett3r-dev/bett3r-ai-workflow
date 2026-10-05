@@ -144,7 +144,7 @@ Your READY is a claim the orchestrator spot-checks: state what you observed, not
 
 ## Waiting
 
-**Waiting.** Wait in one blocking call: `Monitor` on the file or transcript the work writes, or a bounded `until <condition>; do sleep 10; done` inside a single foreground Bash call. A background `sleep` or a re-issued timer is a whole extra turn at full context. Printing your verdict line ends the run: take no turn after it.
+**Waiting.** Wait in one blocking call: `Monitor` on the file or transcript the work writes, or a bounded `until <condition>; do sleep 10; done` inside a single foreground Bash call, whose condition is the thing awaited (the verdict file exists, the agent's transcript stopped growing). A fixed-count loop (`for i in $(seq 1 58); do sleep 10; done`) is not a wait: it sleeps on after the agent finished. A background `sleep` or a re-issued timer is a whole extra turn at full context. Printing your verdict line ends the run: take no turn after it.
 
 ## Boundaries
 

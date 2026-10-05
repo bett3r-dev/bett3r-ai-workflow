@@ -15,12 +15,13 @@ You run the mechanical half of a slice's gate: the checks decidable from `git` o
 
 ## Checks
 
-Run all four; each is a fact about the diff, not an opinion about it.
+Run the first four; each is a fact about the diff, not an opinion about it.
 
 1. **Scope guard.** `git status --short` and `git diff --stat`. Every changed or deleted tracked file belongs to the slice's intended output plus the repo's expected generated artifacts; anything else (a file no slice targeted, an unexpected deletion, foreign WIP) is contamination. Report the paths; whether it was reasonable is the verifier's call.
 2. **Escape hatches.** Grep the diff for `as any`, `as unknown as`, `@ts-ignore` / `@ts-expect-error`, and the silently no-op shape `(x as any).foo?.()`. Report each as `file:line` with the surrounding line; whether the repo sanctions the idiom is the verifier's call.
 3. **Test deletions.** A deleted test is a deleted invariant, invisible to every other gate. Diff the test files (`git diff <base>...HEAD -- '*test*'`) and report every removed test case or assertion, with whether the production symbols it covered changed in the same diff. A test-file rename carries its cases 1:1: report the count on each side.
 4. **Binary classification.** `git diff --numstat` printing `-\t-\t<path>` for a hand-authored source path means a control byte made git classify the file as binary, so its diff is unreviewable while build and tests stay green. Locate it with `grep -aPn '[\x00-\x08\x0e-\x1f]' <path>` and report the offset.
+5. **Doc round** (only when your prompt says doc round and names the files the `[doc]` findings cite). Diff the round (`git diff -U0 <previous> <new>`): every changed path is one of the cited files, and in a file that is not prose (`.md`, `.txt`, `.rst`) every added or removed line is a comment line in that language. Report each path and line outside that as `doc round: <path>:<line> — not a cited prose change`.
 
 ## Report
 
@@ -30,6 +31,7 @@ Scope guard: CLEAN | CONTAMINATED
 Escape hatches: <n> — file:line each, with the line
 Test deletions: <n removed cases> — <which, and whether the covered production symbols changed>
 Binary diff: none | <path> at offset <n>
+Doc round: n/a | CLEAN | <path>:<line> — not a cited prose change
 ```
 
 Say which commands you ran and which base you diffed against: a clean report from a diff against the wrong base is worse than no report. Report facts, not verdicts.

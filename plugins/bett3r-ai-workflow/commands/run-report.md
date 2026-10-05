@@ -19,7 +19,7 @@ Reconstructs a unit of work from Claude Code's own transcripts; nothing is instr
 | `--emit` | also record the run to `~/.claude/bett3r-metrics/` (what `/verify-build` does) |
 | `--since <5d\|2w\|1m>` | limit the transcript scan or the aggregation window |
 | `--fleet <run-dir>` | resolve a `/start-multi` unit (branch or unit id) through that run's `agents.yaml`; automatic from a lane worktree's `.work/lane.yaml` or from `./.work/multi/` |
-| `--fleet <run-dir> --all` | the whole fleet run: one row per unit, orchestrator-only time outside every unit's window (an approximation), and `BIGGEST SINGLE CALLS` so a multi-hour blocked call is named rather than folded into `active` |
+| `--fleet <run-dir> --all` | the whole fleet run: one row per unit with first-pass green, rework share and idle wait, the fleet's totals of those three, the `CRITICAL PATH` from `run.yaml` deps with each hand-off gap, orchestrator-only time outside every unit's window (an approximation), and `BIGGEST SINGLE CALLS` so a multi-hour blocked call is named rather than folded into `active` |
 
 ## Step 1 — Run it
 
@@ -39,6 +39,8 @@ Print the tables, then say what they mean.
 2. **First-pass green**, per build invocation. Each fix round costs a whole extra executor pass, so this is the largest lever on cost.
 3. **tool vs reason**, per role. A role at ~95% reason is thinking; a role heavy in `tool` is bounded by commands, and `WHERE COMMAND TIME WENT` names which.
 4. **Weighted tokens per line landed.** Compare it against `--aggregate`, not intuition.
+
+For a whole fleet (`--fleet <dir> --all`), read the `CRITICAL PATH` first: its depth and hand-off gaps bound the wall clock, and no `--max-parallel` shortens it. Then the fleet line's rework share and idle wait, beside first-pass green.
 
 For the agents rather than the run, `--agents` splits the same numbers `BY ROLE`, `BY MODEL` and `BY EFFORT`; only the `ROLE × MODEL × EFFORT` table controls for which roles ran on a model. `REPO CHECKS` and `WHO PAYS FOR THE CHECKS` show how much shell time is the repo answering back, and for whom. Done when each of the four numbers has one sentence of reading.
 

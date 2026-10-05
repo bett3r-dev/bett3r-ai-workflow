@@ -1,0 +1,6 @@
+runId: multi-P-1-C-2
+deps:
+  - { child: C-2, parent: P-1 }
+units:
+  - { id: P-1, wave: 0 }
+  - { id: C-2, wave: 1 }
