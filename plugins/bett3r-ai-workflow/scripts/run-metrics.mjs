@@ -361,6 +361,27 @@ function extractPhaseMarks(rows) {
   return marks
 }
 
+/**
+ * A `unit-lane` runs each step as an `Agent` dispatch to a step-lane described
+ * `Run /<step> step` (or `/build dispatch 2`). Neither a slash command nor a
+ * Skill call appears in the lane's own transcript, so without these marks every
+ * fleet unit is one `(outside a command)` window and its `/build` ledger, and
+ * with it first-pass green, is never computed.
+ */
+function stepDispatchMarks(rows) {
+  const marks = []
+  for (const r of rows) {
+    if (r.type !== 'assistant' || !Array.isArray(r.message?.content) || !r.timestamp) continue
+    for (const c of r.message.content) {
+      if (c.type !== 'tool_use' || !SPAWN_TOOLS.has(c.name)) continue
+      const m = String(c.input?.description ?? '').match(/\/(verify-build|build|plan|design|start)\b/)
+      const t = Date.parse(r.timestamp)
+      if (m && Number.isFinite(t)) marks.push({ t, phase: m[1], raw: m[1] })
+    }
+  }
+  return marks
+}
+
 // ─────────────────────────────────────────────────────────── fleet lanes
 
 /**
@@ -397,7 +418,23 @@ function fleetRunDirs(explicit, cwd) {
   return [...new Set(dirs)].filter(d => existsSync(join(d, 'agents.yaml')))
 }
 
-/** Parse the flow-style `- { k: v, ... }` rows of agents.yaml without a yaml dependency. */
+/** One flow-style `{ k: v, ... }` row body, without a yaml dependency. */
+function parseFlowRow(body) {
+  const obj = {}
+  for (const kv of body.split(/,\s*(?=\w+:)/)) {
+    const m = kv.match(/^\s*(\w+):\s*(.*?)\s*$/)
+    if (m) obj[m[1]] = m[2].replace(/^['"]|['"]$/g, '')
+  }
+  return obj
+}
+
+/**
+ * Parse the `- { k: v, ... }` rows of agents.yaml. `/start-multi` step 3 writes
+ * them as a bare top-level list, one row per lane, with no section header; a
+ * reader that wanted `lanes:` saw zero units in every real fleet. A bare row is
+ * a lane unless its `role:` says provisioner; a `lanes:` / `provisioners:` /
+ * `serial:` header still sections the rows under it.
+ */
 function readAgentsYaml(runDir) {
   const text = readFileSync(join(runDir, 'agents.yaml'), 'utf8')
   const out = { lanes: [], provisioners: [], serial: [] }
@@ -406,13 +443,26 @@ function readAgentsYaml(runDir) {
     const h = line.match(/^(\w+):\s*$/)
     if (h) { section = h[1]; continue }
     const row = line.match(/^\s*-\s*\{(.*)\}\s*$/)
-    if (!row || !section || !(section in out)) continue
-    const obj = {}
-    for (const kv of row[1].split(/,\s*(?=\w+:)/)) {
-      const m = kv.match(/^\s*(\w+):\s*(.*?)\s*$/)
-      if (m) obj[m[1]] = m[2].replace(/^['"]|['"]$/g, '')
-    }
-    out[section].push(obj)
+    if (!row) continue
+    const obj = parseFlowRow(row[1])
+    const into = section ?? (/provisioner/.test(obj.role ?? '') ? 'provisioners' : 'lanes')
+    if (into in out) out[into].push(obj)
+  }
+  return out
+}
+
+/** `deps:` edges from a run's run.yaml (`- { child: B, parent: A }`), or [] when absent. */
+function readRunDeps(runDir) {
+  const p = join(runDir, 'run.yaml')
+  if (!existsSync(p)) return []
+  const out = []
+  let inDeps = false
+  for (const line of readFileSync(p, 'utf8').split('\n')) {
+    if (/^\w/.test(line)) inDeps = /^deps:/.test(line)
+    const row = inDeps && line.match(/^\s*-\s*\{(.*)\}\s*(#.*)?$/)
+    if (!row) continue
+    const o = parseFlowRow(row[1])
+    if (o.child && o.parent) out.push({ child: o.child, parent: o.parent })
   }
   return out
 }
@@ -514,7 +564,8 @@ function collectFleetUnit({ lane, file, provisioners }) {
     return rows
   }
   const laneRows = visit(file, { ...readMeta(file), agentType: 'orchestrator', laneRole: 'unit-lane' })
-  if (laneRows) marks.push(...extractPhaseMarks(laneRows))
+  if (laneRows) marks.push(...extractPhaseMarks(laneRows), ...stepDispatchMarks(laneRows))
+  marks.sort((a, b) => a.t - b.t)
   for (const p of provisioners) visit(p, readMeta(p))
 
   return { runs, marks, sessions: [{ sessionId: sid, file: join(dir, '..') + '.jsonl' }], workDir: lane.worktree ?? null }
@@ -1333,6 +1384,78 @@ function resolveUnit(branch, lane, { since = null, quiet = false } = {}) {
 /** The N longest single calls a whole-run report names. */
 const BIGGEST_CALLS = 5
 
+/** A call that only waits: a shell sleep or poll loop, or a Monitor. */
+const isWaitCall = (c) => c.tool === 'Monitor' || (c.tool === 'Bash' && /\bsleep\b/.test(c.cmd ?? ''))
+
+/** `iv` minus `cut`, both merged interval lists, as a total in ms. */
+function subtractMs(iv, cut) {
+  let total = 0
+  for (const [a, b] of iv) {
+    let covered = 0
+    for (const [c, d] of cut) covered += Math.max(0, Math.min(b, d) - Math.max(a, c))
+    total += (b - a) - covered
+  }
+  return total
+}
+
+/**
+ * Where a unit's agent time went beyond the summary's totals. Both are
+ * approximations, defined here exactly:
+ *  - reworkShare: active time of executor runs described as a fix round and of
+ *    verifier runs described as a re-check, over all executor + verifier active
+ *    time. A round continued by SendMessage lands in the first pass's transcript
+ *    and reads as first-pass time, so this is a floor.
+ *  - idleWaitMs: wall time some run spent in a wait call (a `sleep` loop or a
+ *    Monitor) while no run in the unit did anything else: no other tool call and
+ *    no reasoning. A poll that outlives the agent it waits on shows up here.
+ */
+function unitWorkSplit(runs) {
+  let leaf = 0, rework = 0
+  for (const r of runs) {
+    const role = shortRole(r.agentType), d = r.description ?? ''
+    if (role !== 'executor' && role !== 'verifier') continue
+    leaf += r.activeMs
+    if ((role === 'executor' && /rework|retry|fix round|correction/i.test(d)) || (role === 'verifier' && /re-?check/i.test(d))) rework += r.activeMs
+  }
+  const waits = [], work = []
+  for (const r of runs) {
+    work.push(...r.reasonIntervals)
+    for (const c of r.calls) (isWaitCall(c) ? waits : work).push([c.at, c.at + c.ms])
+  }
+  const idleWaitMs = subtractMs(unionMs(waits).merged, unionMs(work).merged)
+  return { reworkMs: rework, leafActiveMs: leaf, reworkShare: leaf > 0 ? rework / leaf : null, idleWaitMs }
+}
+
+/**
+ * The chain that set the run's wall clock: start at the unit that finished
+ * last and walk to whichever of its `deps:` parents finished last, until a unit
+ * has none. `gapBeforeMs` is that unit's start minus its chain parent's end:
+ * the hand-off (orchestrator tick, diamond-base merge and gate, provisioning
+ * before the provisioner's first record).
+ */
+function criticalPath(units, deps) {
+  const at = new Map(units.filter(u => u.runStart !== undefined).map(u => [u.unitId, u]))
+  if (!deps.length || !at.size) return null
+  let cur = [...at.values()].sort((a, b) => b.runEnd - a.runEnd)[0]
+  const chain = [], seen = new Set()
+  while (cur && !seen.has(cur.unitId)) {
+    seen.add(cur.unitId)
+    chain.unshift(cur)
+    const parents = deps.filter(d => d.child === cur.unitId).map(d => at.get(d.parent)).filter(Boolean)
+    cur = parents.sort((a, b) => b.runEnd - a.runEnd)[0]
+  }
+  const steps = chain.map((u, i) => ({
+    unitId: u.unitId, runStart: u.runStart, runEnd: u.runEnd, runElapsedMs: u.runElapsedMs,
+    gapBeforeMs: i ? Math.max(0, u.runStart - chain[i - 1].runEnd) : 0,
+  }))
+  return {
+    depth: steps.length, steps,
+    unitMs: steps.reduce((t, s) => t + s.runElapsedMs, 0),
+    handoffMs: steps.reduce((t, s) => t + s.gapBeforeMs, 0),
+    spanMs: steps[steps.length - 1].runEnd - steps[0].runStart,
+  }
+}
+
 /**
  * `--fleet <dir> --all`: every unit in agents.yaml through the same resolution
  * and `summarize` as the per-unit report, plus what no unit owns.
@@ -1364,6 +1487,7 @@ function fleetWholeRun(runDir, { since = null, quiet = false } = {}) {
     const lane = findFleetLane(key, { fleet: runDir })
     const res = lane ? resolveUnit(key, lane, { since, quiet }) : { collected: null, via: 'unresolved' }
     const s = res.collected?.runs.length ? summarize(res.reportBranch, res.collected) : null
+    const slices = s ? s.builds.flatMap(b => b.ledger.filter(x => x.slice !== 'unattributed')) : []
     units.push({
       unitId: u.unitId ?? null, branch: s?.branch ?? u.branch ?? null,
       via: s ? res.via : res.collected ? 'no timestamped rows' : res.via === 'unresolved' ? 'unresolved' : 'no transcripts',
@@ -1372,6 +1496,8 @@ function fleetWholeRun(runDir, { since = null, quiet = false } = {}) {
         runStart: s.runStart, runEnd: s.runEnd, runElapsedMs: s.runElapsedMs, aliveMs: s.aliveMs,
         totalActiveMs: s.totalActiveMs, agentCount: s.agentCount, weightedTokens: s.weightedTokens,
         linesAdded: s.linesAdded, linesRemoved: s.linesRemoved, firstPassGreen: s.firstPassGreen,
+        slices: slices.length, slicesGreen: slices.filter(x => x.executor <= 1).length,
+        ...unitWorkSplit(res.collected.runs),
       } : {}),
     })
     if (!s) continue
@@ -1402,18 +1528,41 @@ function fleetWholeRun(runDir, { since = null, quiet = false } = {}) {
 
   const biggestCalls = allCalls.sort((a, b) => b.ms - a.ms).slice(0, BIGGEST_CALLS)
     .map(({ id, at, ...c }) => ({ ...c, start: at, cmd: (c.cmd ?? '').slice(0, 80) }))
-  return { runDir, units, orchestratorOnly: orchOnly, biggestCalls }
+
+  const sum = (k) => units.reduce((t, u) => t + (u[k] ?? 0), 0)
+  const fleet = {
+    slices: sum('slices'), slicesGreen: sum('slicesGreen'),
+    firstPassGreen: sum('slices') ? sum('slicesGreen') / sum('slices') : null,
+    reworkMs: sum('reworkMs'), leafActiveMs: sum('leafActiveMs'),
+    reworkShare: sum('leafActiveMs') ? sum('reworkMs') / sum('leafActiveMs') : null,
+    idleWaitMs: sum('idleWaitMs'),
+  }
+  return { runDir, units, fleet, criticalPath: criticalPath(units, readRunDeps(runDir)), orchestratorOnly: orchOnly, biggestCalls }
 }
 
 function renderFleet(run) {
   const L = ['', `  fleet ${run.runDir}`, `  ${'─'.repeat(40)}`, '']
   const d = (x) => x === undefined ? '—' : fmtDur(x)
   L.push('  UNITS   (each row is the per-unit report of that unit)')
-  L.push(table(['unit', 'branch', 'resolved via', 'elapsed', 'alive', 'active', 'agents', 'weighted tok', '+/- lines', 'first-pass green'],
+  const green = (g, n) => n ? `${g}/${n} ${pct(g, n)}` : '—'
+  const share = (x) => x == null ? '—' : pct(x, 1)
+  L.push(table(['unit', 'branch', 'resolved via', 'elapsed', 'alive', 'active', 'agents', 'weighted tok', '+/- lines', 'first-pass green', 'rework', 'idle wait'],
     run.units.map(u => [u.unitId ?? '?', u.branch ?? '?', u.via, d(u.runElapsedMs), d(u.aliveMs), d(u.totalActiveMs),
       u.agentCount ?? '—', u.weightedTokens === undefined ? '—' : fmtTok(u.weightedTokens),
       u.linesAdded === undefined ? '—' : `+${u.linesAdded}/-${u.linesRemoved}`,
-      u.firstPassGreen == null ? '—' : pct(u.firstPassGreen, 1)])))
+      green(u.slicesGreen, u.slices), share(u.reworkShare), d(u.idleWaitMs)])))
+  const f = run.fleet
+  if (f) L.push(`  fleet: first-pass green ${green(f.slicesGreen, f.slices)} slices · rework ${share(f.reworkShare)} of executor+verifier time (${fmtDur(f.reworkMs)}, a floor) · idle wait ${fmtDur(f.idleWaitMs)}`)
+  L.push('')
+  const cp = run.criticalPath
+  L.push('  CRITICAL PATH   (run.yaml deps: the chain ending at the unit that finished last; gap = start − chain parent\'s end)')
+  if (!cp) L.push('  (no deps: in run.yaml, or no unit resolved)')
+  else {
+    L.push(table(['unit', 'started', 'ended', 'elapsed', 'gap before'],
+      cp.steps.map(s => [s.unitId, new Date(s.runStart).toISOString().slice(0, 16).replace('T', ' '),
+        new Date(s.runEnd).toISOString().slice(0, 16).replace('T', ' '), fmtDur(s.runElapsedMs), fmtDur(s.gapBeforeMs)])))
+    L.push(`  depth ${cp.depth} · unit time ${fmtDur(cp.unitMs)} · hand-off gaps ${fmtDur(cp.handoffMs)} · span ${fmtDur(cp.spanMs)}`)
+  }
   L.push('')
   const o = run.orchestratorOnly
   L.push('  ORCHESTRATOR-ONLY TIME   (approximation: a unit owns its whole first → last window)')

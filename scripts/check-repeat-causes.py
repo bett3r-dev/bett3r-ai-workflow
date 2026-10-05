@@ -3,7 +3,7 @@
 
 Every fix round in this flow is already classified before it is dispatched
 (`/build` step 3): `oracle-wrong`, `design-silent`, `ripple`, `invariant`,
-`mis-routed`, `flake`. Each one is written into the unit's `build-summary.md`.
+`mis-routed`, `flake`, `doc-wording`. Each one is written into the unit's `build-summary.md`.
 Then nothing happened to them. The numbers were quoted in retros, and the same
 cause produced the same fix round in the next run.
 
@@ -63,7 +63,7 @@ LEDGER = ROOT / "docs" / "causes.md"
 
 # `/build` step 3's closed set. A cause outside it is an error, not a new row:
 # the tally is only worth acting on if everyone spells the causes the same way.
-TAXONOMY = ("oracle-wrong", "design-silent", "ripple", "invariant", "mis-routed", "flake")
+TAXONOMY = ("oracle-wrong", "design-silent", "ripple", "invariant", "mis-routed", "flake", "doc-wording")
 
 # Three occurrences across the whole recorded corpus. Two is a coincidence and a
 # disposition written against it is guesswork; three is the pattern the rule is

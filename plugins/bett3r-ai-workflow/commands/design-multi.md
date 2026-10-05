@@ -72,6 +72,18 @@ Each of the four first appears at `/start-multi` step 0, after the owner has lef
 
 Completion: every unit's asked blocks are forks in the Phase B frontier, or the step said why it skipped.
 
+## Step 3.6 — Split chains deeper than 3
+
+A fleet's wall clock is its longest dependency chain: `/start-multi` cannot start a unit before its parents land, whatever its width. So the chain is cut here, while tickets can still change shape.
+
+1. Build the unit graph from the drafts' **File overlap with siblings** sections: an edge parent → child wherever the child needs something the parent creates. Record each edge's need as `contract` (a type, schema, exported signature, route, event name or file the child codes against) or `behaviour` (the child's tests exercise the parent's working code). Compute the longest chain.
+2. While it is longer than 3 units, split one unit on it: the one whose `contract`-only consumers wait longest. Its contract becomes the original ticket, small and first (the contract and the tests that pin it); the rest of its scope becomes a new ticket that depends on it. Rewire every `contract` consumer onto the contract ticket; `behaviour` consumers follow the new one. A unit whose consumers all need behaviour does not split: name it and why, and try the next unit on the chain.
+3. Stop when the longest chain is 3 or nothing on it splits. Persist `chain: { before: [<ids>], after: [<ids>], splits: [{ unit, contract, remainder: NEW-<n> }] }` to `run.yaml`.
+
+Each split is a Phase B item with the split as its recommendation; the owner's answer can only undo it. Phase C files the remainder as a commissioned ticket (`<run>/units/NEW-<n>.ticket-body.md`, written by the `tracker-writer` as `kind=new-ticket`), rewrites the split unit's scope to the contract, and writes every rewired `deps=` on the markers.
+
+Completion: `run.yaml` carries `chain` with an `after` of at most 3 units, or names each unit on the longer chain that could not split and why.
+
 ## Step 4 — Phase B: the one sitting
 
 Phase B is one `grilling` round over the cross-ticket frontier: every open fork across all tickets, asked together. Call the Skill tool with "grill" and present every fork as it says. The owner arrives cold on N tickets and the answers run unattended with no gate behind them, so the walks are what make the collapses below visible.

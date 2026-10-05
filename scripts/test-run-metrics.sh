@@ -600,6 +600,69 @@ else
   fail '--all without --fleet exits non-zero and says it needs --fleet' "$( head -3 "$TMP/all-nofleet.out" )" "$( head -3 "$TMP/all-nofleet.err" )"
 fi
 
+# ---------------------------------------------------------------------------
+printf '\n--fleet <dir> --all over a bare agents.yaml: steps, first-pass green, rework, idle wait, critical path\n\n'
+# ---------------------------------------------------------------------------
+# fleet-bare/ is shaped as /start-multi writes it: agents.yaml rows with no
+# `lanes:` header, and run.yaml `deps:` (C-2 stacks on P-1). Each lane runs its
+# steps as Agent dispatches described `Run /<step> step`. Expected, by hand:
+#  - P-1 09:00-10:10: slice 1 = executor + fix round (2 passes), slice 2 green
+#    -> 1/2; rework = fix round 5m + re-check 5m of 40m executor+verifier = 0.25;
+#    its /build step-lane sleeps 09:46-09:58 with nothing under it -> 720000 ms.
+#  - C-2 10:30-10:52: one slice, green, no rework, no idle wait.
+#  - fleet: 2/3 green; critical path [P-1, C-2], gap 20m, span 09:00-10:52.
+H4="$TMP/home-fleet-bare"
+mkdir -p "$H4/.claude" "$H4/cwd"
+cp -R "$FIXTURE/fleet-bare/projects" "$H4/.claude/projects"
+rm_run "$H4" --fleet "$FIXTURE/fleet-bare" --all --json > "$TMP/bare.json" 2> "$TMP/bare.err"
+bare_rc=$?
+rm_run "$H4" --fleet "$FIXTURE/fleet-bare" --all --quiet > "$TMP/bare.txt" 2>&1
+"$RM_PY" - "$TMP/bare.json" "$bare_rc" > "$TMP/bare-judged" 2>&1 <<'PY2'
+import json, sys
+path, rc = sys.argv[1:3]
+out = []
+def check(label, ok, detail=""):
+    out.append("%s\t%s\t%s" % ("ok" if ok else "bad", label, str(detail).replace("\n", " ")))
+try:
+    doc = json.load(open(path))
+except Exception as e:
+    doc = {}
+    check("--all --json over fleet-bare exits 0 and prints JSON", False, "rc=%s %s" % (rc, e))
+units = doc.get("units") or []
+check("bare agents.yaml rows (no lanes: header) are lanes: one row per unit, each a live lane",
+      rc == "0" and [u.get("unitId") for u in units] == ["P-1", "C-2"] and all(u.get("via") == "live lane" for u in units),
+      [(u.get("unitId"), u.get("via")) for u in units])
+by = {u.get("unitId"): u for u in units}
+p, c = by.get("P-1") or {}, by.get("C-2") or {}
+check("a lane's `Run /build step` dispatch is a build phase: P-1 is 1/2 first-pass green, C-2 1/1",
+      (p.get("slices"), p.get("slicesGreen"), c.get("slices"), c.get("slicesGreen")) == (2, 1, 1, 1),
+      {k: (p.get(k), c.get(k)) for k in ("slices", "slicesGreen", "firstPassGreen")})
+check("rework share is fix-round + re-check active time over executor + verifier (P-1 0.25, C-2 0)",
+      p.get("reworkShare") == 0.25 and p.get("reworkMs") == 600000 and c.get("reworkShare") == 0,
+      {k: (p.get(k), c.get(k)) for k in ("reworkMs", "leafActiveMs", "reworkShare")})
+check("idle wait is a sleep loop with nothing else running (P-1 12m, C-2 0)",
+      p.get("idleWaitMs") == 720000 and c.get("idleWaitMs") == 0, (p.get("idleWaitMs"), c.get("idleWaitMs")))
+f = doc.get("fleet") or {}
+check("the fleet line sums the units: 2/3 green, rework 10m of 60m, idle 12m",
+      (f.get("slices"), f.get("slicesGreen"), f.get("reworkMs"), f.get("leafActiveMs"), f.get("idleWaitMs")) == (3, 2, 600000, 3600000, 720000), f)
+cp = doc.get("criticalPath") or {}
+steps = cp.get("steps") or []
+check("the critical path walks run.yaml deps back from the last unit to finish: P-1 -> C-2",
+      cp.get("depth") == 2 and [s.get("unitId") for s in steps] == ["P-1", "C-2"], cp)
+check("the critical path names the 20m hand-off gap and the 112m span",
+      [s.get("gapBeforeMs") for s in steps] == [0, 1200000] and cp.get("handoffMs") == 1200000 and cp.get("spanMs") == 6720000, cp)
+print("\n".join(out))
+PY2
+while IFS='	' read -r verdict_word label detail; do
+  if [ "$verdict_word" = ok ]; then pass "$label"; elif [ "$verdict_word" = bad ]; then fail "$label" "$detail"; else fail 'the fleet-bare judge ran' "$verdict_word $label"; fi
+done < "$TMP/bare-judged"
+
+if grep -qF 'CRITICAL PATH' "$TMP/bare.txt" && grep -qF 'depth 2' "$TMP/bare.txt" && grep -F 'fleet:' "$TMP/bare.txt" | grep -qF '2/3'; then
+  pass 'the printed --all report shows the critical path and the fleet line'
+else
+  fail 'the printed --all report shows the critical path and the fleet line' "$( sed -n 1,30p "$TMP/bare.txt" )"
+fi
+
 printf '\n'
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"

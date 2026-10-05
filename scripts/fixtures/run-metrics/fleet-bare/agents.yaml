@@ -1,0 +1,7 @@
+# /start-multi writes agents.yaml as a bare list, no `lanes:` header (step 3).
+# P-1 runs plan -> build -> verify-build; its slice 1 takes a fix round and a
+# re-check, slice 2 passes first time, and its /build step-lane then sleeps 12m
+# in a fixed-count loop with nothing under it running. C-2 stacks on P-1
+# (run.yaml deps), starts 20m after P-1 ends, and passes its one slice first time.
+- { unitId: P-1, agentId: laneP, worktree: /fixture/wt-p, dispatchedAt: "2026-01-11T09:00Z", tick: 1 }
+- { unitId: C-2, agentId: laneC, worktree: /fixture/wt-c, dispatchedAt: "2026-01-11T10:30Z", tick: 2 }

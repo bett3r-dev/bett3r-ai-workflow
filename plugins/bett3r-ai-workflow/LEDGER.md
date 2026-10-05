@@ -288,6 +288,14 @@ condition that retires it on purpose.
 - recorded: 2026-09-13
 - expiry: none known
 
+### A doc round skips the re-check
+- rule: A RETRY whose every finding is `[doc]` is a doc round (`doc-wording`): the executor rewords, scope-check's check 5 confirms only cited prose changed, and the slice commits with no test re-run and no verifier re-check.
+- source: commands/build.md Step 3 item 4
+- evidence:
+  > Owner decision 2026-10-04 ("2. yes"), on the trade stated as: "When a RETRY is about doc wording only, may the fix skip the full verifier re-check (executor fixes, scope-check confirms)? That saves about 5 minutes a round but loosens the gate slightly."
+- recorded: 2026-10-04
+- expiry: a doc round ships a code or test change scope-check missed
+
 ## commands/verify-build.md
 
 ### A lane never bumps plugin.json; the fleet bumps once on integration
@@ -826,6 +834,14 @@ condition that retires it on purpose.
 - recorded: 2026-09-05
 - expiry: none known
 
+### Split chains deeper than 3
+- rule: Step 3.6 splits a unit on any dependency chain longer than 3 into a contract ticket and a remainder ticket, rewiring contract-only consumers, unless the owner undoes it in the sitting.
+- source: commands/design-multi.md Step 3.6
+- evidence:
+  > Owner decision 2026-10-04 ("3. split tickets"), after the 23-unit fleet's six-deep chain set its 21.5h wall clock regardless of width.
+- recorded: 2026-10-04
+- expiry: a fleet's critical path stops being its dependency chain
+
 ## commands/design.md
 
 ### Zero providers is the normal case, and it is silent
@@ -1293,6 +1309,14 @@ condition that retires it on purpose.
 - recorded: 2026-09-05
 - expiry: none known
 
+### Name the critical path; prepare the next wave early; never re-dispatch over a live agent
+- rule: Step 1 records `criticalPath`; step 5 merges, gates and provisions a next-wave unit once its parents are build-complete; step 4 reads every transcript's mtime under a lane before re-dispatching a step.
+- source: commands/start-multi.md steps 1, 4 and 5
+- evidence:
+  > The 23-unit fleet's 21.5h span was its six-deep chain: 19.0h of unit time plus 2.5h of hand-off gaps (45m, 21m, 28m, 41m, 14m). Lanes ran 2.1 at a time on average; seven only in the first half hour. In ESAS-304 the orchestrator re-dispatched /build at 12:32 while the first /build's verifier was still inside its 209-minute call; the two collided in one worktree (slice 3 committed by the second, the first reported blocked-on).
+- recorded: 2026-10-04
+- expiry: fleets stop stacking units (no deps), or tick hand-offs fall under 10 minutes without the preparation
+
 ## commands/plan.md
 
 ### A slice is cuttable only when everything it names resolves at the base
@@ -1755,6 +1779,14 @@ condition that retires it on purpose.
 - recorded: 2026-08-09
 - expiry: none known
 
+### A fleet report needs bare agents.yaml rows, step marks and the chain
+- rule: run-metrics reads bare `agents.yaml` rows as lanes, marks a lane's `Run /<step>` dispatches as phases, and prints first-pass green, rework, idle wait and the critical path for `--fleet --all`.
+- source: scripts/run-metrics.mjs readAgentsYaml, stepDispatchMarks, unitWorkSplit, criticalPath
+- evidence:
+  > `run-metrics --fleet <dir> --all` printed `UNITS (none)` for both fleets, multi-ESAS-287-…-314 (23 units, 2026-10-01/02) and multi-ESAS-333-ESAS-334-ESAS-336-ESAS-337 (4 units, 2026-10-04): /start-multi writes agents.yaml as a bare list and the reader wanted a `lanes:` header. With the header added by hand every unit showed first-pass green `—`, since a lane's steps are Agent dispatches, not slash commands.
+- recorded: 2026-10-04
+- expiry: /start-multi writes a sectioned agents.yaml and lanes invoke steps as Skill calls
+
 ## commands/capture-learnings.md
 
 ### Mechanical → a deterministic check, full stop
@@ -1951,6 +1983,14 @@ condition that retires it on purpose.
 - recorded: 2026-09-01
 - expiry: none known
 
+### Pin every clause and audit every sentence before the verifier does
+- rule: Every slice's executor mutates each behaviour clause it added in a throwaway clone, runs only the slice's oracle under `timeout 600`, reports the clause table, and cuts every prose sentence to what the code does.
+- source: agents/executor.md "Before reporting COMPLETED"
+- evidence:
+  > First-pass green was 19/80 slices (24%) in the 23-unit fleet and 5/11 (45%) in the 4-unit one; fix rounds and re-checks were 40% and 23% of executor+verifier active time (15.3h and 48m, a floor). Of 90 verifier RETRY verdicts read back, about 60 opened by calling the behaviour correct or verified, about 54 cited a clause no test pinned (a mutation left the suite green), and about 22 cited a README, ADR or doc-comment sentence that overstated the code (keyword counts over the verdicts' first 330 characters; overlapping).
+- recorded: 2026-10-04
+- expiry: first-pass green on the next two fleets stays at or above 60% without this check, or the verifier stops running per-clause mutation
+
 ## agents/verifier.md
 
 ### The test-deletion guard: a silent deletion let a guard regress
@@ -2092,6 +2132,22 @@ condition that retires it on purpose.
   > 2. **`git blame` / base-branch check** — is this pre-existing on the base branch, not introduced by this slice? If so it's out of scope, not a finding — name it and leave it: the slice delivers its own behaviour, not unrelated repairs.
 - recorded: 2026-09-13
 - expiry: none known
+
+### Bound every mutation probe
+- rule: The verifier mutates inside one clone per verification, runs only the slice's oracle (or the suite collecting the mutated file) per mutant, wraps each run in `timeout 600`, and reports a timed-out mutant instead of waiting.
+- source: agents/verifier.md "Bound every probe"
+- evidence:
+  > ESAS-304's slice 3 verifier re-check ran one Bash call for 209 minutes (2026-10-02 09:39-13:08 -03): a `mut()` loop that `rm -rf`'d and `cp -R`'d the whole repo per mutant and ran the 155-, 505- and 621-test shell suites each time, at load averages of 100-237. The unit sat on the run's critical path (287 -> 293 -> 295 -> 304 -> 306 -> 307); 304 took 6.8h of the 21.5h span.
+- recorded: 2026-10-04
+- expiry: the host's suites run in seconds under load, or mutation moves out of the verifier
+
+### Tag wording-only findings [doc]
+- rule: A RETRY finding whose whole fix is rewording prose is tagged `[doc]`; a finding that needs a test is never `[doc]`.
+- source: agents/verifier.md Recommendation
+- evidence:
+  > About 22 of 90 RETRY verdicts in the two fleets cited a README, ADR or doc-comment sentence on code the same verdict called correct; each cost a fix round plus a full opus re-check (a re-check averaged about 5 minutes of wall time).
+- recorded: 2026-10-04
+- expiry: doc rounds show a defect the skipped re-check would have caught
 
 ## agents/provisioner.md
 
@@ -2471,6 +2527,14 @@ condition that retires it on purpose.
   >    never runs and no `LANE-STEP:` line is emitted by anything.
 - recorded: 2026-09-18
 - expiry: every harness names the step-invoking tool the same way
+
+### A wait loop's condition is the thing awaited
+- rule: A wait is Monitor or `until <condition>` on the awaited result; a fixed-count sleep loop is not a wait.
+- source: the shared Waiting paragraph (executor, provisioner, step-lane, step-lane-file, unit-lane, build, full-gate)
+- evidence:
+  > ESAS-337's /build step-lane waited in `for i in $(seq 1 58); do sleep 10; done` loops: 52.6m of the unit's 1.7h was a wait while nothing under it ran. Across the 23-unit fleet such idle waits summed to 5.3h, 1.7h of it in ESAS-305.
+- recorded: 2026-10-04
+- expiry: background agent completion can interrupt a foreground Bash call
 
 ## agents/test-runner.md
 
