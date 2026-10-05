@@ -7,7 +7,7 @@
   },
   "metadata": {
     "description": "Bett3r internal AI development tooling: the project-agnostic vertical-slice workflow plus the PV3 DDD framework skills.",
-    "version": "0.51.0"
+    "version": "0.52.0"
   },
   "plugins": [
     {
@@ -24,6 +24,11 @@
       "name": "bett3r-xp-layer",
       "source": "./plugins/bett3r-xp-layer",
       "description": "Experience-layer capture overlay for the flow: two hooks attach to the two moments worth recording \u2014 artifacts are captured synchronously right before `git worktree remove` destroys them, and a freshly-opened PR is captured and queued for extraction, detached. The base flow plugin stays store-agnostic; a repo with no executable `.xp-layer/capture` is byte-for-byte unaffected."
+    },
+    {
+      "name": "bett3r-routine",
+      "source": "./plugins/bett3r-routine",
+      "description": "The unattended implementation lane a Blueprint routine runs: the design is the board's agreed blueprint.md, so /implement goes plan \u2192 build \u2192 verify on the claude/ branch and signals done or needs-human with one git trailer. No /start, no /design, no PR. Requires bett3r-ai-workflow."
     }
   ]
 }

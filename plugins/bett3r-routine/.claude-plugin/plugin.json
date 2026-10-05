@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "bett3r-routine",
+  "version": "0.1.0",
+  "description": "The unattended implementation lane a Blueprint routine runs. The design arrives already agreed as the board's blueprint.md, so the lane is plan → build → verify with no /start or /design: /implement cuts the claude/ work branch, /routine-plan slices blueprint.md, the core /build drives the slices, /routine-verify checks the whole change without opening a PR, and one git trailer tells Blueprint done or needs-human. Requires bett3r-ai-workflow, whose /build, agents, skills and bin it calls.",
+  "author": {
+    "name": "Tomas Ruiz",
+    "email": "tomasruizr@gmail.com"
+  },
+  "repository": "https://github.com/bett3r-dev/bett3r-ai-workflow",
+  "keywords": [
+    "routine",
+    "blueprint",
+    "unattended",
+    "implementation-lane",
+    "bett3r-routine"
+  ]
+}
