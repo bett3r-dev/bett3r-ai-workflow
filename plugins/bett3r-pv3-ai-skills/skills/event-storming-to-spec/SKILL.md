@@ -213,7 +213,7 @@ Ask **one question at a time**. Let each answer inform the next question.
 
 - **Commands:** Imperative PascalCase with domain prefix — e.g. `RegisterShipment`
 - **Events:** Past tense PascalCase with domain prefix — e.g. `ShipmentRegistered`
-- **Aggregates/Systems:** PascalCase ending with `System` or `Aggregate` — e.g. `FulfillmentSystem`
+- **Aggregates/Recorders:** PascalCase ending with `Aggregate` or `Recorder` — e.g. `FulfillmentRecorder` (a recorder lives in a `.recorder.ts` file; see ADR-036 in pv3: aggregates decide, recorders record)
 - **Policies:** PascalCase ending with `Policy` — `OrderFulfillmentPolicy`
 - **Readmodels:** PascalCase ending with `Readmodel` — `OrdersReadmodel`
 - **Error codes:** SCREAMING_SNAKE_CASE — `ORDER_ALREADY_EXISTS`
