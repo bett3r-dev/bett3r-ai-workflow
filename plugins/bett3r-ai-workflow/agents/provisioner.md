@@ -38,6 +38,8 @@ State the corrected value in your READY report, the same way you state the build
 
 ## 2 — Install and build
 
+**Keep the cloned dependency trees.** A worktree cut by `new-worktree` already holds copy-on-write clones of the primary checkout's `node_modules/` and Cargo `target/`. Install and build on top of them; never delete them and never `cargo clean`, because cargo's fingerprints rebuild exactly what this branch changed, and a deleted clone costs the lane its full dependency build and gigabytes of disk. When the worktree lacks a tree the primary checkout has (cut with `git worktree add`, or recycled after the tree was removed), run `new-worktree --from <primary checkout> --deps-only <dir>` first, then install and build.
+
 Run the install, then a **build**, preferring the repo's recursive script (`build:all`, `turbo build`) over a bare `build`, which in a `tsc --build` monorepo may emit only the module format `exports.import` does not point at. Workspace dependencies resolve through a gitignored `build/` that every fresh worktree lacks; the gap presents as `Failed to resolve entry for package` or as suites collecting zero tests, both of which read as a broken baseline. When the branch was switched, re-emit composite `build/*.d.ts` so phantom `TS6305` cascades stay out of the lane.
 
 Stage the gitignored local config: for every `*.enc.*` whose decrypted sibling exists in the source checkout and not here, copy it or run the repo's decrypt task, and confirm with `git check-ignore` that it stays out of the diff.
