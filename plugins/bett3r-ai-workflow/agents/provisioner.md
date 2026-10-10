@@ -113,6 +113,7 @@ preconditions: <the host repo's build/test preconditions, from CLAUDE.md and eve
 adrAllocations: <the monotonically-numbered artifacts reserved for this lane, ADR numbers above all>
 modelRouting: <the model each step runs under>
 sliceBudget: <slices one `/build` invocation may commit before it yields to a fresh one; 3 unless the orchestrator says otherwise, 0 to disable>
+verifyDepth: <light|full: the verifier depth /build runs; full unless the orchestrator says light>
 handedDownFacts: <each fact LABELLED `applies` or `verify whether it applies`, with the command that settles it>
 runId: <run-id>
 runDir: <absolute path of .work/multi/<run-id> in the orchestrator's checkout>

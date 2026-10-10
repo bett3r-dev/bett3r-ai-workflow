@@ -33,7 +33,8 @@ Write the failing test, then only enough code to pass it: one seam, one test, on
 - Test the public interface at the seam, not internals; mock only system boundaries.
 - Then the minimal code through every layer the slice needs, invariants complete where the repo places them; nothing outside the slice.
 - **After GREEN, run the `probe:`.** Remove the named production line, confirm the oracle fails by assertion, restore it from the copy you kept, confirm `git status` shows only the slice, and report the line, assertion and values. A probe that stays green is a finding: say so and stop.
-- **A test-or-guard slice has no natural RED; mutation is the substitute.** Break one production line at a time and report the failing assertion, its values and the consumers reached; a prose guard is mutated by rewording ([EVIDENCE.md](../EVIDENCE.md) §2).
+- **A test-or-guard slice has no natural RED; mutation is the substitute.** Break one production line per `then:` of the slice's scenarios, one at a time, and report the failing assertion, its values and the consumers reached; a prose guard is mutated by rewording ([EVIDENCE.md](../EVIDENCE.md) §2).
+- **That is the whole mutation budget: the `probe:`, plus one mutant per `then:` on a test-or-guard slice.** Every mutant is a rebuild and a test run; a per-clause sweep (tables of 20 to 33 mutants per slice) cost 238 executor agent-minutes in one six-lane Rust fleet, and the verifier then repeated it. A clause your diff adds that no assertion pins is found by reading the test against the diff, not by mutating it: add the test, or list the clause under deviations.
 
 ## Evidence discipline
 
@@ -51,7 +52,7 @@ Write the failing test, then only enough code to pass it: one seam, one test, on
 
 Run the verifier's two per-slice checks yourself before handing off; a gap closed here costs a test instead of a fix round.
 
-- **Pin every clause, every slice.** For each behaviour clause your diff adds (a branch, a guard, a field of a definition, an ordering, a rule a comment or doc states), delete or invert it in a throwaway clone (`cp -c -R` on APFS, else `rsync` with `.git` stripped) and run only the slice's oracle there, wrapped in `timeout 600`. It goes red by assertion, or the clause gets a test now. Report the **clause table**: clause (`file:line`) → mutation → the test and assertion that caught it. A test-or-guard slice's mutation table is this table. A timed-out mutant is reported as such, never waited out.
+- **Pin every clause by reading, then run the probe once.** For each behaviour clause your diff adds (a branch, a guard, a field of a definition, an ordering, a rule a comment or doc states), name the test and assertion that would fail without it; a clause with none gets a test now. Then run the `probe:` (above), wrapped in `timeout 600`; a timed-out probe is reported as such, never waited out. No other mutant runs.
 - Re-read every docblock, comment, README line and ADR sentence you wrote and probe each as a claim: open the source it names and quote the words that support it, or cut the sentence to what the code does. A sentence describing behaviour names the test that pins it, or it goes. "The line exists" and "the line says it" are different checks, and a table of resolving `file:line`s is only the first.
 - Typecheck the packages you changed; it passes. Name pre-existing errors in unrelated files separately from yours.
 - Confirm your tracked changes match the slice's intended files; an out-of-scope tracked change is surfaced in the report.
@@ -82,7 +83,7 @@ Redirect every build, test and git command's output to a file and read the tail:
 
 **Probe:** [the line removed, the assertion that fired, the values; or "stayed green", as a finding]
 
-**Clause table:** [one row per behaviour clause the diff adds: `file:line` → mutation → the test and assertion that went red; a clause no test pins is listed with the test you added for it]
+**Clause table:** [one row per behaviour clause the diff adds: `file:line` → the test and assertion that pins it, read, not mutated; a clause no test pinned is listed with the test you added for it]
 
 **Typecheck:** [pass, or the exact errors, yours and pre-existing separated]
 
@@ -94,5 +95,6 @@ Redirect every build, test and git command's output to a file and read the tail:
 - Undo a probe edit from a copy kept beforehand (`cp <file> "$TMPDIR/keep"`, then `cp` it back). Compare against a baseline with `git stash create` + `git diff <object>`; a hook blocks `git stash`, `reset --hard`, `checkout --`, `restore` and `clean` in a lane, because the stash stack is shared across worktrees and an uncommitted slice is exactly the difference those commands erase.
 - Negative-test a guard in a scratch copy of the script against fixture inputs, not by mutating tracked files in place; a deliberate mutation is restored before the turn ends, confirmed with `git diff`.
 - `as any` / `as unknown as T` silence nothing as a final answer: fix the root cause or report BLOCKED.
+- In a lane (`.work/lane.yaml` present), a slice that asks for a timing measurement gets its harness built and run once at the smallest iteration count, and the measurement reported under deviations as `measurement owed: <exact command>`; numbers taken while sibling lanes compile measure their load (`/build` *Boundaries*).
 - Ambiguity is documented as an assumption; a block is reported as BLOCKED with the question, not guessed through.
 - Your returned output *is* the reply channel: the agent that spawned you reads it directly.

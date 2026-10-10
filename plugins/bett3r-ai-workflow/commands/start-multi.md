@@ -16,7 +16,8 @@ Work-unit ids (with optional descriptions), then flags.
 |---|---|
 | `--deps "C:P,..."` | Dependencies (child stacks on parent). The only dep source besides the resolved blocks and one question. |
 | `--dry-run` | Print the wave / worktree / branch-base plan; cut nothing. |
-| `--max-parallel N` | Cap concurrent lanes. Default conservative. |
+| `--max-parallel N` | Cap concurrent lanes. Default 2; a compile-heavy host sizes it by cores ([sizing](../reference/start-multi-sizing.md)). |
+| `--verify-depth light\|full` | The verifier depth every lane's `/build` runs (the brief's `verifyDepth`). Default `full`; `light` drops the falsification pass and turns prose-only findings into follow-ups ([verifier](../agents/verifier.md) *Light depth*). |
 | `--no-pr` | Stop after local per-slice commits. |
 | `--gate-design` | Pause after `design` on **every** unit (default: only design-heavy ones). |
 | `--serial` | No cross-unit parallelism: run each unit's pipeline yourself, from inside its worktree. Mechanics in [start-multi-serial.md](../reference/start-multi-serial.md), read only when `--serial` is set or step 3's tool probe fails. |
@@ -49,9 +50,9 @@ Done when every unit has a verified snapshot in the run dir, a `designResolved` 
 
 That base check passes *because* `new-worktree` set the cut branch's upstream to the start point (`origin/int/<run-id>` or the parent's branch), not to `origin/<the lane's own branch>` — the same fact read as success. It does not catch, and is not meant to catch, that every later per-slice `git push` from the lane now targets that upstream instead of its own branch, silently: `git push` exits 0 whether or not anything moved. The provisioner's own step 1 asserts and repairs the branch's upstream before any lane runs; this step's base check and that one are not substitutes for each other.
 
-Then dispatch the [`provisioner`](../agents/provisioner.md) agent, once per unit, before any lane, with the unit id, worktree path, repo kind, run id and integration branch, run dir, scratchpad subdirectory, the pinned base sha, the `baseGate` verdict for the branch it was cut from (step 0's for `int/<run-id>`, step 5's for a diamond base), and the scaffold report path step 0's finish wrote on `int/<run-id>`, or that step 0 made no scaffold commit and why (a key undeclared, a red finish, an escalated ask); the provisioner asks for whatever is missing, which stalls a headless fleet, and a lane never scaffolds: one whose brief lacks `scaffoldReport:` says the fleet made no scaffold commit and goes on (`/design` Step 4b), so the reason recorded here is the only one there is. What it does is its own file's business. Its `READY` is a claim: spot-check the one thing readiness means, an artifact its own tests import present on disk, and the upstream it reports for the branch.
+Then dispatch the [`provisioner`](../agents/provisioner.md) agent, once per unit, before any lane, with the unit id, worktree path, repo kind, run id and integration branch, run dir, scratchpad subdirectory, the pinned base sha, the run's `verifyDepth`, the `baseGate` verdict for the branch it was cut from (step 0's for `int/<run-id>`, step 5's for a diamond base), and the scaffold report path step 0's finish wrote on `int/<run-id>`, or that step 0 made no scaffold commit and why (a key undeclared, a red finish, an escalated ask); the provisioner asks for whatever is missing, which stalls a headless fleet, and a lane never scaffolds: one whose brief lacks `scaffoldReport:` says the fleet made no scaffold commit and goes on (`/design` Step 4b), so the reason recorded here is the only one there is. What it does is its own file's business. Its `READY` is a claim: spot-check the one thing readiness means, an artifact its own tests import present on disk, and the upstream it reports for the branch.
 
-Sizing the fleet: **`--max-parallel` has a second axis, and it is not a machine resource** — spend scales with lanes × the context each lane accumulates, and past some N the fleet falls off a **cliff**, not a slope. Record the expected cost and your ceiling in `run.yaml` before dispatching. **[`reference/start-multi-sizing.md`](../reference/start-multi-sizing.md) is normative** for the rest.
+Sizing the fleet: **`--max-parallel` has a second axis, and it is not a machine resource** — spend scales with lanes × the context each lane accumulates, and past some N the fleet falls off a **cliff**, not a slope. On a compile-heavy host the first axis is a machine resource too: lanes ≤ cores ÷ 4. Record the expected cost and your ceiling in `run.yaml` before dispatching. **[`reference/start-multi-sizing.md`](../reference/start-multi-sizing.md) is normative** for the rest.
 Done when every unit has a worktree and branch whose base your command verified, a provisioner `READY` you spot-checked (dispatched with a recorded `baseGate`), and `worktree`, `branch`, `base`, `stackParent` recorded in `run.yaml`.
 
 **3 — Dispatch.** Probe the step-invocation tool once, before any lane: a lane needs `Agent`, its step-lanes `SlashCommand` or `Skill`, whichever this harness names. Neither in your session means every lane blocks at `blocked-on=lane-tools` after provisioning — switch to `--serial` now ([start-multi-serial.md](../reference/start-multi-serial.md)).
@@ -115,7 +116,7 @@ pluginVersion: <the version of the plugin manifest THIS tick loaded — rewritte
 baseGate: { ref: <sha>, mode: <as GATE-MODE printed it>, verdict: PASS|FAIL, namedGuards: [] }
 landedAt: null          # /merge-multi writes this
 integrationPr: null     # /merge-multi writes this
-flags: { gateDesign: false, noPr: false, serial: false, maxParallel: 2, keepWorktrees: false }
+flags: { gateDesign: false, noPr: false, serial: false, maxParallel: 2, verifyDepth: full, keepWorktrees: false }
 waveBudget: { waves: <max waves one tick may dispatch>, ceiling: <the spend ceiling step 2 records, in USD> }
 spendToDate: <cumulative spend in USD: an addend written at each wave boundary, never re-derived>
 deps: [ { child: B, parent: A } ]

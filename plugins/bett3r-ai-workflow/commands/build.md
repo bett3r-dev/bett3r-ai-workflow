@@ -6,7 +6,7 @@ description: Drive each slice in .work/slices.yaml to green through the dual gat
 
 This is the `build` step; its verdict is `LANE-STEP:v1 step=build outcome=<success|gate-red|blocked-on> slices=k/N commits=n`. You are the orchestrator: you dispatch agents, read their reports and commit. You write no code yourself.
 
-**Argument** `$ARGUMENTS`: optional slice ids (`2` or `2,3`); the default is every `passes: false` slice. `--max-parallel N` caps how many slices run concurrently (Step 2).
+**Argument** `$ARGUMENTS`: optional slice ids (`2` or `2,3`); the default is every `passes: false` slice. `--max-parallel N` caps how many slices run concurrently (Step 2). `--verify-depth light|full` sets the verifier's depth (Step 3); default `full`.
 
 ## Step protocol
 
@@ -21,7 +21,7 @@ This is the `build` step; its verdict is `LANE-STEP:v1 step=build outcome=<succe
 1. Mark the mode: `.work/mode.yaml` reads `mode: build` (*Step protocol*).
 2. Read `.work/slices.yaml`. Absent: say "No slices found. Run `/plan` first." and end `blocked-on`. A slice already `passes: true` is skipped; say "resuming" when any is.
 3. Resolve the record folder: `work-docs-path --item <work_item>`, the `work_item` taken from `.work/mode.yaml` untouched; read its last line, not its exit code (ADR-004). `outcome=ok` names `path=`, where `decisions.md` and `build-summary.md` live beside the committed `design.md`. `outcome=error`: report its `reason=` and end `blocked-on` before any slice runs. The folder is the script's answer; a record written anywhere else is one no reader finds.
-4. From the brief, when there is one: `runners` (which command collects which test paths), `preconditions` (the install and build commands), `modelRouting`, `adrAllocations`, `sliceBudget` and `worktreePoolMax`. Say which of the two states you run under, briefed or attended.
+4. From the brief, when there is one: `runners` (which command collects which test paths), `preconditions` (the install and build commands), `modelRouting`, `adrAllocations`, `sliceBudget`, `worktreePoolMax` and `verifyDepth` (`light` or `full`; no key means `full`, and `--verify-depth` given to this invocation wins). Say which of the two states you run under, briefed or attended.
 
 Done when the mode marker is written and the slice list and record path are in hand, or the run has ended `blocked-on`.
 
@@ -60,7 +60,7 @@ A slice's first pass runs in a fresh agent context; its fix rounds continue it (
    - always-green: no credible RED before implementing;
    - red after implementing.
 
-3. **Judgment gate.** Dispatch `scope-check` and the `verifier` concurrently, in one message. Feed the executor's flagged deviations into the verifier's prompt verbatim, as a named section to adjudicate item by item; feed `scope-check`'s report in when it lands first, otherwise adjudicate it yourself against the verdict. A `CONTAMINATED` scope guard blocks the commit whatever the verifier returned. When the slice changes a wire contract (an exported signature, an event or trigger name, a deleted symbol, route or field), have the executor grep callers across the whole repo, suites outside the default run included, and report each affected suite as run or un-run; the verifier checks that list. A slice that adds an artifact kind (a plugin, a hook, a script directory) is resolved to the runner that collects it, and wires the runner in the same slice when none does; a slice that adds or removes a file a census or ratchet guard counts moves that census in the same commit.
+3. **Judgment gate.** Dispatch `scope-check` and the `verifier` concurrently, in one message, with `depth: light` in the verifier's prompt when the depth is `light` (Step 1). Feed the executor's flagged deviations into the verifier's prompt verbatim, as a named section to adjudicate item by item; feed `scope-check`'s report in when it lands first, otherwise adjudicate it yourself against the verdict. A `CONTAMINATED` scope guard blocks the commit whatever the verifier returned. When the slice changes a wire contract (an exported signature, an event or trigger name, a deleted symbol, route or field), have the executor grep callers across the whole repo, suites outside the default run included, and report each affected suite as run or un-run; the verifier checks that list. A slice that adds an artifact kind (a plugin, a hook, a script directory) is resolved to the runner that collects it, and wires the runner in the same slice when none does; a slice that adds or removes a file a census or ratchet guard counts moves that census in the same commit.
 
 4. **Resolve.**
    - Test green and verifier `PASS`: commit (item 5).
@@ -130,6 +130,7 @@ Every dispatch description names `slice <id>` (`slice 3 executor fix round 1`): 
 ## Boundaries
 
 - You dispatch and commit; the executor writes the code. A slice you implement yourself has passed neither gate.
+- **No timing measurement in a lane.** A benchmark, build-time series or latency budget taken while sibling lanes compile measures their load, not this change. With `.work/lane.yaml` present, the slice delivers its harness and runs it once at the smallest iteration count to prove it runs; the measurement itself is appended to `decisions.md` as `kind: deviation` titled `measurement owed: <exact command>`, and `/merge-multi` Step 3b takes it on an idle machine. Attended, outside a fleet, measure as the slice says.
 - Both gates, every slice. A commit on the test alone, or a verifier dropped to save cost, is how a green suite ships a wrong rule; where no RED exists, mutation is the substitute, not an exemption.
 - A tool's verdict is its last line, read as `full-gate` reads a verdict, from the file you redirected it to.
 - Undo a probe edit from a copy you kept (`cp <file> "$TMPDIR/keep"`, then `cp` it back). `git checkout`/`restore` on a path makes it identical to `HEAD`, and the uncommitted slice is exactly that difference; compare against a baseline with `git stash create` + `git diff <object>`, since a hook blocks the destructive forms in a lane.
