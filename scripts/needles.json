@@ -1241,6 +1241,18 @@
       "issue": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/verify-build.md",
       "note": "/verify-build refuses while ticketReview.verdict is pending: slices committed without a verifier keep their review owed."
+    },
+    {
+      "needle": "Decided in-lane, review after the fact",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/verify-build.md",
+      "note": "followUps: in-lane: every follow-up fixed without the owner is an in-lane-fork D-entry listed in the PR for review after the fact."
+    },
+    {
+      "needle": "2c \u2014 Sweep the deferred follow-ups",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/merge-multi.md",
+      "note": "Deferred follow-ups are swept on int after the wave merge under the same fork rule; only owner items become tickets."
     }
   ]
 }

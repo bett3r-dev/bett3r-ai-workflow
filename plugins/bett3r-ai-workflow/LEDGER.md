@@ -618,6 +618,14 @@ condition that retires it on purpose.
 - recorded: 2026-08-08
 - expiry: none known
 
+### Follow-ups fixed in the lane, on request
+- rule: Under `followUps: in-lane` (brief; `/start-multi --follow-ups in-lane`), `/verify-build` Step 3a fixes each follow-up whose change stays in the lane's own files (or new files beside them), needs no owner decision the brief or block reserves, and touches no `sharedFiles` or other unit's area: executor, red test first, test-runner and scope-check, one commit each, recorded as an `in-lane-fork` D-entry and listed in the PR under *Decided in-lane, review after the fact*; the scoped gate then runs on the final head. Everything else goes to `<runDir>/followups/<unit>.md`, which `/merge-multi` Step 2c sweeps on `int/<run-id>` under the same fork rule; only owner items become tickets. Default `ticket`.
+- source: commands/verify-build.md Steps 2 and 3a; commands/merge-multi.md Step 2c; commands/start-multi.md `--follow-ups`, step 8; agents/provisioner.md brief; reference/build-record.md `in-lane-fork`
+- evidence:
+  > Owner request 2026-10-11, approved with the lane-speed levers measured on the multi-rus-loop fleet (pv4, 62 units, wave 2): follow-ups a lane could have closed in its own files were filed as tickets and paid a whole lane (39 min median) later; the owner reviews in-lane decisions after the fact instead of before.
+- recorded: 2026-10-11
+- expiry: the owner reverses in-lane forks often enough that reviewing them costs more than the tickets did
+
 ## commands/design-multi.md
 
 ### Prove the tree the agents read is the pin, in both directions; re-verify at Phase C

@@ -32,7 +32,7 @@ Read `.work/slices.yaml` and `<path>/design.md`. Every slice is `passes: true` w
 - **`.work/lane.yaml` exists and carries `gateDeferred: true`** (and no `executorGate: fast`) → run **`--fast`** only; `/merge-multi` runs the branch-wide check once. The PR body records "Gate deferred to the fleet gate, run `<runId>`." and "Version bump deferred to the fleet merge, run `<runId>`." (the version-bump step reports `SKIP reason=deferred-to-merge-multi`; a `FAIL` there is still a `FAIL`).
 - **No brief, or one that does not defer** → the repo's scoped default (no argument), baseline-diffed; with no scoped mode declared, run `--fast` and say so.
 
-Record the report block verbatim, `GATE-MODE:` line included, for the PR body. A `FAIL` blocks Step 6; a step red on the base too is pre-existing, named and left alone; `SKIP` and `INCONCLUSIVE` steps are named and do not block. Done when the report block is recorded with its mode and verdict.
+Record the report block verbatim, `GATE-MODE:` line included, for the PR body. When Step 3a commits a follow-up fix, this gate runs again after Step 3a, in the scoped mode even under `gateDeferred: true`, on the final head, and that run is the one the PR body records: code the owner has not seen is gated as `executorGate: fast` code is. A `FAIL` blocks Step 6; a step red on the base too is pre-existing, named and left alone; `SKIP` and `INCONCLUSIVE` steps are named and do not block. Done when the report block is recorded with its mode and verdict.
 
 ## Step 2a — Scaffold census
 
@@ -79,6 +79,15 @@ The escape is a human strike or writing the test: the owner strikes the scenario
 Where the plan names a tier the widest gate excludes, run it or say in the PR body that it was not run.
 
 **Disprove every Critical before reporting it**: read the call site, not the hunk; `git blame` for pre-existing on `<resolved-base>`; construct a failing input; drop or downgrade what fails any of the three. Fix Critical and Medium before the PR, inline or as a fix slice appended to `.work/slices.yaml` with `origin: verify-build` and driven through `/build`; anything shipped unresolved carries a recommendation. The conclusions go into the PR body, except the counts Step 5b records. Done when every Critical is disproved or fixed and the counts by severity are noted.
+
+## Step 3a — Follow-ups: `followUps: in-lane` only
+
+Without the brief key, or with `followUps: ticket`, this step does not run and follow-ups go where they go today: the PR body's recommendations and `/start-multi`'s report. Under `in-lane`, collect every follow-up this lane would otherwise leave for a ticket: the verifier's PASS-with-follow-ups items and `[doc]` follow-ups in `decisions.md`, Step 3's Low findings and anything it would ship unresolved with a recommendation. Sort each, in order:
+
+- **Fix in the lane** when all three hold: its change stays inside the files this branch already touches (`git diff --name-only <resolved-base>...HEAD`) or adds new files beside them; it needs no owner decision the brief or the ticket's resolved block reserves; and it touches no file in the brief's `sharedFiles` and no other unit's area. Dispatch the `executor` with the follow-up as a one-slice brief (behaviour, oracle, intended files, `gate:` per the brief's `executorGate`): red test first, as `/build` Step 3 item 1 (a prose-only follow-up has no RED and is a doc round, `/build` Step 3 item 4). Then the `test-runner` on its oracle and `scope-check` on its intended files; a `CONTAMINATED` guard or a red test after one fix round defers the item instead. Commit each as its own commit, `fix(<scope>): <the follow-up>` with `Follow-up of <work_item>, decided in-lane: D<n>.` in the body (never a `Slice <id> of` line).
+- **Defer to the wave sweep**: anything else. Append it to `<runDir>/followups/<unitId>.md` as `## F<n> — <title>` with `source:` (the finding and who raised it), `files:`, `deferred because:` (which of the three tests failed) and `needsOwner: yes|no`. No ticket is filed from a lane.
+
+Every fix made without the owner is a fork: append a D-entry to `decisions.md` with `kind: in-lane-fork`, `decidedBy: lane`, the question as its title, the option chosen and why in its prose, every option rejected and why in `rejected:`, and the fix commit's sha ([build-record.md](../reference/build-record.md)); commit it as `docs(record)`. The PR body lists each under *Decided in-lane, review after the fact*. Then Step 2's gate runs again on the final head (Step 2). Done when every follow-up is a commit with its D-entry or an entry in the follow-ups file.
 
 ## Step 4 — Dev verification checklist
 
@@ -221,6 +230,10 @@ error: the reason= and the C-entry and D-id the verdict line names>
 
 ### Decisions
 - ADR-NNN — <title> (+ Principle, if the ADR states one)
+
+### Decided in-lane, review after the fact
+<followUps: in-lane only; omit the section otherwise. One bullet per Step 3a fork: D<n> — <the question> — chose <option> (<commit>); rejected <options and why>.
+Then: deferred to the wave sweep: <n> items in followups/<unitId>.md>
 
 ### Coherence review
 <Critical/Medium findings and how resolved; or "clean">

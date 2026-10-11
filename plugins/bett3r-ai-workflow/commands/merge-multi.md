@@ -85,7 +85,7 @@ Resolve conflicts in the integration worktree as merge commits, never by rewriti
 
 Record every resolution as you make it (which units, which file, what was kept and dropped, why), in the integration PR body (step 5) and as an entry in the run-level `decisions.md`: the reviewer approved unit diffs; what ships is those diffs plus your resolutions.
 
-**The run-level `decisions.md`** is `<root>/<run-id>/decisions.md`, resolved with `work-docs-path --item <run-id>` (`run.yaml`'s `runId:`), never a hardcoded root. It holds this command's own conflict resolutions only; `/design-multi` Phase B's policies are not restated there, since each unit's committed `design.md` carries them. If `work-docs-path --item <run-id>` refuses (a hand-made run id, or one built from a unit id `work-docs-path` cannot carry, such as a Jira key with an underscore), write no run-level `decisions.md` entry: put its `WORK-DOCS-PATH:v1` verdict line in the integration PR body under *Conflict resolutions* instead, and continue merging. `/merge-multi` is the file's single writer: each entry is a `## D<n> — <title>` with `step: merge-multi · slice: — · decidedBy: orchestrator`, its id one more than the highest already in the file, in the D-entry grammar `/build`'s record companion (`reference/build-record.md`) states.
+**The run-level `decisions.md`** is `<root>/<run-id>/decisions.md`, resolved with `work-docs-path --item <run-id>` (`run.yaml`'s `runId:`), never a hardcoded root. It holds this command's own conflict resolutions and, under `followUps: in-lane`, step 2c's forks, nothing else; `/design-multi` Phase B's policies are not restated there, since each unit's committed `design.md` carries them. If `work-docs-path --item <run-id>` refuses (a hand-made run id, or one built from a unit id `work-docs-path` cannot carry, such as a Jira key with an underscore), write no run-level `decisions.md` entry: put its `WORK-DOCS-PATH:v1` verdict line in the integration PR body under *Conflict resolutions* instead, and continue merging. `/merge-multi` is the file's single writer: each entry is a `## D<n> — <title>` with `step: merge-multi · slice: — · decidedBy: orchestrator`, its id one more than the highest already in the file, in the D-entry grammar `/build`'s record companion (`reference/build-record.md`) states.
 
 Done when every unit ruled `merge` is in `int/<run-id>` at its ruled sha, every conflict and obligation has a recorded resolution, and no `*.orig` remains.
 
@@ -101,6 +101,12 @@ Every unit's tests meet only here, so a scenario a sibling owns, which a lane's 
 Each `hold: <id> under review (<why>)` is an ESAS-296 hold: the integration PR body lists it on its own line, never as missing a test, and it blocks nothing. The escape is a human strike or writing the test: the owner strikes the scenario in their own words, quoted verbatim beside its id under the integration PR body's *Scenario census* (an agent's judgement strikes nothing), or the test is written (on the owning unit's branch and re-merged, as step 3 fixes a red gate) and the census re-run.
 
 Done when the census printed `outcome=ok`, every `not-implemented:` id is struck by the owner, or step 0 made no scaffold commit and the body says so.
+
+**2c — Sweep the deferred follow-ups: `followUps: in-lane` runs only.**
+
+Without `followUps: in-lane` in `run.yaml`'s flags, this step does not run. Otherwise read `<runDir>/followups/<unit>.md` for every unit merged in this invocation and dispatch one agent, the `executor`, in an integration worktree on `int/<run-id>`, to work every item marked `needsOwner: no`, one at a time, under the lane's rules (`/verify-build` *Step 3a*): red test first, `test-runner` and `scope-check`, one commit per item, `fix(<scope>): follow-up <unit>/F<n>`. Each fix made without the owner is a fork: an `in-lane-fork` D-entry in the run-level `decisions.md` (question, option chosen, options rejected and why, the commit), with `decidedBy: orchestrator`. An item marked `needsOwner: yes`, or one the agent finds needs an owner decision after all, becomes a ticket: listed under the integration PR body's *Follow-ups needing an owner decision*, one per item with its text verbatim, for the owner to file or file through the tracker when one is wired. Mark each item in the file `status: fixed <sha>` or `status: owner`. Step 3's gate runs after this step, so it covers the sweep's commits.
+
+Done when every deferred item of a merged unit is fixed with its D-entry or listed for the owner.
 
 **3 — Run the gate, once, on integration.**
 
@@ -148,6 +154,13 @@ Done when the body carries one `closes` per referenced issue, the `declared − 
 <step 2b's census verdict line verbatim, then each `not-implemented:` and `hold:` line on its own line,
  or "no scaffold report">
 
+### Decided in-lane, review after the fact
+<followUps: in-lane runs only; omit otherwise. Per unit, the forks its PR lists under the same heading, then step 2c's,
+ each `D<n> — <question> — chose <option> (<commit>)`, so the owner can reverse any of them>
+
+### Follow-ups needing an owner decision
+<followUps: in-lane runs only: step 2c's owner items, one bullet each, verbatim; or "none">
+
 ### Gate
 <the full-gate report block, verbatim — step names, counts, baseline diff, and
  anything reported SKIP / INCONCLUSIVE, not selected by the scoping, or
@@ -191,7 +204,7 @@ Without `--land` nothing has landed, so nothing is pushed in either mode: print 
 
 **7 — Report.**
 
-Units merged (and any skipped, with why) · `declared − landed`, always, even when empty · the epic goal oracle's verdict · conflict resolutions, counted · the gate verdict · the integration PR URL · issues closed vs. still open · step 6b's push output or each `push owed:` line, verbatim. Done when `run.yaml` carries `landedAt` and `integrationPr`, so a re-run is a no-op.
+Units merged (and any skipped, with why) · `declared − landed`, always, even when empty · the epic goal oracle's verdict · conflict resolutions, counted · under `followUps: in-lane`, the in-lane forks per unit and step 2c's, and the owner items · the gate verdict · the integration PR URL · issues closed vs. still open · step 6b's push output or each `push owed:` line, verbatim. Done when `run.yaml` carries `landedAt` and `integrationPr`, so a re-run is a no-op.
 
 ## Principles
 

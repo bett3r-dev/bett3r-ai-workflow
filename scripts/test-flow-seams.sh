@@ -1862,8 +1862,8 @@ else
   expect 'the D-entry header keys are exactly kind, step · slice · decidedBy, sources, rejected, supersedes' \
     d.keys 'kind step slice decidedBy sources rejected supersedes'
   expect 'slice and decidedBy ride on the step line' d.stepline 'step slice decidedBy'
-  expect 'the D-entry kind enum is false-premise | silent-seam | deviation | shipped-finding | overruled | waiver' \
-    d.enum.kind 'false-premise silent-seam deviation shipped-finding overruled waiver'
+  expect 'the D-entry kind enum is false-premise | silent-seam | deviation | shipped-finding | overruled | waiver | in-lane-fork' \
+    d.enum.kind 'false-premise silent-seam deviation shipped-finding overruled waiver in-lane-fork'
   expect 'the D-entry decidedBy enum is executor | verifier | orchestrator | lane | human' \
     d.enum.decidedBy 'executor verifier orchestrator lane human'
   if shape d.alltext | grep -qiE 'confiden|certaint|probab|score'; then
