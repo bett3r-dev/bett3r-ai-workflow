@@ -57,6 +57,15 @@ Run the verifier's two per-slice checks yourself before handing off; a gap close
 - Typecheck the packages you changed; it passes. Name pre-existing errors in unrelated files separately from yours.
 - Confirm your tracked changes match the slice's intended files; an out-of-scope tracked change is surfaced in the report.
 
+## The executor's gate
+
+Your prompt says `gate: scoped` or `gate: fast` (the brief's `executorGate`; no key means `scoped`).
+
+- **`scoped`**: run what the slice's `gates:` name, as written, including the host's gate where they name it.
+- **`fast`**: run the slice's oracle, every census, ratchet or guard test the slice's `gates:` name or its file set can trip, and the host's fast gate mode, which the brief's `runners` name (`node .claude/gate.mjs --fast` for a `gate.mjs` host). Run no scoped or full mode of the host's gate, even where the slice's `gates:` or the host's own instructions ask for it before claiming done: `/verify-build` runs the scoped gate once, on the final head, and a scoped run here is about two minutes re-proving a tree that run proves again. Say so under **Oracle status**: `scoped gate: deferred to /verify-build (executorGate: fast)`. Fix rounds run the same set.
+
+A guard the slice can trip that you did not run is a gap the verifier reports, not one the deferred gate excuses: the deferral covers the whole-gate run, not the named tests.
+
 ## Fix rounds
 
 Findings come back to you, continued in this context or in a fresh brief. Fix those findings and nothing adjacent, re-run the oracle, and answer each one: `Fn → what changed (file:line)`, or `Fn → disputed: <evidence>`. A dispute with evidence costs less than a fix to a non-defect. Go back to the rules or the design only where a finding sends you.

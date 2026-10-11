@@ -1871,8 +1871,9 @@ else
   else
     pass 'the D-entry header carries no self-rated confidence field'
   fi
-  expect 'the build-summary frontmatter /build writes is exactly work_item, plugin, base, slices' \
-    s.top 'work_item plugin base slices'
+  # ticketReview: is written under verifyCadence: per-ticket only (build.md Step 3b).
+  expect 'the build-summary frontmatter /build writes is exactly work_item, plugin, base, slices, ticketReview' \
+    s.top 'work_item plugin base slices ticketReview'
   expect 'each build-summary slice entry carries exactly the F3 keys' \
     s.item 'id name origin mode modeReason commit passed attempts fixRounds verifier redBeforeGreen postDesignDecisions'
   for absent in usage verifyBuild workItem; do

@@ -18,6 +18,7 @@
     DESIGN-MAP:v1 outcome=fail verb=check-plan reason=unnamed-seam slice=<id> seam=<name>
     DESIGN-MAP:v1 outcome=fail verb=check-plan reason=slice-unprobed slice=<id>
     DESIGN-MAP:v1 outcome=fail verb=check-plan reason=scenario-unsourced slice=<id> why=<w>
+    DESIGN-MAP:v1 outcome=fail verb=check-plan reason=slice-cap-exceeded slices=<n> cap=<N>
     DESIGN-MAP:v1 outcome=ok verb=project ticket=<K> forks=<n> nodes=<n>
     DESIGN-MAP:v1 outcome=ok verb=decisions open=<n> owner=<n> recommendation=<n> code=<n> moot=<n>
     DESIGN-MAP:v1 outcome=ok verb=record forks=<n> payloads=<n> owner=<n> recommendation=<n> code=<n> unresolved=<n> nocard=<n> already=<n> sidecar=<path>
@@ -45,7 +46,7 @@ Usage:
   design-map check-page <map.json> <page.html> --expect <n>
   design-map apply-answers <map.json> <answers-dir> [--final]
   design-map candidates <map.json>
-  design-map check-plan <slices.yaml> [<map.json>]
+  design-map check-plan <slices.yaml> [<map.json>] [--slice-cap <N>]
   design-map render --stack <m1> <m2>... --expect <n1> <n2>... --out <page.html>
   design-map project --ticket <K> <map.json>...   (the map, then the verdict, on stdout)
   design-map decisions <map.json> [--closed]
@@ -336,6 +337,15 @@ entry (map.json#scenarios/<id>/examples when the entry has examples, else spec
 any other text, and an id the map holds proposed, struck or under review,
 confirms nothing; without the map every rule above applies as before.
 
+With `--slice-cap N` (the lane brief's `sliceCap`, or `/plan --slice-cap`),
+a plan of more than N slices is `outcome=fail reason=slice-cap-exceeded
+slices=<n> cap=<N>` unless it carries a top-level `sliceCapException:`, a
+non-empty string naming why the design's independent seams cannot share an
+oracle. The cap is checked after every rule above, so a plan that is wrong in
+shape reports that first. N is a positive integer (`reason=bad-slice-cap`,
+outcome=error, otherwise). Without the flag no count is enforced. The cap is
+not `sliceBudget`, which is /build's context-yield ceiling and cuts nothing.
+
 else `outcome=ok review=<the top-level review, or "none"> candidates=<the
 length of candidateOracles, 0 if the key is absent> scenarios=<n> seams=<n>`. Other reasons, all
 `outcome=error`: `missing-plan` (no argument), `plan-unreadable` (the file
@@ -481,7 +491,8 @@ def verdict(outcome, **attrs):
 
 
 BOOLEAN_FLAGS = ("final", "stack", "closed", "line", "no-feed")
-VALUE_FLAGS = ("expect", "out", "ticket", "lane", "feed-seq", "phase", "captures", "map", "readback", "from")
+VALUE_FLAGS = ("expect", "out", "ticket", "lane", "feed-seq", "phase", "captures", "map", "readback", "from",
+               "slice-cap")
 
 
 def parse_args(args):
@@ -1612,6 +1623,7 @@ def write_line(line):
 def check_plan(positional, flags):
     if not positional:
         raise Refusal("missing-plan")
+    cap = slice_cap(flags.get("slice-cap"))
     try:
         import yaml
     except ImportError:
@@ -1676,8 +1688,32 @@ def check_plan(positional, flags):
     scened = check_scenarios(raw_slices)
     seams = check_seams(doc, raw_slices)
     probed = check_adequacy(raw_slices, confirmed)
+    check_slice_cap(doc, raw_slices, cap)
     return dict(review=review if review else "none", candidates=len(raw_candidates),
                 scenarios=scened, seams=seams, probed=probed)
+
+
+def slice_cap(raw_cap):
+    """`--slice-cap`'s value, read before the plan: a positive integer, or None."""
+    if raw_cap is None:
+        return None
+    if not re.fullmatch(r"[1-9][0-9]*", raw_cap):
+        raise Refusal("bad-slice-cap")
+    return int(raw_cap)
+
+
+def check_slice_cap(doc, raw_slices, cap):
+    """`--slice-cap N`: more than N slices fails unless the plan names why in a
+    top-level `sliceCapException:`. Each slice past the first pays a fresh
+    executor that re-reads the context, and under per-slice cadence a verifier
+    too; the exception is for a design whose independent seams cannot share an
+    oracle, and it is written down so a reader can disagree with it."""
+    if cap is None or len(raw_slices) <= cap:
+        return
+    exception = doc.get("sliceCapException")
+    if isinstance(exception, str) and exception.strip():
+        return
+    raise Refusal("slice-cap-exceeded", outcome="fail", slices=len(raw_slices), cap=cap)
 
 
 def agreed_ids(map_path):
@@ -2437,10 +2473,11 @@ VERBS = {"validate": validate_map, "write": write, "render": render, "check-page
          "project": project, "decisions": decisions, "record": record, "count": count, "drift": drift,
          "select": select, "post": post, "export-examples": export_examples}
 # The flags each verb takes; any other parsed flag is reason=unknown-flag-<name>.
-# `candidates` and `check-plan` take positional arguments only, so `--map`
-# (the wording ESAS-165's block used) is refused as unknown-flag-map.
+# `candidates` takes positional arguments only, and `check-plan` only
+# `--slice-cap`, so `--map` (the wording ESAS-165's block used) is refused as
+# unknown-flag-map.
 FLAGS = {"validate": (), "write": (), "render": ("expect", "out", "stack"), "check-page": ("expect",),
-         "apply-answers": ("final",), "candidates": (), "check-plan": (), "project": ("ticket",),
+         "apply-answers": ("final",), "candidates": (), "check-plan": ("slice-cap",), "project": ("ticket",),
          "decisions": ("closed",), "record": (), "count": ("lane", "line"), "drift": ("feed-seq", "no-feed"),
          "select": ("phase", "captures", "map", "lane"), "post": ("expect", "map", "readback"),
          "export-examples": ("from",)}

@@ -13,8 +13,8 @@ The plugin does not know this repo's test commands, and which of `test`, `test:i
 
 | Invocation | Runs | Who runs it |
 |---|---|---|
-| `node .claude/gate.mjs --fast` | the cheap structural checks, typically build + typecheck | every `/verify-build` inside a fleet lane (`gateDeferred: true`) |
-| `node .claude/gate.mjs` (no argument: scoped) | the whole-repo structural checks, then only the suites, drift checks and guards whose surface this branch's own diff touches | every landing the flow performs: `/verify-build` outside a fleet, `/merge-multi` on the integration branch, `/start-multi`'s base check |
+| `node .claude/gate.mjs --fast` | the cheap structural checks, typically build + typecheck | every `/verify-build` inside a fleet lane (`gateDeferred: true`), unless the brief carries `executorGate: fast`; and the executor's per-slice gate under `executorGate: fast` |
+| `node .claude/gate.mjs` (no argument: scoped) | the whole-repo structural checks, then only the suites, drift checks and guards whose surface this branch's own diff touches | every landing the flow performs: `/verify-build` outside a fleet, and inside one when the brief carries `executorGate: fast`, `/merge-multi` on the integration branch, `/start-multi`'s base check |
 | `node .claude/gate.mjs --full` | everything, unconditionally | CI, or the human when they ask for it by name; never a flow step, and `--all` likewise |
 
 `--full` ⊃ scoped ⊃ `--fast`. A repo with nothing worth splitting may run the same thing in every mode and say so in a comment. A repo with no scoped mode (it exits 2 on `--scoped`, or accepts only `--fast` and `--full`) is run with `--fast`, and the report says so; the gap is closed in the repo's gate script, not in the flow.

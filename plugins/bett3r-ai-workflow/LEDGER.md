@@ -1536,6 +1536,14 @@ condition that retires it on purpose.
 - recorded: 2026-09-13
 - expiry: none known
 
+### A slice cap, on request
+- rule: With `sliceCap: N` (brief) or `/plan --slice-cap N`, `/plan` cuts at most N slices, merging before cutting and keeping every slicing rule; over N only when the design names more independent seams than N that cannot share an oracle, recorded in a top-level `sliceCapException:`, which `design-map check-plan --slice-cap N` requires. Any other way over N ends `/plan` `blocked-on`. Distinct from `sliceBudget`, `/build`'s context-yield ceiling. Default: no cap.
+- source: commands/plan.md Steps 1, 2, 4; skills/vertical-slicing/SKILL.md *A slice cap, when one is set*; scripts/design-map.py check_slice_cap; agents/provisioner.md brief; commands/start-multi.md `--slice-cap`
+- evidence:
+  > Owner request 2026-10-11, on measurements of the multi-rus-loop fleet (pv4, 62 units, wave 2, two lanes at once): a ticket lane took 39 min median and 47 mean, of which about 2 start/design/plan, 29 executor, 5.6 verifier, 2 test-runner and scope-check, and 3 verify-build. /plan cut 3 to 4 slices a ticket, so a ticket paid about 4.2 executor runs, each a fresh context re-reading the ticket, design and code, and each slice also paid a verifier.
+- recorded: 2026-10-11
+- expiry: a capped fleet's first-pass green or escaped-defect count falls below the uncapped baseline, or executor context re-reads stop dominating a lane
+
 ## commands/merge-multi.md
 
 ### A PR merged into the wrong target returns exit 0 and shows MERGED
@@ -2015,6 +2023,14 @@ condition that retires it on purpose.
 - recorded: 2026-10-10
 - expiry: first-pass green falls below the 2026-10-04 baseline (24% / 45%) on fleets run under this rule
 
+### The executor's gate can be the fast one
+- rule: Under `executorGate: fast` (brief) or `/build --executor-gate fast`, the executor and its fix rounds run the slice oracle, the census or guard tests the slice can trip and the host's fast gate mode (from the brief's `runners`), never the scoped or full gate; `/verify-build` runs the scoped gate once on the final head, even under `gateDeferred: true`. Default `scoped`: the slice's `gates:` as written.
+- source: agents/executor.md *The executor's gate*; commands/build.md Step 1, Step 3 item 1; commands/verify-build.md Step 2; skills/full-gate/SKILL.md mode table
+- evidence:
+  > Owner request 2026-10-11, on measurements of the multi-rus-loop fleet (pv4, 62 units, wave 2, two lanes at once): a ticket lane took 39 min median and 47 mean, of which about 2 start/design/plan, 29 executor, 5.6 verifier, 2 test-runner and scope-check, and 3 verify-build. Executors ran the host's full scoped gate (`node .claude/gate.mjs`, about 2 minutes) 51 times across 11 tickets, although the scoped gate runs again on the final head.
+- recorded: 2026-10-11
+- expiry: a fast-gate fleet's `/verify-build` scoped gate goes red on something a per-slice scoped run would have caught early enough to save a fix round
+
 ## agents/verifier.md
 
 ### The test-deletion guard: a silent deletion let a guard regress
@@ -2180,6 +2196,14 @@ condition that retires it on purpose.
   > Owner decision 2026-10-10 ("Please do 1, 2, 4, and 5"), on the run report of the rus-loop fleet (rustrillo, wave 0, six Rust lanes on a 10-core laptop, 15:08 to 18:19): verifiers spent 159 of 203 minutes in tools, 53 of them on mutation and 41 on cold builds in throwaway copies; about eight fix rounds at 10 to 30 minutes each, some prose-only ("doc round 2").
 - recorded: 2026-10-10
 - expiry: a light-depth fleet ships a defect the falsification pass would have named
+
+### Verifier cadence: per slice, or once per ticket
+- rule: Under `verifyCadence: per-ticket` (brief) or `/build --verify-cadence per-ticket`, `/build` keeps test-runner, scope-check (and its CONTAMINATED block) and a commit per slice, and dispatches the verifier once after the last slice over the ticket's range with every slice's oracle, probe and flagged deviations (`/build` Step 3b); its RETRY/ESCALATE drive fix rounds with the same cap, classes and re-check mode. `verifyDepth` applies to that one dispatch unchanged. `/verify-build`'s whole-PR review runs unchanged and adds no verifier, so a ticket keeps two independent judgments; `/verify-build` refuses while `ticketReview.verdict` is `pending`. Default `per-slice`.
+- source: commands/build.md Step 3, Step 3b, Boundaries; agents/verifier.md *Ticket review*; commands/verify-build.md Steps 1 and 3; reference/build-record.md `ticketReview:`
+- evidence:
+  > Owner request 2026-10-11, on measurements of the multi-rus-loop fleet (pv4, 62 units, wave 2, two lanes at once): a ticket lane took 39 min median and 47 mean, of which about 2 start/design/plan, 29 executor, 5.6 verifier, 2 test-runner and scope-check, and 3 verify-build. With 3 to 4 slices a ticket, each slice paid its own verifier (5.6 minutes of verifier a lane) on top of a fresh executor.
+- recorded: 2026-10-11
+- expiry: a per-ticket fleet ships a defect a per-slice verifier would have caught before a later slice built on it
 
 ## agents/provisioner.md
 

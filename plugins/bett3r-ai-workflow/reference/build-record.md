@@ -49,6 +49,11 @@ slices:
     verifier: pass                   # the final verdict: pass | retry | escalate; null = no verifier ran
     redBeforeGreen: true             # true | mutation | null
     postDesignDecisions: [D1]        # ids into decisions.md; [] = explicitly none
+ticketReview:                        # verifyCadence: per-ticket only; per-slice cadence writes no such key
+  - from: <sha the reviewed range starts after>   # one entry per Step 3b review, oldest first
+    head: <sha the review passed on; null while pending, escalated or capped>
+    verdict: pass                    # pass | retry | escalate | pending
+    fixRounds: []                    # one per Step 3b fix round: { cause: <Step 3 class>, executor: fresh }
 ---
 ## What shipped
 <short prose: outcome, root causes, what a future agent should know>
@@ -61,5 +66,6 @@ slices:
 - A slice an earlier session passed, with no entry or a stale one: `commit:`, `passed: true` and `postDesignDecisions:` from `decisions.md`, plus `id`, `name`, `origin`; `mode`, `modeReason`, `attempts`, `fixRounds`, `verifier` and `redBeforeGreen` are `null`, never a guessed value.
 - `commit:` is the landed sha `.work/slices.yaml` records (a pool slice); else the one commit `git log --format=%H -E --grep '^Slice <id> of <work_item> ' <base>..HEAD` finds, `<base>` being the frontmatter's `base:` (anchored and space-terminated so `KEY-2` never matches `KEY-27`, ranged to this work item's history). When neither yields exactly one commit, write `commit: null` and name the slice and reason in `## What shipped`; never pick one. `passed: true` with `commit: null` is legal: the flag says it landed, the record says its commit could not be proven.
 - A slice this run ran that did not land: `passed: false`, `commit: null`, its last verifier verdict.
+- Under `verifyCadence: per-ticket`, each slice in the reviewed range has `verifier:` set to the ticket review's final verdict, and its own `fixRounds:` holds only the rounds Step 3 ran on it before the commit; Step 3b's rounds are written once, under `ticketReview.fixRounds`, never copied onto a slice, so a cause is counted once. A `verify-build` fix slice reviewed in a later range appends its own entry.
 - `mode:` is `worktree` for a pool slice, `sequential` for a main-tree one; `modeReason:` names which Step 2 branch sent a `sequential` slice there.
 - The `usage` blocks and the `verifyBuild` block are not written here: they are generated later by `/verify-build` from `run-metrics`; when the file already carries them, rewrite only the keys above.

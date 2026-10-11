@@ -923,6 +923,32 @@ check 'check-plan: review is read through' "$( attr "$LINE" review )" unattended
 check 'check-plan: candidates counts candidateOracles' "$( attr "$LINE" candidates )" 2 "$LINE"
 check 'check-plan: conforming exits 0' "$rc" 0
 
+# --slice-cap: the lane brief's sliceCap (or /plan --slice-cap). Over the cap
+# is a fail unless the plan names why in a top-level sliceCapException:.
+dm check-plan "$CPFIX/two-seams.yaml" --slice-cap 1
+check 'check-plan --slice-cap 1 over a two-slice plan: outcome=fail' \
+  "$( attr "$LINE" outcome )" fail "$LINE" "$( cat "$OUT" )"
+check 'check-plan: slice-cap-exceeded reason' "$( attr "$LINE" reason )" slice-cap-exceeded "$LINE"
+check 'check-plan: slice-cap-exceeded counts the slices' "$( attr "$LINE" slices )" 2 "$LINE"
+check 'check-plan: slice-cap-exceeded names the cap' "$( attr "$LINE" cap )" 1 "$LINE"
+check 'check-plan: slice-cap-exceeded exits 1, not 2' "$rc" 1
+dm check-plan "$CPFIX/two-seams.yaml" --slice-cap 2
+check 'check-plan --slice-cap 2 over a two-slice plan: at the cap is outcome=ok' \
+  "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+dm check-plan "$CPFIX/two-seams.yaml"
+check 'check-plan without --slice-cap enforces no count' "$( attr "$LINE" outcome )" ok "$LINE"
+{ cat "$CPFIX/two-seams.yaml"; printf 'sliceCapException: "the two seams cannot share an oracle"\n'; } > "$TMP/w/cap-excepted.yaml"
+dm check-plan "$TMP/w/cap-excepted.yaml" --slice-cap 1
+check 'check-plan --slice-cap: a named sliceCapException passes over the cap' \
+  "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+{ cat "$CPFIX/two-seams.yaml"; printf 'sliceCapException: "  "\n'; } > "$TMP/w/cap-blank.yaml"
+dm check-plan "$TMP/w/cap-blank.yaml" --slice-cap 1
+check 'check-plan --slice-cap: a blank sliceCapException is no exception' \
+  "$( attr "$LINE" reason )" slice-cap-exceeded "$LINE"
+dm check-plan "$CPFIX/two-seams.yaml" --slice-cap 0
+check 'check-plan --slice-cap 0 is not a positive integer' "$( attr "$LINE" reason )" bad-slice-cap "$LINE"
+check 'check-plan: bad-slice-cap exits 2' "$rc" 2
+
 dmin /dev/null check-plan "$TMP/no-such-plan.yaml"
 check 'check-plan: an unreadable plan path' "$( attr "$LINE" reason )" plan-unreadable "$LINE"
 printf ': not yaml : [' > "$TMP/w/bad.yaml"

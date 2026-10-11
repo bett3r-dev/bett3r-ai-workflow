@@ -30,7 +30,7 @@ The structure file is the shape's reference. What the verbs below turn on: a for
 | `check-page` | `<map.json> <page.html> --expect <n>` | the same counts, no `page=` |
 | `apply-answers` | `<map.json> <answers-dir> [--final]` | `final= open= owner= recommendation= code= moot= otherMap= commented= map=` |
 | `candidates` | `<map.json>` (positional; `--map` is refused) | `forks= candidates= skipped-open= skipped-moot= skipped-nowalk= skipped-untestable= agreed= skipped-review= skipped-struck=` |
-| `check-plan` | `<slices.yaml> [<map.json>]` (positional) | `review=<human\|unattended\|none> candidates= scenarios= seams= probed=` |
+| `check-plan` | `<slices.yaml> [<map.json>] [--slice-cap <N>]` | `review=<human\|unattended\|none> candidates= scenarios= seams= probed=` |
 | `count` | `<map.json> [--lane <lane.yaml>] [--line]` | `forks= owner= code= recommendation= open= moot=` |
 | `drift` | `<map.json> (--feed-seq <n> \| --no-feed)` | `outcome=current\|drifted\|skip mapSeq= feedSeq=` |
 
@@ -72,7 +72,7 @@ Done when every answered fork reads `source: owner` in the map, every printed co
 
 ```
 design-map candidates <map.json>
-design-map check-plan <slices.yaml> [<map.json>]
+design-map check-plan <slices.yaml> [<map.json>] [--slice-cap <N>]
 ```
 
 `candidates` validates the map, reads it, and prints one compact JSON line per walk of a **decided** fork's **chosen** option, `{"fork","option","scenario","source","example","given","when","then"}` in that key order (`given`/`when`/`then` are the walk's own, absent from a structural walk's line); never a rejected option's walk, which is a confidently wrong oracle. The map's stored `scenarios` come first: a chosen walk a stored scenario names in its `derivedFrom` yields that scenario instead, judged on read against its fork. An agreed one prints `{"class":"agreed","id","fork","option","scenario","source","given","when","then"}` (counted `agreed=`); a proposed one is the same line with `"class":"candidate"` and the walk's text as `example` after `source` (counted in `candidates=`); its `scenario` is the title and `given`/`when`/`then` are its steps' texts joined with ` and `. An agreed authored scenario (no `derivedFrom`) prints after the forks with `fork`, `option` and `source` null. One struck is counted `skipped-struck=`, one under review (option-changed, reopened, moot, fork-gone, walk-changed, walk-gone) `skipped-review=`; neither is printed. Skipped forks are counted, never printed: `skipped-open`, `skipped-moot` (its id is never named), `skipped-untestable` (`testable: false`, which wins a tie with a zero-walk option), and `skipped-nowalk`, always 0 and kept on the line because `/plan` parses it as proof the refusal fired. Two refusals, `outcome=fail`: `reason=decided-nowalk id= option=` (a choice nobody can test) and `reason=walk-unstructured id= option= walk=<index>` (a chosen option's walk is prose and no stored scenario names it, since a stored scenario with its own steps is offered instead; the index, never the scenario text, since verdict attributes are space-free).
@@ -89,6 +89,7 @@ design-map check-plan <slices.yaml> [<map.json>]
 - `reason=unnamed-seam slice=<id> seam=<name>`: a slice's `seam:` is not one the plan declared.
 - `reason=slice-unprobed slice=<id>`: a slice declares no `probe:`, the one-line production mutation that must turn its oracle red.
 - `reason=scenario-unsourced slice=<id> why=<detail>`: a behavioural scenario has no `expected_from:`, names one outside `literal | worked-example | spec | existing-behaviour`, or is non-`literal` and cites no `expected_source:`.
+- `reason=slice-cap-exceeded slices=<n> cap=<N>`: with `--slice-cap N`, the plan cuts more than N slices and carries no top-level `sliceCapException:` (a non-empty reason). Checked after every rule above; without the flag no count is enforced. `--slice-cap` that is not a positive integer is `outcome=error reason=bad-slice-cap`. The cap is not `sliceBudget`, `/build`'s context-yield ceiling.
 
 With a second argument, the committed `map.json`, `check-plan` first validates it (validate's refusals, `outcome=error`) and reads the scenarios it holds agreed and not under review. A slice scenario whose `id:` is one of them and whose `scenario`/`given`/`when`/`then` equal that entry's title and step texts (joined with ` and `, as `candidates` prints them) is a human's confirmation already: those four fields are exempt from `candidate-in-oracle` (a `text:` is still searched), and with no `expected_from:` its source is the map entry, so `scenario-unsourced` does not fire for it. An agreed id over any other text, and an id the map holds proposed, struck or under review, confirms nothing; without the map every rule above applies.
 
