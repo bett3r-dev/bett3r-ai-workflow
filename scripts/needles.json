@@ -1231,18 +1231,6 @@
       "note": "Under executorGate: fast, /verify-build runs the scoped gate on the final head even in a gateDeferred lane, so the deferral never leaves the scoped gate unrun."
     },
     {
-      "needle": "moves the judgment gate, it does not drop it",
-      "issue": null,
-      "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
-      "note": "verifyCadence: per-ticket: one verifier over the whole ticket after the last slice; never zero independent review."
-    },
-    {
-      "needle": "Ticket review owed (verifyCadence: per-ticket)",
-      "issue": null,
-      "was_in": "plugins/bett3r-ai-workflow/commands/verify-build.md",
-      "note": "/verify-build refuses while ticketReview.verdict is pending: slices committed without a verifier keep their review owed."
-    },
-    {
       "needle": "Decided in-lane, review after the fact",
       "issue": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/verify-build.md",

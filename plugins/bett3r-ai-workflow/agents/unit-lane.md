@@ -67,7 +67,7 @@ A step is done when its log parses to an `outcome`, the outcome is in your state
 - k did not advance between two consecutive dispatches → stop and report `blocked-on=build-no-progress` with both lines; a yield that resumes onto the same slice forever is the one way this loop costs more than it saves.
 - anything else → the table's rule; no re-dispatch.
 
-Record each dispatch with its counts, so `3/8`, `6/8`, `8/8` reads as one build step that yielded twice. Under `verifyCadence: per-ticket` in your brief, the dispatch that commits the last slice also runs the ticket's one verifier review (`/build` *Step 3b*), so `N/N` with `outcome=success` means reviewed; one that returns `N/N` with `gate-red` or `blocked-on` failed that review and follows the table's rule. `sliceCap`, `executorGate` and `verifyCadence` are read by the steps from the brief; you pass none of them. Route models as `/build`'s table does; your brief's `modelRouting` carries the same policy.
+Record each dispatch with its counts, so `3/8`, `6/8`, `8/8` reads as one build step that yielded twice. `sliceCap`, `executorGate`, `followUps` and `prefactored` are read by the steps from the brief; you pass none of them. Route models as `/build`'s table does; your brief's `modelRouting` carries the same policy.
 
 ## What you write
 

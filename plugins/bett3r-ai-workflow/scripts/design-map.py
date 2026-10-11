@@ -1705,8 +1705,7 @@ def slice_cap(raw_cap):
 def check_slice_cap(doc, raw_slices, cap):
     """`--slice-cap N`: more than N slices fails unless the plan names why in a
     top-level `sliceCapException:`. Each slice past the first pays a fresh
-    executor that re-reads the context, and under per-slice cadence a verifier
-    too; the exception is for a design whose independent seams cannot share an
+    executor that re-reads the context, and a verifier too; the exception is for a design whose independent seams cannot share an
     oracle, and it is written down so a reader can disagree with it."""
     if cap is None or len(raw_slices) <= cap:
         return

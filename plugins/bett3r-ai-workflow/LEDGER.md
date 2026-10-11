@@ -2213,13 +2213,13 @@ condition that retires it on purpose.
 - recorded: 2026-10-10
 - expiry: a light-depth fleet ships a defect the falsification pass would have named
 
-### Verifier cadence: per slice, or once per ticket
-- rule: Under `verifyCadence: per-ticket` (brief) or `/build --verify-cadence per-ticket`, `/build` keeps test-runner, scope-check (and its CONTAMINATED block) and a commit per slice, and dispatches the verifier once after the last slice over the ticket's range with every slice's oracle, probe and flagged deviations (`/build` Step 3b); its RETRY/ESCALATE drive fix rounds with the same cap, classes and re-check mode. `verifyDepth` applies to that one dispatch unchanged. `/verify-build`'s whole-PR review runs unchanged and adds no verifier, so a ticket keeps two independent judgments; `/verify-build` refuses while `ticketReview.verdict` is `pending`. Default `per-slice`.
-- source: commands/build.md Step 3, Step 3b, Boundaries; agents/verifier.md *Ticket review*; commands/verify-build.md Steps 1 and 3; reference/build-record.md `ticketReview:`
+### The verifier stays per slice: per-ticket cadence measured and dropped
+- rule: `/build` dispatches the verifier on every slice, at every depth; there is no per-ticket cadence. A `verifyCadence: per-ticket` lever (one verifier over the whole ticket after the last slice) was built on feat/fleet-lane-speed and removed before release by owner decision.
+- source: commands/build.md Step 3 and Boundaries ("Both gates, every slice")
 - evidence:
-  > Owner request 2026-10-11, on measurements of the multi-rus-loop fleet (pv4, 62 units, wave 2, two lanes at once): a ticket lane took 39 min median and 47 mean, of which about 2 start/design/plan, 29 executor, 5.6 verifier, 2 test-runner and scope-check, and 3 verify-build. With 3 to 4 slices a ticket, each slice paid its own verifier (5.6 minutes of verifier a lane) on top of a fresh executor.
+  > Owner decision 2026-10-11, on the multi-rus-loop fleet (pv4, wave 2): a per-slice verifier's first pass took 1.5 min median (max 3.2, 33 runs). Under a 2-slice cap a per-ticket review would save at most 0.5 to 1 min a ticket, and it would move the 9 fix rounds the per-slice verifier caught (32 executor-minutes across 11 tickets) to the end of the ticket, where they cost more. The owner keeps a check that costs about a minute.
 - recorded: 2026-10-11
-- expiry: a per-ticket fleet ships a defect a per-slice verifier would have caught before a later slice built on it
+- expiry: per-slice verifier first passes grow past a few minutes median, or its fix rounds stop landing before later slices build on the slice
 
 ## agents/provisioner.md
 
