@@ -1333,6 +1333,14 @@ condition that retires it on purpose.
 - recorded: 2026-10-10
 - expiry: lanes stop compiling on the orchestrator's machine (remote builders, a shared build cache that makes a lane's build near-free)
 
+### A wave prefactor, on request
+- rule: With `--wave-prefactor`, before a wave's lanes are cut the orchestrator lists the files two or more of the wave's units will edit (manifests, registries, wiring and assembly points, gate step lists, module folders) from their resolved designs, and one agent lands a single prefactor commit on `int/<run-id>` with the shared scaffolding and no unit's behaviour, preferring an append-only shape (a folder a registry reads) where one fits; gated scoped, recorded with its files and the units each serves, and handed to each lane as `prefactored:`, fill in, don't restructure. `/merge-multi` records `mergeConflicts` per invocation on every run, so runs without the flag are the baseline. Default off.
+- source: commands/start-multi.md step 1b, flags, run.yaml; agents/provisioner.md brief; commands/build.md Step 1, Step 3 item 1; agents/executor.md Before writing code; commands/merge-multi.md step 2
+- evidence:
+  > Owner request 2026-10-11, approved with the lane-speed levers measured on the multi-rus-loop fleet (pv4, 62 units, wave 2, two lanes at once): sibling lanes edited the same manifests, registries and gate step lists, and each such point was a conflict resolved again at the wave merge. The measure to compare is `mergeConflicts` per wave merge, before and after.
+- recorded: 2026-10-11
+- expiry: `mergeConflicts` per wave merge does not fall on prefactored runs against the runs without it
+
 ## commands/plan.md
 
 ### A slice is cuttable only when everything it names resolves at the base

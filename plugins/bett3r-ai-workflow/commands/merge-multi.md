@@ -83,7 +83,7 @@ Resolve conflicts in the integration worktree as merge commits, never by rewriti
 - A pinned counter touched by N units is **recomputed, never picked**: write `base + Σ (each unit's delta against its own base)`, the addends `/start-multi`'s step-8 report carries, and verify by running the suite, since every branch's value is wrong on the merged tree.
 - A clean merge does not discharge a cross-unit obligation. For every `owesSiblings` entry in `units/<id>.state.yaml` and every PR-body "for the <sibling> merge" section, check the merged file even where git did not conflict, apply the obligation on integration with a test red without it, and record it as a resolution; an unresolved one blocks step 5.
 
-Record every resolution as you make it (which units, which file, what was kept and dropped, why), in the integration PR body (step 5) and as an entry in the run-level `decisions.md`: the reviewer approved unit diffs; what ships is those diffs plus your resolutions.
+Count the conflicts as you merge: for each unit merge, the files git reported conflicted. Append one entry to `run.yaml`'s `mergeConflicts` for this invocation, `{ units, conflictedFiles: <n>, resolutions: <n>, wavePrefactor: <run.yaml's flag> }`, and print it in the report and the integration PR's *Conflict resolutions*: the before-and-after measure for `--wave-prefactor`, recorded on every run so runs without the flag are the baseline. Record every resolution as you make it (which units, which file, what was kept and dropped, why), in the integration PR body (step 5) and as an entry in the run-level `decisions.md`: the reviewer approved unit diffs; what ships is those diffs plus your resolutions.
 
 **The run-level `decisions.md`** is `<root>/<run-id>/decisions.md`, resolved with `work-docs-path --item <run-id>` (`run.yaml`'s `runId:`), never a hardcoded root. It holds this command's own conflict resolutions and, under `followUps: in-lane`, step 2c's forks, nothing else; `/design-multi` Phase B's policies are not restated there, since each unit's committed `design.md` carries them. If `work-docs-path --item <run-id>` refuses (a hand-made run id, or one built from a unit id `work-docs-path` cannot carry, such as a Jira key with an underscore), write no run-level `decisions.md` entry: put its `WORK-DOCS-PATH:v1` verdict line in the integration PR body under *Conflict resolutions* instead, and continue merging. `/merge-multi` is the file's single writer: each entry is a `## D<n> — <title>` with `step: merge-multi · slice: — · decidedBy: orchestrator`, its id one more than the highest already in the file, in the D-entry grammar `/build`'s record companion (`reference/build-record.md`) states.
 
@@ -147,6 +147,7 @@ Done when the body carries one `closes` per referenced issue, the `declared − 
 | TV1-1002 — <title> | #102 | — |
 
 ### Conflict resolutions
+conflicts: <n> files over <m> unit merges (wave prefactor: on|off)
 - TV1-1004 × TV1-1007 in `src/foo.ts` — kept X, dropped Y, because <reason>.
 - (or "none")
 
@@ -204,7 +205,7 @@ Without `--land` nothing has landed, so nothing is pushed in either mode: print 
 
 **7 — Report.**
 
-Units merged (and any skipped, with why) · `declared − landed`, always, even when empty · the epic goal oracle's verdict · conflict resolutions, counted · under `followUps: in-lane`, the in-lane forks per unit and step 2c's, and the owner items · the gate verdict · the integration PR URL · issues closed vs. still open · step 6b's push output or each `push owed:` line, verbatim. Done when `run.yaml` carries `landedAt` and `integrationPr`, so a re-run is a no-op.
+Units merged (and any skipped, with why) · `declared − landed`, always, even when empty · the epic goal oracle's verdict · conflict resolutions, counted, with step 2's `mergeConflicts` entry · under `followUps: in-lane`, the in-lane forks per unit and step 2c's, and the owner items · the gate verdict · the integration PR URL · issues closed vs. still open · step 6b's push output or each `push owed:` line, verbatim. Done when `run.yaml` carries `landedAt` and `integrationPr`, so a re-run is a no-op.
 
 ## Principles
 

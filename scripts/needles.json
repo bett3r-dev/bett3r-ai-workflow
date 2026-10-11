@@ -1253,6 +1253,18 @@
       "issue": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/merge-multi.md",
       "note": "Deferred follow-ups are swept on int after the wave merge under the same fork rule; only owner items become tickets."
+    },
+    {
+      "needle": "1b \u2014 Wave prefactor",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "note": "--wave-prefactor: one shared-scaffolding commit on int before a wave's lanes are cut; no unit's behaviour; append-only preferred; lanes fill in, don't restructure."
+    },
+    {
+      "needle": "mergeConflicts",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/merge-multi.md",
+      "note": "Conflicts per wave merge recorded on every run: the before/after measure for --wave-prefactor."
     }
   ]
 }
