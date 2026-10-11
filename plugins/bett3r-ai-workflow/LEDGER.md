@@ -1317,6 +1317,14 @@ condition that retires it on purpose.
 - recorded: 2026-10-04
 - expiry: fleets stop stacking units (no deps), or tick hand-offs fall under 10 minutes without the preparation
 
+### On a compile-heavy host, cores bound the lanes
+- rule: Lanes ≤ max(1, cores ÷ 4) where the test loop is a compile; the next wave runs one lane narrower when the 1-minute load exceeds twice the core count. `--max-parallel` defaults to 2.
+- source: reference/start-multi-sizing.md; commands/start-multi.md flags and step 2
+- evidence:
+  > Owner decision 2026-10-10 ("Please do 1, 2, 4, and 5"), on the run report of the rus-loop fleet (rustrillo, wave 0, six Rust lanes on a 10-core laptop, 15:08 to 18:19): `maxParallel: 8`, six lanes; 34 `uptime` samples in the transcripts held a median load of 30 and a peak of 126 on 10 cores; cargo test median 15 s, max 8 min; slices ran 45 to 90 minutes.
+- recorded: 2026-10-10
+- expiry: lanes stop compiling on the orchestrator's machine (remote builders, a shared build cache that makes a lane's build near-free)
+
 ## commands/plan.md
 
 ### A slice is cuttable only when everything it names resolves at the base
@@ -1571,6 +1579,14 @@ condition that retires it on purpose.
   > **Run it fresh; do not reopen the fleet conversation.** That session is the largest context in the run — it dispatched N lanes, collected N escalations, aggregated N state files — and re-invoking it to perform a mechanical merge sequence re-sends all of it. Everything this command needs is on disk (`run.yaml`) or on GitHub (`gh pr view`). The bookkeeping is cheap; the memory is not.
 - recorded: 2026-08-14
 - expiry: none known
+
+### A timing measurement is taken after the fleet, not inside a lane
+- rule: A lane delivers and smoke-runs a measurement harness and records `measurement owed: <command>`; `/merge-multi` Step 3b runs each owed measurement serially on an idle machine (1-minute load under half the cores).
+- source: commands/build.md Boundaries; agents/executor.md Boundaries; commands/merge-multi.md Step 3b
+- evidence:
+  > Owner decision 2026-10-10 ("Please do 1, 2, 4, and 5"), on the run report of the rus-loop fleet (rustrillo, wave 0, six Rust lanes on a 10-core laptop, 15:08 to 18:19): RUS-11's build-time `W` series ran inside its lane for 115 minutes in one command (130 executor agent-minutes) at load 30 to 126, so its numbers measured the siblings, not the change.
+- recorded: 2026-10-10
+- expiry: lanes run on isolated machines
 
 ## commands/start.md
 
@@ -1991,6 +2007,14 @@ condition that retires it on purpose.
 - recorded: 2026-10-04
 - expiry: first-pass green on the next two fleets stays at or above 60% without this check, or the verifier stops running per-clause mutation
 
+### The mutation budget is the probe
+- rule: The executor runs the slice's `probe:` once (plus one mutant per scenario `then:` on a test-or-guard slice) and pins every other clause by reading; no per-clause mutation sweep.
+- source: agents/executor.md RED → GREEN and Before reporting COMPLETED; EVIDENCE.md §2
+- evidence:
+  > Owner decision 2026-10-10 ("Please do 1, 2, 4, and 5"), on the run report of the rus-loop fleet (rustrillo, wave 0, six Rust lanes on a 10-core laptop, 15:08 to 18:19): executors spent 238 agent-minutes of 525 tool-minutes on mutation (tables of 20 to 33 mutants per slice, each a Rust rebuild), and verifiers 53 more repeating it in a copy. Supersedes the mutating half of the 2026-10-04 clause-table lever; the reading half stays.
+- recorded: 2026-10-10
+- expiry: first-pass green falls below the 2026-10-04 baseline (24% / 45%) on fleets run under this rule
+
 ## agents/verifier.md
 
 ### The test-deletion guard: a silent deletion let a guard regress
@@ -2148,6 +2172,14 @@ condition that retires it on purpose.
   > About 22 of 90 RETRY verdicts in the two fleets cited a README, ADR or doc-comment sentence on code the same verdict called correct; each cost a fix round plus a full opus re-check (a re-check averaged about 5 minutes of wall time).
 - recorded: 2026-10-04
 - expiry: doc rounds show a defect the skipped re-check would have caught
+
+### Mutation is read, not re-run; light depth
+- rule: The verifier checks the executor's probe evidence against the diff and re-runs only the probe, only when that evidence fails. Under `verifyDepth: light` it skips the falsification pass and returns prose-only findings as follow-ups; named mitigations and disproof hold at every depth.
+- source: agents/verifier.md Verify, Light depth; commands/build.md Step 3; agents/provisioner.md brief
+- evidence:
+  > Owner decision 2026-10-10 ("Please do 1, 2, 4, and 5"), on the run report of the rus-loop fleet (rustrillo, wave 0, six Rust lanes on a 10-core laptop, 15:08 to 18:19): verifiers spent 159 of 203 minutes in tools, 53 of them on mutation and 41 on cold builds in throwaway copies; about eight fix rounds at 10 to 30 minutes each, some prose-only ("doc round 2").
+- recorded: 2026-10-10
+- expiry: a light-depth fleet ships a defect the falsification pass would have named
 
 ## agents/provisioner.md
 

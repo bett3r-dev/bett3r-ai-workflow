@@ -112,6 +112,12 @@ A red gate is **fixed on integration**, not deferred. If a failure traces cleanl
 
 Done when the gate printed `GATE: PASS` on the current tip of `int/<run-id>` and the version-bump step read `PASS`.
 
+**3b — Take the owed measurements, on an idle machine.**
+
+A lane takes no timing measurement (`/build` *Boundaries*); each one it owed is an entry titled `measurement owed: <exact command>` in that unit's `decisions.md`. Grep every merged unit's record for them. With the gate's last run finished and no fleet lane, gate or build of yours in flight, run each owed command serially on `int/<run-id>`, recording `uptime` beside each result: a 1-minute load above half the core count makes the number not a measurement, so wait and re-run rather than record it. Commit the results where the slice said they go, naming the unit, and list each one under the integration PR's `### Gate`. A measurement that regresses past the bound its design set is a finding in the PR, and blocks nothing the design did not say it blocks.
+
+Done when every owed measurement has a committed result taken under the load bound, or is listed in the PR as not taken, with why.
+
 **4 — Collect the closing keywords.**
 
 A PR merged into `int/<run-id>` does not close its issues: GitHub fires closing keywords only on merges into the default branch, so every `Closes #N` in a unit PR body is inert. Collect the union of issues referenced across every unit PR into the integration PR body, one `closes` keyword per issue: `Closes #56, closes #62, closes #63`. A bare list (`Closes #56, #62`) closes the first and turns the rest into mentions; `/verify-build` step 6 states the binding rule.
