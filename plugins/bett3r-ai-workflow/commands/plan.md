@@ -6,7 +6,7 @@ description: Cut the committed design into vertical slices, review the breakdown
 
 This is the `plan` step; its verdict is `LANE-STEP:v1 step=plan outcome=<success|blocked-on> slices=<n>`. It turns the committed `design.md` into `.work/slices.yaml`, the ordered slice list `/build` drives.
 
-**Argument** `$ARGUMENTS`: optional ticket id. `--publish` also creates Jira sub-tasks (Step 5).
+**Argument** `$ARGUMENTS`: optional ticket id. `--publish` also creates Jira sub-tasks (Step 5). `--slice-cap N` caps the cut at N slices (Step 2); default no cap.
 
 ## Step protocol
 
@@ -21,7 +21,7 @@ This is the `plan` step; its verdict is `LANE-STEP:v1 step=plan outcome=<success
 1. Mark the mode: `.work/mode.yaml` reads `mode: plan` (*Step protocol*).
 2. Run `work-docs-path --item <work_item>` with the `work_item` from `.work/mode.yaml` and read `<path>/design.md` from the verdict line's `path=`. `outcome=error` ends the step `blocked-on` with its `reason=`; there is no second location to try. A folder without `design.md`: say "No design found. Run `/design` first." and end `blocked-on`.
 3. If `<path>/map.json` exists, run `design-map candidates <path>/map.json` (positional; `--map` is refused) and read its `DESIGN-MAP:v1` line, not its prose, for the candidate list Step 3 uses. A line with `"class":"agreed"` is not a candidate: it is a scenario a human agreed on the board (counted `agreed=`), and Step 4 copies it into a slice. A stored scenario under review is not printed (`skipped-review=`). Without `map.json` there are no candidates and the verb is not called.
-4. Read the area's `CONTEXT.md` for the ubiquitous language and the ADRs it cites. From the brief: `adrAllocations` (the number the plan's top-level `adr:` takes) and `modelRouting` (what `model:` on a slice must agree with).
+4. Read the area's `CONTEXT.md` for the ubiquitous language and the ADRs it cites. From the brief: `adrAllocations` (the number the plan's top-level `adr:` takes), `modelRouting` (what `model:` on a slice must agree with) and `sliceCap` (a positive integer; no key means no cap, and `--slice-cap` given to this invocation wins). `sliceCap` is not `sliceBudget`: the cap limits how many slices you cut, the budget is how many `/build` commits before it yields, and this step reads only the cap.
 
 Done when the design, the candidate list or its absence, and the brief's inputs are in hand.
 
@@ -39,8 +39,9 @@ Call the Skill tool with "vertical-slicing". It is the method's single home: tra
 - `designs:` on each slice when the unit has a design layer (`.blueprint/design.json`): the node ids it builds, copied from the design file (ids look like `{subdomain}_{abbrev}_{slug}`). A scaffolded artifact's host slice comes before the artifact's own: the handler before its command, the module before its event. Without a design layer the field is absent.
 - **The scaffold report's files are intended files.** When `<path>/scaffold.json` exists (in a lane, the fleet's report at the brief's `scaffoldReport:`), every `manifest[].file` and `placed[].file` whose `node` is in a slice's `designs:` is in that slice's intended files, and counted in its `surface:`; `/build` hands the executor the report's entries for those nodes and runs no scaffolder.
 - `model: sonnet` only where the skill calls the slice mechanical; absent everywhere else, which `/build` routes as its table does.
+- **With a slice cap, at most N slices**, cut as the skill's *A slice cap, when one is set* says: merge before you cut, and keep every rule above. Over N only when the design names more than N independent seams that cannot share an oracle, recorded in a top-level `sliceCapException:`; any other way over N ends the step `blocked-on` naming the conflict, so the ticket is split before it is built. Red-first, `probe:`, `scenarios:` and `check-plan` are the same under a cap.
 
-Done when every slice has resolved symbols, a seam, sourced scenarios, a probe and a surface within the cap, in dependency order with the tracer bullet first.
+Done when every slice has resolved symbols, a seam, sourced scenarios, a probe and a surface within the cap, in dependency order with the tracer bullet first, and the count is within any slice cap or carries its exception.
 
 ## Step 3 — Review the breakdown
 
@@ -52,14 +53,15 @@ Done when the breakdown is approved, or the unattended branch has been taken and
 
 ## Step 4 — Write `.work/slices.yaml`
 
-Write the slices in the skill's schema: `id`, `name`, `passes: false`, `depends_on`, `behavior`, `oracle`, `seam`, `probe`, `scenarios` (every slice, at least one; each behavioural one with `expected_from:` and, unless `literal`, `expected_source:`), `gates`, `surface`, and where they apply `designs` and `model`. Every agreed scenario `candidates` printed is copied, in both branches, into the scenarios of the slice that delivers it, with its `id:` and its `scenario`/`given`/`when`/`then` as printed, and `expected_from: worked-example` with `expected_source: map.json#scenarios/<id>/examples` when the map entry has examples, else `expected_from: spec` with `expected_source: scenario <id>`. It is never a `candidateOracles:` entry. After `slices:`, always write a top-level `review: human|unattended`. When Step 1 found a `map.json`, also write a top-level `candidateOracles:`, one `{fork, option, scenario, source, example, slice, status}` entry per candidate (a `"class":"candidate"` line also carries its `id`) with `status` one of `confirmed|rejected|unconfirmed`; omit the key entirely otherwise. Both keys go after `slices:`, because `worktree-pool`'s parser stops at the first indent-0 line following it.
+Write the slices in the skill's schema: `id`, `name`, `passes: false`, `depends_on`, `behavior`, `oracle`, `seam`, `probe`, `scenarios` (every slice, at least one; each behavioural one with `expected_from:` and, unless `literal`, `expected_source:`), `gates`, `surface`, and where they apply `designs` and `model`. Every agreed scenario `candidates` printed is copied, in both branches, into the scenarios of the slice that delivers it, with its `id:` and its `scenario`/`given`/`when`/`then` as printed, and `expected_from: worked-example` with `expected_source: map.json#scenarios/<id>/examples` when the map entry has examples, else `expected_from: spec` with `expected_source: scenario <id>`. It is never a `candidateOracles:` entry. After `slices:`, always write a top-level `review: human|unattended`. When Step 1 found a `map.json`, also write a top-level `candidateOracles:`, one `{fork, option, scenario, source, example, slice, status}` entry per candidate (a `"class":"candidate"` line also carries its `id`) with `status` one of `confirmed|rejected|unconfirmed`; omit the key entirely otherwise. Over a slice cap, also write the top-level `sliceCapException:` Step 2 owes. These keys go after `slices:`, because `worktree-pool`'s parser stops at the first indent-0 line following it.
 
-Then run `design-map check-plan .work/slices.yaml`, with `<path>/map.json` as a second argument when Step 1 found one, in both branches, and read its line. The map is what lets an unattended plan carry an agreed scenario: check-plan re-reads it and accepts a scenario whose `id:` the map holds agreed and not under review and whose `scenario`/`given`/`when`/`then` are that entry's as printed (an agreed id over other text confirms nothing); without it, that copy is checked like any other scenario, so a candidate example inside it is refused as `candidate-in-oracle`. On `outcome=fail`, act on `reason=` and re-run:
+Then run `design-map check-plan .work/slices.yaml`, with `<path>/map.json` as a second argument when Step 1 found one and `--slice-cap N` when a cap is set, in both branches, and read its line. The map is what lets an unattended plan carry an agreed scenario: check-plan re-reads it and accepts a scenario whose `id:` the map holds agreed and not under review and whose `scenario`/`given`/`when`/`then` are that entry's as printed (an agreed id over other text confirms nothing); without it, that copy is checked like any other scenario, so a candidate example inside it is refused as `candidate-in-oracle`. On `outcome=fail`, act on `reason=` and re-run:
 
 - `reason=candidate-in-oracle` → remove the copied candidate example from that `slice=`'s `oracle`;
 - `reason=unattended-confirmed` → reset that candidate to `status: unconfirmed`;
 - `reason=slice-unprobed` → name the production line whose deletion turns that oracle red, not the test file;
 - `reason=scenario-unsourced` → say where the expected value comes from and cite it; when the honest answer is "from how the code will compute it", the scenario is what to fix;
+- `reason=slice-cap-exceeded` → merge slices to N (Step 2), or, only for independent seams that cannot share an oracle, write the `sliceCapException:` naming them; never raise the cap;
 - `reason=plan-unseamed|slice-unseamed|unnamed-seam|seam-unstructured` → back to Step 2 to name the seam properly, never by adding a `seams:` entry to match what a slice already said;
 - any other `reason=` → its name says which field is missing or malformed; fix that slice.
 

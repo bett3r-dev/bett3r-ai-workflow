@@ -10,11 +10,11 @@ The orchestrator is the single writer of `decisions.md` and `build-summary.md`. 
 
 ## `decisions.md`: every decision made after the design
 
-One entry per post-design decision; the `kind` enum below names the six. Sources: the executor's flagged deviations, the verifier's per-item verdicts, your fix-round classifications (`design-silent` names a filled seam), every human decision on an `ESCALATE`. The header is fixed:
+One entry per post-design decision; the `kind` enum below names the seven. `in-lane-fork` is a follow-up fixed without the owner under `followUps: in-lane`: its title is the question, its prose the option chosen and why, its `rejected:` every option not taken and why, and it names the fix commit. Sources: the executor's flagged deviations, the verifier's per-item verdicts, your fix-round classifications (`design-silent` names a filled seam), every human decision on an `ESCALATE`. The header is fixed:
 
 ```markdown
 ## D1 — <one-line decision>
-kind: silent-seam        # false-premise | silent-seam | deviation | shipped-finding | overruled | waiver
+kind: silent-seam        # false-premise | silent-seam | deviation | shipped-finding | overruled | waiver | in-lane-fork
 step: build · slice: 2 · decidedBy: executor    # executor | verifier | orchestrator | lane | human
 sources: [code:<symbol> (<file>), adr:ADR-NNN, design:<section>, xp:<atom-id>, human]
 rejected: <option> — <why not>

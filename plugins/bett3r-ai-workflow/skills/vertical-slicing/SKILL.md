@@ -16,6 +16,14 @@ A **slice** is the smallest independently observable behaviour, cut top to botto
 - Invariants are complete the moment their aggregate appears; no later slice finishes an invariant.
 - Named in the ubiquitous language (the area's `CONTEXT.md`), respecting the ADRs there; described as behaviour, not file paths or snippets. Exception: a decision-rich prototype snippet (a state machine, reducer, schema or type shape), trimmed to the decision.
 
+## A slice cap, when one is set
+
+A lane brief's `sliceCap: N` (or `/plan --slice-cap N`) caps the cut at N slices. Every slice past the first pays a fresh executor that re-reads the context, and a verifier as well; a measured Rust fleet cut 3 to 4 slices a ticket and spent 29 of a 39-minute lane in executors. Under a cap, merge adjacent slices that test at the same seam into one slice with several scenarios before cutting a new one. Every rule above still holds for each slice the cap leaves: vertical, its own oracle, `probe:` and scenarios, invariants complete, one fresh executor context, the tracer bullet first and prefactoring first. The cap never weakens one of them.
+
+The cap gives in one case only: the design names more independent seams than N that cannot share an oracle. Then cut what the seams need and write a top-level `sliceCapException:` in `slices.yaml` naming those seams and why no oracle can observe two of them; `design-map check-plan --slice-cap N` refuses a plan over the cap without it (`reason=slice-cap-exceeded`). Any other reason to exceed N (a merged slice over the surface cap, or too big for one executor context) means the ticket is larger than the cap allows: `/plan` says so and ends `blocked-on`, so the ticket is split upstream; it neither weakens a rule nor exceeds the cap. Without a cap, nothing here changes how many slices you cut.
+
+`sliceCap` is not `sliceBudget`. `sliceCap` limits how many slices `/plan` cuts; `sliceBudget` is `/build`'s context-yield ceiling, the number of slices one `/build` invocation commits before it yields to a fresh one, and cuts nothing.
+
 ## Tracer bullet first
 
 Slice 1 is the thinnest end-to-end path through the riskiest gate-less seam: the part nothing automatically catches when it is wrong (a generated-artifact or deployment seam, a new integration boundary, a cross-aggregate contract). It is kept code, not a prototype, and it proves the seam holds before anything is built on it. A genuinely shared foundation (a schema five slices depend on, a migration) is what prefactoring and the tracer bullet establish: just enough skeleton, then vertical.
@@ -101,11 +109,14 @@ slices:
     passes: false
     depends_on: []                 # independent of slice 1 → can run in parallel
 review: human                      # human | unattended — set by /plan, always
+sliceCapException: "<the seams, and why none can share an oracle>"  # OPTIONAL. Only when a
+                                   #   sliceCap is set and the plan exceeds it; check-plan
+                                   #   --slice-cap refuses an over-cap plan without it
 candidateOracles:                  # OPTIONAL. Only when a <path>/map.json existed at /plan Step 1;
                                     #   [{fork, option, scenario, source, example, slice, status}]
 ```
 
-`scenarios:` is the oracle in the form nobody can quietly re-read; `oracle:` stays the narrative. Where a design map's fork was decided and its walk confirmed, that walk is the scenario. An agreed scenario the committed `map.json` carries (`design-map candidates` prints it with `"class":"agreed"`) is copied into the slice's scenarios with its `id:` and its Given/When/Then as printed, and `design-map check-plan <slices.yaml> <map.json>` accepts it unattended while the map holds it agreed and not under review and its text is still the entry's as printed. `passes` flags and the slice commits are the build's progress. `review:` and `candidateOracles:` trail `slices:` because `worktree-pool`'s parser stops at the first indent-0 line after it. `design-map check-plan` refuses a plan missing any REQUIRED field above. An env-gated oracle (one the default run excludes behind a flag or a service) names its exact invocation, flag and services, in `oracle:`, so `/verify-build` can re-run it; such a slice is certified by that invocation, not by its `passes:` flag. `model: sonnet` marks a mechanical slice: a scaffold from a framework skill, config or wiring, a test-only or guard-only slice, a mechanical prefactor; the tracer bullet, a seam and anything touching an invariant leave it absent, which `/build` routes as `opus`, and so does doubt.
+`scenarios:` is the oracle in the form nobody can quietly re-read; `oracle:` stays the narrative. Where a design map's fork was decided and its walk confirmed, that walk is the scenario. An agreed scenario the committed `map.json` carries (`design-map candidates` prints it with `"class":"agreed"`) is copied into the slice's scenarios with its `id:` and its Given/When/Then as printed, and `design-map check-plan <slices.yaml> <map.json>` accepts it unattended while the map holds it agreed and not under review and its text is still the entry's as printed. `passes` flags and the slice commits are the build's progress. `review:`, `sliceCapException:` and `candidateOracles:` trail `slices:` because `worktree-pool`'s parser stops at the first indent-0 line after it. `design-map check-plan` refuses a plan missing any REQUIRED field above. An env-gated oracle (one the default run excludes behind a flag or a service) names its exact invocation, flag and services, in `oracle:`, so `/verify-build` can re-run it; such a slice is certified by that invocation, not by its `passes:` flag. `model: sonnet` marks a mechanical slice: a scaffold from a framework skill, config or wiring, a test-only or guard-only slice, a mechanical prefactor; the tracer bullet, a seam and anything touching an invariant leave it absent, which `/build` routes as `opus`, and so does doubt.
 
 ## Anti-patterns
 

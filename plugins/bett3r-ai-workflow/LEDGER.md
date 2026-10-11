@@ -618,6 +618,14 @@ condition that retires it on purpose.
 - recorded: 2026-08-08
 - expiry: none known
 
+### Follow-ups fixed in the lane, on request
+- rule: Under `followUps: in-lane` (brief; `/start-multi --follow-ups in-lane`), `/verify-build` Step 3a fixes each follow-up whose change stays in the lane's own files (or new files beside them), needs no owner decision the brief or block reserves, and touches no `sharedFiles` or other unit's area: executor, red test first, test-runner and scope-check, one commit each, recorded as an `in-lane-fork` D-entry and listed in the PR under *Decided in-lane, review after the fact*; the scoped gate then runs on the final head. Everything else goes to `<runDir>/followups/<unit>.md`, which `/merge-multi` Step 2c sweeps on `int/<run-id>` under the same fork rule; only owner items become tickets. Default `ticket`.
+- source: commands/verify-build.md Steps 2 and 3a; commands/merge-multi.md Step 2c; commands/start-multi.md `--follow-ups`, step 8; agents/provisioner.md brief; reference/build-record.md `in-lane-fork`
+- evidence:
+  > Owner request 2026-10-11, approved with the lane-speed levers measured on the multi-rus-loop fleet (pv4, 62 units, wave 2): follow-ups a lane could have closed in its own files were filed as tickets and paid a whole lane (39 min median) later; the owner reviews in-lane decisions after the fact instead of before.
+- recorded: 2026-10-11
+- expiry: the owner reverses in-lane forks often enough that reviewing them costs more than the tickets did
+
 ## commands/design-multi.md
 
 ### Prove the tree the agents read is the pin, in both directions; re-verify at Phase C
@@ -1325,6 +1333,14 @@ condition that retires it on purpose.
 - recorded: 2026-10-10
 - expiry: lanes stop compiling on the orchestrator's machine (remote builders, a shared build cache that makes a lane's build near-free)
 
+### A wave prefactor, on request
+- rule: With `--wave-prefactor`, before a wave's lanes are cut the orchestrator lists the files two or more of the wave's units will edit (manifests, registries, wiring and assembly points, gate step lists, module folders) from their resolved designs, and one agent lands a single prefactor commit on `int/<run-id>` with the shared scaffolding and no unit's behaviour, preferring an append-only shape (a folder a registry reads) where one fits; gated scoped, recorded with its files and the units each serves, and handed to each lane as `prefactored:`, fill in, don't restructure. `/merge-multi` records `mergeConflicts` per invocation on every run, so runs without the flag are the baseline. Default off.
+- source: commands/start-multi.md step 1b, flags, run.yaml; agents/provisioner.md brief; commands/build.md Step 1, Step 3 item 1; agents/executor.md Before writing code; commands/merge-multi.md step 2
+- evidence:
+  > Owner request 2026-10-11, approved with the lane-speed levers measured on the multi-rus-loop fleet (pv4, 62 units, wave 2, two lanes at once): sibling lanes edited the same manifests, registries and gate step lists, and each such point was a conflict resolved again at the wave merge. The measure to compare is `mergeConflicts` per wave merge, before and after.
+- recorded: 2026-10-11
+- expiry: `mergeConflicts` per wave merge does not fall on prefactored runs against the runs without it
+
 ## commands/plan.md
 
 ### A slice is cuttable only when everything it names resolves at the base
@@ -1535,6 +1551,14 @@ condition that retires it on purpose.
   > model: sonnet                  # OPTIONAL. Present only on mechanical slices; absent means opus.
 - recorded: 2026-09-13
 - expiry: none known
+
+### A slice cap, on request
+- rule: With `sliceCap: N` (brief) or `/plan --slice-cap N`, `/plan` cuts at most N slices, merging before cutting and keeping every slicing rule; over N only when the design names more independent seams than N that cannot share an oracle, recorded in a top-level `sliceCapException:`, which `design-map check-plan --slice-cap N` requires. Any other way over N ends `/plan` `blocked-on`. Distinct from `sliceBudget`, `/build`'s context-yield ceiling. Default: no cap.
+- source: commands/plan.md Steps 1, 2, 4; skills/vertical-slicing/SKILL.md *A slice cap, when one is set*; scripts/design-map.py check_slice_cap; agents/provisioner.md brief; commands/start-multi.md `--slice-cap`
+- evidence:
+  > Owner request 2026-10-11, on measurements of the multi-rus-loop fleet (pv4, 62 units, wave 2, two lanes at once): a ticket lane took 39 min median and 47 mean, of which about 2 start/design/plan, 29 executor, 5.6 verifier, 2 test-runner and scope-check, and 3 verify-build. /plan cut 3 to 4 slices a ticket, so a ticket paid about 4.2 executor runs, each a fresh context re-reading the ticket, design and code, and each slice also paid a verifier.
+- recorded: 2026-10-11
+- expiry: a capped fleet's first-pass green or escaped-defect count falls below the uncapped baseline, or executor context re-reads stop dominating a lane
 
 ## commands/merge-multi.md
 
@@ -2015,6 +2039,14 @@ condition that retires it on purpose.
 - recorded: 2026-10-10
 - expiry: first-pass green falls below the 2026-10-04 baseline (24% / 45%) on fleets run under this rule
 
+### The executor's gate can be the fast one
+- rule: Under `executorGate: fast` (brief) or `/build --executor-gate fast`, the executor and its fix rounds run the slice oracle, the census or guard tests the slice can trip and the host's fast gate mode (from the brief's `runners`), never the scoped or full gate; `/verify-build` runs the scoped gate once on the final head, even under `gateDeferred: true`. Default `scoped`: the slice's `gates:` as written.
+- source: agents/executor.md *The executor's gate*; commands/build.md Step 1, Step 3 item 1; commands/verify-build.md Step 2; skills/full-gate/SKILL.md mode table
+- evidence:
+  > Owner request 2026-10-11, on measurements of the multi-rus-loop fleet (pv4, 62 units, wave 2, two lanes at once): a ticket lane took 39 min median and 47 mean, of which about 2 start/design/plan, 29 executor, 5.6 verifier, 2 test-runner and scope-check, and 3 verify-build. Executors ran the host's full scoped gate (`node .claude/gate.mjs`, about 2 minutes) 51 times across 11 tickets, although the scoped gate runs again on the final head.
+- recorded: 2026-10-11
+- expiry: a fast-gate fleet's `/verify-build` scoped gate goes red on something a per-slice scoped run would have caught early enough to save a fix round
+
 ## agents/verifier.md
 
 ### The test-deletion guard: a silent deletion let a guard regress
@@ -2180,6 +2212,14 @@ condition that retires it on purpose.
   > Owner decision 2026-10-10 ("Please do 1, 2, 4, and 5"), on the run report of the rus-loop fleet (rustrillo, wave 0, six Rust lanes on a 10-core laptop, 15:08 to 18:19): verifiers spent 159 of 203 minutes in tools, 53 of them on mutation and 41 on cold builds in throwaway copies; about eight fix rounds at 10 to 30 minutes each, some prose-only ("doc round 2").
 - recorded: 2026-10-10
 - expiry: a light-depth fleet ships a defect the falsification pass would have named
+
+### The verifier stays per slice: per-ticket cadence measured and dropped
+- rule: `/build` dispatches the verifier on every slice, at every depth; there is no per-ticket cadence. A `verifyCadence: per-ticket` lever (one verifier over the whole ticket after the last slice) was built on feat/fleet-lane-speed and removed before release by owner decision.
+- source: commands/build.md Step 3 and Boundaries ("Both gates, every slice")
+- evidence:
+  > Owner decision 2026-10-11, on the multi-rus-loop fleet (pv4, wave 2): a per-slice verifier's first pass took 1.5 min median (max 3.2, 33 runs). Under a 2-slice cap a per-ticket review would save at most 0.5 to 1 min a ticket, and it would move the 9 fix rounds the per-slice verifier caught (32 executor-minutes across 11 tickets) to the end of the ticket, where they cost more. The owner keeps a check that costs about a minute.
+- recorded: 2026-10-11
+- expiry: per-slice verifier first passes grow past a few minutes median, or its fix rounds stop landing before later slices build on the slice
 
 ## agents/provisioner.md
 

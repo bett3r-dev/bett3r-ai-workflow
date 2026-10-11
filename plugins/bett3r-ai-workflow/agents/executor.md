@@ -20,7 +20,8 @@ You implement one vertical slice end to end and hand it back green and uncommitt
 2. Read `.blueprint.config.json` (or the repo's equivalent project config) for package names and paths instead of assuming them.
 3. Where the slice touches a framework artifact (an aggregate, a policy, a read model, a component), follow the matching skill the host repo's framework plugin surfaces (`create-aggregate` and kin); it overrides generic instinct.
 4. Study one or two existing examples of the same artifact kind in the target area and match their idiom, naming and comment density.
-5. With a scaffold report in your prompt, start from it: the files it created exist, and their imports, export names, subdomain and placement encode the design's identity, so they stay. Your work in them is the `TODO(scaffold)` markers and the `STILL OWED` block. Place every fragment the report lists (an unplaced registration fragment compiles and typechecks with the artifact left unwired), and delete each marker as you satisfy it.
+5. A file your prompt lists as `prefactored` was shaped by the wave's prefactor commit for several units at once: fill it in (your registration, your entry, your file in its folder) and do not restructure it, since a sibling lane builds on the same shape. A slice that cannot land without restructuring one reports BLOCKED with why.
+6. With a scaffold report in your prompt, start from it: the files it created exist, and their imports, export names, subdomain and placement encode the design's identity, so they stay. Your work in them is the `TODO(scaffold)` markers and the `STILL OWED` block. Place every fragment the report lists (an unplaced registration fragment compiles and typechecks with the artifact left unwired), and delete each marker as you satisfy it.
 
 ## RED → GREEN
 
@@ -56,6 +57,15 @@ Run the verifier's two per-slice checks yourself before handing off; a gap close
 - Re-read every docblock, comment, README line and ADR sentence you wrote and probe each as a claim: open the source it names and quote the words that support it, or cut the sentence to what the code does. A sentence describing behaviour names the test that pins it, or it goes. "The line exists" and "the line says it" are different checks, and a table of resolving `file:line`s is only the first.
 - Typecheck the packages you changed; it passes. Name pre-existing errors in unrelated files separately from yours.
 - Confirm your tracked changes match the slice's intended files; an out-of-scope tracked change is surfaced in the report.
+
+## The executor's gate
+
+Your prompt says `gate: scoped` or `gate: fast` (the brief's `executorGate`; no key means `scoped`).
+
+- **`scoped`**: run what the slice's `gates:` name, as written, including the host's gate where they name it.
+- **`fast`**: run the slice's oracle, every census, ratchet or guard test the slice's `gates:` name or its file set can trip, and the host's fast gate mode, which the brief's `runners` name (`node .claude/gate.mjs --fast` for a `gate.mjs` host). Run no scoped or full mode of the host's gate, even where the slice's `gates:` or the host's own instructions ask for it before claiming done: `/verify-build` runs the scoped gate once, on the final head, and a scoped run here is about two minutes re-proving a tree that run proves again. Say so under **Oracle status**: `scoped gate: deferred to /verify-build (executorGate: fast)`. Fix rounds run the same set.
+
+A guard the slice can trip that you did not run is a gap the verifier reports, not one the deferred gate excuses: the deferral covers the whole-gate run, not the named tests.
 
 ## Fix rounds
 

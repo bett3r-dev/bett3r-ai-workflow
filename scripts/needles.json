@@ -1205,6 +1205,54 @@
       "issue": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
       "note": "No timing measurement inside a lane; it is recorded as owed and /merge-multi Step 3b takes it on an idle machine. RUS-11's bench ran 115 minutes at load 30-126."
+    },
+    {
+      "needle": "Any other reason to exceed N",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/skills/vertical-slicing/SKILL.md",
+      "note": "sliceCap: /plan cuts at most N slices without weakening a slicing rule; only independent seams that cannot share an oracle exceed it, named in sliceCapException:. 62-unit Rust fleet (pv4, 2026-10-11): ticket lane 39 min median, 29 of it executor; 3-4 slices a ticket meant ~4.2 executor runs."
+    },
+    {
+      "needle": "reason=slice-cap-exceeded",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/plan.md",
+      "note": "check-plan --slice-cap enforces the cap mechanically; /plan acts on the refusal by merging, never by raising the cap."
+    },
+    {
+      "needle": "scoped gate: deferred to /verify-build (executorGate: fast)",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/agents/executor.md",
+      "note": "executorGate: fast: executors ran the ~2 min scoped gate 51 times across 11 tickets; 62-unit Rust fleet (pv4, 2026-10-11): ticket lane 39 min median, 29 of it executor."
+    },
+    {
+      "needle": "even under `gateDeferred: true`",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/verify-build.md",
+      "note": "Under executorGate: fast, /verify-build runs the scoped gate on the final head even in a gateDeferred lane, so the deferral never leaves the scoped gate unrun."
+    },
+    {
+      "needle": "Decided in-lane, review after the fact",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/verify-build.md",
+      "note": "followUps: in-lane: every follow-up fixed without the owner is an in-lane-fork D-entry listed in the PR for review after the fact."
+    },
+    {
+      "needle": "2c \u2014 Sweep the deferred follow-ups",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/merge-multi.md",
+      "note": "Deferred follow-ups are swept on int after the wave merge under the same fork rule; only owner items become tickets."
+    },
+    {
+      "needle": "1b \u2014 Wave prefactor",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "note": "--wave-prefactor: one shared-scaffolding commit on int before a wave's lanes are cut; no unit's behaviour; append-only preferred; lanes fill in, don't restructure."
+    },
+    {
+      "needle": "mergeConflicts",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/merge-multi.md",
+      "note": "Conflicts per wave merge recorded on every run: the before/after measure for --wave-prefactor."
     }
   ]
 }
