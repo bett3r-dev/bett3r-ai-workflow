@@ -1,0 +1,10 @@
+#!/bin/sh
+# Launcher for scripts/cpu-pool.py — one machine-wide pool of compiler tokens that
+# every lane's cargo shares (up, env, status, refill, down), each ending in a
+# `CPU-POOL:v1` verdict line. Read reference/cpu-pool.md before running a fleet
+# wider than cores ÷ 4 on a compile-heavy host.
+#
+# Here for the same reason as `lane-step`: `CLAUDE_PLUGIN_ROOT` is substituted for
+# hook invocations only, while every enabled plugin's `bin/` is on `PATH`, keyed
+# by the version the session loaded.
+exec python3 "$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)/scripts/cpu-pool.py" "$@"

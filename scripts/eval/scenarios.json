@@ -697,7 +697,7 @@
     },
     {
       "id": "prototype-ui-reached",
-      "why": "prototype's SKILL.md names a URL search param and a floating bar. The default that actually decides the artifact — mount variants on an existing page (sub-shape A), three of them, hide the bar in production — lives only in UI.md. A session that stays on SKILL.md invents a vacuum route and ships the switcher.",
+      "why": "prototype's SKILL.md names a URL search param and a floating bar. The default that actually decides the artifact \u2014 mount variants on an existing page (sub-shape A), three of them, hide the bar in production \u2014 lives only in UI.md. A session that stays on SKILL.md invents a vacuum route and ships the switcher.",
       "guards_split": "skills/prototype/SKILL.md -> skills/prototype/UI.md",
       "artifact": "plugins/bett3r-ai-workflow/skills/prototype/SKILL.md",
       "prompt": "Read plugins/bett3r-ai-workflow/skills/prototype/SKILL.md. The user wants to see options for how the existing settings page should look. Build the prototype. State how many variants you generate, where they mount, and how the switcher is kept out of production.",
@@ -784,6 +784,27 @@
       ],
       "must_not_state": [],
       "_calibration": "UNVALIDATED: added in the same pass as the split; no session has been run. `read_db` and the re-grouping rule live only in the companion. A model could plausibly guess 'read the run dir' from priors, which is why the assertion is the specific command and the fingerprint, not the general idea."
+    },
+    {
+      "id": "cpu-pool-reached",
+      "why": "start-multi's step 2 says cores stop bounding lanes once the CPU pool is up, and points at reference/cpu-pool.md for what that means. An orchestrator that widens the fleet on the sentence alone, without opening the reference, never records cpuPool, never logs cpu-pool status, and never refills lost tokens at a wave boundary; the pool silently shrinks over a long run.",
+      "guards_split": "commands/start-multi.md -> reference/cpu-pool.md",
+      "artifact": "plugins/bett3r-ai-workflow/commands/start-multi.md",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/start-multi.md. You are running it on a 10-core, 32 GiB laptop whose test loop is a Rust compile. You are at step 2, sizing the fleet: the owner asked for --max-parallel 6, and `env` shows CARGO_MAKEFLAGS=--jobserver-auth=fifo:/Users/me/.cache/bett3r-cpu-pool/default.fifo. Say concretely what you record in run.yaml about the CPU pool, what you log at each dispatch, what bounds the lane count now that cores do not, and what you run at a wave boundary when `free=` is below `tokens=` with no cargo running. Name actual commands and keys.",
+      "must_open": [
+        "reference/cpu-pool.md"
+      ],
+      "must_state": [
+        [
+          "refill"
+        ],
+        [
+          "RAM",
+          "memory",
+          "disk"
+        ]
+      ],
+      "must_not_state": []
     }
   ]
 }

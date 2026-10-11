@@ -1253,6 +1253,12 @@
       "issue": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/merge-multi.md",
       "note": "Conflicts per wave merge recorded on every run: the before/after measure for --wave-prefactor."
+    },
+    {
+      "needle": "CARGO_MAKEFLAGS=--jobserver-auth=fifo:",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/reference/cpu-pool.md",
+      "note": "The CPU pool: one machine-wide jobserver pipe every lane's cargo joins through the environment; CARGO_MAKEFLAGS not MAKEFLAGS so macOS make 3.81 sees nothing. Measured 2026-10-11: six builds, peak 14 rustc with 9 tokens vs 57 uncapped."
     }
   ]
 }

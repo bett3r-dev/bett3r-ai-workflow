@@ -155,6 +155,14 @@ jobs:
           sh scripts/test-worktree-pool.sh
           POOL_SH=dash dash scripts/test-worktree-pool.sh
           POOL_SH=bash bash scripts/test-worktree-pool.sh
+      # One machine-wide compiler token pipe every lane's cargo joins through
+      # CARGO_MAKEFLAGS (reference/cpu-pool.md). The suite drives the real script
+      # over a throwaway pipe with a python stand-in for cargo's token handling.
+      - name: Test the CPU pool (throwaway pipe)
+        run: |
+          sh scripts/test-cpu-pool.sh
+          POOL_SH=dash dash scripts/test-cpu-pool.sh
+          POOL_SH=bash bash scripts/test-cpu-pool.sh
       # A fleet orchestrator ends its context at a wave boundary and reports
       # `FLEET-STEP:v1 … waves=k/N` (GH-429); `bin/fleet-loop` is the driver that
       # decides whether to start another one. That decision is control flow in a
