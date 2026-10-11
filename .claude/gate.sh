@@ -210,6 +210,11 @@ sh scripts/test-worktree-pool.sh
 POOL_SH=dash dash scripts/test-worktree-pool.sh
 POOL_SH=bash bash scripts/test-worktree-pool.sh
 EOF
+step cpu-pool full 'plugins/bett3r-ai-workflow/bin/cpu-pool' 'plugins/bett3r-ai-workflow/scripts/cpu-pool.py' 'plugins/bett3r-ai-workflow/commands/cpu-pool.md' 'scripts/test-cpu-pool.sh' <<'EOF'
+sh scripts/test-cpu-pool.sh
+POOL_SH=dash dash scripts/test-cpu-pool.sh
+POOL_SH=bash bash scripts/test-cpu-pool.sh
+EOF
 # Surface: the driver, its launcher, the parser it reads the verdict through (a
 # change to the line grammar changes what the driver decides), the orchestrator
 # command whose yield it consumes, and the suite itself.

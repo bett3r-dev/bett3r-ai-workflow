@@ -21,7 +21,7 @@ Fleet:
 | Multi | `/bett3r-ai-workflow:start-multi` | Drives N units through the flow unattended, one worktree each, in parallel where safe. Every unit PR targets one integration branch, `int/<run-id>`; the run ends at N PRs, merging nothing. `/bett3r-ai-workflow:design-multi` does the same for N designs, batching the genuine forks into one human sitting. |
 | Land | `/bett3r-ai-workflow:merge-multi` | After review: merges the unit PRs into the integration branch (conflicts resolved once), runs the gate once there, opens one integration PR. `--land` merges it. Run it in a fresh session. |
 
-Utilities: `/bett3r-ai-workflow:commit` (logically grouped commits for ad-hoc work) and `/bett3r-ai-workflow:run-report` (where a unit's time and tokens went, read from the transcripts, so any past branch can be reported; `--aggregate` compares runs by plugin version).
+Utilities: `/bett3r-ai-workflow:commit` (logically grouped commits for ad-hoc work) and `/bett3r-ai-workflow:run-report` (where a unit's time and tokens went, read from the transcripts, so any past branch can be reported; `--aggregate` compares runs by plugin version), and `/bett3r-ai-workflow:cpu-pool` (lift the machine-wide compiler token pool before a compile-heavy fleet, and get the line that launches the orchestrator inside it).
 
 ## The gate is the host repo's
 
