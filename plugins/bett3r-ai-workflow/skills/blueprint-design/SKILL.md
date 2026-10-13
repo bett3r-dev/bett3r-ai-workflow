@@ -88,6 +88,10 @@ When a board edit is not design intent (the extractor mislabelled something, or 
 - The diff may look bigger than the change: the store rewrites through a JSON round-trip, normalising whitespace and key order.
 - A refusal is information: `RECLASSIFY_WOULD_BE_STALE` means an id the extracted graph lacks, or an edge whose endpoint is still a proposal. The error names the alternative, and the correction still applies in the design layer.
 
+## modify: every existing artifact the work touches
+
+Every existing artifact the work intends to touch gets a `modify` entry — a command's data schema, an aggregate's logic, a policy, an algorithm, an event's structure or payload, a read model's shape, anything — or the board shows it unchanged. When a settable field changes (label, subdomain, resourceKey, queries; rule, errorCodes, generic on an invariant), put it in `set`. When none does, send an empty `set` with a `note` describing the change ("adds `discountCode` to the payload"); an empty `set` with no note is refused. A proposal of this design is already new: modify it only to rename or re-home it.
+
 ## A label is a code-identity contract
 
 A proposed node's id derives from `(subdomain, type, label)`, and `/build`'s scaffold step generates the artifact from that id, so renaming or re-homing a proposal renames code not yet written: say so before you `modify` one. After the artifact exists, a board rename without the code rename leaves the proposal never `satisfied` and a phantom artifact on the board while everything compiles. Draw the edges the scaffolder reads: a policy needs its `issues` edge to be placed, a command its `handled-by` edge to have a file; both are refused rather than guessed.
@@ -103,7 +107,7 @@ Board collaboration happens in the main checkout. A fleet worktree has no `.blue
 
 ## Writing and reading
 
-The verbs are `propose`, `modify`, `remove`, `reclassify`, `comment`, `resolve`, `get_flow`, `get_design`, `read_changes`, `mark_synced`, `status`. **A refused verb is a fact to report**, never a reason to reach for one that lands or for a file edit: say what you tried, quote what it said, let the user decide.
+The verbs are `propose`, `modify`, `remove`, `reclassify`, `comment`, `resolve`, `get_flow`, `get_design`, `read_changes`, `mark_synced`, `status`. `modify` is how the board learns an existing artifact changes: one entry per artifact the work touches, a `note` where no field holds the change. **A refused verb is a fact to report**, never a reason to reach for one that lands or for a file edit: say what you tried, quote what it said, let the user decide.
 
 **Batch.** Arrays in, one write, one op out: ten proposals in one `propose` is one feed entry the user reads.
 
