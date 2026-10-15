@@ -276,6 +276,11 @@ step skill-shadows full 'plugins/bett3r-ai-workflow/bin/check-skill-shadows' 'pl
 sh scripts/test-skill-shadows.sh
 SHADOW_PY=python3 sh scripts/test-skill-shadows.sh
 EOF
+step skill-path full 'plugins/bett3r-ai-workflow/bin/skill-path' 'scripts/test-skill-path.sh' 'scripts/fixtures/skill-path/*' <<'EOF'
+sh scripts/test-skill-path.sh
+dash scripts/test-skill-path.sh
+bash scripts/test-skill-path.sh
+EOF
 step gate-drift fast <<'EOF'
 sh scripts/test-gate-drift.sh
 EOF
