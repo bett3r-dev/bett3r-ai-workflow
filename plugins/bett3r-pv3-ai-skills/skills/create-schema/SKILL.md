@@ -32,7 +32,7 @@ the first item in every generated file's `STILL OWED` block.
 ## Starting from a scaffold
 
 When the scaffold already wrote the placeholder schemas (the prose above), skip generating the files and the exports. Keep every export name, label-derived name and subdomain it
-wrote: they are id-exact, the identity the extractor reads back. Each fragment stays in the types module its command or event imports. Work only the `TODO(scaffold)` markers and
+wrote: they are the contract the command, event or read model imports them by. Each fragment stays in the types module its command or event imports. Work only the `TODO(scaffold)` markers and
 the file's `STILL OWED` block, and delete each marker as you satisfy it. Finish each placeholder as the two bullets above say: replaced in place for a companion fragment, rewritten in the domain package for an inline one. The rest of this
 skill still governs the content you write and the Final Checklist.
 

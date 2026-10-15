@@ -10,7 +10,7 @@ Generate co-located test files for PV3 DDD components using Jest and Given/When/
 
 ## Starting from a scaffold
 
-When the scaffold already wrote test files, their `it.todo` cases sit behind a `TODO(scaffold)` marker; skip generating those files. Keep each case's title, its
+When the scaffold already wrote test files, their `it.todo` cases sit behind a `TODO(scaffold)` marker; skip generating those files. Keep each case's title, and a scenario case's
 `<scenarioId>: ` prefix above all: the verifier's pending-test check keys on that prefix and the scaffold matches it to tell a test already landed, so rewording a title while turning `it.todo` into `it` breaks both silently. Work only the `TODO(scaffold)` markers (every scaffolded case carries one) and
 the `STILL OWED` block where there is one (a file holding integration cases), and delete each marker as you satisfy it. Turn each `it.todo` into a real Given/When/Then case, and add the required fixtures the reference lists. The rest of this
 skill still governs the content you write and the Final Checklist.
