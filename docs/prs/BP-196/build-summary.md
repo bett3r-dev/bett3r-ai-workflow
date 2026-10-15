@@ -42,15 +42,15 @@ slices:
   - id: 4
     name: PV3 create-* skills open with 'Starting from a scaffold' (keep the identity, work the markers)
     origin: plan
-    mode: null
-    modeReason: null
-    commit: null
-    passed: false
-    attempts: 0
-    fixRounds: []
-    verifier: null
-    redBeforeGreen: null
-    postDesignDecisions: []
+    mode: sequential
+    modeReason: ready-alone
+    commit: 056102d
+    passed: true
+    attempts: 3
+    fixRounds: [{cause: oracle-wrong, executor: fresh}, {cause: doc-wording, executor: fresh}]
+    verifier: retry
+    redBeforeGreen: true
+    postDesignDecisions: [D8, D9]
 ---
 ## What shipped
-Slices 1-3 landed. Slice 4 was not started: the slice budget (3) was reached, so the run yielded; re-dispatch /build to resume from passes: true. Slice 1 needed two fix rounds (worktree-aware project-scope root, local/managed scopes, malformed manifests, test leaking GIT_DIR). The pool was not used (sequential, tracer first; pure markdown/shell repo). Gate: scoped (sh .claude/gate.sh) PASS each slice; its blind spot is the rest of the repo, and flow-seams does not trigger on plugins/bett3r-pv3-ai-skills (slice 4 must run it explicitly). Owner items: D3 (project-over-user precedence vs Claude Code), D4 (four unrelayed dispatch sites), D7 (resume without BASE). No plugin.json bump (F19); intended bump past 0.110.0 belongs in the PR body.
+All four slices landed (c55e6b6, f2cb111, 8d356be, 056102d). Slice 4: each PV3 create-* skill opens with '## Starting from a scaffold'; flow-seams now triggers on plugins/bett3r-pv3-ai-skills. Fix round 1 was oracle-wrong plus doc findings (create-schema STILL OWED was satisfied by old prose); round 2 was a doc round whose diff I inspected (four prose sentences) and committed without a verifier re-check, so the final verifier verdict on record is the round-1 re-check RETRY, all [doc], then fixed. Gate: scoped (the slice's oracle sh scripts/test-flow-seams.sh 819 passed, test-gate-drift 65, validate-plugins 60, check-artifact-links, check-needles 161); blind spot: the rest of the repo, no whole-gate run. Pool not used. Owner items: D3, D4, D7, D9 (create-tests wording is it.todo until BP-269 lands). No plugin.json bump (F19); intended bumps (bett3r-ai-workflow past 0.110.0, bett3r-pv3-ai-skills past 0.17.0 ordered with BP-198) belong in the PR body.

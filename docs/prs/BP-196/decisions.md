@@ -53,3 +53,19 @@ sources: [code:start-multi.md:32, code:fleet-loop.py:284-291]
 rejected: fixing it in slice 3 — not a named mitigation, and the same state already arises when a step-0 tick ends before BASE is pinned
 supersedes: —
 A later /start-multi without --fresh matches "Resume when run.yaml exists" with no BASE; it fails loudly at step 2 (origin/int/<run-id> missing). Follow-up: a run.yaml without createdBaseSha resumes as fresh and re-runs the check, or the refusal tells the operator to re-run with --fresh; pin in the census. Also optional: ADR-016's "once per /build run" parenthesis omits /verify-build's in-lane resolution.
+
+## D8 — Scaffold section keeps names, label-derived name, subdomain and module folder; create-tests keeps the scenario-id title prefix
+kind: false-premise
+step: build · slice: 4 · decidedBy: verifier
+sources: [code:subdomainFromPath.ts (pv3-library-blueprint-extractor), code:placement.ts (pv3-library-blueprint-scaffold), code:verifier.md:26, design:F2]
+rejected: kixie's "keep the folder: not part of the node id, but couplings attach to it" — false for PV3, where the module folder is the subdomain and the subdomain is in the node id; create-tests keeping "export name, id, subdomain" — test files carry none of them, the identity is the `<scenarioId>: ` title prefix
+supersedes: —
+The design cites kixie's create-aggregate wording as the shape; copying its folder rationale into PV3 was wrong (the verifier's own first-pass recommendation, withdrawn on re-check). Three doc rounds' worth of findings (F1 oracle-wrong: create-schema STILL OWED satisfied by pre-existing prose, section moved below it; F2/F3/F4/G1 doc-wording). The final doc round was confirmed by diff inspection (four prose sentences, no re-check dispatched).
+
+## D9 — create-tests describes it.todo, not it.skip
+kind: deviation
+step: build · slice: 4 · decidedBy: executor
+sources: [design:F2, code:scaffold-from-design/SKILL.md:128, code:pv3 emit/tests.ts]
+rejected: it.skip-with-body wording — BP-269 (ADR-041) has not landed in this tree and pv3's emitter on master still writes it.todo
+supersedes: —
+The PR body must say so; if BP-269 lands first, create-tests' scaffold section needs the it.skip-with-body wording. The kixie reference wording was unreachable to the executor; the verifier read it on this machine.
