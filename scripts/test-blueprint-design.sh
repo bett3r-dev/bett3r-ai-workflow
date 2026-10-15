@@ -768,7 +768,34 @@ assert_md "$BOARD_MD" 'the .mcp.json edit merges rather than replaces' \
 # The board is a projection. Its absence costs a second screen, not the design.
 assert_md "$BOARD_MD" 'a board that is not running does not block the command' \
   'Never block the design on the board'
-assert_md "$BOARD_MD" 'it hands the user the launch line their repo uses' 'yarn blueprint:board'
+
+# The launch line is the preflight's (its `launch:` sub-line, under the
+# `board_script:` verdict), so the doc defers to it rather than re-deriving it:
+# a derivation rule in prose is one the agent re-runs every time and nothing
+# tests. The refutes keep blueprint's pre-`src/` layout and the `link:` rule
+# (which matches no consumer) from coming back.
+assert_md "$BOARD_MD" 'it offers the launch line the preflight printed' 'launch line'
+assert_md "$BOARD_MD" 'it names the script the launch line runs' 'run blueprint:board'
+refute_md "$BOARD_MD" 'it carries no launch-line derivation rule of its own' 'packageManager'
+refute_md "$BOARD_MD" 'it names no board bin under the old packages/ layout' 'packages/sticky-notes-board'
+refute_md "$BOARD_MD" 'it names no MCP bin under the old packages/ layout' 'packages/blueprint-mcp'
+refute_md "$BOARD_MD" 'it does not resolve the checkout from a link: dependency' 'link:../blueprint'
+assert_md "$BOARD_MD" 'the .mcp.json template points at the src/ layout bin' \
+  '<abs path to the blueprint checkout>/src/services/blueprint-mcp/bin/blueprint-mcp.mjs'
+assert_md "$BOARD_MD" 'checkout resolution consults $BLUEPRINT_CHECKOUT' '`$BLUEPRINT_CHECKOUT`'
+assert_md "$BOARD_MD" 'checkout resolution tries the sibling checkout' 'sibling `../blueprint`'
+assert_md "$BOARD_MD" 'checkout resolution takes the first candidate holding the MCP bin, starting with the path the repo already uses' \
+  'the first of these that holds `src/services/blueprint-mcp/bin/blueprint-mcp.mjs`: the path the repo already uses'
+assert_md "$BOARD_MD" 'checkout resolution tries $BLUEPRINT_CHECKOUT before the sibling, then asks' \
+  '`$BLUEPRINT_CHECKOUT`; the sibling `../blueprint`. If none does, ask.'
+assert_md "$BOARD_MD" 'the launch line resolves the checkout the same way registration does' \
+  'with `<blueprint checkout>` resolved as in §2'
+assert_md "$BOARD_MD" 'a launch with no board build is named by its exit' 'no board build at'
+assert_md "$BOARD_MD" 'a board build with no index.html is named by its exit too' \
+  '`the board build at … has no index.html`'
+assert_md "$BOARD_MD" 'the board-build line is handed over' 'yarn workspace sticky-notes-board build'
+assert_md "$BOARD_MD" 'the board build is never run unasked' 'never run it unasked'
+assert_md "$BOARD_MD" 'the server is not pinned to one checkout' 'Do not set `BLUEPRINT_REPO_PATH`'
 
 # These two are asserted on BOARD-SETUP.md rather than on the command *because*
 # the command still contains both literals — the preflight probes
