@@ -61,7 +61,7 @@ A map is `structureVersion: 2`. Two committed files describe it:
   skills/design-map/map.schema.json           the vocabulary: the closed sets
       (fork status kind, decided source, node level, map shape), a
       byte-identical copy of what blueprint emits
-      (packages/blueprint-schema/schema/map.schema.json). Never hand-edited.
+      (src/packages/backend/blueprint-schema/schema/map.schema.json). Never hand-edited.
   skills/design-map/map-structure.schema.json the structure: nodes, forks,
       cards, options, links. It names every closed set by a `$ref` into
       map.schema.json, resolved from its own directory, so the values are

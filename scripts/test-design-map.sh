@@ -24,8 +24,8 @@
 #
 # BLUEPRINT_CHECKOUT, when set, names an blueprint checkout: the vocabulary copy
 # skills/design-map/map.schema.json is compared byte for byte with its
-# packages/blueprint-schema/schema/map.schema.json (and with serialiseMapSchema()
-# when packages/blueprint-schema/build/esm/index.js exists). Unset, that case prints
+# src/packages/backend/blueprint-schema/schema/map.schema.json (and with serialiseMapSchema()
+# when src/packages/backend/blueprint-schema/build/esm/index.js exists). Unset, that case prints
 # `SKIP reason=no-blueprint-checkout` and is counted as skipped, never as passed.
 
 ROOT=$( CDPATH= cd -- "$( dirname -- "$0" )/.." && pwd )
@@ -297,9 +297,9 @@ stale(){
 }
 skipped=0
 if [ -n "${BLUEPRINT_CHECKOUT:-}" ]; then
-  EMITTED="$BLUEPRINT_CHECKOUT/packages/blueprint-schema/schema/map.schema.json"
+  EMITTED="$BLUEPRINT_CHECKOUT/src/packages/backend/blueprint-schema/schema/map.schema.json"
   if [ -f "$EMITTED" ]; then
-    check 'the copy equals $BLUEPRINT_CHECKOUT packages/blueprint-schema/schema/map.schema.json' \
+    check 'the copy equals $BLUEPRINT_CHECKOUT src/packages/backend/blueprint-schema/schema/map.schema.json' \
       "$( stale "$VOCAB" "$EMITTED" )" fresh "$EMITTED"
   else
     fail 'BLUEPRINT_CHECKOUT holds the emitted map.schema.json' "no file at $EMITTED"
@@ -312,7 +312,7 @@ i = b.index(b"decided"); b[i] = ord("D")
 open(p, "wb").write(bytes(b))
 PY
   check 'one planted byte in a temp copy is detected as stale' "$( stale "$TMP/planted.json" "$EMITTED" )" stale
-  BUILT="$BLUEPRINT_CHECKOUT/packages/blueprint-schema/build/esm/index.js"
+  BUILT="$BLUEPRINT_CHECKOUT/src/packages/backend/blueprint-schema/build/esm/index.js"
   if [ -f "$BUILT" ]; then
     # Serialise to stdout only: the package's emit script writes into the checkout.
     if node --input-type=module -e 'const m = await import(process.argv[1]); process.stdout.write(m.serialiseMapSchema());' \

@@ -154,7 +154,7 @@
       }
     },
     "link": {
-      "$comment": "blueprint MapLink (packages/blueprint-schema/src/map-structure.ts): an ES node id to a map deliverable.",
+      "$comment": "blueprint MapLink (src/packages/backend/blueprint-schema/src/map-structure.ts): an ES node id to a map deliverable.",
       "type": "object",
       "required": ["esId", "deliverableId"],
       "additionalProperties": false,

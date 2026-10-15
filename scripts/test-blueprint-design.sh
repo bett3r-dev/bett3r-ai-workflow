@@ -777,8 +777,12 @@ assert_md "$BOARD_MD" 'a board that is not running does not block the command' \
 assert_md "$BOARD_MD" 'it offers the launch line the preflight printed' 'launch line'
 assert_md "$BOARD_MD" 'it names the script the launch line runs' 'run blueprint:board'
 refute_md "$BOARD_MD" 'it carries no launch-line derivation rule of its own' 'packageManager'
-refute_md "$BOARD_MD" 'it names no board bin under the old packages/ layout' 'packages/sticky-notes-board'
-refute_md "$BOARD_MD" 'it names no MCP bin under the old packages/ layout' 'packages/blueprint-mcp'
+# The old root is spliced in from a variable so these needles are not
+# themselves hits for the stale-path census (BP-173 D8), which greps
+# plugins/ and scripts/ for that layout's literal paths.
+OLD_ROOT=packages
+refute_md "$BOARD_MD" 'it names no board bin under the old packages/ layout' "$OLD_ROOT/sticky-notes-board"
+refute_md "$BOARD_MD" 'it names no MCP bin under the old packages/ layout' "$OLD_ROOT/blueprint-mcp"
 refute_md "$BOARD_MD" 'it does not resolve the checkout from a link: dependency' 'link:../blueprint'
 assert_md "$BOARD_MD" 'the .mcp.json template points at the src/ layout bin' \
   '<abs path to the blueprint checkout>/src/services/blueprint-mcp/bin/blueprint-mcp.mjs'
