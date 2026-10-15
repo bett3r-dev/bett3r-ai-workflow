@@ -347,6 +347,32 @@
       "_calibration": "must_open is deliberately empty: the routing lives inline in build.md, so there is no pointer to follow. What is asserted is that both gate agents are named AND that a model is attached to each dispatch \u2014 an answer that dispatches the verifier without naming opus has read the step and skipped the policy, which is the exact failure."
     },
     {
+      "id": "build-declared-scaffold-skill-relay",
+      "why": "Neither the executor nor the verifier holds the Skill tool (ADR-012's listing cost; a lane's step-lane-file has none either), so the framework skill a host declares in designTooling.scaffoldSkill reaches them only as a file path that /build resolves through bin/skill-path and relays on a `framework skill:` line. The relay is inline in build.md and costs nothing to skip: a dispatch without the line still works, and the worker writes framework code from generic instinct, which is what it looked like before BP-196. Nothing in the tree distinguishes a relayed skill from a forgotten one.",
+      "guards_split": "commands/build.md -> agents/executor.md, agents/verifier.md (the framework skill relayed by resolved file through bin/skill-path, not a reference file)",
+      "artifact": "plugins/bett3r-ai-workflow/commands/build.md",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/build.md. You are running /build in a host repo whose .blueprint.config.json declares designTooling.scaffoldSkill as bett3r-pv3-ai-skills:scaffold-from-design. Slice 2 of 3 has designs: [inventory-aggregate] and is about to start. State concretely the command you run to find the framework skill and how you read its result, then write the exact framework-skill line you put in the executor's prompt and in the verifier's prompt, with placeholders for any path you cannot know.",
+      "must_open": [],
+      "must_state": [
+        [
+          "skill-path"
+        ],
+        [
+          "framework skill:"
+        ],
+        [
+          "plugin root",
+          "root="
+        ]
+      ],
+      "must_not_state": [
+        "cannot load",
+        "Skill tool to load",
+        "call the Skill tool"
+      ],
+      "_calibration": "must_open is deliberately empty: the relay lives inline in build.md Step 3 item 0, and skill-path is a script, not a reference file. What is asserted is that the resolution names skill-path and that the line handed to both workers is the `framework skill:` line with its plugin root; an answer that loads the skill through the Skill tool, or says the session cannot load it, has read past the relay."
+    },
+    {
       "id": "context-providers-reached",
       "why": "Seam B declares an extension point in /design Step 1 and moves its whole contract behind a pointer. The rules that only exist behind it are the ones that keep it harmless: failure is tolerated (a throwing or timing-out provider must NOT fail /design), zero providers is the normal case and is silent, and a hook was rejected on this repo's own measured evidence (blueprint-pending.sh). A session that reads past the pointer will improvise the failure policy, and the improvised answer \u2014 surface the error, or abort grounding \u2014 is the one this seam exists to prevent.",
       "guards_split": "commands/design.md -> CONTEXT-PROVIDERS.md",

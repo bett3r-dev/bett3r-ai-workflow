@@ -4041,6 +4041,182 @@ for term in 'Scaffold commit' 'Scaffold report' 'Untouched stub' 'Held element' 
 done
 present "$README_MD" 'docs/adr/ADR-015' 'the README glossary points at ADR-015 for the why'
 
+# ---------------------------------------------------------------------------
+printf '\nBP-196 — the framework skill reaches the executor and the verifier by resolved file\n\n'
+# ---------------------------------------------------------------------------
+# Neither worker holds the Skill tool (ADR-012's listing cost, the step-lane-file
+# pin above), so the framework skill the host declares
+# (`designTooling.scaffoldSkill`) reaches them only as a file path: /build
+# resolves it through bin/skill-path and every executor and verifier dispatch
+# carries a `framework skill: <file> (plugin root <root>)` line. These are
+# presence pins on prose; the resolution itself is executed by
+# scripts/test-skill-path.sh.
+EXECUTOR_MD="$PLUGIN/agents/executor.md"
+VERIFIER_MD="$PLUGIN/agents/verifier.md"
+
+# One numbered item of /build's Step 3, whole (each item is one paragraph line).
+step3_item(){
+  awk -v n="$1. **" 'index($0, "## Step 3")==1 { s=1; next } /^## / { s=0 } s && index($0, n)==1' "$BUILD_MD"
+}
+for item in 0 1 3; do
+  text=$( step3_item "$item" )
+  if [ -z "$text" ]; then
+    fail "/build Step 3 item $item is found (the relay census reads it)" "no line starting '$item. **' under '## Step 3'"
+    continue
+  fi
+  for lit in 'framework skill:' 'skill-path'; do
+    case $text in
+      *"$lit"*) pass "/build Step 3 item $item carries '$lit' (the framework skill relay)" ;;
+      *) fail "/build Step 3 item $item carries '$lit' (the framework skill relay)" \
+              "expected: '$lit' in the item" "actual:   absent from: $( printf '%s' "$text" | cut -c1-120 )…" ;;
+    esac
+  done
+done
+# The no-declaration path: the prompt says so, the executor records it, nothing searches a cache.
+present "$BUILD_MD" '`framework skill: none declared`' '/build hands `framework skill: none declared` when no scaffoldSkill is declared (D9)'
+present "$EXECUTOR_MD" '`framework skill: none declared`' 'the executor knows the none-declared line'
+
+# How item 0 resolves: once, by the verdict line, refusing rather than guessing.
+present "$BUILD_MD" 'resolved once per run, before the first slice'"'"'s executor' '/build resolves the framework skill once per run (D6)'
+present "$BUILD_MD" 'read its last line (`SKILL-PATH:v1`), not its exit code' '/build reads skill-path'"'"'s verdict line, not its exit code'
+present "$BUILD_MD" '`outcome=error` ends the run `blocked-on` before any executor is dispatched' '/build dispatches no worker on an unresolved framework skill (F1)'
+present "$BUILD_MD" 'opened by its resolved file and never through the Skill tool' '/build Step 3 item 0 reads the bridge by file, not through the Skill tool (D6)'
+present "$BUILD_MD" 'no plugin cache is searched for one' '/build searches no cache when nothing is declared (D9)'
+present "$EXECUTOR_MD" 'you search no plugin cache for a skill' 'the executor searches no cache on none declared (D9)'
+present "$EXECUTOR_MD" 'is a deviation you record' 'the executor records none declared as a deviation (D9)'
+
+# A fix round's fresh executor or verifier is a dispatch too (Step 3 item 4, *Fix rounds*).
+present "$BUILD_MD" 'its own previous report and the `framework skill:` line' '/build hands a fresh fix-round executor the framework skill line'
+present "$BUILD_MD" 'a fresh verifier also gets the `framework skill:` line' '/build hands a fresh re-check verifier the framework skill line'
+
+# Item 0's old clause promised a skill the session could not load; it is replaced, not appended to.
+item0=$( step3_item 0 )
+case $item0 in
+  *'which this session cannot load'*) fail "/build Step 3 item 0 no longer says 'which this session cannot load'" "expected: absent" "actual:   present" ;;
+  *) pass "/build Step 3 item 0 no longer says 'which this session cannot load'" ;;
+esac
+
+# /verify-build's in-lane fix dispatches the executor too (Step 3a).
+fixline=$( grep -F '**Fix in the lane**' "$VERIFY_BUILD_MD" )
+for lit in 'framework skill:' 'skill-path'; do
+  case $fixline in
+    *"$lit"*) pass "/verify-build's in-lane executor dispatch carries '$lit'" ;;
+    *) fail "/verify-build's in-lane executor dispatch carries '$lit'" "expected: '$lit' in the Fix-in-the-lane line" "actual:   absent" ;;
+  esac
+done
+
+# Rule 3 and the verifier's checklist step name the relayed file, and no longer
+# point at a skill the plugin "surfaces" (which neither worker can load).
+for f in "$EXECUTOR_MD" "$VERIFIER_MD"; do
+  present "$f" 'framework skill: <file> (plugin root <root>)' "${f##*/} reads the framework skill from the relayed file line"
+  if grep -qF 'surfaces (`create-aggregate`' "$( norm "$f" )"; then
+    fail "${f##*/} no longer promises the skill its framework plugin 'surfaces'" "expected: absent" "actual:   present: surfaces (\`create-aggregate\`"
+  else
+    pass "${f##*/} no longer promises the skill its framework plugin 'surfaces'"
+  fi
+done
+present "$EXECUTOR_MD" 'skill-path <plugin>:<skill>' 'executor rule 3 routes other qualified names through skill-path (D4)'
+present "$EXECUTOR_MD" '<root>/skills/<skill>/SKILL.md' 'executor rule 3 maps a same-plugin name under the plugin root (D4)'
+present "$EXECUTOR_MD" '${CLAUDE_PLUGIN_ROOT}` is `<root>`' 'executor rule 3 maps ${CLAUDE_PLUGIN_ROOT} to the plugin root (D4)'
+present "$VERIFIER_MD" 'Final Checklist' 'the verifier checks the routed create-* skill'"'"'s Final Checklist (D5)'
+
+# Pin (green at base too): neither worker holds Skill or SlashCommand.
+for f in "$EXECUTOR_MD" "$VERIFIER_MD"; do
+  "$MARKER_PY" - "$f" > "$TMP/worker-tools" 2>"$TMP/err" <<'PYT'
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+m = re.match(r"\A---\r?\n(.*?)\r?\n---\r?\n", text, re.S)
+if not m:
+    sys.exit("no frontmatter block")
+lines = m.group(1).splitlines()
+tools = []
+for i, line in enumerate(lines):
+    key, sep, value = line.partition(":")
+    if line.startswith((" ", "\t", "-", "#")) or not sep or key.strip() != "tools":
+        continue
+    value = value.split(" #", 1)[0].strip()
+    if value:
+        tools += [t.strip() for t in value.strip("[]").split(",") if t.strip()]
+        break
+    for nxt in lines[i + 1:]:
+        if not nxt.strip() or nxt.lstrip().startswith("#"):
+            continue
+        if not nxt.startswith((" ", "\t", "-")):
+            break
+        tools.append(nxt.lstrip(" \t-").split(" #", 1)[0].strip())
+    break
+if not tools:
+    sys.exit("no tools: allowlist")
+print("\n".join(tools))
+PYT
+  if [ $? -ne 0 ]; then
+    fail "${f##*/} declares a tools: allowlist" "$( cat "$TMP/err" )"
+    continue
+  fi
+  grep -qx 'Read' "$TMP/worker-tools" && pass "${f##*/} tools: parsed (holds Read)" \
+    || fail "${f##*/} tools: parsed (holds Read)" "tools: $( tr '\n' ' ' < "$TMP/worker-tools" )"
+  for forbidden in Skill SlashCommand; do
+    if grep -qx "$forbidden" "$TMP/worker-tools"; then
+      fail "${f##*/} reads skills by file: no $forbidden in tools:" "tools: $( tr '\n' ' ' < "$TMP/worker-tools" )"
+    else
+      pass "${f##*/} reads skills by file: no $forbidden in tools:"
+    fi
+  done
+done
+
+# Structural: every line that dispatches the executor or the verifier carries the
+# framework skill line. The detector is controlled positively: it must find
+# /build's two dispatch lines (Step 3 items 1 and 3) and /verify-build's in-lane
+# fix, or it is not looking. Dispatch sites outside /build and /verify-build that
+# predate BP-196 and sit outside its design's edit list are named here one by
+# one (the slice's finding); any other site lacking the line fails.
+"$MARKER_PY" - "$PLUGIN" > "$TMP/dispatch-sites" 2>"$TMP/err" <<'PYT'
+import pathlib, re, sys
+plugin = pathlib.Path(sys.argv[1])
+DISPATCH = re.compile(r"(?i)\bdispatch\w*\b[^.]{0,200}?`(executor|verifier)`|`(executor|verifier)` you hand")
+# Pre-BP-196 sites outside /build and /verify-build, outside the design's edit
+# list: (file, a phrase unique to the site). Each is the slice's finding.
+NAMED = (
+    ("commands/start-multi.md", "Wave prefactor"),
+    ("commands/start-multi.md", "as a backfill before teardown"),
+    ("commands/merge-multi.md", "follow-up <unit>/F<n>"),
+    ("commands/design.md", "an `executor` you hand the worklist"),
+)
+for sub in ("commands", "agents", "skills", "reference"):
+    for p in sorted((plugin / sub).rglob("*.md")):
+        rel = p.relative_to(plugin).as_posix()
+        for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+            if not DISPATCH.search(line):
+                continue
+            if "framework skill:" in line:
+                state = "carries"
+            elif rel not in ("commands/build.md", "commands/verify-build.md") and any(rel == f and k in line for f, k in NAMED):
+                state = "named"
+            else:
+                state = "lacks"
+            print(f"{rel}\t{n}\t{state}\t{line[:110]}")
+PYT
+if [ $? -ne 0 ]; then
+  fail 'the dispatch-site census runs' "$( cat "$TMP/err" )"
+else
+  for ctl in 'commands/build.md|1. **Implement' 'commands/build.md|3. **Judgment gate' 'commands/verify-build.md|- **Fix in the lane'; do
+    cf=${ctl%%|*}; ct=${ctl#*|}
+    if awk -F '\t' -v f="$cf" -v t="$ct" '$1==f && index($4,t)==1 { found=1 } END { exit !found }' "$TMP/dispatch-sites"; then
+      pass "dispatch census finds $cf '$ct' (positive control)"
+    else
+      fail "dispatch census finds $cf '$ct' (positive control)" "sites found: $( cut -f1,2 "$TMP/dispatch-sites" | tr '\n\t' ' :' )"
+    fi
+  done
+  tab=$( printf '\t' )
+  while IFS=$tab read -r file line state text; do
+    case $state in
+      carries) pass "dispatch site $file:$line carries the framework skill line" ;;
+      named) pass "dispatch site $file:$line is a named pre-BP-196 site outside the design's edit list (finding, not covered)" ;;
+      *) fail "dispatch site $file:$line carries the framework skill line" "expected: 'framework skill:' on the line" "actual:   $text" ;;
+    esac
+  done < "$TMP/dispatch-sites"
+fi
+
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"
   exit 0
