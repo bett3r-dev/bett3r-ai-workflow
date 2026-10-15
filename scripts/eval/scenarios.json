@@ -373,6 +373,39 @@
       "_calibration": "must_open is deliberately empty: the relay lives inline in build.md Step 3 item 0, and skill-path is a script, not a reference file. What is asserted is that the resolution names skill-path and that the line handed to both workers is the `framework skill:` line with its plugin root; an answer that loads the skill through the Skill tool, or says the session cannot load it, has read past the relay."
     },
     {
+      "id": "build-scaffold-skill-not-installed",
+      "why": "/build, scaffoldSkill names an uninstalled plugin. F1 (owner, refuse-before-start): a declared framework skill that skill-path cannot resolve is a fact about the machine, so /build Step 1 item 5 ends the run blocked-on before Step 2, before any executor is dispatched, naming the plugin, the reason and the install command, with --plugin-dir as a possible not-installed cause. The refusal is inline prose in build.md and costs nothing to skip: a session that carries on dispatches executors that write framework code blind, which is the quality loss BP-196 exists to remove, and every slice still goes green.",
+      "guards_split": "commands/build.md (Step 1 item 5: refuse before start on an unresolved framework skill, ADR-016; inline, not a reference file)",
+      "artifact": "plugins/bett3r-ai-workflow/commands/build.md",
+      "prompt": "Read the command file plugins/bett3r-ai-workflow/commands/build.md. You are running /build in a host repo whose .blueprint.config.json declares designTooling.scaffoldSkill as ddd:scaffold-from-design. .work/slices.yaml holds three slices, all passes: false. In Step 1 you run skill-path and its last line is: SKILL-PATH:v1 outcome=error reason=not-installed name=ddd:scaffold-from-design plugin=ddd. State concretely what the run does next, at which step it stops or continues, whether any executor is dispatched, the verdict line you print, and the message you give the user.",
+      "must_open": [],
+      "must_state": [
+        [
+          "blocked-on"
+        ],
+        [
+          "before any executor",
+          "no executor is dispatched",
+          "no executor",
+          "dispatch no executor",
+          "without dispatching"
+        ],
+        [
+          "claude plugin install",
+          "plugin install"
+        ],
+        [
+          "--plugin-dir"
+        ]
+      ],
+      "must_not_state": [
+        "cannot load",
+        "dispatch the executor anyway",
+        "framework skill: none declared"
+      ],
+      "_calibration": "must_open is deliberately empty: the refusal lives inline in build.md Step 1 item 5. What is asserted is that the run ends blocked-on before any executor, names the install command and the --plugin-dir cause; an answer that carries on as if nothing were declared (handing `framework skill: none declared`) or that says the session cannot load the skill has read past the refusal."
+    },
+    {
       "id": "context-providers-reached",
       "why": "Seam B declares an extension point in /design Step 1 and moves its whole contract behind a pointer. The rules that only exist behind it are the ones that keep it harmless: failure is tolerated (a throwing or timing-out provider must NOT fail /design), zero providers is the normal case and is silent, and a hook was rejected on this repo's own measured evidence (blueprint-pending.sh). A session that reads past the pointer will improvise the failure policy, and the improvised answer \u2014 surface the error, or abort grounding \u2014 is the one this seam exists to prevent.",
       "guards_split": "commands/design.md -> CONTEXT-PROVIDERS.md",
