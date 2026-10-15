@@ -145,7 +145,8 @@
               "kind": { "$ref": "map.schema.json#/$defs/walkKind" },
               "given": { "$ref": "#/$defs/text" },
               "when": { "$ref": "#/$defs/text" },
-              "then": { "$ref": "#/$defs/text" }
+              "then": { "$ref": "#/$defs/text" },
+              "rejection": { "$ref": "#/$defs/rejection" }
             }
           }
         },
@@ -162,6 +163,12 @@
         "esId": { "$ref": "#/$defs/text" },
         "deliverableId": { "$ref": "#/$defs/id" }
       }
+    },
+    "rejection": {
+      "$comment": "blueprint ScenarioRejection (BP-229 D6), on a walk, a stored scenario and a derived basis: present means the walk or scenario declares a refusal case; code, when known, names the error code it is refused with, non-empty with no whitespace (blueprint map-write.ts isRejection). Optional and additive: no structureVersion bump.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "code": { "type": "string", "pattern": "^\\S+$" } }
     },
     "scenarioId": { "type": "string", "pattern": "^SCN-[0-9A-HJKMNP-TV-Z]{8}$" },
     "observationId": { "type": "string", "pattern": "^OBS-[0-9A-HJKMNP-TV-Z]{8}$" },
@@ -243,6 +250,7 @@
         },
         "derivedFrom": { "$ref": "#/$defs/scenarioDerivation" },
         "supersedes": { "$ref": "#/$defs/scenarioId" },
+        "rejection": { "$ref": "#/$defs/rejection" },
         "proposedBy": { "$ref": "#/$defs/proposedBy" },
         "status": { "$ref": "#/$defs/exampleStatus" }
       }

@@ -1,0 +1,352 @@
+{
+  "structureVersion": 1,
+  "shape": "decision",
+  "grounded": true,
+  "nodes": [
+    {
+      "id": "N1",
+      "level": "how",
+      "title": "Retry failed payments",
+      "parents": []
+    }
+  ],
+  "forks": [
+    {
+      "id": "F",
+      "title": "Retry policy",
+      "anchor": "N1",
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "C"
+      },
+      "card": {
+        "problem": "p",
+        "useCases": [
+          "u"
+        ],
+        "options": [
+          {
+            "id": "C",
+            "label": "Retry once",
+            "walks": [
+              {
+                "scenario": "Refused card",
+                "text": "a refused card is not retried",
+                "given": "a payment refused by the bank",
+                "when": "the retry runs",
+                "then": "the retry is refused",
+                "rejection": {
+                  "code": "PAYMENT_REFUSED"
+                }
+              },
+              {
+                "scenario": "Retry once",
+                "text": "one retry",
+                "given": "a failed payment",
+                "when": "the retry runs",
+                "then": "it is retried once"
+              },
+              {
+                "scenario": "Gives up",
+                "text": "then stops",
+                "given": "a payment failed twice",
+                "when": "the retry runs",
+                "then": "it is marked failed",
+                "rejection": {}
+              },
+              {
+                "scenario": "Card expired",
+                "text": "an expired card is refused",
+                "given": "an expired card",
+                "when": "the retry runs",
+                "then": "the retry is refused",
+                "rejection": {
+                  "code": "CARD_EXPIRED"
+                }
+              },
+              {
+                "scenario": "Card stolen",
+                "text": "a stolen card is refused",
+                "given": "a stolen card",
+                "when": "the retry runs",
+                "then": "the retry is refused",
+                "rejection": {
+                  "code": "CARD_STOLEN"
+                }
+              },
+              {
+                "scenario": "Over limit",
+                "text": "an over-limit card is refused",
+                "given": "a card over its limit",
+                "when": "the retry runs",
+                "then": "the retry is refused",
+                "rejection": {}
+              },
+              {
+                "scenario": "Soft decline",
+                "text": "a soft decline is retried",
+                "given": "a payment softly declined",
+                "when": "the retry runs",
+                "then": "it is retried"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "C",
+          "why": "w"
+        },
+        "ifOverturned": "o"
+      }
+    }
+  ],
+  "links": [],
+  "scenarios": [
+    {
+      "id": "SCN-0000000A",
+      "title": "Retry once",
+      "anchors": [
+        "N1"
+      ],
+      "given": [
+        {
+          "text": "a failed payment"
+        }
+      ],
+      "when": [
+        {
+          "text": "the retry runs"
+        }
+      ],
+      "then": [
+        {
+          "text": "it is retried once"
+        }
+      ],
+      "derivedFrom": {
+        "forkId": "F",
+        "optionId": "C",
+        "walk": "Retry once",
+        "basis": {
+          "text": "one retry",
+          "given": "a failed payment",
+          "when": "the retry runs",
+          "then": "it is retried once"
+        }
+      },
+      "proposedBy": "human",
+      "status": {
+        "kind": "agreed",
+        "seq": 7,
+        "at": "2026-10-02T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "SCN-0000000B",
+      "title": "Gives up",
+      "anchors": [
+        "N1"
+      ],
+      "given": [
+        {
+          "text": "a payment failed twice"
+        }
+      ],
+      "when": [
+        {
+          "text": "the retry runs"
+        }
+      ],
+      "then": [
+        {
+          "text": "it is marked failed"
+        }
+      ],
+      "derivedFrom": {
+        "forkId": "F",
+        "optionId": "C",
+        "walk": "Gives up",
+        "basis": {
+          "text": "then stops",
+          "given": "a payment failed twice",
+          "when": "the retry runs",
+          "then": "it is marked failed"
+        }
+      },
+      "proposedBy": "human",
+      "status": {
+        "kind": "agreed",
+        "seq": 7,
+        "at": "2026-10-02T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "SCN-0000000C",
+      "title": "Card expired",
+      "anchors": [
+        "N1"
+      ],
+      "given": [
+        {
+          "text": "an expired card"
+        }
+      ],
+      "when": [
+        {
+          "text": "the retry runs"
+        }
+      ],
+      "then": [
+        {
+          "text": "the retry is refused"
+        }
+      ],
+      "derivedFrom": {
+        "forkId": "F",
+        "optionId": "C",
+        "walk": "Card expired",
+        "basis": {
+          "text": "an expired card is refused",
+          "given": "an expired card",
+          "when": "the retry runs",
+          "then": "the retry is refused",
+          "rejection": {
+            "code": "CARD_DECLINED"
+          }
+        }
+      },
+      "proposedBy": "human",
+      "status": {
+        "kind": "agreed",
+        "seq": 7,
+        "at": "2026-10-02T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "SCN-0000000D",
+      "title": "Card stolen",
+      "anchors": [
+        "N1"
+      ],
+      "given": [
+        {
+          "text": "a stolen card"
+        }
+      ],
+      "when": [
+        {
+          "text": "the retry runs"
+        }
+      ],
+      "then": [
+        {
+          "text": "the retry is refused"
+        }
+      ],
+      "derivedFrom": {
+        "forkId": "F",
+        "optionId": "C",
+        "walk": "Card stolen",
+        "basis": {
+          "text": "a stolen card is refused",
+          "given": "a stolen card",
+          "when": "the retry runs",
+          "then": "the retry is refused",
+          "rejection": {
+            "code": "CARD_STOLEN"
+          }
+        }
+      },
+      "proposedBy": "human",
+      "status": {
+        "kind": "agreed",
+        "seq": 7,
+        "at": "2026-10-02T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "SCN-0000000E",
+      "title": "Over limit",
+      "anchors": [
+        "N1"
+      ],
+      "given": [
+        {
+          "text": "a card over its limit"
+        }
+      ],
+      "when": [
+        {
+          "text": "the retry runs"
+        }
+      ],
+      "then": [
+        {
+          "text": "the retry is refused"
+        }
+      ],
+      "derivedFrom": {
+        "forkId": "F",
+        "optionId": "C",
+        "walk": "Over limit",
+        "basis": {
+          "text": "an over-limit card is refused",
+          "given": "a card over its limit",
+          "when": "the retry runs",
+          "then": "the retry is refused",
+          "rejection": {}
+        }
+      },
+      "proposedBy": "human",
+      "status": {
+        "kind": "agreed",
+        "seq": 7,
+        "at": "2026-10-02T00:00:00.000Z"
+      }
+    },
+    {
+      "id": "SCN-0000000F",
+      "title": "Soft decline",
+      "anchors": [
+        "N1"
+      ],
+      "given": [
+        {
+          "text": "a payment softly declined"
+        }
+      ],
+      "when": [
+        {
+          "text": "the retry runs"
+        }
+      ],
+      "then": [
+        {
+          "text": "it is retried"
+        }
+      ],
+      "derivedFrom": {
+        "forkId": "F",
+        "optionId": "C",
+        "walk": "Soft decline",
+        "basis": {
+          "text": "a soft decline is retried",
+          "given": "a payment softly declined",
+          "when": "the retry runs",
+          "then": "it is retried",
+          "rejection": {}
+        }
+      },
+      "proposedBy": "human",
+      "status": {
+        "kind": "agreed",
+        "seq": 7,
+        "at": "2026-10-02T00:00:00.000Z"
+      }
+    }
+  ],
+  "observations": [],
+  "coverage": []
+}

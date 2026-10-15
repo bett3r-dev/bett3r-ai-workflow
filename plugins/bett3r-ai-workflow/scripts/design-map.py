@@ -1490,11 +1490,18 @@ def steps_of(text):
     return [] if text is None else [{"text": text}]
 
 
+def same_rejection(walk, basis):
+    """BP-229 (D8): absent means no rejection; a marker on one side only, or a
+    different code, is a change."""
+    return (walk is None) == (basis is None) and (walk or {}).get("code") == (basis or {}).get("code")
+
+
 def same_walk(walk, basis):
     """The walk's fields a basis records; `kind` absent reads as behavioral."""
     return (walk.get("text") == basis.get("text")
             and is_structural(walk) == is_structural(basis)
-            and all(walk.get(f) == basis.get(f) for f in ("given", "when", "then")))
+            and all(walk.get(f) == basis.get(f) for f in ("given", "when", "then"))
+            and same_rejection(walk.get("rejection"), basis.get("rejection")))
 
 
 def review_reason(derived_from, forks):
@@ -1544,7 +1551,7 @@ def fork_scenarios(payload):
             if is_structural(walk) or key in stored:
                 continue
             ready = has_gherkin(walk)
-            proposals.append({
+            proposal = {
                 "key": key, "forkId": fork["id"], "optionId": status["option"],
                 "walk": walk["scenario"], "source": status["source"],
                 "state": "ready" if ready else "needs-gherkin",
@@ -1552,7 +1559,11 @@ def fork_scenarios(payload):
                 "anchors": [fork.get("anchor", fork["id"])],
                 "given": steps_of(walk.get("given")) if ready else [],
                 "when": steps_of(walk.get("when")) if ready else [],
-                "then": steps_of(walk.get("then")) if ready else []})
+                "then": steps_of(walk.get("then")) if ready else []}
+            # BP-229 (D7): the walk's declared rejection, copied only when the walk carries one.
+            if "rejection" in walk:
+                proposal["rejection"] = walk["rejection"]
+            proposals.append(proposal)
     forks = {f["id"]: f for f in payload["forks"]}
     derived = [{"scenarioId": s["id"], "reviewReason": review_reason(s["derivedFrom"], forks)}
                for s in scenarios if s.get("derivedFrom") is not None]
@@ -2386,7 +2397,7 @@ def post(positional, flags):
 # map-structure.ts), in the order an exported entry spells them; any other key a
 # get_map body decorates an entry with is not carried.
 SCENARIO_FIELDS = ("id", "title", "anchors", "given", "when", "then", "examples", "derivedFrom",
-                   "supersedes", "proposedBy", "status")
+                   "supersedes", "rejection", "proposedBy", "status")
 OBSERVATION_FIELDS = ("id", "title", "anchors", "kpi", "expect", "supersedes", "proposedBy", "status")
 
 

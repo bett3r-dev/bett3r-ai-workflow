@@ -1,0 +1,61 @@
+{
+  "proposals": [
+    {
+      "key": "derived:F/C/Refused card",
+      "forkId": "F",
+      "optionId": "C",
+      "walk": "Refused card",
+      "source": "owner",
+      "state": "ready",
+      "title": "Refused card",
+      "text": "a refused card is not retried",
+      "anchors": [
+        "N1"
+      ],
+      "given": [
+        {
+          "text": "a payment refused by the bank"
+        }
+      ],
+      "when": [
+        {
+          "text": "the retry runs"
+        }
+      ],
+      "then": [
+        {
+          "text": "the retry is refused"
+        }
+      ],
+      "rejection": {
+        "code": "PAYMENT_REFUSED"
+      }
+    }
+  ],
+  "derived": [
+    {
+      "scenarioId": "SCN-0000000A",
+      "reviewReason": null
+    },
+    {
+      "scenarioId": "SCN-0000000B",
+      "reviewReason": "walk-changed"
+    },
+    {
+      "scenarioId": "SCN-0000000C",
+      "reviewReason": "walk-changed"
+    },
+    {
+      "scenarioId": "SCN-0000000D",
+      "reviewReason": null
+    },
+    {
+      "scenarioId": "SCN-0000000E",
+      "reviewReason": null
+    },
+    {
+      "scenarioId": "SCN-0000000F",
+      "reviewReason": "walk-changed"
+    }
+  ]
+}
