@@ -18,6 +18,13 @@ queries, and is missing rows forever.
 
 Only write the whole file by hand when the read model is **not** in the design layer.
 
+## Starting from a scaffold
+
+When the scaffold already wrote the read model (file, builder wiring, projector stubs, collection name), skip generating them. Keep every export name, label-derived name and subdomain it
+wrote: they are id-exact, the identity the extractor reads back. The module folder `src/modules/<subdomain>/` is the subdomain, so it is id-exact too: keep it. The subdirectory inside the module is only inferred for a read model, so check it; a wrong one is a `git mv`, not an identity change. Work only the `TODO(scaffold)` markers and
+the file's `STILL OWED` block, and delete each marker as you satisfy it. An emitted registration fragment is placed, not rewritten. The rest of this
+skill still governs the content you write and the Final Checklist.
+
 ## Project configuration
 
 This skill resolves the following placeholders from your repo's `.blueprint.config.json`:

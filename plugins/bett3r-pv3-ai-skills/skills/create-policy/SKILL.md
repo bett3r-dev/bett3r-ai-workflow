@@ -17,6 +17,13 @@ Only write the whole file by hand when the policy is **not** in the design layer
 
 **Read [`ddd-patterns` → POLICIES.md](../ddd-patterns/POLICIES.md) before writing the file** — partial-progress redelivery, multi-command fan-out replay-safety, reconcile-by-natural-key, dependency declaration, policy placement, and the gateway ACL two-step. **If the handler dispatches more than one command, accumulates, or calls anything external, read [DELIVERY.md](../ddd-patterns/DELIVERY.md) too**: a policy is a consumer, the outbox is at-least-once, and the dedup rules (per-stream version watermark, never global position; `isRedelivery` is a replay hint, not a dedup gate) are stated there.
 
+## Starting from a scaffold
+
+When the scaffold already wrote the policy (file, builder wiring, registration), skip generating them. Keep every export name, label-derived name and subdomain it
+wrote: they are id-exact, the identity the extractor reads back. The module folder `src/modules/<subdomain>/` is the subdomain, so it is id-exact too: keep it. Work only the `TODO(scaffold)` markers and
+the file's `STILL OWED` block, and delete each marker as you satisfy it. An emitted registration fragment is placed, not rewritten. The rest of this
+skill still governs the content you write and the Final Checklist.
+
 ## Project configuration
 
 Resolve these placeholders from your repo's `.blueprint.config.json`:

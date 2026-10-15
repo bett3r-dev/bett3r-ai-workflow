@@ -4379,6 +4379,39 @@ else
   fail "eval scenario '/build, scaffoldSkill names an uninstalled plugin' asserts blocked-on before any executor, never 'cannot load'" "$( cat "$TMP/s3-eval" )"
 fi
 
+# ---------------------------------------------------------------------------
+printf '\nSeam — the PV3 create-* skills open from a scaffold (BP-196)\n\n'
+# ---------------------------------------------------------------------------
+
+# Five skills carry '## Starting from a scaffold' (keep the identity, work the
+# markers); no other PV3 skill gains the heading.
+PV3_SKILLS="$ROOT/plugins/bett3r-pv3-ai-skills/skills"
+for n in aggregate policy readmodel schema tests; do
+  f="$PV3_SKILLS/create-$n/SKILL.md"
+  if [ ! -f "$f" ]; then
+    fail "create-$n carries '## Starting from a scaffold'" "missing: ${f#"$ROOT"/}"
+    continue
+  fi
+  if grep -qx '## Starting from a scaffold' "$f"; then
+    pass "create-$n carries '## Starting from a scaffold'"
+    sec="$TMP/scaffold-sec.$n"
+    awk '/^## /{on=($0=="## Starting from a scaffold")} on' "$f" > "$sec"
+    present "$sec" 'TODO(scaffold)' "create-$n's scaffold section names TODO(scaffold)"
+    present "$sec" 'STILL OWED' "create-$n's scaffold section names STILL OWED"
+  else
+    fail "create-$n carries '## Starting from a scaffold'" "heading line not found in ${f#"$ROOT"/}"
+  fi
+done
+for f in "$PV3_SKILLS"/*/SKILL.md; do
+  d=${f%/SKILL.md}; d=${d##*/}
+  case "$d" in create-aggregate|create-policy|create-readmodel|create-schema|create-tests) continue ;; esac
+  if grep -qx '## Starting from a scaffold' "$f"; then
+    fail "$d does not gain '## Starting from a scaffold'" "heading found in ${f#"$ROOT"/}"
+  else
+    pass "$d does not gain '## Starting from a scaffold'"
+  fi
+done
+
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"
   exit 0

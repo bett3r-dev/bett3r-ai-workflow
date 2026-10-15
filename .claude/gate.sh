@@ -197,7 +197,7 @@ EOF
 # the plugin. So `bin/*`, `scripts/*` and the fixtures are in the surface too
 # (GH-429 slice 1, F5/D6): without them a diff touching lane-step-parse.py alone
 # printed SKIP for the only suite that guards it.
-step flow-seams full 'plugins/bett3r-ai-workflow/commands/*' 'plugins/bett3r-ai-workflow/agents/*' 'plugins/bett3r-ai-workflow/skills/*' 'plugins/bett3r-ai-workflow/bin/*' 'plugins/bett3r-ai-workflow/scripts/*' 'scripts/fixtures/lane-step/*' 'docs/adr/*' 'scripts/test-flow-seams.sh' <<'EOF'
+step flow-seams full 'plugins/bett3r-ai-workflow/commands/*' 'plugins/bett3r-ai-workflow/agents/*' 'plugins/bett3r-ai-workflow/skills/*' 'plugins/bett3r-ai-workflow/bin/*' 'plugins/bett3r-ai-workflow/scripts/*' 'scripts/fixtures/lane-step/*' 'docs/adr/*' 'plugins/bett3r-pv3-ai-skills/*' 'scripts/test-flow-seams.sh' <<'EOF'
 sh scripts/test-flow-seams.sh
 EOF
 step blueprint-design full 'plugins/bett3r-ai-workflow/skills/blueprint-design/*' 'plugins/bett3r-ai-workflow/skills/blueprint-pending/*' 'plugins/bett3r-ai-workflow/hooks/*' 'plugins/bett3r-ai-workflow/bin/*' 'scripts/test-blueprint-design.sh' 'scripts/fixtures/blueprint-design/*' <<'EOF'
