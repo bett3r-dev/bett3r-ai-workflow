@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="generator" content="design-map"><title>BP-173</title><style>
+body{font:15px/1.5 system-ui,sans-serif;margin:0;background:#f6f5f2;color:#1d1d1b}
+header{padding:20px 28px;border-bottom:1px solid #ddd;background:#fff}
+h1{margin:0 0 4px;font-size:20px} #dbnote{color:#555;font-size:13px}
+.levels{padding:12px 28px;font-size:13px;color:#444} .levels b{color:#1d1d1b}
+main{padding:12px 28px 40px;display:grid;gap:14px;max-width:960px}
+.fork{background:#fff;border:1px solid #ddd;border-left:5px solid #c9c9c9;border-radius:8px;padding:14px 18px}
+.fork.open{border-left-color:#d4553b} .fork.done{border-left-color:#2f8f5b}
+.fork.moot{opacity:.6} .fork.titleonly h3{color:#666} .locked{font-size:13px;color:#666}
+.legend{padding:8px 28px;font-size:12px;color:#444;display:flex;gap:10px;flex-wrap:wrap}
+.legend span{border-left:5px solid #c9c9c9;padding:0 6px;background:#fff}
+.walks{margin:4px 0 2px 18px;font-size:13px;color:#333} .note{font-size:13px;color:#555;margin:2px 0}
+.eyebrow{font-size:12px;color:#666} h3{margin:2px 0 8px;font-size:16px}
+.opt{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 10px;border:1px solid #e3e3e3;border-radius:6px;margin:6px 0}
+.opt.rec{background:#fbf6e8} .opt.picked{outline:2px solid #2f8f5b}
+.badge{font-size:11px;background:#d49a1f;color:#fff;border-radius:4px;padding:1px 5px;margin-left:6px}
+textarea{width:100%;min-height:54px;box-sizing:border-box;margin-top:6px}
+.btn{font:inherit;font-size:13px;padding:4px 10px;border-radius:5px;border:1px solid #bbb;background:#fff;cursor:pointer}
+.btn:disabled{cursor:not-allowed;opacity:.5} .saved{font-size:12px;color:#555;margin-left:8px}
+.fork.owner{border-left-color:#d49a1f} .legend .owner{border-left-color:#d49a1f}
+.fork.recommendation{border-left-color:#3b6fd4} .legend .recommendation{border-left-color:#3b6fd4}
+.fork.code{border-left-color:#7a4fc9} .legend .code{border-left-color:#7a4fc9}
+</style></head><body><header><h1>BP-173</h1><div>A fork you leave unanswered is taken on its recommendation.</div><div id="dbnote">Connecting to the answer store&hellip;</div></header><div class="levels"><b>goal</b> The plugin&#x27;s board setup works as written in every host repo (yarn, pnpm, npm) &middot; <b>mapActor</b> The /design agent following BOARD-SETUP.md in a host repo &middot; <b>impact</b> Registering blueprint-mcp and launching the board succeed on the first try in teselly and kixie &middot; <b>deliverable</b> BOARD-SETUP.md: src/ paths, &lt;pm&gt; run blueprint:board, checkout resolution order, board-build line; test needles; version bump, Every live stale packages/ blueprint path in the plugin repointed (design-map skill, script, schema comment, test, fixtures)</div><div class="legend"><span class="owner">decided: owner</span><span class="recommendation">decided: recommendation</span><span class="code">decided: code</span></div><main><article class="fork decided owner" data-fork-id="BP-173-F1"><div class="eyebrow">BP-173-F1 &middot; BP-173 &middot; BOARD-SETUP.md: src/ paths, &lt;pm&gt; run blueprint:board, checkout resolution order, board-build line; test needles; version bump &middot; decided (owner): preflight-prints</div><h3>Should the preflight work out the board launch line, or should the agent read it off the repo by following the doc?</h3><p>BOARD-SETUP §4 tells the agent to offer the repo&#x27;s launch line and then names a yarn command, which is wrong in kixie (pnpm, and its script needs BLUEPRINT_CHECKOUT). The /design preflight already reports on-disk facts such as .blueprint/, the .mcp.json registration and the board on :3727, but not how this repo launches the board. Either the doc carries the rule and the agent applies it each run, or the preflight prints it as a tested fact.</p><ul><li>teselly: yarn, script present, sibling blueprint checkout</li><li>kixie: pnpm, script present, needs BLUEPRINT_CHECKOUT</li><li>a host repo with no blueprint:board script</li><li>a host repo on npm</li></ul><div class="opt rec"><div><b>preflight-prints</b> The preflight prints a board_script verdict with the launch line<span class=badge>recommended</span><ul class="walks"><li><i>kixie launch</i> &mdash; The preflight sees pnpm and the script&#x27;s BLUEPRINT_CHECKOUT use, and the agent offers that line verbatim.</li><li><i>no script</i> &mdash; The preflight reports no script, and the agent offers the direct node line.</li></ul></div><button class="btn" data-pick="preflight-prints" disabled>Choose</button></div><div class="opt"><div><b>doc-rule</b> The doc spells out the rule and the agent derives the line each time<ul class="walks"><li><i>kixie launch</i> &mdash; The agent reads packageManager and the script itself at offer time, and nothing tests that it gets it right.</li></ul></div><button class="btn" data-pick="doc-rule" disabled>Choose</button></div><p><b>Recommendation.</b> preflight-prints: It turns a judgement the agent repeats on every run into a fact that is tested under two shells, which is the reason the preflight exists. It also costs one row and two fixtures.</p><p class="note"><b>If overturned.</b> Drop the preflight change; §4 carries the three checks in prose, and the test pins only &#x27;run blueprint:board&#x27;.</p><textarea placeholder="Anything the options miss, or a question for me" disabled></textarea><div><button class="btn" data-action="save" disabled>Save comment</button> <button class="btn" data-action="agree" disabled>Agree with the recommendation</button><span class="saved"></span></div></article><article class="fork decided owner" data-fork-id="BP-173-F2"><div class="eyebrow">BP-173-F2 &middot; BP-173 &middot; Every live stale packages/ blueprint path in the plugin repointed (design-map skill, script, schema comment, test, fixtures) &middot; decided (owner): sweep</div><h3>Should this ticket fix only the board-setup doc, or every place in the plugin that still points at blueprint&#x27;s old packages/ layout?</h3><p>Besides BOARD-SETUP.md, the old packages/ layout appears in the design-map skill, scripts/design-map.py, a schema comment, the design-map test, three fixtures and a fixture README. The design-map test&#x27;s vocabulary check fails whenever someone points it at a real blueprint checkout, because it looks in packages/blueprint-schema/, while the copy is actually in sync. The gate never sets the variable, so the check has silently been a skip.</p><ul><li>a reader follows the design-map skill&#x27;s pointer to blueprint&#x27;s schema</li><li>a maintainer runs the vocabulary check against a blueprint checkout</li><li>the gate runs without BLUEPRINT_CHECKOUT</li></ul><div class="opt rec"><div><b>sweep</b> Sweep every live stale path in the plugin in the same release<span class=badge>recommended</span><ul class="walks"><li><i>vocabulary check</i> &mdash; The check finds blueprint&#x27;s schema at its real path and passes.</li></ul></div><button class="btn" data-pick="sweep" disabled>Choose</button></div><div class="opt"><div><b>board-setup-only</b> Fix BOARD-SETUP.md only; the rest waits for a follow-up<ul class="walks"><li><i>vocabulary check</i> &mdash; The check stays red against a real checkout until a follow-up lands.</li></ul></div><button class="btn" data-pick="board-setup-only" disabled>Choose</button></div><p><b>Recommendation.</b> sweep: It is the same defect, in the same repo and the same release, about a dozen lines. Leaving it means a second plugin bump later for the identical fix.</p><p class="note"><b>If overturned.</b> Ship BOARD-SETUP only and file a plugin follow-up for the remaining stale paths.</p><textarea placeholder="Anything the options miss, or a question for me" disabled></textarea><div><button class="btn" data-action="save" disabled>Save comment</button> <button class="btn" data-action="agree" disabled>Agree with the recommendation</button><span class="saved"></span></div></article></main><script type="application/json" id="map-data">{"structureVersion": 2, "shape": "decision", "grounded": true, "mapId": "BP-173", "nodes": [{"id": "g-board-setup-true", "level": "goal", "title": "The plugin's board setup works as written in every host repo (yarn, pnpm, npm)", "parents": []}, {"id": "a-design-agent", "level": "mapActor", "title": "The /design agent following BOARD-SETUP.md in a host repo", "parents": ["g-board-setup-true"]}, {"id": "i-launch-and-register-work", "level": "impact", "title": "Registering blueprint-mcp and launching the board succeed on the first try in teselly and kixie", "parents": ["a-design-agent"]}, {"id": "d-board-setup-fixed", "level": "deliverable", "title": "BOARD-SETUP.md: src/ paths, \u003cpm> run blueprint:board, checkout resolution order, board-build line; test needles; version bump", "parents": ["i-launch-and-register-work"]}, {"id": "d-stale-paths-swept", "level": "deliverable", "title": "Every live stale packages/ blueprint path in the plugin repointed (design-map skill, script, schema comment, test, fixtures)", "parents": ["i-launch-and-register-work"]}], "forks": [{"id": "BP-173-F1", "title": "Should the preflight work out the board launch line, or should the agent read it off the repo by following the doc?", "tickets": ["BP-173"], "anchor": "d-board-setup-fixed", "restsOn": [], "status": {"kind": "decided", "source": "owner", "option": "preflight-prints"}, "card": {"problem": "BOARD-SETUP §4 tells the agent to offer the repo's launch line and then names a yarn command, which is wrong in kixie (pnpm, and its script needs BLUEPRINT_CHECKOUT). The /design preflight already reports on-disk facts such as .blueprint/, the .mcp.json registration and the board on :3727, but not how this repo launches the board. Either the doc carries the rule and the agent applies it each run, or the preflight prints it as a tested fact.", "useCases": ["teselly: yarn, script present, sibling blueprint checkout", "kixie: pnpm, script present, needs BLUEPRINT_CHECKOUT", "a host repo with no blueprint:board script", "a host repo on npm"], "options": [{"id": "preflight-prints", "label": "The preflight prints a board_script verdict with the launch line", "walks": [{"scenario": "kixie launch", "text": "The preflight sees pnpm and the script's BLUEPRINT_CHECKOUT use, and the agent offers that line verbatim.", "kind": "behavioral", "given": "a pnpm host repo whose blueprint:board script reads BLUEPRINT_CHECKOUT", "when": "the preflight runs", "then": "it prints board_script: present with launch: pnpm run blueprint:board (needs BLUEPRINT_CHECKOUT)"}, {"scenario": "no script", "text": "The preflight reports no script, and the agent offers the direct node line.", "kind": "behavioral", "given": "a host repo with no blueprint:board script", "when": "the preflight runs", "then": "it prints board_script: absent and the doc's fallback is the direct node src/apps/sticky-notes-board/bin/blueprint-board.mjs line"}]}, {"id": "doc-rule", "label": "The doc spells out the rule and the agent derives the line each time", "walks": [{"scenario": "kixie launch", "text": "The agent reads packageManager and the script itself at offer time, and nothing tests that it gets it right.", "kind": "behavioral", "given": "a pnpm host repo whose blueprint:board script reads BLUEPRINT_CHECKOUT", "when": "the agent reaches the board offer", "then": "it must derive pnpm run blueprint:board with the variable set from the doc's prose"}]}], "recommendation": {"option": "preflight-prints", "why": "It turns a judgement the agent repeats on every run into a fact that is tested under two shells, which is the reason the preflight exists. It also costs one row and two fixtures."}, "ifOverturned": "Drop the preflight change; §4 carries the three checks in prose, and the test pins only 'run blueprint:board'."}}, {"id": "BP-173-F2", "title": "Should this ticket fix only the board-setup doc, or every place in the plugin that still points at blueprint's old packages/ layout?", "tickets": ["BP-173"], "anchor": "d-stale-paths-swept", "restsOn": [], "status": {"kind": "decided", "source": "owner", "option": "sweep"}, "card": {"problem": "Besides BOARD-SETUP.md, the old packages/ layout appears in the design-map skill, scripts/design-map.py, a schema comment, the design-map test, three fixtures and a fixture README. The design-map test's vocabulary check fails whenever someone points it at a real blueprint checkout, because it looks in packages/blueprint-schema/, while the copy is actually in sync. The gate never sets the variable, so the check has silently been a skip.", "useCases": ["a reader follows the design-map skill's pointer to blueprint's schema", "a maintainer runs the vocabulary check against a blueprint checkout", "the gate runs without BLUEPRINT_CHECKOUT"], "options": [{"id": "sweep", "label": "Sweep every live stale path in the plugin in the same release", "walks": [{"scenario": "vocabulary check", "text": "The check finds blueprint's schema at its real path and passes.", "kind": "behavioral", "given": "BLUEPRINT_CHECKOUT set to a blueprint checkout at cd44e8e3", "when": "scripts/test-design-map.sh runs", "then": "the vocabulary copy is compared with src/packages/backend/blueprint-schema/schema/map.schema.json and reported fresh"}]}, {"id": "board-setup-only", "label": "Fix BOARD-SETUP.md only; the rest waits for a follow-up", "walks": [{"scenario": "vocabulary check", "text": "The check stays red against a real checkout until a follow-up lands.", "kind": "behavioral", "given": "BLUEPRINT_CHECKOUT set to a blueprint checkout at cd44e8e3", "when": "scripts/test-design-map.sh runs", "then": "it fails 'BLUEPRINT_CHECKOUT holds the emitted map.schema.json' with no file at packages/blueprint-schema/..."}]}], "recommendation": {"option": "sweep", "why": "It is the same defect, in the same repo and the same release, about a dozen lines. Leaving it means a second plugin bump later for the identical fix."}, "ifOverturned": "Ship BOARD-SETUP only and file a plugin follow-up for the remaining stale paths."}}]}</script><script type="application/json" id="fork-maps">{"BP-173-F1": "BP-173", "BP-173-F2": "BP-173"}</script><script>
+const DATA = JSON.parse(document.getElementById("map-data").textContent);
+// A stacked page embeds {stack: [map, ...]}; each fork remembers its own map's id.
+const MAPS = DATA.stack || [DATA];
+// Each fork's own map's id, computed at render time (fork_maps); a fork of a map
+// without mapId is absent, so its answers carry no map.
+const FORK_MAP = JSON.parse(document.getElementById("fork-maps").textContent);
+const FORKS = {};
+MAPS.forEach(m => m.forks.forEach(f => { FORKS[f.id] = f; }));
+let db = null;
+let answers = {};
+
+function stateOf(id) {
+  const f = FORKS[id];
+  if (f.status.kind === "moot") return "moot";
+  if (answers[id] && answers[id].pick) return "done";
+  return f.status.kind === "decided" ? "decided " + f.status.source : "open";
+}
+function recKey(f) {
+  return f.card ? f.card.recommendation.option : null;
+}
+function renderCard(id) {
+  const card = document.querySelector('[data-fork-id="' + id + '"]');
+  const a = answers[id] || null;
+  card.className = "fork " + stateOf(id) + (FORKS[id].card ? "" : " titleonly");
+  if (!FORKS[id].card) return;
+  card.querySelectorAll("[data-pick]").forEach(b => {
+    const picked = !!(a && a.pick === b.dataset.pick);
+    b.closest(".opt").classList.toggle("picked", picked);
+    b.textContent = picked ? "Chosen" : "Choose";
+  });
+  const ta = card.querySelector("textarea");
+  if (a && document.activeElement !== ta) ta.value = a.comment || "";
+  card.querySelector(".saved").textContent = a && a.updatedAt
+    ? "Saved " + new Date(a.updatedAt).toLocaleString()
+    : (db ? "" : "Answers can't be saved in this view. Reply in the terminal.");
+  card.querySelectorAll("button, textarea").forEach(el => { el.disabled = !db || FORKS[id].status.kind === "moot"; });
+}
+function renderAll() { Object.keys(FORKS).forEach(renderCard); }
+
+async function saveAnswer(id, patch) {
+  if (!db) return;
+  const prev = answers[id] || {};
+  const doc = { pick: prev.pick || null, comment: prev.comment || "", ...patch, updatedAt: new Date().toISOString() };
+  if (FORK_MAP[id]) doc.map = FORK_MAP[id];
+  answers[id] = doc; renderCard(id);
+  const s = document.querySelector('[data-fork-id="' + id + '"] .saved');
+  try { await db.doc("answers/" + id).set(doc); s.textContent = "Saved"; }
+  catch (e) { s.textContent = "Not saved: " + (e && e.message || "store refused the write"); }
+}
+
+document.addEventListener("click", e => {
+  const card = e.target.closest("[data-fork-id]");
+  if (!card || !FORKS[card.dataset.forkId].card) return;
+  const id = card.dataset.forkId;
+  const comment = card.querySelector("textarea").value;
+  if (e.target.dataset.pick) { saveAnswer(id, { pick: e.target.dataset.pick, comment }); return; }
+  if (e.target.dataset.action === "save") { saveAnswer(id, { comment }); return; }
+  if (e.target.dataset.action === "agree") { saveAnswer(id, { pick: recKey(FORKS[id]), comment }); return; }
+});
+
+renderAll();
+(async () => {
+  try { db = window.claude && window.claude.use ? await window.claude.use("db") : null; } catch (_) { db = null; }
+  const note = document.getElementById("dbnote");
+  if (!db) {
+    note.textContent = "Answers can't be saved in this view. Reply in the terminal.";
+    renderAll();
+    return;
+  }
+  note.textContent = "Answers save as you click. Claude reads them back.";
+  const col = db.collection("answers");
+  const apply = snap => { const next = {}; (snap.docs || []).forEach(d => { next[d.id] = d.data(); }); answers = next; renderAll(); };
+  if (typeof col.onSnapshot === "function") col.onSnapshot(apply, () => { note.textContent = "Lost the answer store; reload to reconnect."; });
+  else col.get().then(apply);
+  renderAll();
+})();
+</script></body></html>
