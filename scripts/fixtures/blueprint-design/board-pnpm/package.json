@@ -1,0 +1,9 @@
+{
+  "name": "host-repo",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "blueprint": "pv3 g blueprint",
+    "blueprint:board": "node ${BLUEPRINT_CHECKOUT:?set BLUEPRINT_CHECKOUT to the blueprint checkout}/src/apps/sticky-notes-board/bin/blueprint-board.mjs ."
+  }
+}
