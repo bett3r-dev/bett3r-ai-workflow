@@ -60,6 +60,11 @@
         "card": { "$ref": "#/$defs/card" },
         "anchor": { "$ref": "#/$defs/id" },
         "restsOn": { "type": "array", "items": { "$ref": "#/$defs/forkId" } },
+        "affects": {
+          "$comment": "BP-232 (D3): optional, the map entries (node or fork ids) the fork's decision can change beyond its anchor's subtree (blueprint MapFork.affects). validate resolves each id against the map.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" }
+        },
         "status": { "$ref": "#/$defs/status" },
         "testable": { "const": false }
       }

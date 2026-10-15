@@ -452,6 +452,30 @@ check 'a parent naming no node: at' "$( attr "$LINE" at )" /nodes/0/parents/0 "$
 variant dangling-rests 'm["forks"][0]["restsOn"] = ["ESAS-1-F9"]'
 refuse_validate 'restsOn naming no fork' dangling-ref "$TMP/v2/dangling-rests.json"
 check 'restsOn naming no fork: at' "$( attr "$LINE" at )" /forks/0/restsOn/0 "$LINE"
+# BP-232 (D3, D10): a fork's optional affects names the map entries (node or
+# fork) its decision can change beyond its anchor's subtree. answers-map.json
+# carries one (ESAS-1-F1 affects node G); an id nothing on the map carries is a
+# dangling-ref at /forks/<i>/affects/<j>, the restsOn path shape.
+check 'answers-map.json: a fork carries affects naming node G' \
+  "$( python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); print(",".join(a for f in m["forks"] for a in f.get("affects", [])))' "$FIX/answers-map.json" 2>&1 )" G
+dm validate "$FIX/answers-map.json"
+check 'a fork whose affects names an existing node: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+python3 - "$FIX/answers-map.json" "$TMP/v2/affects-fork.json" <<'PY'
+import json, sys
+m = json.load(open(sys.argv[1]))
+m["forks"][1]["affects"] = ["ESAS-1-F1"]
+json.dump(m, open(sys.argv[2], "w"), indent=2)
+PY
+dm validate "$TMP/v2/affects-fork.json"
+check 'a fork whose affects names another fork: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+python3 - "$FIX/answers-map.json" "$TMP/v2/dangling-affects.json" <<'PY'
+import json, sys
+m = json.load(open(sys.argv[1]))
+m["forks"][0]["affects"] = ["G", "NOPE"]
+json.dump(m, open(sys.argv[2], "w"), indent=2)
+PY
+refuse_validate 'affects naming no node or fork' dangling-ref "$TMP/v2/dangling-affects.json"
+check 'affects naming no node or fork: id and at' "$( attr "$LINE" id ):$( attr "$LINE" at )" NOPE:/forks/0/affects/1 "$LINE"
 variant anchor-is-fork 'm["forks"][0]["anchor"] = "ESAS-1-F2"'
 refuse_validate 'an anchor naming a fork, not a node' dangling-ref "$TMP/v2/anchor-is-fork.json"
 variant dangling-link 'm["links"] = [{"esId": "cmd_x_y", "deliverableId": "D9"}]'
@@ -1097,6 +1121,34 @@ check 'project alone: forks=2' "$( attr "$LINE" forks )" 2 "$LINE"
 sed '$d' "$OUT" > "$TMP/proj/body.json"
 python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); print(",".join(r for f in m["forks"] for r in f["restsOn"]))' "$TMP/proj/body.json" > "$TMP/proj/rests" 2>&1
 check 'project: restsOn to a kept fork survives' "$( cat "$TMP/proj/rests" )" ESAS-11-F1
+# BP-232 (D3): affects is narrowed like restsOn, to the kept nodes and forks, so
+# a projection never carries a dangling affects entry; an affects narrowed to
+# nothing is dropped, since an absent affects already claims nothing.
+dm project --ticket ESAS-1 "$FIX/answers-map.json"
+check 'project answers-map.json (affects names a node off the anchor chain): outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+sed '$d' "$OUT" > "$TMP/proj/answers.json"
+python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); print("affects" in m["forks"][0])' "$TMP/proj/answers.json" > "$TMP/proj/answers-affects" 2>&1
+check 'project: an affects narrowed to nothing is dropped' "$( cat "$TMP/proj/answers-affects" )" False
+python3 - "$FIX/answers-map.json" "$TMP/proj/affects-mixed.json" "$TMP/proj/affects-anchored.json" <<'PY'
+import copy, json, sys
+m = json.load(open(sys.argv[1]))
+other = copy.deepcopy(m["forks"][5])
+other["id"], other["tickets"] = "ESAS-2-F1", ["ESAS-2"]
+m["forks"].append(other)
+m["forks"][0]["affects"] = ["G", "ESAS-1-F2", "ESAS-2-F1"]
+json.dump(m, open(sys.argv[2], "w"), indent=2)
+m["forks"][0]["anchor"] = "G"
+json.dump(m, open(sys.argv[3], "w"), indent=2)
+PY
+dm project --ticket ESAS-1 "$TMP/proj/affects-mixed.json"
+check 'project affects-mixed: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+sed '$d' "$OUT" > "$TMP/proj/mixed.json"
+python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); print(",".join(m["forks"][0].get("affects", [])))' "$TMP/proj/mixed.json" > "$TMP/proj/mixed-affects" 2>&1
+check 'project: affects to a kept fork survives, to an unreached node or a dropped fork is pruned' "$( cat "$TMP/proj/mixed-affects" )" ESAS-1-F2
+dm project --ticket ESAS-1 "$TMP/proj/affects-anchored.json"
+sed '$d' "$OUT" > "$TMP/proj/anchored.json"
+python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); print(",".join(m["forks"][0].get("affects", [])))' "$TMP/proj/anchored.json" > "$TMP/proj/anchored-affects" 2>&1
+check 'project: affects to a kept node survives' "$( cat "$TMP/proj/anchored-affects" )" G,ESAS-1-F2
 expect_error 'project: no --ticket' missing-ticket project "$STK/c.map.json"
 expect_error 'project: no map' missing-map project --ticket ESAS-9
 expect_error 'project: an invalid input names its map' schema-invalid project --ticket ESAS-1 "$FIX/v1-map.json"

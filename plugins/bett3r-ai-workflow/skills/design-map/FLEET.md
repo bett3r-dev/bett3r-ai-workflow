@@ -16,7 +16,7 @@ Every map is validated and must be grounded (refusals name `map=`). One `--expec
 design-map project --ticket <K> <map>... | design-map write <units/K.map.json>
 ```
 
-`project` prints the v2 map of K: the forks whose `tickets` contain K, their anchors and ancestors as nodes, `restsOn` and links pruned to what is kept, `mapId` K, `grounded` and `shape` from the inputs (refused when they disagree); `feedSeq` and `target` are not carried over. The verdict follows the JSON as the last stdout line; `write` drops `project`'s ok line and refuses `reason=upstream-refused` on any other, so a refused projection is never written as a map.
+`project` prints the v2 map of K: the forks whose `tickets` contain K, their anchors and ancestors as nodes, `restsOn`, `affects` and links pruned to what is kept (an `affects` left empty is dropped), `mapId` K, `grounded` and `shape` from the inputs (refused when they disagree); `feedSeq` and `target` are not carried over. The verdict follows the JSON as the last stdout line; `write` drops `project`'s ok line and refuses `reason=upstream-refused` on any other, so a refused projection is never written as a map.
 
 ## Listing decisions per ticket
 
