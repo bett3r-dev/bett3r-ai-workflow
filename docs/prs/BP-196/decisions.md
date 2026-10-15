@@ -37,3 +37,19 @@ sources: [design:D6]
 rejected: —
 supersedes: —
 build.md:77 and :80 (fresh fix-round executor / re-check verifier) carry the line by analogy. The unresolved-skill refusal is interim at item 0; slice 3 must move it to Step 1 item 5 and update its census pin.
+
+## D6 — start-multi refusal: verdict word, anchor in step 0, and a resume gap
+kind: silent-seam
+step: build · slice: 3 · decidedBy: executor
+sources: [design:F1, code:start-multi.md step 0, code:fleet-loop.py]
+rejected: leaving the check at the end of step 0 — the verifier showed the order of :32 ran the BASE push and scaffold agent first (fix round 1, design-silent)
+supersedes: —
+The refusal ends the tick `blocked-on=framework-skill` (word chosen by analogy with lane-tools); an anchor at start-multi.md:32 puts the check before pinning BASE, pinned by an offset census; the refusing tick still writes run.yaml with pluginVersion. Install command is `claude plugin install <plugin>` (marketplace cannot be derived).
+
+## D7 — Refusing fresh run leaves run.yaml without BASE
+kind: shipped-finding
+step: build · slice: 3 · decidedBy: verifier
+sources: [code:start-multi.md:32, code:fleet-loop.py:284-291]
+rejected: fixing it in slice 3 — not a named mitigation, and the same state already arises when a step-0 tick ends before BASE is pinned
+supersedes: —
+A later /start-multi without --fresh matches "Resume when run.yaml exists" with no BASE; it fails loudly at step 2 (origin/int/<run-id> missing). Follow-up: a run.yaml without createdBaseSha resumes as fresh and re-runs the check, or the refusal tells the operator to re-run with --fresh; pin in the census. Also optional: ADR-016's "once per /build run" parenthesis omits /verify-build's in-lane resolution.
