@@ -1,0 +1,185 @@
+{
+  "structureVersion": 2,
+  "shape": "decision",
+  "grounded": true,
+  "mapId": "BP-196",
+  "nodes": [
+    {
+      "id": "g-framework-rules-reach-code",
+      "level": "goal",
+      "title": "Framework code written in /build follows the host framework's own skills",
+      "parents": []
+    },
+    {
+      "id": "a-executor-verifier",
+      "level": "mapActor",
+      "title": "The /build executor and verifier (no Skill tool)",
+      "parents": [
+        "g-framework-rules-reach-code"
+      ]
+    },
+    {
+      "id": "i-skill-reached-by-file",
+      "level": "impact",
+      "title": "They read the declared framework skill and the create-* skills it routes to, by resolved file",
+      "parents": [
+        "a-executor-verifier"
+      ]
+    },
+    {
+      "id": "d-skill-path-relay",
+      "level": "deliverable",
+      "title": "skill-path resolver + /build relays framework skill file and plugin root to executor and verifier",
+      "parents": [
+        "i-skill-reached-by-file"
+      ]
+    },
+    {
+      "id": "d-pv3-scaffold-sections",
+      "level": "deliverable",
+      "title": "PV3 create-* skills open with a 'Starting from a scaffold' section",
+      "parents": [
+        "i-skill-reached-by-file"
+      ]
+    }
+  ],
+  "forks": [
+    {
+      "id": "BP-196-F1",
+      "title": "When the framework skill a repo declares cannot be found on this machine, what should /build do?",
+      "tickets": [
+        "BP-196"
+      ],
+      "anchor": "d-skill-path-relay",
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "refuse-before-start"
+      },
+      "card": {
+        "problem": "Every repo we build in declares a framework skill in .blueprint.config.json (blueprint and teselly: bett3r-pv3-ai-skills:scaffold-from-design; kixie: ddd:scaffold-from-design). After this ticket /build looks that name up among the installed plugins and hands the file to the coding and reviewing agents. The lookup can fail: the plugin is not installed (on this laptop ddd is missing, so a kixie build here would hit it), the plugin runs from a source checkout, or the name is misspelled. Today nothing notices: /build prints one line (build.md:49), and in a fleet that line always prints, and the agent writes framework code without the framework's rules.",
+        "useCases": [
+          "A kixie fleet started from a machine without the ddd plugin",
+          "A developer running the plugin from a source checkout",
+          "A typo in designTooling.scaffoldSkill",
+          "A repo that declares no framework skill"
+        ],
+        "options": [
+          {
+            "id": "carry-on",
+            "label": "Carry on: each slice runs and records the missing skill as a deviation the reviewer weighs",
+            "walks": [
+              {
+                "scenario": "kixie fleet without ddd",
+                "text": "The code is written and committed without the framework rules; you learn it from the PR record.",
+                "kind": "behavioral",
+                "given": "a kixie fleet started on a machine without the ddd plugin",
+                "when": "/build dispatches a slice that touches an aggregate",
+                "then": "the slice is built and committed with a deviation saying no framework skill was found"
+              }
+            ]
+          },
+          {
+            "id": "block-slice",
+            "label": "Stop each slice that touches framework code with BLOCKED",
+            "walks": [
+              {
+                "scenario": "kixie fleet without ddd",
+                "text": "Each lane spends its provisioning and stops at its first framework slice with the same message.",
+                "kind": "behavioral",
+                "given": "a kixie fleet started on a machine without the ddd plugin",
+                "when": "/build reaches the first slice that touches an aggregate",
+                "then": "that slice reports BLOCKED naming the missing plugin and the lane stops"
+              }
+            ]
+          },
+          {
+            "id": "refuse-before-start",
+            "label": "Check once before anything runs: /build Step 1 and /start-multi before provisioning refuse with the missing plugin and install command",
+            "walks": [
+              {
+                "scenario": "kixie fleet without ddd",
+                "text": "The run refuses in seconds instead of building blind or stopping lane by lane.",
+                "kind": "behavioral",
+                "given": "a kixie fleet started on a machine without the ddd plugin",
+                "when": "/start-multi begins",
+                "then": "it refuses before provisioning any lane, naming ddd and the install command (or a --plugin-dir cause)"
+              },
+              {
+                "scenario": "no framework skill declared",
+                "text": "A repo that declares nothing is unaffected.",
+                "kind": "behavioral",
+                "given": "a repo whose .blueprint.config.json declares no scaffoldSkill",
+                "when": "/build starts",
+                "then": "it runs and the executor's prompt says framework skill: none declared"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "refuse-before-start",
+          "why": "The failure is a fact about the machine, not about any slice, so it should be found once and before any compute is spent. Writing framework code blind is the quality loss this ticket exists to remove."
+        },
+        "ifOverturned": "carry-on: rule 3 records the deviation and the verifier adjudicates it; block-slice: the executor reports BLOCKED on a framework slice; in both, start-multi.md is untouched."
+      }
+    },
+    {
+      "id": "BP-196-F2",
+      "title": "Should this ticket also give the PV3 create-* skills a 'Starting from a scaffold' section, as the kixie ones have?",
+      "tickets": [
+        "BP-196"
+      ],
+      "anchor": "d-pv3-scaffold-sections",
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "include"
+      },
+      "card": {
+        "problem": "Once the coding agent reads the framework skills, it reads them as written. kixie's ddd create-aggregate, create-policy, create-readmodel, create-schema and create-flow-tests each open with a 'Starting from a scaffold' section: keep the file's names, ids and placement, and work only the TODO(scaffold) markers. The PV3 skills in this same plugin repo have none; they walk through building the artifact from nothing. The PV3 bridge says to keep the identity once (scaffold-from-design Step 4); the create-* file the agent then opens does not repeat it.",
+        "useCases": [
+          "A PV3 slice whose aggregate the scaffold already wrote",
+          "A PV3 slice with no scaffold (hand-written)",
+          "A kixie slice"
+        ],
+        "options": [
+          {
+            "id": "include",
+            "label": "Add a short 'Starting from a scaffold' section to the five PV3 create-* skills (aggregate, policy, read model, schema, tests), matching kixie's",
+            "walks": [
+              {
+                "scenario": "scaffolded PV3 aggregate",
+                "text": "The agent is told up front not to rename or move what the design fixed.",
+                "kind": "behavioral",
+                "given": "a PV3 slice whose aggregate file the scaffold wrote",
+                "when": "the executor follows create-aggregate",
+                "then": "it keeps the generated names, ids and placement and works only the TODO(scaffold) markers"
+              }
+            ]
+          },
+          {
+            "id": "defer",
+            "label": "Ship the path relay alone and file the PV3 sections as a follow-up",
+            "walks": [
+              {
+                "scenario": "scaffolded PV3 aggregate",
+                "text": "PV3 agents get the skills but follow them from the top.",
+                "kind": "behavioral",
+                "given": "a PV3 slice whose aggregate file the scaffold wrote",
+                "when": "the executor follows create-aggregate from the top",
+                "then": "nothing in that skill tells it the identity is fixed, so a rename or move is possible and the board can show a phantom artifact"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "include",
+          "why": "The skills are in the same repo and the edit is small. Without it, the PV3 half of this ticket hands the agent a guide written for a situation it is not in."
+        },
+        "ifOverturned": "File a follow-up for the five PV3 create-* sections; the relay ships unchanged."
+      }
+    }
+  ]
+}
