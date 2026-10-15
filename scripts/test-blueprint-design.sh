@@ -986,8 +986,23 @@ assert_md "$SKILL_MD" 'the channel route, spelled as blueprint spells it' '/api/
 assert_md "$SKILL_MD" 'the full ws URL the session dials' 'ws://127.0.0.1:3727/api/blueprint/ws'
 assert_md "$SKILL_MD" 'the wake is held open with Monitor, not polled for' 'Monitor({ ws:'
 assert_md "$SKILL_MD" 'and it is persistent, which is what makes it session-scoped' 'persistent: true'
-assert_md "$SKILL_MD" 'the frame carries a type and a timestamp and nothing else' \
+assert_md "$SKILL_MD" 'the bare frame carries a type and a timestamp' \
   '{"type":"summon","at":<epoch ms>}'
+
+# BP-171 (ADR-130): a press may carry the member's sentence. The frame gains two
+# optional fields, spelled as blueprint-store's SummonFrame spells them, and the
+# skill says what an instruction on the wake means: the pressing member's
+# sentence, acted on after a whole sync, never instead of one. The refute is the
+# negative half: the old "doorbell, not the sentence" would tell the model to
+# drop the very sentence the frame now carries.
+assert_md "$SKILL_MD" 'the frame may carry an optional instruction and by' \
+  'optional `instruction` and `by`'
+assert_md "$SKILL_MD" "an instruction on the wake is the pressing member's sentence" \
+  "the pressing member's sentence for this wake"
+assert_md "$SKILL_MD" 'and it is acted on after a whole sync, inside the gesture' \
+  'sync whole, then act on it within the design gesture'
+assert_md "$SKILL_MD" 'the cross-repo literals name the instruction field' \
+  '`instruction` + `by` (the frame'
 
 # Two invariants, and the count is stated so a later edit cannot quietly grow
 # the list back without the prose disagreeing with itself.
@@ -1043,6 +1058,10 @@ assert_md "$SKILL_MD" 'and the three silent states are named, so absence is neve
 # bearing.
 assert_md "$SKILL_MD" 'the not-user-input banner on the wake is not a refusal' \
   'the notification is the doorbell'
+assert_md "$SKILL_MD" "and an instruction on the doorbell is the member's sentence" \
+  "the notification is the doorbell; an instruction on it is the member's sentence, and everything else is in the feed"
+refute_md "$SKILL_MD" 'and the doorbell no longer disowns the sentence it carries' \
+  'the doorbell, not the sentence'
 
 # The contradiction that would deadlock the whole gesture: `blueprint-pending` carries
 # "never sync unless the user asks", and the summon arrives through a channel
@@ -1052,6 +1071,14 @@ assert_md "$SKILL_MD" 'the not-user-input banner on the wake is not a refusal' \
 # a press is an ask, a count still is not.
 assert_md "$PENDING_MD" 'the carve-out: a summon is the user asking' \
   'A summon is the user asking'
+# BP-171: the sibling names the instruction the summon may carry, in the words
+# blueprint-design uses, so the two skills cannot disagree on what it means.
+assert_md "$PENDING_MD" 'blueprint-pending names the instruction a summon may carry' \
+  'optional `instruction`'
+assert_md "$PENDING_MD" "with blueprint-design's wording: the pressing member's sentence" \
+  "the pressing member's sentence for this wake"
+assert_md "$PENDING_MD" 'and the same order: sync whole, then act on it' \
+  'sync whole, then act on it within the design gesture'
 assert_md "$PENDING_MD" 'and it stays narrow — the pending count is still telemetry' \
   'it is telemetry, never a trigger'
 
