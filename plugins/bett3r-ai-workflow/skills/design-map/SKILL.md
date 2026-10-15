@@ -97,7 +97,7 @@ With a second argument, the committed `map.json`, `check-plan` first validates i
 
 ## The walk contract
 
-A walk is where an oracle is born; the shape a walk must have is `vertical-slicing`'s. What `design-map` enforces: `validate` refuses a behavioural walk missing any of `given`/`when`/`then` (`walk-partial-gwt`) and a `kind: structural` walk that carries them (`walk-structural-gwt`); `candidates` reads decided forks only. The fields are optional in `map-structure.schema.json`.
+A walk is where an oracle is born; the shape a walk must have is `vertical-slicing`'s. What `design-map` enforces: `validate` refuses a behavioural walk missing any of `given`/`when`/`then` (`walk-partial-gwt`), a `kind: structural` walk that carries them (`walk-structural-gwt`), and a `kind: structural` walk that carries a `rejection` marker (`walk-structural-rejection`); `candidates` reads decided forks only. The fields are optional in `map-structure.schema.json`.
 
 What makes an oracle adequate (seams named once per unit, `probe:`, `expected_from:`, the `scenarios:` a unit with no map still carries) is the `vertical-slicing` skill's; `check-plan` enforces the field shapes and states nothing more about them. Discrimination (a RED that is an assertion with values; an undiscriminating RED such as a hang, crash or import error is no evidence) is a property of the run, enforced in `/build`, not a field here.
 

@@ -1954,6 +1954,20 @@ car_invalid rejection-walk-extra-key "$WALK0"'["rejection"] = {"message": "no"}'
 car_invalid rejection-basis-code-empty 'm["scenarios"][0]["derivedFrom"]["basis"]["rejection"] = {"code": ""}' \
   /scenarios/0/derivedFrom/basis/rejection/code pattern
 
+# BP-229 (D4): a structural walk derives no scenario, so it carries no rejection
+# marker; check_semantics refuses one as walk-structural-rejection, mirroring
+# blueprint-store's checkWalks (MAP_ENTRY_INVALID). The positive controls: a
+# structural walk with no marker, and a behavioral walk with one, both validate.
+STRUCT0="$WALK0"'.update(kind="structural"); [ '"$WALK0"'.pop(k) for k in ("given", "when", "then") ]'
+car_ok structural-walk-no-rejection "$STRUCT0"
+car_ok behavioral-walk-rejection "$WALK0"'["kind"] = "behavioral"; '"$WALK0"'["rejection"] = {"code": "PAYMENT_REFUSED"}'
+mutate structural-walk-rejection "$STRUCT0"'; '"$WALK0"'["rejection"] = {"code": "PAYMENT_REFUSED"}'
+expect_error 'a structural walk carrying a rejection' walk-structural-rejection validate "$TMP/car-structural-walk-rejection.json"
+check 'a structural walk carrying a rejection: at' "$( attr "$LINE" at )" /forks/0/card/options/0/walks/0 "$LINE"
+check 'a structural walk carrying a rejection: option' "$( attr "$LINE" option )" A "$LINE"
+mutate structural-walk-rejection-no-code "$STRUCT0"'; '"$WALK0"'["rejection"] = {}'
+expect_error 'a structural walk carrying a code-less rejection' walk-structural-rejection validate "$TMP/car-structural-walk-rejection-no-code.json"
+
 # export-examples: agreed stored entries only, written whole and deterministically.
 mkdir -p "$TMP/exp/a" "$TMP/exp/b"
 cp "$CAR/export-target.map.json" "$TMP/exp/a/map.json"

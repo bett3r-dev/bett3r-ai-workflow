@@ -762,6 +762,12 @@ def check_semantics(payload):
                     if walk.get("kind") == "structural" and gwt:
                         raise Refusal("walk-structural-gwt", id=fid, option=option["id"],
                                       at=pointer(at))
+                    # BP-229 (D4): a structural walk derives no scenario, so a
+                    # rejection marker on it would mark a refusal case nothing
+                    # carries; blueprint-store's checkWalks refuses the same.
+                    if walk.get("kind") == "structural" and "rejection" in walk:
+                        raise Refusal("walk-structural-rejection", id=fid, option=option["id"],
+                                      at=pointer(at))
         if "option" in status:
             if card is None:
                 raise Refusal("decided-title-only", id=fid)
