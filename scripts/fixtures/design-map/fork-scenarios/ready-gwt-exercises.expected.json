@@ -1,0 +1,36 @@
+{
+  "proposals": [
+    {
+      "key": "derived:F1/C/Payment fails",
+      "forkId": "F1",
+      "optionId": "C",
+      "walk": "Payment fails",
+      "source": "owner",
+      "state": "ready",
+      "title": "Payment fails",
+      "text": "retried after 30s",
+      "anchors": [
+        "N-retry"
+      ],
+      "given": [
+        {
+          "text": "a payment that failed once"
+        }
+      ],
+      "when": [
+        {
+          "text": "the retry runs",
+          "exercises": {
+            "esId": "design_cmd_run-conflict-check"
+          }
+        }
+      ],
+      "then": [
+        {
+          "text": "the payment is retried after 30 seconds"
+        }
+      ]
+    }
+  ],
+  "derived": []
+}
