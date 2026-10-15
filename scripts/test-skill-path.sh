@@ -50,6 +50,7 @@ fail(){
 
 [ -f "$BIN" ] || { printf 'test-skill-path: missing %s\n' "$BIN" >&2; exit 2; }
 [ -x "$BIN" ] || { printf 'test-skill-path: %s is not executable\n' "$BIN" >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 || { printf 'test-skill-path: python3 not on PATH\n' >&2; exit 2; }
 
 # The fixture copy, with every manifest's placeholder rewritten.
 FX="$TMP/fx"
