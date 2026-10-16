@@ -94,7 +94,7 @@ Done when every unit ruled `merge` is in `int/<run-id>` at its ruled sha, every 
 Every unit's tests meet only here, so a scenario a sibling owns, which a lane's `/verify-build` only warned on, is ruled here. With every unit ruled `merge` merged, run `scaffold-commit census --item <run-id> --repo <integration worktree>` on `int/<run-id>`, over the fleet's one scaffold report (`/start-multi` step 0's), and read the last line, `SCAFFOLD-COMMIT:v1 verb=census outcome=…`, not the exit code (ADR-004):
 
 - `outcome=ok` → continue.
-- `outcome=blocked` blocks step 5: each `not-implemented: <id> presence=<absent|pending>` is an agreed scenario no merged unit implemented, a pending `.todo(` test counting as none, and the integration PR body lists each line verbatim.
+- `outcome=blocked` blocks step 5: each `not-implemented: <id> presence=<absent|pending>` is an agreed scenario no merged unit implemented, a pending `.todo(` or `.skip(` test counting as none, and the integration PR body lists each line verbatim.
 - `outcome=error`, or no verdict line → blocks step 5, as `blocked` does.
 - `outcome=skipped reason=no-scaffold-report` → step 0 made no scaffold commit: the integration PR body says so, and there is nothing to census.
 

@@ -707,6 +707,22 @@ sc census --item ESAS-304
 check 'census: once both are implemented, outcome=ok notImplemented=0' \
   "$( attr "$LINE" outcome ) $( attr "$LINE" notImplemented ) $( attr "$LINE" holds )" 'ok 0 1' "$LINE"
 check 'census: exactly one verdict line' "$NV" 1
+# BP-269 D2: the scaffolder renders a wired scenario test as it.skip(title, body);
+# `.skip(`, like `.todo(`, optionally `.each`, is pending. `.skipIf(` is a runtime
+# condition, not a pending test, and stays implemented.
+printf "it.skip('S1: ships', async () => {});\nit.skipIf(process.env.CI)('S2: lists', () => {});\n" > "$REPO/test/scenarios.test.ts"
+git -C "$REPO" commit -qam 'test: skipped'
+sc census --item ESAS-304
+check 'census: an it.skip( scenario line is pending (BP-269 D2)' \
+  "$( grep -cx 'not-implemented: S1 presence=pending' "$OUT" )" 1 "$( cat "$OUT" )"
+check 'census: it.skipIf(c)( stays implemented (BP-269 D2)' "$( grep -c 'not-implemented: S2' "$OUT" )" 0 "$( cat "$OUT" )"
+printf "it.skip.each([[1], [2]])('S1: ships %%s', async () => {});\nit.todo.each([[1]])('S2: lists %%s');\nit('S3: audits', () => {});\n" \
+  > "$REPO/test/scenarios.test.ts"
+git -C "$REPO" commit -qam 'test: skipped tables'
+sc census --item ESAS-304
+check 'census: .skip.each( and .todo.each( scenario lines are pending (BP-269 D2)' \
+  "$( grep -cx 'not-implemented: S1 presence=pending' "$OUT" )|$( grep -cx 'not-implemented: S2 presence=pending' "$OUT" )|$( attr "$LINE" outcome )" \
+  '1|1|blocked' "$( cat "$OUT" )"
 
 # ---------------------------------------------------------------------------
 printf '\nasked at finish: placement turns a deferred unit into a block\n'

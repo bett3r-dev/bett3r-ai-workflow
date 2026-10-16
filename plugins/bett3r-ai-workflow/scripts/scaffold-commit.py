@@ -102,8 +102,8 @@ census
   Reads the committed report's scenarioTests[] and unplaced[] by scenario id and
   prints `not-implemented: <id> presence=<absent|pending>` for each with no
   implemented test (a string starting "<id>: " right after its opening quote,
-  on a line with no `.todo(`, in any tracked or untracked, not ignored, file
-  outside the work-docs root), and each ESAS-296 hold
+  on a line with no `.todo(` or `.skip(`, optionally `.each`, in any tracked or
+  untracked, not ignored, file outside the work-docs root), and each ESAS-296 hold
   (scenariosExcluded[] reason review) as `hold: <id> under review (<why>)`,
   never as not implemented. outcome=blocked when any is not implemented: the
   caller decides whether that warns (a fleet lane) or blocks.
@@ -870,8 +870,10 @@ def unchanged(repo, path, report):
     return not others
 
 
-# A pending test: `.todo(` on the title's line (scaffold-core test-plan.ts PENDING).
-PENDING = re.compile(r"\.todo\s*\(")
+# A pending test: `.todo(` or `.skip(`, optionally `.each`, on the title's line
+# (scaffold-core test-plan.ts PENDING; BP-269 D2). `.skipIf(` is a runtime
+# condition, not a pending test, and stays implemented.
+PENDING = re.compile(r"\.(todo|skip)(\.each)?\s*\(")
 
 
 def census(repo, flags):
