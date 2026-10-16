@@ -85,6 +85,13 @@
         "query"
       ]
     },
+    "kpiQueryLanguage": {
+      "type": "string",
+      "description": "The language a query KPI's expr is written in; a query that states none is promql.",
+      "enum": [
+        "promql"
+      ]
+    },
     "kpiFilterOutcome": {
       "type": "string",
       "description": "The logical outcome a KPI event side may be filtered on.",

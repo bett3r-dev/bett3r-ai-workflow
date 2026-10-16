@@ -261,7 +261,7 @@ A status belongs to one sha: on every later push this flow makes, re-run Step 5a
 
 ## Step 6c — Push the KPI dashboards: attended, after merge only
 
-A design's agreed KPIs are committed as `blueprint-kpi-<map>.json` dashboards (ESAS-306, ADR-116 in blueprint), and the repo's Grafana shows them only after the repo's own declared push runs. `/merge-multi` step 6b pushes for a fleet; this step pushes for a lone unit. Read `observability` from `.blueprint.config.json` on `origin/<default>`, fetched:
+A design's agreed KPIs are committed as `blueprint-kpi-<map>.json` dashboards (ESAS-306, ADR-116 in blueprint), and the repo's APM shows them only after the repo's own declared push runs. `/merge-multi` step 6b pushes for a fleet; this step pushes for a lone unit. Read `observability` from `.blueprint.config.json` on `origin/<default>`, fetched:
 
 - **`push` declared, a human present** (no `.work/lane.yaml`, not a headless run), **and the PR merged** (`git merge-base --is-ancestor <head-sha> origin/<default>` succeeds): run the command exactly as written, from the repo root on the updated default branch, and report its output.
 - **`push` declared, otherwise** (a lane, a headless run, or a PR not merged yet): never run it. Print `push owed: <command>`, the command verbatim, for a human to run once the code is on the default branch. In a fleet unit the line is informational: `/merge-multi` step 6b owns the fleet's push, so a lane never pushes and the dashboards are not pushed twice.
