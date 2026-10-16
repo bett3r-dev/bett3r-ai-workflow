@@ -1296,6 +1296,13 @@
       "note": "BP-267 F2=C: an edge between two artifacts in code is handed to the slice that lists its key in designs:; its marker names that key."
     },
     {
+      "needle": "`scaffold-commit.py`'s finish report owes edge stubs too",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
+      "file": "plugins/bett3r-ai-workflow/commands/build.md",
+      "note": "BP-267 slice 8 fix: an edge stub is topology (baf1368), so it is on prepare's worklist and finish owes it not-placed or deferred with node = the existing end; /build matches the row by node + detail and hands it by the stub's ends, key or marker. Replaces the false 'puts no edge stub in stillOwed[]'."
+    },
+    {
       "needle": "which rides with its new end; it selects nothing",
       "issue": null,
       "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
