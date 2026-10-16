@@ -1259,6 +1259,90 @@
       "issue": null,
       "was_in": "plugins/bett3r-ai-workflow/reference/cpu-pool.md",
       "note": "The CPU pool: one machine-wide jobserver pipe every lane's cargo joins through the environment; CARGO_MAKEFLAGS not MAKEFLAGS so macOS make 3.81 sees nothing. Measured 2026-10-11: six builds, peak 14 rustc with 9 tokens vs 57 uncapped."
+    },
+    {
+      "needle": "only when both its ends are already in code",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/plan.md",
+      "file": "plugins/bett3r-ai-workflow/commands/plan.md",
+      "note": "BP-267 F2=C: designs: may hold an edge key edge:<from>|<to>|<kind>, only for an edge between two artifacts in code; an edge with a new end rides with that end's slice. Pinned: /plan is the step that writes designs:."
+    },
+    {
+      "needle": "its stub's `TODO(scaffold)` marker names the new end or the key",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/plan.md",
+      "file": "plugins/bett3r-ai-workflow/commands/plan.md",
+      "note": "BP-267 F2=C: an edge stub's marker is scoped by either name, the new end's node id or the edge key; /plan puts the stub's file in the owning slice's intended files."
+    },
+    {
+      "needle": "selects nothing and exits 0 silently",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/plan.md",
+      "file": "plugins/bett3r-ai-workflow/commands/plan.md",
+      "note": "BP-267 slice 3 carry: the key of an edge that rides with a new end is a known id (no unknown report) yet selects no unit, exit 0, no warning, so /plan must not list it."
+    },
+    {
+      "needle": "an edge stub is handed by its owner, never by its `node`",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
+      "file": "plugins/bett3r-ai-workflow/commands/build.md",
+      "note": "BP-267 F2=C + slice 3 carry: the scaffold report carries no owner and an edge entry's node is its existing end, so /build picks edge stubs by edge.from/edge.to against designs: (or the marker's name), never by node."
+    },
+    {
+      "needle": "by its key `edge:<from>|<to>|<kind>` when both ends are in code",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
+      "file": "plugins/bett3r-ai-workflow/commands/build.md",
+      "note": "BP-267 F2=C: an edge between two artifacts in code is handed to the slice that lists its key in designs:; its marker names that key."
+    },
+    {
+      "needle": "which rides with its new end; it selects nothing",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
+      "file": "plugins/bett3r-ai-workflow/commands/build.md",
+      "note": "BP-267 slice 3 carry: a listed edge key matching no edge entry selects nothing and exits 0 silently; /build says so instead of handing off nothing."
+    },
+    {
+      "needle": "An edge stub's marker scopes by either name",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/agents/verifier.md",
+      "file": "plugins/bett3r-ai-workflow/agents/verifier.md",
+      "note": "BP-267 F2=C: the verifier scopes an edge stub's TODO(scaffold) marker by the new end's node id or by the edge key edge:<from>|<to>|<kind>; the slice-8 probe deletes this clause."
+    },
+    {
+      "needle": "`TODO(scaffold) [edge:<from>|<to>|<kind>]` refuses when that key is in the slice's `designs:`",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/agents/verifier.md",
+      "file": "plugins/bett3r-ai-workflow/agents/verifier.md",
+      "note": "BP-267 F2=C: a both-ends-in-code edge stub's marker names the edge key, and it refuses in the slice that lists that key."
+    },
+    {
+      "needle": "`--nodes` also takes an edge key `edge:<from>|<to>|<kind>`",
+      "issue": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/scaffold-from-design/SKILL.md",
+      "file": "plugins/bett3r-pv3-ai-skills/skills/scaffold-from-design/SKILL.md",
+      "note": "BP-267 F2=C: the scaffold core's select.ts accepts an edge key; an edge with a new end is selected by that end's id instead."
+    },
+    {
+      "needle": "a proposed edge onto an artifact **in code** (an edge stub)",
+      "issue": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/scaffold-from-design/SKILL.md",
+      "file": "plugins/bett3r-pv3-ai-skills/skills/scaffold-from-design/SKILL.md",
+      "note": "BP-267: the emitted-table rows for edge stubs (projected-to, triggers, produces, emits; others deferred to hand-authoring) and their either-name marker."
+    },
+    {
+      "needle": "an edge stub's names its new end, or `[edge:<from>|<to>|<kind>]` when both ends are in code",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/commands/build.md",
+      "file": "plugins/bett3r-ai-workflow/commands/build.md",
+      "note": "BP-267 F2=C: /build hands the executor an edge stub's marker by either name, the new end's node id or, with both ends in code, the edge key. Pinned: the either-end marker scope must be stated in build.md itself."
+    },
+    {
+      "needle": "behind a marker naming its owner: the new end, `TODO(scaffold) [<nodeId>]`, or with both ends in code the edge key",
+      "issue": null,
+      "was_in": "plugins/bett3r-pv3-ai-skills/skills/scaffold-from-design/SKILL.md",
+      "file": "plugins/bett3r-pv3-ai-skills/skills/scaffold-from-design/SKILL.md",
+      "note": "BP-267 F2=C: the scaffold skill's emitted table states an edge stub's either-end marker scope, the new end's node id or the edge key edge:<from>|<to>|<kind>. Pinned: the skill is the reader of the scaffolder's output."
     }
   ]
 }
