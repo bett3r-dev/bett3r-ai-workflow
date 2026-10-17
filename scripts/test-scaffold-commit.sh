@@ -1016,23 +1016,25 @@ check 'unplace: finish ok, placed[] names all three, once each' \
   "$( attr "$LINE" outcome )|$( js "$REPO/$REPORT" "[p['node'] for p in d['placed']]" )" \
   "ok|['orders_evt_order-boxed', 'orders_evt_order-packed', 'orders_evt_order-sealed']" "$LINE" "$( tail -5 "$OUT" )"
 # Hand-edit Boxed's code line: its import span is still verbatim, the fragment is edited as a whole;
-# the edit shifts Packed down the file, so its recorded offset no longer holds its text.
+# the edit shifts Packed down the file, so its recorded offset no longer holds its text. A span is
+# found at its recorded offset only, byte-exact (BP-268 slice 6): a shifted placement is kept whole
+# and reported edited, never searched for elsewhere in the file.
 sed "s|^export const OrderBoxed = 'OrderBoxed';\$|&  // hand edit|" "$REPO/src/events.ts" > "$TMP/ev" && mv "$TMP/ev" "$REPO/src/events.ts"
 git -C "$REPO" commit -qam 'feat: tune boxed'
 : > "$SEEN_LOG"
 sc prepare --item ESAS-304
-check 'unplace: a shifted verbatim insertion is still removed; a partly edited fragment keeps every span' \
-  "$( attr "$LINE" edited )|$( head -n 1 "$SEEN_LOG" )|$( grep -cx "import 'OrderBoxed';" "$REPO/src/events.ts" )" \
-  '2|dry: OrderPlaced OrderSealed OrderBoxed|1' "$LINE"
-check 'unplace: edited[] lists both edited placements' \
-  "$( js "$REPO/$REPORT" "[e['node'] for e in d['edited']]" )" "['orders_evt_order-boxed', 'orders_evt_order-sealed']"
+check 'unplace: a shifted insertion is kept and edited, as is a partly edited fragment, every span of each' \
+  "$( attr "$LINE" edited )|$( head -n 1 "$SEEN_LOG" )|$( grep -cx "import 'OrderBoxed';" "$REPO/src/events.ts" )|$( grep -cx "export const OrderPacked = 'OrderPacked';" "$REPO/src/events.ts" )" \
+  '3|dry: OrderPlaced OrderSealed OrderBoxed OrderPacked|1|1' "$LINE"
+check 'unplace: edited[] lists the three edited placements' \
+  "$( js "$REPO/$REPORT" "[e['node'] for e in d['edited']]" )" "['orders_evt_order-boxed', 'orders_evt_order-packed', 'orders_evt_order-sealed']"
 sc finish --item ESAS-304 --abort
 design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_BOXED,$N_SEALED],\"edges\":[]}}"
 sc prepare --item ESAS-304
 sc finish --item ESAS-304
-check 'unplace: a removed placement the design no longer asks for is gone from the tree and from placed[]' \
+check 'unplace: a shifted placement the design no longer asks for stays in the tree as the developer'"'"'s and in placed[] as edited' \
   "$( attr "$LINE" outcome )|$( grep -c OrderPacked "$REPO/src/events.ts" )|$( js "$REPO/$REPORT" "[p['node'] for p in d['placed']]" )" \
-  "ok|0|['orders_evt_order-boxed', 'orders_evt_order-sealed']" "$LINE" "$( tail -5 "$OUT" )"
+  "ok|1|['orders_evt_order-boxed', 'orders_evt_order-packed', 'orders_evt_order-sealed']" "$LINE" "$( tail -5 "$OUT" )"
 
 # An astral character and a CRLF line above the insertion, and its text quoted in a comment:
 # only the recorded offset, counted in UTF-16 code units, finds it; the CRLF survives the cut.
@@ -1057,6 +1059,25 @@ sc prepare --item ESAS-304
 check 'unplace offsets: shifted off its offset and found twice, the insertion is kept and edited' \
   "$( attr "$LINE" edited )|$( js "$REPO/$REPORT" "[e['node'] for e in d['edited']]" )" \
   "1|['orders_evt_order-packed']" "$LINE" "$( tail -5 "$OUT" )"
+sc finish --item ESAS-304 --abort
+
+# BP-268 slice 6 N1 shape, the local flow: the developer edited the placed line in place (so
+# nothing is at its offset) and quoted the placed text once, in a hand-written comment line
+# above it. A span is found at its recorded offset only, byte-exact; never at "its only
+# occurrence", which here is the inside of the developer's line: cutting it would glue
+# `// was: ` to the line below and reorder the developer's code.
+new_repo unplace-hand-written "$FULL_TOOLING"
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_PACKED],\"edges\":[]}}"
+sc prepare --item ESAS-304
+sc finish --item ESAS-304
+check 'unplace hand-written: the first run commits the placement' "$( attr "$LINE" outcome ) $( attr "$LINE" placed )" 'ok 1' "$LINE"
+printf "export const OrderPlaced = 'OrderPlaced';\n// was: export const OrderPacked = 'OrderPacked';\n// hand-written, keep me\nexport const OrderPacked = 'order.packed';\n" > "$REPO/src/events.ts"
+git -C "$REPO" commit -qam 'feat: rename the value, note the old one'
+cp "$REPO/src/events.ts" "$TMP/hand-written.copy"
+sc prepare --item ESAS-304
+check 'unplace hand-written: edited in place and quoted once elsewhere, the placement is kept and edited; the developer'"'"'s lines are byte-identical' \
+  "$( attr "$LINE" edited )|$( js "$REPO/$REPORT" "[e['node'] for e in d['edited']]" )|$( cmp -s "$REPO/src/events.ts" "$TMP/hand-written.copy" && echo same )" \
+  "1|['orders_evt_order-packed']|same" "$LINE" "$( tail -5 "$OUT" )" "$( cat "$REPO/src/events.ts" )"
 sc finish --item ESAS-304 --abort
 
 # One placement, one placed[] entry (keyed node|file|at.kind|declares): the agent deletes

@@ -614,10 +614,10 @@ def unappend(repo, stale, appended, result):
 def unplace(repo, placed):
     """Removes, from its file, every span a placed[] entry records as inserted
     (`inserted` [{offset, text}], scaffold-core's placement.inserted: final-file
-    offsets in UTF-16 code units) when ALL the entry's spans are still verbatim:
-    at the recorded offset, else at the one place in the file the text occurs.
-    One span not found so (off its offset, and in the file zero or several
-    times), or overlapping a span already taken, and the entry is EDITED: every span of it stays, and it is returned as an edited[]
+    offsets in UTF-16 code units) when ALL the entry's spans are still verbatim
+    at their recorded offsets (locate). One span not there (edited, or shifted by
+    lines the developer added above it), or overlapping a span already taken, and
+    the entry is EDITED: every span of it stays, and it is returned as an edited[]
     entry {file, node, key}. Spans are cut last offset first, so the earlier
     ones stay valid. Entries with no `inserted` (placed by the agent) are never
     touched. Returns (removed entries, edited entries)."""
@@ -648,15 +648,18 @@ def unplace(repo, placed):
 
 
 def locate(text, span):
-    """(start, end) of an inserted span in `text` (Python indices), or None when it
-    is not there verbatim: at its UTF-16 offset, else at its only occurrence."""
+    """(start, end) of an inserted span in `text` (Python indices), or None when its
+    text is not verbatim at its recorded UTF-16 offset. Only there: never at "its only
+    occurrence" elsewhere, which is text the developer wrote or moved (a comment quoting
+    the placed line, a hand-written copy) and must not be cut (BP-268 slice 6, N1;
+    ADR-128 Decision 9). A placement that moved off its offset is kept and reported
+    edited."""
     needle, offset = span["text"], span["offset"]
+    if not isinstance(needle, str) or not needle or not isinstance(offset, int) or offset < 0:
+        return None
     units, want = text.encode("utf-16-le"), needle.encode("utf-16-le")
     if units[2 * offset:2 * offset + len(want)] == want:
         start = len(units[:2 * offset].decode("utf-16-le"))
-        return start, start + len(needle)
-    if text.count(needle) == 1:
-        start = text.index(needle)
         return start, start + len(needle)
     return None
 
