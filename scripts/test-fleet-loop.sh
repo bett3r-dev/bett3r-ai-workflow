@@ -101,7 +101,8 @@ VERSION=$( sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".
            "$PLUGIN/.claude-plugin/plugin.json" | head -n 1 )
 
 # new_run <name> — a RESUMED run's dir: a run.yaml as a tick before this one left
-# it, carrying no `pluginVersion`. Nothing here synthesizes that key, and that is
+# it, carrying `createdBaseSha` (a run that got past step 0's BASE pin is the
+# only kind there is to resume — BP-196 D7) but no `pluginVersion`. Nothing here synthesizes that key, and that is
 # deliberate: the only producer of it is the orchestrator's step 0, so a fixture
 # that wrote it itself would pin the driver against a file shape no producer
 # emits — which is exactly what hid the defect this slice fixes. The stub tick
@@ -110,6 +111,7 @@ new_run(){
   RUN="$TMP/$1"
   mkdir -p "$RUN"
   { printf 'runId: multi-A-B\n'
+    printf 'createdBaseSha: 0123456789abcdef0123456789abcdef01234567\n'
     printf 'integrationBranch: int/multi-A-B\n'
     printf 'units:\n  - { id: A, wave: 0 }\n'
   } > "$RUN/run.yaml"
@@ -137,10 +139,15 @@ new_fresh_run(){
 # fresh. That is the contract in commands/start-multi.md step 0, and the stub
 # standing in for the orchestrator has to honour it or the fixture is testing a
 # file shape nothing produces. `$VERSIONS` line n overrides what tick n records
-# (`none` = records nothing, a DRIFTED orchestrator).
+# (`none` = records nothing, a DRIFTED orchestrator). `$BASES` line n is what
+# tick n does about `createdBaseSha` when it creates run.yaml: `none` = a tick
+# that REFUSED before pinning BASE (it still writes pluginVersion, as step 0's
+# framework skill check requires), anything else = the fresh path, which pins
+# it. Default: pinned.
 TICK_LOG="$TMP/ticks.log"
 SCRIPTED="$TMP/scripted"
 VERSIONS="$TMP/versions"
+BASES="$TMP/bases"
 STUB_RUN=""
 cat > "$TMP/stub-tick.sh" <<'STUB'
 n=$( wc -l < "$TICK_LOG" | tr -d ' ' )
@@ -152,10 +159,18 @@ total=$( wc -l < "$SCRIPTED" | tr -d ' ' )
 v=$( sed -n "${n}p" "$VERSIONS" )
 [ -n "$v" ] || v=$STUB_VERSION
 if [ "$v" != none ]; then
-  [ -f "$STUB_RUN/run.yaml" ] || {
-    printf 'runId: multi-A-B\nintegrationBranch: int/multi-A-B\nunits:\n  - { id: A, wave: 0 }\n' \
-      > "$STUB_RUN/run.yaml"
-  }
+  b=$( sed -n "${n}p" "$BASES" )
+  # Step 0 as the command spells it: a run.yaml with no createdBaseSha is never
+  # started, so it is rewritten whole, exactly as a missing one is created.
+  if [ ! -f "$STUB_RUN/run.yaml" ] || ! grep -q '^createdBaseSha:' "$STUB_RUN/run.yaml"; then
+    if [ -f "$STUB_RUN/run.yaml" ]; then
+      printf 'orchestrator prose: run.yaml records no createdBaseSha — never started, recreating as a fresh run\n'
+    fi
+    { printf 'runId: multi-A-B\n'
+      [ "$b" = none ] || printf 'createdBaseSha: fedcba9876543210fedcba9876543210fedcba98\n'
+      printf 'integrationBranch: int/multi-A-B\nunits:\n  - { id: A, wave: 0 }\n'
+    } > "$STUB_RUN/run.yaml"
+  fi
   grep -v '^pluginVersion:' "$STUB_RUN/run.yaml" > "$STUB_SCRATCH"
   { printf 'runId: multi-A-B\n'; printf 'pluginVersion: %s\n' "$v"
     grep -v '^runId:' "$STUB_SCRATCH"; } > "$STUB_RUN/run.yaml"
@@ -165,7 +180,7 @@ sed -n "${n}p" "$SCRIPTED"
 STUB
 STUB_SCRATCH="$TMP/runyaml.scratch"
 STUB_VERSION=$VERSION
-export TICK_LOG SCRIPTED VERSIONS STUB_RUN STUB_SCRATCH STUB_VERSION
+export TICK_LOG SCRIPTED VERSIONS BASES STUB_RUN STUB_SCRATCH STUB_VERSION
 STUB_TICK="sh '$TMP/stub-tick.sh'"
 
 # arm <line…> — reset the invocation log and script one output per tick. Also
@@ -176,12 +191,17 @@ arm(){
   : > "$TICK_LOG"
   : > "$SCRIPTED"
   : > "$VERSIONS"
+  : > "$BASES"
   STUB_VERSION=$VERSION
   for l in "$@"; do printf '%s\n' "$l" >> "$SCRIPTED"; done
 }
 
 # records <version-per-tick…> — what the stub orchestrator writes on each tick.
 records(){ : > "$VERSIONS"; for v in "$@"; do printf '%s\n' "$v" >> "$VERSIONS"; done; }
+
+# pins <base-per-tick…> — whether the stub orchestrator pins createdBaseSha on
+# each tick that creates run.yaml (`none` = a tick that refused before BASE).
+pins(){ : > "$BASES"; for b in "$@"; do printf '%s\n' "$b" >> "$BASES"; done; }
 
 ticks(){ wc -l < "$TICK_LOG" | tr -d ' '; }
 
@@ -345,6 +365,46 @@ check 'a run dir with no run.yaml at t0 is a FRESH run, and the driver starts it
 check 'and it is not a usage error' "$rc" '0' "$( cat "$TMP/out" )"
 check 'tick 1 created run.yaml, as step 0 does' \
       "$( [ -f "$RUN/run.yaml" ] && printf present || printf absent )" 'present' "$( cat "$TMP/out" )"
+
+# BP-196 D7 — a fresh run that REFUSES (framework skill check, collision, dirty
+# tree) has by contract already written run.yaml with its pluginVersion and no
+# createdBaseSha, and the driver stops on the non-success verdict. The next
+# invocation on the same run dir must not read that file as a run in progress:
+# a resume reaches step 2 with no base to cut a lane from. It is a run that
+# never started, and both halves say so — the driver in one line before tick 1,
+# the orchestrator's step 0 by recreating the file whole with BASE pinned.
+new_fresh_run run-d7
+arm 'FLEET-STEP:v1 outcome=blocked-on blocked-on=framework-skill waves=0/2 units=0/7'
+pins none
+loop "$TMP/out" --run "$RUN" --tick "$STUB_TICK"
+check 'a fresh run whose tick 1 refuses stops after that one tick' "$( ticks )" '1' "$( cat "$TMP/out" )"
+check 'and the refusing tick left run.yaml behind, with pluginVersion recorded' \
+      "$( grep -c '^pluginVersion:' "$RUN/run.yaml" 2>/dev/null )" '1' "$( cat "$RUN/run.yaml" )"
+check 'but no createdBaseSha — nothing had pinned BASE' \
+      "$( grep -q '^createdBaseSha:' "$RUN/run.yaml" && printf present || printf absent )" 'absent' "$( cat "$RUN/run.yaml" )"
+says_not 'the refusal itself is not misread as the never-started notice' "$TMP/out" 'never started'
+# The resume, same run dir, no --fresh: the driver and the stub orchestrator both
+# see the never-started shape.
+arm 'FLEET-STEP:v1 outcome=success waves=1/2 units=2/7' \
+    'FLEET-STEP:v1 outcome=success waves=2/2 units=7/7'
+loop "$TMP/out" --run "$RUN" --tick "$STUB_TICK"
+says 'the next invocation names the missing createdBaseSha before tick 1' "$TMP/out" 'records no createdBaseSha'
+says 'and reads it as a run that never started, not a resume' "$TMP/out" 'this run never started'
+says 'and treats it as fresh: the version guard starts from nothing' "$TMP/out" 'records no pluginVersion yet'
+says_not 'a never-started run is not a refusal' "$TMP/out" 'fleet-loop: refused'
+check 'and the run then ticks through to its end' "$( ticks )" '2' "$( cat "$TMP/out" )"
+check 'and exits 0' "$rc" '0' "$( cat "$TMP/out" )"
+check 'tick 1 recreated run.yaml with createdBaseSha pinned, as step 0 does' \
+      "$( grep -q '^createdBaseSha:' "$RUN/run.yaml" && printf present || printf absent )" 'present' "$( cat "$RUN/run.yaml" )"
+says 'the orchestrator said in one line that it was recreating' "$TMP/out" 'never started, recreating as a fresh run'
+
+# A resumed run that DID start reads no such notice: createdBaseSha present is
+# the ordinary resume, and the two shapes must stay distinguishable.
+new_run run-d8
+arm 'FLEET-STEP:v1 outcome=success waves=2/2 units=7/7'
+loop "$TMP/out" --run "$RUN" --tick "$STUB_TICK"
+says_not 'a run.yaml that records createdBaseSha is never called never-started' "$TMP/out" 'never started'
+check 'and resumes as before' "$rc" '0' "$( cat "$TMP/out" )"
 
 # Absent AFTER a tick is a different fact from absent before one: step 0 records
 # it on every tick, resume included, so a tick that left it absent is contract

@@ -3079,6 +3079,22 @@ present "$START_MULTI_MD" 'Record `pluginVersion` in `run.yaml` on every tick, r
 present "$START_MULTI_MD" 'your own loaded manifest' \
   '/start-multi takes pluginVersion from the manifest IT loaded, not the branch checkout'\''s'
 
+# A refusing tick (framework skill, collision, dirty tree) has already written
+# run.yaml with pluginVersion and no BASE (BP-196 D7). Resume keyed on "run.yaml
+# exists" alone reads that file as a run in progress and reaches step 2 with no
+# base to cut from. The pin is on the resume CONDITION naming createdBaseSha and
+# on the never-started disposition, in the command and in the tick-boundary
+# companion that restates the resume rule; `bin/fleet-loop` is pinned by
+# scripts/test-fleet-loop.sh.
+present "$START_MULTI_MD" 'Resume when `run.yaml` exists, records `createdBaseSha`, and `--fresh` is absent' \
+  '/start-multi resumes only a run.yaml that records createdBaseSha (BP-196 D7)'
+present "$START_MULTI_MD" 'A `run.yaml` with no `createdBaseSha` is a run that never started' \
+  '/start-multi reads a run.yaml without createdBaseSha as never started, not as a resume (BP-196 D7)'
+present "$START_MULTI_MD" 'never started, recreating as a fresh run' \
+  '/start-multi says in one line that it is recreating a never-started run (BP-196 D7)'
+present "$TICK_MD" 'one without it never started and is recreated fresh' \
+  'the tick-boundary companion restates the never-started rule beside its resume rule (BP-196 D7)'
+
 # --- executed: the run.yaml block gains waveBudget and a spend addend, and
 # NOTHING else. The fenced block under `## run.yaml` is the only specification of
 # the file any tick writes, so it is extracted and read as text: the two additive
