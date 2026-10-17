@@ -25,7 +25,7 @@ The gesture is the user's to start. The `blueprint: N pending` line is telemetry
 
 ## The summon: the board asking you to look now
 
-The user presses **Ask Claude**; the board POSTs `/api/blueprint/board/summon` and broadcasts one frame, `{"type":"summon","at":<epoch ms>}`, to every session holding the channel open. It says *look now*, never *look at this*: what changed is already in the feed. The frame may also carry an optional `instruction` and `by`: when present, the instruction is the pressing member's sentence for this wake (trimmed, at most 2000 characters) and `by` the member who pressed (hosted presses only). Run the sync whole, then act on it within the design gesture; the sentence never replaces the sync, and a frame without it is a plain press. Hold the channel open from anywhere and let the turn end:
+The user presses **Ask Claude**; the board POSTs `/api/blueprint/board/summon` and broadcasts one frame, `{"type":"summon","at":<epoch ms>}`, to every session holding the channel. It says *look now*, never *look at this*: what changed is already in the feed. The frame may carry an optional `instruction` and `by`: when present, the instruction is the pressing member's sentence for this wake (trimmed, at most 2000 characters) and `by` the member who pressed (hosted presses only). Run the sync whole, then act on it within the design gesture; the sentence never replaces the sync, and a frame without it is a plain press. Hold the channel open (hosted: `blueprint listen`, `/blueprint`) and let the turn end:
 
 ```
 Monitor({ ws: { url: 'ws://127.0.0.1:3727/api/blueprint/ws' }, persistent: true })

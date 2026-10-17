@@ -1,4 +1,11 @@
 #!/bin/sh
+blueprint_gate=${CLAUDE_PROJECT_DIR:-.}/.git
+if [ -f "$blueprint_gate" ]; then
+  { read -r blueprint_gate <"$blueprint_gate"; } 2>/dev/null
+  blueprint_gate=${blueprint_gate#gitdir: }
+  case $blueprint_gate in /*) ;; *) blueprint_gate=${CLAUDE_PROJECT_DIR:-.}/$blueprint_gate ;; esac
+fi
+[ -f "$blueprint_gate/blueprint-connection.json" ] ||
 [ -d "${CLAUDE_PROJECT_DIR:-.}/.blueprint" ] || exit 0
 #
 # SessionStart — "open the BLUEPRINT session channel".
@@ -23,9 +30,13 @@
 # runs at the start of **every session in every repo** where the plugin is
 # enabled, including every fleet worktree.
 #
-#   * **Line 2 is the whole program, most of the time.** No `.blueprint/`, no work:
-#     one `test`, then gone. Everything below it is for the one checkout in a
-#     session that is actually designing.
+#   * **The gate above is the whole program, most of the time.** No connection
+#     record in this checkout's git dir and no `.blueprint/`, no work: two `test`s
+#     (a `read` of the one-line `.git` file in a linked worktree), no process
+#     started, then gone. The record is looked for first because a fleet
+#     worktree has no `.blueprint/` (it is gitignored) but has a git dir of its
+#     own, which is where `/blueprint connect` puts the record (BP-277 D7).
+#     Everything below it is for a checkout that is designing or connected.
 #
 #   * **Exit 0 on every path, always.** No `set -e`, no `set -u`, no unguarded
 #     read. A hook that throws at session start is a hook that greets the user
@@ -61,9 +72,92 @@
 # the session leaves this session deaf, and `SessionStart` has already run. The
 # recovery for that is the `blueprintSessionChannel` notice `blueprint-mcp` attaches to
 # every tool result while the channel is shut — this hook only buys t=0.
+#
+# ## Hosted rows: a checkout connected to a hosted session (BP-277)
+#
+# `/blueprint connect` writes `$(git rev-parse --git-dir)/blueprint-connection.json`
+# ({host, sessionId, branchAtConnect, connectedAt}), and from then on
+# `blueprint-mcp` works on that hosted session, not on a local board. A record
+# whose four fields this hook cannot read is no record; so is any record while
+# BLUEPRINT_HOST_URL is set in this hook's own environment, because env vars
+# override it in blueprint-mcp too. The hook cannot see a BLUEPRINT_HOST_URL set
+# only in blueprint-mcp's `.mcp.json` env block. With no
+# record the hook runs the table above and its output is what it was before
+# BP-277, byte for byte (scripts/test-blueprint-design.sh pins both).
+#
+# With one, the local table is skipped, and:
+#
+#   | state                                              | prints                       |
+#   |----------------------------------------------------|------------------------------|
+#   | HEAD is not on branchAtConnect                     | the one-line reminder (F2)   |
+#   | `blueprint listen --probe` exits 0 (a listener)    | nothing more                 |
+#   | it exits non-zero, hangs past 3 s, or no CLI       | the listen instruction       |
+#
+# The listen instruction is a `Monitor` command on `blueprint listen`, never a
+# `Monitor` ws URL at the host: the ws form carries no Authorization header and
+# cannot ack (plugin ADR-018). Instructing when the probe cannot answer is the
+# opposite of the local table's default, on purpose: a second listener costs a
+# duplicate ring line, a missing one leaves this laptop deaf to its own Asks.
 
 blueprint_root=${CLAUDE_PROJECT_DIR:-.}
 blueprint_port=${BLUEPRINT_BOARD_PORT:-3727}
+
+blueprint_record=''
+if [ -z "${BLUEPRINT_HOST_URL:-}" ] && command -v git >/dev/null 2>&1; then
+  blueprint_git_dir=$( git -C "$blueprint_root" rev-parse --absolute-git-dir 2>/dev/null )
+  if [ -n "$blueprint_git_dir" ] && [ -f "$blueprint_git_dir/blueprint-connection.json" ]; then
+    blueprint_record=$( tr -d '\n' <"$blueprint_git_dir/blueprint-connection.json" 2>/dev/null )
+  fi
+fi
+# One string field of the record, or empty.
+blueprint_field(){
+  printf '%s\n' "$blueprint_record" | sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p"
+}
+blueprint_host='' blueprint_session='' blueprint_branch_at_connect='' blueprint_connected_at=''
+if [ -n "$blueprint_record" ]; then
+  blueprint_host=$( blueprint_field host )
+  blueprint_session=$( blueprint_field sessionId )
+  blueprint_branch_at_connect=$( blueprint_field branchAtConnect )
+  blueprint_connected_at=$( blueprint_field connectedAt )
+fi
+
+if [ -n "$blueprint_host" ] && [ -n "$blueprint_session" ] && [ -n "$blueprint_branch_at_connect" ] && [ -n "$blueprint_connected_at" ]; then
+  # F2 = A: stay on the session and say so. The sentence is blueprint-mcp's
+  # (connection.ts, `reminder`), copied so both surfaces read the same.
+  blueprint_head=$( git -C "$blueprint_root" symbolic-ref -q HEAD 2>/dev/null )
+  blueprint_branch=${blueprint_head#refs/heads/}
+  if [ "$blueprint_branch" != "$blueprint_branch_at_connect" ]; then
+    if [ -n "$blueprint_branch" ]; then
+      blueprint_here="branch $blueprint_branch"; blueprint_switch_to="$blueprint_branch's session"
+    else
+      blueprint_here='a detached HEAD'; blueprint_switch_to='another session'
+    fi
+    printf 'blueprint: This checkout is on %s, but Blueprint is connected to the session for branch %s; your Asks still ring here for %s. Run /blueprint connect to switch to %s.\n' \
+      "$blueprint_here" "$blueprint_branch_at_connect" "$blueprint_branch_at_connect" "$blueprint_switch_to"
+  fi
+
+  # The host's own answer to whether this member's Asks ring a laptop
+  # connection (`blueprint listen --probe`, exit 0 when they do), cut off at
+  # 3 s so the hook stays inside its 5 s budget.
+  blueprint_listening=no
+  if command -v blueprint >/dev/null 2>&1; then
+    blueprint listen --probe --host "$blueprint_host" --session "$blueprint_session" >/dev/null 2>&1 </dev/null &
+    blueprint_probe_pid=$!
+    ( sleep 3; kill "$blueprint_probe_pid" 2>/dev/null ) >/dev/null 2>&1 </dev/null &
+    blueprint_timer_pid=$!
+    wait "$blueprint_probe_pid" 2>/dev/null && blueprint_listening=yes
+    kill "$blueprint_timer_pid" 2>/dev/null
+  fi
+  if [ "$blueprint_listening" != yes ]; then
+    printf 'blueprint: this checkout is connected to hosted session %s at %s, and no laptop connection of yours holds its summon socket, so your Asks go to the hosted agent instead of here. Start the listener now, and let the turn end: Monitor({ command: "blueprint listen --host %s --session %s", persistent: true }). If it ends NOT_SIGNED_IN or LISTEN_REFUSED, ask the user to run ! blueprint login --host %s; /blueprint status says more.\n' \
+      "$blueprint_session" "$blueprint_host" "$blueprint_host" "$blueprint_session" "$blueprint_host"
+  fi
+  exit 0
+fi
+
+# The local table is for a design layer only: a checkout that passed the gate
+# on an unusable record alone stops here, as it did before BP-277.
+[ -d "$blueprint_root/.blueprint" ] || exit 0
 
 # No curl, no probe, and no guess. Reporting "open the channel" unprobed would
 # be an instruction to dial a port nothing is on, in every session in the repo.

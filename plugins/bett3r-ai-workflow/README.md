@@ -21,7 +21,7 @@ Fleet:
 | Multi | `/bett3r-ai-workflow:start-multi` | Drives N units through the flow unattended, one worktree each, in parallel where safe. Every unit PR targets one integration branch, `int/<run-id>`; the run ends at N PRs, merging nothing. `/bett3r-ai-workflow:design-multi` does the same for N designs, batching the genuine forks into one human sitting. |
 | Land | `/bett3r-ai-workflow:merge-multi` | After review: merges the unit PRs into the integration branch (conflicts resolved once), runs the gate once there, opens one integration PR. `--land` merges it. Run it in a fresh session. |
 
-Utilities: `/bett3r-ai-workflow:commit` (logically grouped commits for ad-hoc work) and `/bett3r-ai-workflow:run-report` (where a unit's time and tokens went, read from the transcripts, so any past branch can be reported; `--aggregate` compares runs by plugin version), and `/bett3r-ai-workflow:cpu-pool` (lift the machine-wide compiler token pool before a compile-heavy fleet, and get the line that launches the orchestrator inside it).
+Utilities: `/bett3r-ai-workflow:commit` (logically grouped commits for ad-hoc work) and `/bett3r-ai-workflow:run-report` (where a unit's time and tokens went, read from the transcripts, so any past branch can be reported; `--aggregate` compares runs by plugin version), `/bett3r-ai-workflow:cpu-pool` (lift the machine-wide compiler token pool before a compile-heavy fleet, and get the line that launches the orchestrator inside it), and `/bett3r-ai-workflow:blueprint` (connect this checkout to its hosted Blueprint session and run the local listener that rings it with your Asks; `docs/adr/ADR-018`).
 
 ## The gate is the host repo's
 
@@ -63,7 +63,7 @@ Three, all in `hooks/hooks.json` and each one cheap check and gone in a repo whe
 | Hook | Fires | Does |
 |---|---|---|
 | `blueprint-pending.sh` | `UserPromptSubmit` | Puts `blueprint: N pending (seq A→B)` in front of the prompt while the user has unsynced board edits. Telemetry, never a trigger. |
-| `blueprint-session-channel.sh` | `SessionStart` | Tells a session to open the board's summon channel when a board is serving this repo and nobody holds it. |
+| `blueprint-session-channel.sh` | `SessionStart` | Tells a session to open the board's summon channel when a board is serving this repo and nobody holds it; in a checkout connected to a hosted session, to start `blueprint listen` when nothing listens, with a reminder when the branch moved. |
 | `lane-git-guard.sh` | `PreToolUse` on `Bash` | When the checkout a command acts on holds `.work/lane.yaml` (an unattended lane), blocks the git commands that discard or shelve the working tree. |
 
 ## It's working if

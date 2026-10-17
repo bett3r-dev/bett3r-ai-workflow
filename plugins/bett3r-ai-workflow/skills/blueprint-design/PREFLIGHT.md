@@ -94,6 +94,27 @@ else
     fi
   fi
 fi
+
+# A hosted connection (BP-277): `/blueprint connect` records the session this
+# checkout drives in the git dir. Printed only when the record exists and its
+# four fields read, so a checkout that never connected reports as before.
+blueprint_record=''
+if command -v git >/dev/null 2>&1; then
+  blueprint_git_dir=$( git rev-parse --absolute-git-dir 2>/dev/null )
+  if [ -n "$blueprint_git_dir" ] && [ -f "$blueprint_git_dir/blueprint-connection.json" ]; then
+    blueprint_record=$( tr -d '\n' <"$blueprint_git_dir/blueprint-connection.json" 2>/dev/null )
+  fi
+fi
+if [ -n "$blueprint_record" ]; then
+  blueprint_host=$( printf '%s\n' "$blueprint_record" | sed -n 's/.*"host"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' )
+  blueprint_session=$( printf '%s\n' "$blueprint_record" | sed -n 's/.*"sessionId"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' )
+  blueprint_branch=$( printf '%s\n' "$blueprint_record" | sed -n 's/.*"branchAtConnect"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' )
+  blueprint_connected_at=$( printf '%s\n' "$blueprint_record" | sed -n 's/.*"connectedAt"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' )
+  if [ -n "$blueprint_host" ] && [ -n "$blueprint_session" ] && [ -n "$blueprint_branch" ] && [ -n "$blueprint_connected_at" ]; then
+    printf 'connection: hosted\n'
+    printf '  host: %s\n' "$blueprint_host"; printf '  session: %s\n' "$blueprint_session"; printf '  branch: %s\n' "$blueprint_branch"
+  fi
+fi
 # --- end blueprint preflight ---
 ```
 
@@ -114,3 +135,4 @@ fi
 | `board: serving` | A board is up on this checkout. The `status:` line under it is the board's whole answer, including `sessions`: how many sessions hold the summon channel (`/api/blueprint/ws`) open. | Compare its `lastSeq` with the `status` tool's; the same number means the link is live. `"sessions":0` means nobody would hear the *Ask Claude* button: open the channel (`blueprint-design`, the summon). A count of one or more is not proof anyone is listening (no heartbeat, so a half-open socket counts) and never decides against opening one; an older board omits the field, which is unknown, never zero. |
 | `board: other-repo` | Something holds :3727 serving a different checkout, and the `status:` line says which. | **Name the repo that holds it** (the `repoPath` in the `status:` line is the project root that board serves) before the first proposal: until it is closed this repo's board cannot claim the port, and the screen the user is watching will never move. Then carry on. |
 | `board: unknown` | No `curl` here, so the board was not probed. | Say it was not verified rather than reporting it down, and carry on. |
+| `connection: hosted` | This checkout is connected to a hosted session (`/blueprint connect` wrote the record in the git dir); the `host:`, `session:` and `branch:` lines under it are the record's, `branch:` being the branch it was connected on. | `blueprint-mcp` works on that hosted session, not this checkout's `.blueprint/` (unless `BLUEPRINT_HOST_URL` is set, which overrides the record), so the `board:` and `blueprint_dir:` rows above describe a local board this session is not designing on: no local board to offer, and the summon arrives through the listener, not `/api/blueprint/ws`. Call `status`, which answers for the hosted session (BOARD-SETUP.md §1); `/blueprint disconnect` returns to a local board. Run `/blueprint status` if the `SessionStart` hook said no listener holds the session. |
