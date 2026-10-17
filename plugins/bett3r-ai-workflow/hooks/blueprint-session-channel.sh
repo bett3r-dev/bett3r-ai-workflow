@@ -1,10 +1,10 @@
 #!/bin/sh
-blueprint_gate=${CLAUDE_PROJECT_DIR:-.}/.git
+blueprint_gate=${GIT_DIR:-${CLAUDE_PROJECT_DIR:-.}/.git}
 if [ -f "$blueprint_gate" ]; then
   { read -r blueprint_gate <"$blueprint_gate"; } 2>/dev/null
   blueprint_gate=${blueprint_gate#gitdir: }
-  case $blueprint_gate in /*) ;; *) blueprint_gate=${CLAUDE_PROJECT_DIR:-.}/$blueprint_gate ;; esac
 fi
+case $blueprint_gate in /*) ;; *) blueprint_gate=${CLAUDE_PROJECT_DIR:-.}/$blueprint_gate ;; esac
 [ -f "$blueprint_gate/blueprint-connection.json" ] ||
 [ -d "${CLAUDE_PROJECT_DIR:-.}/.blueprint" ] || exit 0
 #
@@ -33,10 +33,13 @@ fi
 #   * **The gate above is the whole program, most of the time.** No connection
 #     record in this checkout's git dir and no `.blueprint/`, no work: two `test`s
 #     (a `read` of the one-line `.git` file in a linked worktree), no process
-#     started, then gone. The record is looked for first because a fleet
-#     worktree has no `.blueprint/` (it is gitignored) but has a git dir of its
-#     own, which is where `/blueprint connect` puts the record (BP-277 D7).
-#     Everything below it is for a checkout that is designing or connected.
+#     started, then gone. The git dir is found as git finds it: `GIT_DIR` when
+#     set (relative to the checkout, as `git -C` resolves it), else `.git`, a
+#     directory or a linked worktree's `gitdir:` file. The record is looked for
+#     first because a fleet worktree has no `.blueprint/` (it is gitignored) but
+#     has a git dir of its own, which is where `/blueprint connect` puts the
+#     record (BP-277 D7). Everything below it is for a checkout that is
+#     designing or connected.
 #
 #   * **Exit 0 on every path, always.** No `set -e`, no `set -u`, no unguarded
 #     read. A hook that throws at session start is a hook that greets the user

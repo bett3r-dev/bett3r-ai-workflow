@@ -1403,9 +1403,10 @@ hosted_record(){
 # to set. Positional, because an assignment prefixed to a function call may
 # outlive it in some shells. Run from `/` so only CLAUDE_PROJECT_DIR names the
 # checkout.
+# $6 = a GIT_DIR to set.
 run_hosted_hook(){
   rm -f "$HOSTED_LOG"
-  ( cd / && env -u BLUEPRINT_HOST_URL ${5:+BLUEPRINT_HOST_URL="$5"} \
+  ( cd / && env -u BLUEPRINT_HOST_URL -u GIT_DIR ${5:+BLUEPRINT_HOST_URL="$5"} ${6:+GIT_DIR="$6"} \
       CLAUDE_PROJECT_DIR="$HOSTED_WORK" BLUEPRINT_BOARD_PORT="$1" PATH="$2" \
       GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CEILING_DIRECTORIES="$TMP" \
       BLUEPRINT_STUB_LOG="$HOSTED_LOG" BLUEPRINT_STUB_RC="${3:-1}" BLUEPRINT_STUB_SLEEP="${4:-}" \
@@ -1552,6 +1553,32 @@ $( listen_notice )"
   printf 'gitdir: ../hosted/.git/worktrees/hosted-wt\n' >"$HOSTED_WORK/.git"
   run_hosted_hook "$BOARD_PORT" "$HOSTED_BIN:$NO_CLI_PATH" 1
   assert_hook 'a linked worktree whose .git names its git dir relatively: the listen instruction' "$( listen_notice )"
+  stop_stub_board
+  HOSTED_WORK=$hosted_main
+
+  # GIT_DIR names the git dir, as it does for git itself: the record is looked
+  # for there, not under the checkout's own `.git`. A checkout with no `.git`
+  # and no `.blueprint/` (a plain directory, so only the gate's GIT_DIR read can
+  # let the hook past line 9) is connected through it; a relative GIT_DIR
+  # resolves against the checkout, as `git -C` resolves it.
+  hosted_checkout git feat
+  hosted_record feat
+  hosted_ext="$TMP/hosted-ext"
+  rm -rf "$hosted_ext"; mkdir -p "$hosted_ext"
+  hosted_ext_physical=$( CDPATH= cd -- "$hosted_ext" && pwd -P )
+  hosted_main=$HOSTED_WORK
+  HOSTED_WORK=$hosted_ext
+  start_stub_board "$hosted_ext_physical" compact 0
+  run_hosted_hook "$BOARD_PORT" "$HOSTED_BIN:$NO_CLI_PATH" 1 '' '' "$hosted_main/.git"
+  assert_hook 'GIT_DIR naming a git dir with a record, from a checkout with no .git: the listen instruction' "$( listen_notice )"
+  run_hosted_hook "$BOARD_PORT" "$HOSTED_BIN:$NO_CLI_PATH" 1 '' '' "../hosted/.git"
+  assert_hook 'a relative GIT_DIR resolves against the checkout: the listen instruction' "$( listen_notice )"
+  mkdir -p "$hosted_ext/.blueprint"
+  run_hosted_hook "$BOARD_PORT" "$HOSTED_BIN:$NO_CLI_PATH" 1
+  assert_hook 'the same checkout without GIT_DIR has no record: today'"'"'s notice (control)' "$( today_notice "$BOARD_PORT" )"
+  rm -f "$hosted_main/.git/blueprint-connection.json"
+  run_hosted_hook "$BOARD_PORT" "$HOSTED_BIN:$NO_CLI_PATH" 1 '' '' "$hosted_main/.git"
+  assert_hook 'GIT_DIR naming a git dir with no record: today'"'"'s notice' "$( today_notice "$BOARD_PORT" )"
   stop_stub_board
   HOSTED_WORK=$hosted_main
 fi

@@ -34,6 +34,7 @@ If no `mcp__blueprint__*` tools are in this session, `blueprint-mcp` is not regi
    | code | what you do |
    |---|---|
    | `CONNECT_NOT_SIGNED_IN` | Ask the user to run `! blueprint login --host <url>` (the message names the host when it knows it), then call `connect` again. |
+   | `CONNECT_RECORD_MISMATCH` | This checkout's record names a session for this branch that the host no longer lists among the branch's sessions: show both (the message and `details`), let the user pick one of the listed sessions and call again with `sessionId`, or `/blueprint disconnect` first. |
    | `CONNECT_HOST_REQUIRED` | The laptop is signed in to several hosts and none was named: ask which, and call again with `host`. |
    | `CONNECT_PICK_SESSION` | Several sessions are bound to this branch: show the listed sessions, let the user pick, and call again with `sessionId`. |
    | `CONNECT_ORG_REQUIRED` | No session is bound to this branch, so `connect` starts a change from the repository's Baseline, and the remote is in several orgs: show them, let the user pick, and call again with `orgId`. |
@@ -41,7 +42,7 @@ If no `mcp__blueprint__*` tools are in this session, `blueprint-mcp` is not regi
    | `CONNECT_NO_BRANCH` | This checkout has no branch or no origin remote: say so and stop. |
    | anything else | Quote the code and message and stop. |
 
-   A refused `connect` writes nothing. `started: true` on the answer means no session was bound to this branch and `connect` started a change session: say so.
+   A refused `connect` writes nothing. `started: true` on the answer means no session was bound to this branch and `connect` started a change session: say so. `reused: true` means the record already named this branch's session and `connect` kept it (a started change is unfindable on the host until the branch is pushed, so a repeat `connect` never starts a second one).
 
 2. If this session already runs a `Monitor` on `blueprint listen` for another session, `TaskStop` it first.
 3. Start the listener with the answer's `listen` field, verbatim; do not rebuild it from the host and session. Its form is `blueprint listen --host <h> --session <id>`, and the call is:
@@ -90,6 +91,7 @@ blueprint listen --probe --host <h> --session <id>              # exit 0: your A
 ```
 
 - No record: not connected; `/design`'s local board mode applies. Stop there.
+- No `mcp__blueprint__*` tools although `blueprint-mcp` is registered, and its stderr says `CONNECT_HOST_NOT_SIGNED_IN`: the record names a host this laptop is not signed in to, and `blueprint-mcp` refuses to start rather than silently working on the local checkout. The user runs `! blueprint login --host <h>` and restarts, or deletes the record (`rm "$(git rev-parse --git-dir)/blueprint-connection.json"`, what `disconnect` does) to design locally.
 - `BLUEPRINT_HOST_URL` set: the env vars choose the target, not the record. Say so.
 - The branch now differs from the record's `branchAtConnect`: the connection stays on that session (F2). Every `blueprint-mcp` result and the `SessionStart` hook carry one reminder line, `… Run /blueprint connect to switch to <branch>'s session.` Switching is the user's call: `/blueprint connect` again on this branch.
 - The probe exits 1, or no `Monitor` in this session runs the listener: offer to start it (`connect` step 3).
