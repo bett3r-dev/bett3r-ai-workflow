@@ -30,7 +30,7 @@ Two rules of address hold in every paragraph. **Restate every reference at every
 
 ## Confirming a decided fork
 
-Once the fork is decided, show the chosen option's walk back as **Given/When/Then** and record it on the map as `given`/`when`/`then`: it is the test that will be written, and the owner reading a `then:` catches a mis-aimed oracle before an executor pays for it. `design-map candidates` and `check-plan` consume it and refuse a prose walk. Where the rule is "every X must do Y", the walk stays prose under `kind: structural`. **An open fork is presented, never pinned**: no Given/When/Then until an option is chosen.
+Once the fork is decided, show the chosen option's walk back as **Given/When/Then** and record it on the map as `given`/`when`/`then`: it is the test that will be written, and the owner reading a `then:` catches a mis-aimed oracle before an executor pays for it. `design-map candidates` and `check-plan` consume it and refuse a prose walk. Where a step drives or expects a known eventstorming element (the command the `when` sends, the event the `then` expects), name it on the walk as `exercises: {when: {esId}}`, one `{esId}` per keyword, and the scenario derived from the walk carries it on that step. Where the rule is "every X must do Y", the walk stays prose under `kind: structural`. **An open fork is presented, never pinned**: no Given/When/Then until an option is chosen.
 
 Where a fork concerns the flow, a skill or a command this session is itself running, the session is a participant: an observation is evidence about the loaded version, never about the design question, so name the version.
 

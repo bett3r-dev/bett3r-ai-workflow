@@ -2104,8 +2104,8 @@ printf 'ESAS-296: fork-derived scenarios — one derivation, pinned to blueprint
 # proposals and reasons out) pins the two: blueprint's vitest drives the TS over
 # it, the driver below drives the Python over this byte-identical copy.
 FSC="$FIX/fork-scenarios"
-check 'control: the PL copy holds 19 maps, each with its expected file' \
-  "$( ls "$FSC"/*.map.json | wc -l | tr -d ' ' ) $( ls "$FSC"/*.expected.json | wc -l | tr -d ' ' ) $( ls "$FSC" | wc -l | tr -d ' ' )" '19 19 38'
+check 'control: the PL copy holds 21 maps, each with its expected file' \
+  "$( ls "$FSC"/*.map.json | wc -l | tr -d ' ' ) $( ls "$FSC"/*.expected.json | wc -l | tr -d ' ' ) $( ls "$FSC" | wc -l | tr -d ' ' )" '21 21 42'
 
 # derive_all <dir> — runs design-map.py's fork_scenarios over every <case>.map.json
 # in <dir> and compares the JSON.stringify(_, null, 2) + "\n" bytes with
@@ -2129,7 +2129,7 @@ print(f"match={len(cases) - len(differs)} total={len(cases)} differs={','.join(d
 PY
 }
 check 'the Python derivation reproduces every expected file byte for byte' \
-  "$( derive_all "$FSC" 2>&1 )" 'match=19 total=19 differs=none'
+  "$( derive_all "$FSC" 2>&1 )" 'match=21 total=21 differs=none'
 mkdir -p "$TMP/fsc"
 cp "$FSC"/* "$TMP/fsc/"
 python3 - "$TMP/fsc/review-option-changed.expected.json" <<'PY'
@@ -2138,7 +2138,7 @@ p = sys.argv[1]; b = open(p, "rb").read()
 open(p, "wb").write(b.replace(b'"option-changed"', b'"reopened"'))
 PY
 check 'one reason planted in a temp copy of an expected file is caught' \
-  "$( derive_all "$TMP/fsc" 2>&1 )" 'match=18 total=19 differs=review-option-changed'
+  "$( derive_all "$TMP/fsc" 2>&1 )" 'match=20 total=21 differs=review-option-changed'
 
 # same_set <a> <b> — fresh when both directories list the same names and every
 # file is byte-identical (cmp), else stale.
@@ -2162,6 +2162,88 @@ else
   skipped=$(( skipped + 1 ))
   printf '  \033[33m!! SKIP reason=no-blueprint-checkout\033[0m the fork-scenarios fixture set was NOT compared with blueprint (set BLUEPRINT_CHECKOUT); this is not a pass\n'
 fi
+
+printf 'BP-231: a step names the element it exercises; a walk names one per keyword\n'
+# blueprint's GherkinStep is {text, exercises?: {esId}} and a MapOptionWalk carries
+# exercises?: {given?, when?, then?: {esId}} (ADR-123). The schema admits both and
+# refuses what blueprint's store refuses with MAP_ENTRY_INVALID (map-write.ts isStep,
+# isWalkExercises): an extra keyword, an extra element key, an empty or blank id.
+WALK0='m["forks"][0]["card"]["options"][0]["walks"][0]'
+mutate step-bound 'm["scenarios"][0]["when"][0]["exercises"] = {"esId": "design_cmd_run-conflict-check"}'
+dm validate "$TMP/car-step-bound.json"
+check 'validate: a scenario whose when[0] names its element is a valid map' \
+  "$( attr "$LINE" outcome ) exit=$rc" 'ok exit=0' "$( cat "$OUT" )"
+mutate walk-bound "$WALK0"'["exercises"] = {"when": {"esId": "design_cmd_run-conflict-check"}}'
+dm validate "$TMP/car-walk-bound.json"
+check 'validate: a walk naming the element its when exercises is a valid map' \
+  "$( attr "$LINE" outcome ) exit=$rc" 'ok exit=0' "$( cat "$OUT" )"
+mutate basis-bound 'm["scenarios"][0]["derivedFrom"]["basis"]["exercises"] = {"given": {"esId": "e1"}, "when": {"esId": "e2"}, "then": {"esId": "e3"}}'
+dm validate "$TMP/car-basis-bound.json"
+check 'validate: a derivation basis carrying the walk'"'"'s elements is a valid map' \
+  "$( attr "$LINE" outcome ) exit=$rc" 'ok exit=0' "$( cat "$OUT" )"
+# The store reads exercises: {} on a walk as absent, and admits an element on a
+# keyword with no text (a prose walk) or on a structural walk (BP-231 D17).
+mutate walk-empty-exercises "$WALK0"'["exercises"] = {}'
+dm validate "$TMP/car-walk-empty-exercises.json"
+check 'validate: a walk with exercises {} is a valid map' \
+  "$( attr "$LINE" outcome ) exit=$rc" 'ok exit=0' "$( cat "$OUT" )"
+mutate walk-prose-bound 'w = '"$WALK0"'
+for k in ("given", "when", "then"): del w[k]
+w["exercises"] = {"when": {"esId": "e2"}}'
+dm validate "$TMP/car-walk-prose-bound.json"
+check 'validate: a prose walk naming an element is a valid map' \
+  "$( attr "$LINE" outcome ) exit=$rc" 'ok exit=0' "$( cat "$OUT" )"
+mutate walk-structural-bound 'w = '"$WALK0"'
+for k in ("given", "when", "then"): del w[k]
+w["kind"] = "structural"
+w["exercises"] = {"then": {"esId": "e3"}}'
+dm validate "$TMP/car-walk-structural-bound.json"
+check 'validate: a structural walk naming an element is a valid map' \
+  "$( attr "$LINE" outcome ) exit=$rc" 'ok exit=0' "$( cat "$OUT" )"
+car_invalid step-element-extra-key 'm["scenarios"][0]["when"][0]["exercises"] = {"esId": "e", "kind": "command"}' \
+  /scenarios/0/when/0/exercises/kind additionalProperties
+car_invalid step-element-empty-id 'm["scenarios"][0]["when"][0]["exercises"] = {"esId": ""}' \
+  /scenarios/0/when/0/exercises/esId minLength
+car_invalid step-element-blank-id 'm["scenarios"][0]["when"][0]["exercises"] = {"esId": "  "}' \
+  /scenarios/0/when/0/exercises/esId pattern
+car_invalid step-element-no-id 'm["scenarios"][0]["when"][0]["exercises"] = {}' \
+  /scenarios/0/when/0/exercises/esId required
+car_invalid step-extra-key 'm["scenarios"][0]["when"][0]["covers"] = "e"' \
+  /scenarios/0/when/0/covers additionalProperties
+car_invalid walk-extra-keyword "$WALK0"'["exercises"] = {"examples": {"esId": "e"}}' \
+  /forks/0/card/options/0/walks/0/exercises/examples additionalProperties
+car_invalid walk-element-extra-key "$WALK0"'["exercises"] = {"when": {"esId": "e", "kind": "command"}}' \
+  /forks/0/card/options/0/walks/0/exercises/when/kind additionalProperties
+car_invalid walk-element-empty-id "$WALK0"'["exercises"] = {"then": {"esId": ""}}' \
+  /forks/0/card/options/0/walks/0/exercises/then/esId minLength
+car_invalid walk-element-bare-id "$WALK0"'["exercises"] = {"given": "e"}' \
+  /forks/0/card/options/0/walks/0/exercises/given type
+# same_walk: an element absent on one side only, or a different id, is a change;
+# exercises {} reads as absent (fork-scenarios.ts sameExercises).
+same_walks(){
+  python3 - "$ROOT/plugins/bett3r-ai-workflow/scripts/design-map.py" <<'PY'
+import importlib.util
+spec = importlib.util.spec_from_file_location("design_map", __import__("sys").argv[1])
+dm = importlib.util.module_from_spec(spec); spec.loader.exec_module(dm)
+w = {"scenario": "s", "text": "t", "given": "g", "when": "w", "then": "x"}
+el = lambda i: {"when": {"esId": i}}
+print(dm.same_walk(dict(w, exercises={}), dict(w)), dm.same_walk(dict(w, exercises=el("a")), dict(w)),
+      dm.same_walk(dict(w), dict(w, exercises=el("a"))), dm.same_walk(dict(w, exercises=el("a")), dict(w, exercises=el("b"))),
+      dm.same_walk(dict(w, exercises=el("a")), dict(w, exercises=el("a"))))
+PY
+}
+check 'same_walk: {} = absent, one-sided element changed, other id changed, same id same' \
+  "$( same_walks 2>&1 )" 'True False False False True'
+# export-examples copies an agreed scenario whole: a step's element and its basis's survive.
+feed bound '
+s = next(s for s in b["map"]["scenarios"] if s["id"] == "SCN-0000000A")
+s["when"][0]["exercises"] = {"esId": "design_cmd_run-conflict-check"}
+s["derivedFrom"]["basis"]["exercises"] = {"when": {"esId": "design_cmd_run-conflict-check"}}'
+export_fresh bound
+check 'export-examples, an agreed scenario with a bound step: ok' "$( attr "$LINE" outcome ) exit=$rc" 'ok exit=0' "$( cat "$OUT" )"
+check 'export-examples: the step and its basis carry the element' \
+  "$( python3 -c 'import json,sys; s=json.load(open(sys.argv[1]))["scenarios"][0]; print(s["id"], json.dumps(s["when"][0], sort_keys=True), s["derivedFrom"]["basis"]["exercises"]["when"]["esId"])' "$TMP/exp/bound/map.json" 2>&1 )" \
+  'SCN-0000000A {"exercises": {"esId": "design_cmd_run-conflict-check"}, "text": "/design writes map.json"} design_cmd_run-conflict-check'
 
 printf 'ESAS-296: validate — the scenarios slot, and one label per walk\n'
 dm validate "$FIX/scenario-agreed.map.json"

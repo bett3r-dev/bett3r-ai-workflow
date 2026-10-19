@@ -1492,8 +1492,18 @@ def has_gherkin(walk):
     return all(f in walk for f in ("given", "when", "then"))
 
 
-def steps_of(text):
-    return [] if text is None else [{"text": text}]
+def steps_of(walk, keyword):
+    """BP-231 (D11): a keyword's step carries the element the walk names for
+    that keyword, and no `exercises` key without one."""
+    text = walk.get(keyword)
+    if text is None:
+        return []
+    element = (walk.get("exercises") or {}).get(keyword)
+    return [{"text": text} if element is None else {"text": text, "exercises": {"esId": element["esId"]}}]
+
+
+def exercised_id(walk, keyword):
+    return ((walk.get("exercises") or {}).get(keyword) or {}).get("esId")
 
 
 def same_rejection(walk, basis):
@@ -1503,11 +1513,13 @@ def same_rejection(walk, basis):
 
 
 def same_walk(walk, basis):
-    """The walk's fields a basis records; `kind` absent reads as behavioral."""
+    """The walk's fields a basis records; `kind` absent reads as behavioral. An
+    element absent on one side only, or a different id, is a change (BP-231 D11)."""
     return (walk.get("text") == basis.get("text")
             and is_structural(walk) == is_structural(basis)
             and all(walk.get(f) == basis.get(f) for f in ("given", "when", "then"))
-            and same_rejection(walk.get("rejection"), basis.get("rejection")))
+            and same_rejection(walk.get("rejection"), basis.get("rejection"))
+            and all(exercised_id(walk, f) == exercised_id(basis, f) for f in ("given", "when", "then")))
 
 
 def review_reason(derived_from, forks):
@@ -1563,9 +1575,9 @@ def fork_scenarios(payload):
                 "state": "ready" if ready else "needs-gherkin",
                 "title": walk["scenario"], "text": walk["text"],
                 "anchors": [fork.get("anchor", fork["id"])],
-                "given": steps_of(walk.get("given")) if ready else [],
-                "when": steps_of(walk.get("when")) if ready else [],
-                "then": steps_of(walk.get("then")) if ready else []}
+                "given": steps_of(walk, "given") if ready else [],
+                "when": steps_of(walk, "when") if ready else [],
+                "then": steps_of(walk, "then") if ready else []}
             # BP-229 (D7): the walk's declared rejection, copied only when the walk carries one.
             if "rejection" in walk:
                 proposal["rejection"] = walk["rejection"]
