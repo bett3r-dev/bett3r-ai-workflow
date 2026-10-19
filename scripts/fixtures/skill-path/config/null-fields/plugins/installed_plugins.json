@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "plugins": {
+    "bett3r-pv3-ai-skills@bett3r-ai-workflow": [
+      { "scope": "user", "installPath": "@FIXTURE@/cache/bett3r-ai-workflow/bett3r-pv3-ai-skills/0.17.0", "version": null, "projectPath": null },
+      { "scope": "project", "projectPath": null, "installPath": "@FIXTURE@/cache/bett3r-ai-workflow/bett3r-pv3-ai-skills/0.16.0", "version": "0.16.0" }
+    ]
+  }
+}

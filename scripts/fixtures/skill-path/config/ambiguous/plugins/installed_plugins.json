@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "plugins": {
+    "bett3r-pv3-ai-skills@bett3r-ai-workflow": [
+      { "scope": "user", "installPath": "@FIXTURE@/cache/bett3r-ai-workflow/bett3r-pv3-ai-skills/0.17.0", "version": "0.17.0", "installedAt": "2026-10-01T00:00:00.000Z", "lastUpdated": "2026-10-01T00:00:00.000Z" }
+    ],
+    "bett3r-pv3-ai-skills@other-market": [
+      { "scope": "user", "installPath": "@FIXTURE@/cache/other-market/bett3r-pv3-ai-skills/1.0.0", "version": "1.0.0", "installedAt": "2026-10-01T00:00:00.000Z", "lastUpdated": "2026-10-01T00:00:00.000Z" }
+    ]
+  }
+}

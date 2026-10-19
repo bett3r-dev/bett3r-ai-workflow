@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="generator" content="design-map"><title>BP-196</title><style>
+body{font:15px/1.5 system-ui,sans-serif;margin:0;background:#f6f5f2;color:#1d1d1b}
+header{padding:20px 28px;border-bottom:1px solid #ddd;background:#fff}
+h1{margin:0 0 4px;font-size:20px} #dbnote{color:#555;font-size:13px}
+.levels{padding:12px 28px;font-size:13px;color:#444} .levels b{color:#1d1d1b}
+main{padding:12px 28px 40px;display:grid;gap:14px;max-width:960px}
+.fork{background:#fff;border:1px solid #ddd;border-left:5px solid #c9c9c9;border-radius:8px;padding:14px 18px}
+.fork.open{border-left-color:#d4553b} .fork.done{border-left-color:#2f8f5b}
+.fork.moot{opacity:.6} .fork.titleonly h3{color:#666} .locked{font-size:13px;color:#666}
+.legend{padding:8px 28px;font-size:12px;color:#444;display:flex;gap:10px;flex-wrap:wrap}
+.legend span{border-left:5px solid #c9c9c9;padding:0 6px;background:#fff}
+.walks{margin:4px 0 2px 18px;font-size:13px;color:#333} .note{font-size:13px;color:#555;margin:2px 0}
+.eyebrow{font-size:12px;color:#666} h3{margin:2px 0 8px;font-size:16px}
+.opt{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 10px;border:1px solid #e3e3e3;border-radius:6px;margin:6px 0}
+.opt.rec{background:#fbf6e8} .opt.picked{outline:2px solid #2f8f5b}
+.badge{font-size:11px;background:#d49a1f;color:#fff;border-radius:4px;padding:1px 5px;margin-left:6px}
+textarea{width:100%;min-height:54px;box-sizing:border-box;margin-top:6px}
+.btn{font:inherit;font-size:13px;padding:4px 10px;border-radius:5px;border:1px solid #bbb;background:#fff;cursor:pointer}
+.btn:disabled{cursor:not-allowed;opacity:.5} .saved{font-size:12px;color:#555;margin-left:8px}
+.fork.owner{border-left-color:#d49a1f} .legend .owner{border-left-color:#d49a1f}
+.fork.recommendation{border-left-color:#3b6fd4} .legend .recommendation{border-left-color:#3b6fd4}
+.fork.code{border-left-color:#7a4fc9} .legend .code{border-left-color:#7a4fc9}
+</style></head><body><header><h1>BP-196</h1><div>A fork you leave unanswered is taken on its recommendation.</div><div id="dbnote">Connecting to the answer store&hellip;</div></header><div class="levels"><b>goal</b> Framework code written in /build follows the host framework&#x27;s own skills &middot; <b>mapActor</b> The /build executor and verifier (no Skill tool) &middot; <b>impact</b> They read the declared framework skill and the create-* skills it routes to, by resolved file &middot; <b>deliverable</b> skill-path resolver + /build relays framework skill file and plugin root to executor and verifier, PV3 create-* skills open with a &#x27;Starting from a scaffold&#x27; section</div><div class="legend"><span class="owner">decided: owner</span><span class="recommendation">decided: recommendation</span><span class="code">decided: code</span></div><main><article class="fork decided owner" data-fork-id="BP-196-F1"><div class="eyebrow">BP-196-F1 &middot; BP-196 &middot; skill-path resolver + /build relays framework skill file and plugin root to executor and verifier &middot; decided (owner): refuse-before-start</div><h3>When the framework skill a repo declares cannot be found on this machine, what should /build do?</h3><p>Every repo we build in declares a framework skill in .blueprint.config.json (blueprint and teselly: bett3r-pv3-ai-skills:scaffold-from-design; kixie: ddd:scaffold-from-design). After this ticket /build looks that name up among the installed plugins and hands the file to the coding and reviewing agents. The lookup can fail: the plugin is not installed (on this laptop ddd is missing, so a kixie build here would hit it), the plugin runs from a source checkout, or the name is misspelled. Today nothing notices: /build prints one line (build.md:49), and in a fleet that line always prints, and the agent writes framework code without the framework&#x27;s rules.</p><ul><li>A kixie fleet started from a machine without the ddd plugin</li><li>A developer running the plugin from a source checkout</li><li>A typo in designTooling.scaffoldSkill</li><li>A repo that declares no framework skill</li></ul><div class="opt"><div><b>carry-on</b> Carry on: each slice runs and records the missing skill as a deviation the reviewer weighs<ul class="walks"><li><i>kixie fleet without ddd</i> &mdash; The code is written and committed without the framework rules; you learn it from the PR record.</li></ul></div><button class="btn" data-pick="carry-on" disabled>Choose</button></div><div class="opt"><div><b>block-slice</b> Stop each slice that touches framework code with BLOCKED<ul class="walks"><li><i>kixie fleet without ddd</i> &mdash; Each lane spends its provisioning and stops at its first framework slice with the same message.</li></ul></div><button class="btn" data-pick="block-slice" disabled>Choose</button></div><div class="opt rec"><div><b>refuse-before-start</b> Check once before anything runs: /build Step 1 and /start-multi before provisioning refuse with the missing plugin and install command<span class=badge>recommended</span><ul class="walks"><li><i>kixie fleet without ddd</i> &mdash; The run refuses in seconds instead of building blind or stopping lane by lane.</li><li><i>no framework skill declared</i> &mdash; A repo that declares nothing is unaffected.</li></ul></div><button class="btn" data-pick="refuse-before-start" disabled>Choose</button></div><p><b>Recommendation.</b> refuse-before-start: The failure is a fact about the machine, not about any slice, so it should be found once and before any compute is spent. Writing framework code blind is the quality loss this ticket exists to remove.</p><p class="note"><b>If overturned.</b> carry-on: rule 3 records the deviation and the verifier adjudicates it; block-slice: the executor reports BLOCKED on a framework slice; in both, start-multi.md is untouched.</p><textarea placeholder="Anything the options miss, or a question for me" disabled></textarea><div><button class="btn" data-action="save" disabled>Save comment</button> <button class="btn" data-action="agree" disabled>Agree with the recommendation</button><span class="saved"></span></div></article><article class="fork decided owner" data-fork-id="BP-196-F2"><div class="eyebrow">BP-196-F2 &middot; BP-196 &middot; PV3 create-* skills open with a &#x27;Starting from a scaffold&#x27; section &middot; decided (owner): include</div><h3>Should this ticket also give the PV3 create-* skills a &#x27;Starting from a scaffold&#x27; section, as the kixie ones have?</h3><p>Once the coding agent reads the framework skills, it reads them as written. kixie&#x27;s ddd create-aggregate, create-policy, create-readmodel, create-schema and create-flow-tests each open with a &#x27;Starting from a scaffold&#x27; section: keep the file&#x27;s names, ids and placement, and work only the TODO(scaffold) markers. The PV3 skills in this same plugin repo have none; they walk through building the artifact from nothing. The PV3 bridge says to keep the identity once (scaffold-from-design Step 4); the create-* file the agent then opens does not repeat it.</p><ul><li>A PV3 slice whose aggregate the scaffold already wrote</li><li>A PV3 slice with no scaffold (hand-written)</li><li>A kixie slice</li></ul><div class="opt rec"><div><b>include</b> Add a short &#x27;Starting from a scaffold&#x27; section to the five PV3 create-* skills (aggregate, policy, read model, schema, tests), matching kixie&#x27;s<span class=badge>recommended</span><ul class="walks"><li><i>scaffolded PV3 aggregate</i> &mdash; The agent is told up front not to rename or move what the design fixed.</li></ul></div><button class="btn" data-pick="include" disabled>Choose</button></div><div class="opt"><div><b>defer</b> Ship the path relay alone and file the PV3 sections as a follow-up<ul class="walks"><li><i>scaffolded PV3 aggregate</i> &mdash; PV3 agents get the skills but follow them from the top.</li></ul></div><button class="btn" data-pick="defer" disabled>Choose</button></div><p><b>Recommendation.</b> include: The skills are in the same repo and the edit is small. Without it, the PV3 half of this ticket hands the agent a guide written for a situation it is not in.</p><p class="note"><b>If overturned.</b> File a follow-up for the five PV3 create-* sections; the relay ships unchanged.</p><textarea placeholder="Anything the options miss, or a question for me" disabled></textarea><div><button class="btn" data-action="save" disabled>Save comment</button> <button class="btn" data-action="agree" disabled>Agree with the recommendation</button><span class="saved"></span></div></article></main><script type="application/json" id="map-data">{"structureVersion": 2, "shape": "decision", "grounded": true, "mapId": "BP-196", "nodes": [{"id": "g-framework-rules-reach-code", "level": "goal", "title": "Framework code written in /build follows the host framework's own skills", "parents": []}, {"id": "a-executor-verifier", "level": "mapActor", "title": "The /build executor and verifier (no Skill tool)", "parents": ["g-framework-rules-reach-code"]}, {"id": "i-skill-reached-by-file", "level": "impact", "title": "They read the declared framework skill and the create-* skills it routes to, by resolved file", "parents": ["a-executor-verifier"]}, {"id": "d-skill-path-relay", "level": "deliverable", "title": "skill-path resolver + /build relays framework skill file and plugin root to executor and verifier", "parents": ["i-skill-reached-by-file"]}, {"id": "d-pv3-scaffold-sections", "level": "deliverable", "title": "PV3 create-* skills open with a 'Starting from a scaffold' section", "parents": ["i-skill-reached-by-file"]}], "forks": [{"id": "BP-196-F1", "title": "When the framework skill a repo declares cannot be found on this machine, what should /build do?", "tickets": ["BP-196"], "anchor": "d-skill-path-relay", "restsOn": [], "status": {"kind": "decided", "source": "owner", "option": "refuse-before-start"}, "card": {"problem": "Every repo we build in declares a framework skill in .blueprint.config.json (blueprint and teselly: bett3r-pv3-ai-skills:scaffold-from-design; kixie: ddd:scaffold-from-design). After this ticket /build looks that name up among the installed plugins and hands the file to the coding and reviewing agents. The lookup can fail: the plugin is not installed (on this laptop ddd is missing, so a kixie build here would hit it), the plugin runs from a source checkout, or the name is misspelled. Today nothing notices: /build prints one line (build.md:49), and in a fleet that line always prints, and the agent writes framework code without the framework's rules.", "useCases": ["A kixie fleet started from a machine without the ddd plugin", "A developer running the plugin from a source checkout", "A typo in designTooling.scaffoldSkill", "A repo that declares no framework skill"], "options": [{"id": "carry-on", "label": "Carry on: each slice runs and records the missing skill as a deviation the reviewer weighs", "walks": [{"scenario": "kixie fleet without ddd", "text": "The code is written and committed without the framework rules; you learn it from the PR record.", "kind": "behavioral", "given": "a kixie fleet started on a machine without the ddd plugin", "when": "/build dispatches a slice that touches an aggregate", "then": "the slice is built and committed with a deviation saying no framework skill was found"}]}, {"id": "block-slice", "label": "Stop each slice that touches framework code with BLOCKED", "walks": [{"scenario": "kixie fleet without ddd", "text": "Each lane spends its provisioning and stops at its first framework slice with the same message.", "kind": "behavioral", "given": "a kixie fleet started on a machine without the ddd plugin", "when": "/build reaches the first slice that touches an aggregate", "then": "that slice reports BLOCKED naming the missing plugin and the lane stops"}]}, {"id": "refuse-before-start", "label": "Check once before anything runs: /build Step 1 and /start-multi before provisioning refuse with the missing plugin and install command", "walks": [{"scenario": "kixie fleet without ddd", "text": "The run refuses in seconds instead of building blind or stopping lane by lane.", "kind": "behavioral", "given": "a kixie fleet started on a machine without the ddd plugin", "when": "/start-multi begins", "then": "it refuses before provisioning any lane, naming ddd and the install command (or a --plugin-dir cause)"}, {"scenario": "no framework skill declared", "text": "A repo that declares nothing is unaffected.", "kind": "behavioral", "given": "a repo whose .blueprint.config.json declares no scaffoldSkill", "when": "/build starts", "then": "it runs and the executor's prompt says framework skill: none declared"}]}], "recommendation": {"option": "refuse-before-start", "why": "The failure is a fact about the machine, not about any slice, so it should be found once and before any compute is spent. Writing framework code blind is the quality loss this ticket exists to remove."}, "ifOverturned": "carry-on: rule 3 records the deviation and the verifier adjudicates it; block-slice: the executor reports BLOCKED on a framework slice; in both, start-multi.md is untouched."}}, {"id": "BP-196-F2", "title": "Should this ticket also give the PV3 create-* skills a 'Starting from a scaffold' section, as the kixie ones have?", "tickets": ["BP-196"], "anchor": "d-pv3-scaffold-sections", "restsOn": [], "status": {"kind": "decided", "source": "owner", "option": "include"}, "card": {"problem": "Once the coding agent reads the framework skills, it reads them as written. kixie's ddd create-aggregate, create-policy, create-readmodel, create-schema and create-flow-tests each open with a 'Starting from a scaffold' section: keep the file's names, ids and placement, and work only the TODO(scaffold) markers. The PV3 skills in this same plugin repo have none; they walk through building the artifact from nothing. The PV3 bridge says to keep the identity once (scaffold-from-design Step 4); the create-* file the agent then opens does not repeat it.", "useCases": ["A PV3 slice whose aggregate the scaffold already wrote", "A PV3 slice with no scaffold (hand-written)", "A kixie slice"], "options": [{"id": "include", "label": "Add a short 'Starting from a scaffold' section to the five PV3 create-* skills (aggregate, policy, read model, schema, tests), matching kixie's", "walks": [{"scenario": "scaffolded PV3 aggregate", "text": "The agent is told up front not to rename or move what the design fixed.", "kind": "behavioral", "given": "a PV3 slice whose aggregate file the scaffold wrote", "when": "the executor follows create-aggregate", "then": "it keeps the generated names, ids and placement and works only the TODO(scaffold) markers"}]}, {"id": "defer", "label": "Ship the path relay alone and file the PV3 sections as a follow-up", "walks": [{"scenario": "scaffolded PV3 aggregate", "text": "PV3 agents get the skills but follow them from the top.", "kind": "behavioral", "given": "a PV3 slice whose aggregate file the scaffold wrote", "when": "the executor follows create-aggregate from the top", "then": "nothing in that skill tells it the identity is fixed, so a rename or move is possible and the board can show a phantom artifact"}]}], "recommendation": {"option": "include", "why": "The skills are in the same repo and the edit is small. Without it, the PV3 half of this ticket hands the agent a guide written for a situation it is not in."}, "ifOverturned": "File a follow-up for the five PV3 create-* sections; the relay ships unchanged."}}]}</script><script type="application/json" id="fork-maps">{"BP-196-F1": "BP-196", "BP-196-F2": "BP-196"}</script><script>
+const DATA = JSON.parse(document.getElementById("map-data").textContent);
+// A stacked page embeds {stack: [map, ...]}; each fork remembers its own map's id.
+const MAPS = DATA.stack || [DATA];
+// Each fork's own map's id, computed at render time (fork_maps); a fork of a map
+// without mapId is absent, so its answers carry no map.
+const FORK_MAP = JSON.parse(document.getElementById("fork-maps").textContent);
+const FORKS = {};
+MAPS.forEach(m => m.forks.forEach(f => { FORKS[f.id] = f; }));
+let db = null;
+let answers = {};
+
+function stateOf(id) {
+  const f = FORKS[id];
+  if (f.status.kind === "moot") return "moot";
+  if (answers[id] && answers[id].pick) return "done";
+  return f.status.kind === "decided" ? "decided " + f.status.source : "open";
+}
+function recKey(f) {
+  return f.card ? f.card.recommendation.option : null;
+}
+function renderCard(id) {
+  const card = document.querySelector('[data-fork-id="' + id + '"]');
+  const a = answers[id] || null;
+  card.className = "fork " + stateOf(id) + (FORKS[id].card ? "" : " titleonly");
+  if (!FORKS[id].card) return;
+  card.querySelectorAll("[data-pick]").forEach(b => {
+    const picked = !!(a && a.pick === b.dataset.pick);
+    b.closest(".opt").classList.toggle("picked", picked);
+    b.textContent = picked ? "Chosen" : "Choose";
+  });
+  const ta = card.querySelector("textarea");
+  if (a && document.activeElement !== ta) ta.value = a.comment || "";
+  card.querySelector(".saved").textContent = a && a.updatedAt
+    ? "Saved " + new Date(a.updatedAt).toLocaleString()
+    : (db ? "" : "Answers can't be saved in this view. Reply in the terminal.");
+  card.querySelectorAll("button, textarea").forEach(el => { el.disabled = !db || FORKS[id].status.kind === "moot"; });
+}
+function renderAll() { Object.keys(FORKS).forEach(renderCard); }
+
+async function saveAnswer(id, patch) {
+  if (!db) return;
+  const prev = answers[id] || {};
+  const doc = { pick: prev.pick || null, comment: prev.comment || "", ...patch, updatedAt: new Date().toISOString() };
+  if (FORK_MAP[id]) doc.map = FORK_MAP[id];
+  answers[id] = doc; renderCard(id);
+  const s = document.querySelector('[data-fork-id="' + id + '"] .saved');
+  try { await db.doc("answers/" + id).set(doc); s.textContent = "Saved"; }
+  catch (e) { s.textContent = "Not saved: " + (e && e.message || "store refused the write"); }
+}
+
+document.addEventListener("click", e => {
+  const card = e.target.closest("[data-fork-id]");
+  if (!card || !FORKS[card.dataset.forkId].card) return;
+  const id = card.dataset.forkId;
+  const comment = card.querySelector("textarea").value;
+  if (e.target.dataset.pick) { saveAnswer(id, { pick: e.target.dataset.pick, comment }); return; }
+  if (e.target.dataset.action === "save") { saveAnswer(id, { comment }); return; }
+  if (e.target.dataset.action === "agree") { saveAnswer(id, { pick: recKey(FORKS[id]), comment }); return; }
+});
+
+renderAll();
+(async () => {
+  try { db = window.claude && window.claude.use ? await window.claude.use("db") : null; } catch (_) { db = null; }
+  const note = document.getElementById("dbnote");
+  if (!db) {
+    note.textContent = "Answers can't be saved in this view. Reply in the terminal.";
+    renderAll();
+    return;
+  }
+  note.textContent = "Answers save as you click. Claude reads them back.";
+  const col = db.collection("answers");
+  const apply = snap => { const next = {}; (snap.docs || []).forEach(d => { next[d.id] = d.data(); }); answers = next; renderAll(); };
+  if (typeof col.onSnapshot === "function") col.onSnapshot(apply, () => { note.textContent = "Lost the answer store; reload to reconnect."; });
+  else col.get().then(apply);
+  renderAll();
+})();
+</script></body></html>

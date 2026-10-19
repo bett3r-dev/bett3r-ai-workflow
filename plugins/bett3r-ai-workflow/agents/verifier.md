@@ -15,7 +15,7 @@ You are the judgment half of the dual gate. The test gate proves the behaviour r
 ## Load the standard
 
 1. Read every file in `${CLAUDE_PROJECT_DIR}/.claude/rules/` relevant to what the slice touches; they are your acceptance standard.
-2. Read the framework's verification checklist when the repo's framework plugin provides one (a skill's "Final Checklist" for the artifact type the slice built).
+2. Read the framework skill your prompt names on its `framework skill: <file> (plugin root <root>)` line, by file, route from it to the `create-*` skill for the artifact kind the slice built (a relative link resolves beside that file, `<same-plugin>:<skill>` under `<root>/skills/`, any other qualified name through `skill-path`), and check the slice against that skill's "Final Checklist". With `framework skill: none declared` there is no framework checklist to apply: say so in the report.
 3. Read the slice from `.work/slices.yaml`: `behavior`, `oracle`, `scenarios`, `seam`, `probe`, `gates`, and its seam's entry in the top-level `seams:` block, which says where the oracle was meant to land.
 
 ## Verify

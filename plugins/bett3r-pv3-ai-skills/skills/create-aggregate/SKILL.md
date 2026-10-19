@@ -25,6 +25,13 @@ invariants, the idempotency check, and any stream override. A generated command 
 emits its event unconditionally is correct **only** for the simplest case; read
 [AGGREGATES.md](../ddd-patterns/AGGREGATES.md) before assuming yours is one.
 
+## Starting from a scaffold
+
+When the scaffold already wrote the aggregate, its domain files and the barrel line (the prose above), skip generating them. Keep every export name, label-derived name and subdomain it
+wrote: they are id-exact, the identity the extractor reads back. The module folder `src/modules/<subdomain>/` is the subdomain, so it is id-exact too: keep it. Work only the `TODO(scaffold)` markers and
+the file's `STILL OWED` block, and delete each marker as you satisfy it. Placing a command fragment is the same: the block it emitted keeps its names. The rest of this
+skill still governs the content you write and the Final Checklist.
+
 ## Project configuration
 
 Resolve these placeholders from the `.blueprint.config.json` at your repo root:

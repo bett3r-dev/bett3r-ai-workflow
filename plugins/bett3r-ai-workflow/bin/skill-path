@@ -1,0 +1,251 @@
+#!/usr/bin/env python3
+"""Name the SKILL.md a session would load for a skill, so a worker can read it by file.
+
+    skill-path [--repo DIR] <plugin>:<skill>
+    skill-path [--repo DIR] <skill>
+
+The last stdout line is the verdict (exit 0 ok, 2 error):
+
+    SKILL-PATH:v1 outcome=ok name=<arg> file=<abs SKILL.md> root=<dir> version=<v>
+    SKILL-PATH:v1 outcome=error reason=<reason> name=<arg> [key=value ...]
+
+reason is one of no-manifest, not-installed, no-such-skill, ambiguous, bad-name.
+
+`<plugin>:<skill>` is resolved through installed_plugins.json, read from
+$CLAUDE_CONFIG_DIR/plugins/ (default ~/.claude/plugins/), the same manifest
+check-skill-shadows reads. That file names each plugin's version-keyed
+installPath; the plugin cache keeps every version it ever installed, each with
+its own copy of the skill, and only the manifest says which one is live. So the
+cache is never globbed. file= is <installPath>/skills/<skill>/SKILL.md, root=
+is the installPath, version= the entry's version.
+
+Which entry: the four scopes Claude Code records fall into three levels, and
+the most specific level with an applicable entry wins: "local" over "project"
+over "user"/"managed". A "user" or "managed" entry applies everywhere. A
+"project" or "local" entry applies when its projectPath and the repo share one
+canonical root, the rule Claude Code keys project entries by: the work tree
+folder holding `.git` (`git rev-parse --show-toplevel`), except that a linked
+worktree maps to its main checkout (the folder holding <common>, or <common>
+itself for a bare repo). A linked worktree is a `.git` file whose gitdir sits
+in <common>/worktrees/ and whose back-pointer (<gitdir>/gitdir) names that
+`.git` file. So the main checkout, a linked worktree of it and any
+subdirectory of either all match, while a submodule or a repo made with
+--separate-git-dir keeps its own folder even where its git dir sits beside
+another's. Outside git the root is the realpath. An
+entry with no or an empty projectPath names no repo and never applies. Two
+applicable entries at the same level (one plugin name from two marketplaces,
+or a user and a managed entry) are reason=ambiguous. A plugin with no
+applicable entry is reason=not-installed plugin=<name>, whatever the cache
+holds: a plugin run from a source checkout (--plugin-dir) is not in the
+manifest, so it reads not-installed here too.
+
+A bare `<skill>` resolves to <repo>/.claude/skills/<skill>/SKILL.md, then
+$CLAUDE_CONFIG_DIR/skills/<skill>/SKILL.md; root= is the .claude or config dir
+it was found under, version=none. <repo> is --repo, default the working
+directory.
+
+A manifest that is missing, is not JSON, or holds no "plugins" object is
+reason=no-manifest. So is one with a malformed entry anywhere in it, for any
+plugin: an entry list that is not a list, an entry that is not an object, or a
+scope, projectPath, installPath or version that is neither a string nor null;
+that verdict adds entry=<manifest key>.
+
+Oracle: scripts/test-skill-path.sh in the bett3r-ai-workflow repo.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+TOKEN = "SKILL-PATH:v1"
+# One name segment: a plugin or a skill directory name. Starts alphanumeric, so
+# `..`, `.x` and an empty segment are refused before any path is joined.
+SEGMENT = r"[A-Za-z0-9][A-Za-z0-9._-]*"
+QUALIFIED = re.compile(rf"({SEGMENT}):({SEGMENT})")
+BARE = re.compile(SEGMENT)
+
+
+def verdict(outcome: str, **attrs: str) -> int:
+    parts = [TOKEN, f"outcome={outcome}"] + [f"{k}={v}" for k, v in attrs.items()]
+    sys.stdout.write(" ".join(parts) + "\n")
+    sys.stdout.flush()
+    return 0 if outcome == "ok" else 2
+
+
+def config_dir() -> Path:
+    return Path(os.environ.get("CLAUDE_CONFIG_DIR") or (Path.home() / ".claude"))
+
+
+# Scope -> level; a higher level is more specific and wins.
+LEVELS = {"managed": 0, "user": 0, "project": 1, "local": 2}
+PROJECT_LEVEL = 1
+STRING_FIELDS = ("scope", "projectPath", "installPath", "version")
+# Variables that would make git answer for another repo than the path asked
+# about (a hook exports GIT_DIR); dropped from the child's environment.
+GIT_LOCATION_VARS = ("GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE",
+                     "GIT_OBJECT_DIRECTORY", "GIT_NAMESPACE", "GIT_PREFIX")
+
+
+def git_toplevel(path: str) -> str | None:
+    """The work tree folder git finds for path (the one holding .git), else None."""
+    env = {k: v for k, v in os.environ.items() if k not in GIT_LOCATION_VARS}
+    try:
+        out = subprocess.run(["git", "-C", path, "rev-parse", "--show-toplevel"],
+                             capture_output=True, text=True, env=env, check=False)
+    except OSError:
+        return None
+    top = out.stdout.strip()
+    if out.returncode != 0 or not top or not os.path.isdir(top):
+        return None
+    return os.path.realpath(top)
+
+
+def read_line(path: str) -> str | None:
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.readline().strip()
+    except (OSError, ValueError):
+        return None
+
+
+def main_checkout(top: str) -> str | None:
+    """For a linked worktree at top, its main checkout; else None.
+
+    top/.git must be a file `gitdir: <g>` with <g> in <common>/worktrees/
+    (<common> read from <g>/commondir) and <g>/gitdir pointing back at top/.git.
+    The main checkout is the folder holding <common> when <common> is named
+    .git, else <common> itself (a bare repo) unless <common>/.git exists.
+    Mirrors Claude Code's canonical git root.
+    """
+    dot_git = os.path.join(top, ".git")
+    if not os.path.isfile(dot_git):
+        return None
+    line = read_line(dot_git) or ""
+    if not line.startswith("gitdir:"):
+        return None
+    gitdir = os.path.realpath(os.path.join(top, line[len("gitdir:"):].strip()))
+    commondir = read_line(os.path.join(gitdir, "commondir"))
+    back = read_line(os.path.join(gitdir, "gitdir"))
+    if not commondir or not back:
+        return None
+    common = os.path.realpath(os.path.join(gitdir, commondir))
+    if os.path.dirname(gitdir) != os.path.join(common, "worktrees"):
+        return None
+    if os.path.realpath(os.path.join(gitdir, back)) != os.path.realpath(dot_git):
+        return None
+    if os.path.basename(common) != ".git":
+        # A bare repo: the common dir is the repo's folder, unless it holds a
+        # .git of its own, which makes it no bare repo to redirect to.
+        return None if os.path.lexists(os.path.join(common, ".git")) else common
+    return os.path.dirname(common)
+
+
+def canonical_root(path: str) -> str:
+    """The folder that keys path's project entries, Claude Code's rule.
+
+    The work tree folder holding .git; a linked worktree maps to its main
+    checkout; a submodule or a separate-git-dir repo keeps its own folder.
+    Outside git, path's realpath.
+    """
+    real = os.path.realpath(path)
+    top = git_toplevel(real)
+    if top is None:
+        return real
+    return main_checkout(top) or top
+
+
+def malformed_key(plugins: dict) -> str | None:
+    """The first manifest key whose entries are not a list of string-field objects."""
+    for key, entries in plugins.items():
+        if not isinstance(entries, list):
+            return key
+        for entry in entries:
+            if not isinstance(entry, dict):
+                return key
+            if any(entry.get(f) is not None and not isinstance(entry.get(f), str)
+                   for f in STRING_FIELDS):
+                return key
+    return None
+
+
+def resolve_plugin(name: str, plugin: str, skill: str, repo: Path) -> int:
+    manifest = config_dir() / "plugins" / "installed_plugins.json"
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = None
+    plugins = data.get("plugins") if isinstance(data, dict) else None
+    if not isinstance(plugins, dict):
+        return verdict("error", reason="no-manifest", name=name, manifest=str(manifest))
+
+    bad = malformed_key(plugins)
+    if bad is not None:
+        return verdict("error", reason="no-manifest", name=name, manifest=str(manifest), entry=bad)
+
+    repo_root = None
+    applicable: dict[int, list] = {}
+    for key, entries in plugins.items():
+        if key.split("@", 1)[0] != plugin:
+            continue
+        for entry in entries:
+            level = LEVELS.get(entry.get("scope"))
+            if level is None:
+                continue
+            if level >= PROJECT_LEVEL:
+                project_path = entry.get("projectPath")
+                if not project_path:
+                    continue
+                if repo_root is None:
+                    repo_root = canonical_root(str(repo))
+                if canonical_root(project_path) != repo_root:
+                    continue
+            applicable.setdefault(level, []).append((key, entry))
+
+    chosen = applicable[max(applicable)] if applicable else []
+    if not chosen:
+        return verdict("error", reason="not-installed", name=name, plugin=plugin)
+    if len(chosen) > 1:
+        return verdict("error", reason="ambiguous", name=name, plugin=plugin,
+                       candidates=",".join(key for key, _ in chosen))
+
+    _, entry = chosen[0]
+    root = Path(entry.get("installPath") or "")
+    file = root / "skills" / skill / "SKILL.md"
+    if not entry.get("installPath") or not file.is_file():
+        return verdict("error", reason="no-such-skill", name=name, plugin=plugin, root=str(root))
+    return verdict("ok", name=name, file=str(file), root=str(root),
+                   version=entry.get("version") or "unknown")
+
+
+def resolve_bare(name: str, repo: Path) -> int:
+    for base in (repo / ".claude", config_dir()):
+        file = base / "skills" / name / "SKILL.md"
+        if file.is_file():
+            return verdict("ok", name=name, file=str(file), root=str(base), version="none")
+    return verdict("error", reason="no-such-skill", name=name)
+
+
+def main(argv: list[str]) -> int:
+    args = argv[1:]
+    repo = Path.cwd()
+    if len(args) >= 2 and args[0] == "--repo":
+        repo = Path(args[1])
+        args = args[2:]
+    repo = Path(os.path.realpath(repo))
+
+    name = args[0] if len(args) == 1 else ""
+    qualified = QUALIFIED.fullmatch(name)
+    if qualified:
+        return resolve_plugin(name, qualified.group(1), qualified.group(2), repo)
+    if BARE.fullmatch(name):
+        return resolve_bare(name, repo)
+    return verdict("error", reason="bad-name", name=name.replace(" ", "_") or "none")
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

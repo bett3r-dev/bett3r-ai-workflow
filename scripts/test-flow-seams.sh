@@ -3079,6 +3079,22 @@ present "$START_MULTI_MD" 'Record `pluginVersion` in `run.yaml` on every tick, r
 present "$START_MULTI_MD" 'your own loaded manifest' \
   '/start-multi takes pluginVersion from the manifest IT loaded, not the branch checkout'\''s'
 
+# A refusing tick (framework skill, collision, dirty tree) has already written
+# run.yaml with pluginVersion and no BASE (BP-196 D7). Resume keyed on "run.yaml
+# exists" alone reads that file as a run in progress and reaches step 2 with no
+# base to cut from. The pin is on the resume CONDITION naming createdBaseSha and
+# on the never-started disposition, in the command and in the tick-boundary
+# companion that restates the resume rule; `bin/fleet-loop` is pinned by
+# scripts/test-fleet-loop.sh.
+present "$START_MULTI_MD" 'Resume when `run.yaml` exists, records `createdBaseSha`, and `--fresh` is absent' \
+  '/start-multi resumes only a run.yaml that records createdBaseSha (BP-196 D7)'
+present "$START_MULTI_MD" 'A `run.yaml` with no `createdBaseSha` is a run that never started' \
+  '/start-multi reads a run.yaml without createdBaseSha as never started, not as a resume (BP-196 D7)'
+present "$START_MULTI_MD" 'never started, recreating as a fresh run' \
+  '/start-multi says in one line that it is recreating a never-started run (BP-196 D7)'
+present "$TICK_MD" 'one without it never started and is recreated fresh' \
+  'the tick-boundary companion restates the never-started rule beside its resume rule (BP-196 D7)'
+
 # --- executed: the run.yaml block gains waveBudget and a spend addend, and
 # NOTHING else. The fenced block under `## run.yaml` is the only specification of
 # the file any tick writes, so it is extracted and read as text: the two additive
@@ -4040,6 +4056,377 @@ for term in 'Scaffold commit' 'Scaffold report' 'Untouched stub' 'Held element' 
   present "$README_MD" "**$term**" "the README glossary defines \"$term\" (ESAS-304)"
 done
 present "$README_MD" 'docs/adr/ADR-015' 'the README glossary points at ADR-015 for the why'
+
+# ---------------------------------------------------------------------------
+printf '\nBP-196 — the framework skill reaches the executor and the verifier by resolved file\n\n'
+# ---------------------------------------------------------------------------
+# Neither worker holds the Skill tool (ADR-012's listing cost, the step-lane-file
+# pin above), so the framework skill the host declares
+# (`designTooling.scaffoldSkill`) reaches them only as a file path: /build
+# resolves it through bin/skill-path and every executor and verifier dispatch
+# carries a `framework skill: <file> (plugin root <root>)` line. These are
+# presence pins on prose; the resolution itself is executed by
+# scripts/test-skill-path.sh.
+EXECUTOR_MD="$PLUGIN/agents/executor.md"
+VERIFIER_MD="$PLUGIN/agents/verifier.md"
+
+# One numbered item of /build's Step 3, whole (each item is one paragraph line).
+step3_item(){
+  awk -v n="$1. **" 'index($0, "## Step 3")==1 { s=1; next } /^## / { s=0 } s && index($0, n)==1' "$BUILD_MD"
+}
+for item in 0 1 3; do
+  text=$( step3_item "$item" )
+  if [ -z "$text" ]; then
+    fail "/build Step 3 item $item is found (the relay census reads it)" "no line starting '$item. **' under '## Step 3'"
+    continue
+  fi
+  for lit in 'framework skill:' 'skill-path'; do
+    case $text in
+      *"$lit"*) pass "/build Step 3 item $item carries '$lit' (the framework skill relay)" ;;
+      *) fail "/build Step 3 item $item carries '$lit' (the framework skill relay)" \
+              "expected: '$lit' in the item" "actual:   absent from: $( printf '%s' "$text" | cut -c1-120 )…" ;;
+    esac
+  done
+done
+# The no-declaration path: the prompt says so, the executor records it, nothing searches a cache.
+present "$BUILD_MD" '`framework skill: none declared`' '/build hands `framework skill: none declared` when no scaffoldSkill is declared (D9)'
+present "$EXECUTOR_MD" '`framework skill: none declared`' 'the executor knows the none-declared line'
+
+# How item 0 resolves: once, by the verdict line, refusing rather than guessing.
+present "$BUILD_MD" 'resolved once per run, before the first slice'"'"'s executor' '/build resolves the framework skill once per run (D6)'
+present "$BUILD_MD" 'read its last line (`SKILL-PATH:v1`), not its exit code' '/build reads skill-path'"'"'s verdict line, not its exit code'
+# The refusal on an unresolved framework skill lives in Step 1 item 5 (slice 3,
+# pinned in the refuse-before-start block below); item 0 only points at it.
+present "$BUILD_MD" 'the verdict Step 1 item 5 read' '/build Step 3 item 0 takes the framework skill from Step 1 item 5'"'"'s verdict (F1)'
+present "$BUILD_MD" 'opened by its resolved file and never through the Skill tool' '/build Step 3 item 0 reads the bridge by file, not through the Skill tool (D6)'
+present "$BUILD_MD" 'no plugin cache is searched for one' '/build searches no cache when nothing is declared (D9)'
+present "$EXECUTOR_MD" 'you search no plugin cache for a skill' 'the executor searches no cache on none declared (D9)'
+present "$EXECUTOR_MD" 'is a deviation you record' 'the executor records none declared as a deviation (D9)'
+
+# A fix round's fresh executor or verifier is a dispatch too (Step 3 item 4, *Fix rounds*).
+present "$BUILD_MD" 'its own previous report and the `framework skill:` line' '/build hands a fresh fix-round executor the framework skill line'
+present "$BUILD_MD" 'a fresh verifier also gets the `framework skill:` line' '/build hands a fresh re-check verifier the framework skill line'
+
+# Item 0's old clause promised a skill the session could not load; it is replaced, not appended to.
+item0=$( step3_item 0 )
+case $item0 in
+  *'which this session cannot load'*) fail "/build Step 3 item 0 no longer says 'which this session cannot load'" "expected: absent" "actual:   present" ;;
+  *) pass "/build Step 3 item 0 no longer says 'which this session cannot load'" ;;
+esac
+
+# /verify-build's in-lane fix dispatches the executor too (Step 3a).
+fixline=$( grep -F '**Fix in the lane**' "$VERIFY_BUILD_MD" )
+for lit in 'framework skill:' 'skill-path'; do
+  case $fixline in
+    *"$lit"*) pass "/verify-build's in-lane executor dispatch carries '$lit'" ;;
+    *) fail "/verify-build's in-lane executor dispatch carries '$lit'" "expected: '$lit' in the Fix-in-the-lane line" "actual:   absent" ;;
+  esac
+done
+
+# Rule 3 and the verifier's checklist step name the relayed file, and no longer
+# point at a skill the plugin "surfaces" (which neither worker can load).
+for f in "$EXECUTOR_MD" "$VERIFIER_MD"; do
+  present "$f" 'framework skill: <file> (plugin root <root>)' "${f##*/} reads the framework skill from the relayed file line"
+  if grep -qF 'surfaces (`create-aggregate`' "$( norm "$f" )"; then
+    fail "${f##*/} no longer promises the skill its framework plugin 'surfaces'" "expected: absent" "actual:   present: surfaces (\`create-aggregate\`"
+  else
+    pass "${f##*/} no longer promises the skill its framework plugin 'surfaces'"
+  fi
+done
+present "$EXECUTOR_MD" 'skill-path <plugin>:<skill>' 'executor rule 3 routes other qualified names through skill-path (D4)'
+present "$EXECUTOR_MD" '<root>/skills/<skill>/SKILL.md' 'executor rule 3 maps a same-plugin name under the plugin root (D4)'
+present "$EXECUTOR_MD" '${CLAUDE_PLUGIN_ROOT}` is `<root>`' 'executor rule 3 maps ${CLAUDE_PLUGIN_ROOT} to the plugin root (D4)'
+present "$VERIFIER_MD" 'Final Checklist' 'the verifier checks the routed create-* skill'"'"'s Final Checklist (D5)'
+
+# Pin (green at base too): neither worker holds Skill or SlashCommand.
+for f in "$EXECUTOR_MD" "$VERIFIER_MD"; do
+  "$MARKER_PY" - "$f" > "$TMP/worker-tools" 2>"$TMP/err" <<'PYT'
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+m = re.match(r"\A---\r?\n(.*?)\r?\n---\r?\n", text, re.S)
+if not m:
+    sys.exit("no frontmatter block")
+lines = m.group(1).splitlines()
+tools = []
+for i, line in enumerate(lines):
+    key, sep, value = line.partition(":")
+    if line.startswith((" ", "\t", "-", "#")) or not sep or key.strip() != "tools":
+        continue
+    value = value.split(" #", 1)[0].strip()
+    if value:
+        tools += [t.strip() for t in value.strip("[]").split(",") if t.strip()]
+        break
+    for nxt in lines[i + 1:]:
+        if not nxt.strip() or nxt.lstrip().startswith("#"):
+            continue
+        if not nxt.startswith((" ", "\t", "-")):
+            break
+        tools.append(nxt.lstrip(" \t-").split(" #", 1)[0].strip())
+    break
+if not tools:
+    sys.exit("no tools: allowlist")
+print("\n".join(tools))
+PYT
+  if [ $? -ne 0 ]; then
+    fail "${f##*/} declares a tools: allowlist" "$( cat "$TMP/err" )"
+    continue
+  fi
+  grep -qx 'Read' "$TMP/worker-tools" && pass "${f##*/} tools: parsed (holds Read)" \
+    || fail "${f##*/} tools: parsed (holds Read)" "tools: $( tr '\n' ' ' < "$TMP/worker-tools" )"
+  for forbidden in Skill SlashCommand; do
+    if grep -qx "$forbidden" "$TMP/worker-tools"; then
+      fail "${f##*/} reads skills by file: no $forbidden in tools:" "tools: $( tr '\n' ' ' < "$TMP/worker-tools" )"
+    else
+      pass "${f##*/} reads skills by file: no $forbidden in tools:"
+    fi
+  done
+done
+
+# Structural: every line that dispatches the executor or the verifier carries the
+# framework skill line. The detector is controlled positively: it must find
+# /build's two dispatch lines (Step 3 items 1 and 3) and /verify-build's in-lane
+# fix, or it is not looking. Dispatch sites outside /build and /verify-build that
+# predate BP-196 and sit outside its design's edit list are named here one by
+# one (the slice's finding); any other site lacking the line fails.
+"$MARKER_PY" - "$PLUGIN" > "$TMP/dispatch-sites" 2>"$TMP/err" <<'PYT'
+import pathlib, re, sys
+plugin = pathlib.Path(sys.argv[1])
+DISPATCH = re.compile(r"(?i)\bdispatch\w*\b[^.]{0,200}?`(executor|verifier)`|`(executor|verifier)` you hand")
+# Pre-BP-196 sites outside /build and /verify-build, outside the design's edit
+# list: (file, a phrase unique to the site). Each is the slice's finding.
+NAMED = (
+    ("commands/start-multi.md", "Wave prefactor"),
+    ("commands/start-multi.md", "as a backfill before teardown"),
+    ("commands/merge-multi.md", "follow-up <unit>/F<n>"),
+    ("commands/design.md", "an `executor` you hand the worklist"),
+)
+for sub in ("commands", "agents", "skills", "reference"):
+    for p in sorted((plugin / sub).rglob("*.md")):
+        rel = p.relative_to(plugin).as_posix()
+        for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1):
+            if not DISPATCH.search(line):
+                continue
+            if "framework skill:" in line:
+                state = "carries"
+            elif rel not in ("commands/build.md", "commands/verify-build.md") and any(rel == f and k in line for f, k in NAMED):
+                state = "named"
+            else:
+                state = "lacks"
+            print(f"{rel}\t{n}\t{state}\t{line[:110]}")
+PYT
+if [ $? -ne 0 ]; then
+  fail 'the dispatch-site census runs' "$( cat "$TMP/err" )"
+else
+  for ctl in 'commands/build.md|1. **Implement' 'commands/build.md|3. **Judgment gate' 'commands/verify-build.md|- **Fix in the lane'; do
+    cf=${ctl%%|*}; ct=${ctl#*|}
+    if awk -F '\t' -v f="$cf" -v t="$ct" '$1==f && index($4,t)==1 { found=1 } END { exit !found }' "$TMP/dispatch-sites"; then
+      pass "dispatch census finds $cf '$ct' (positive control)"
+    else
+      fail "dispatch census finds $cf '$ct' (positive control)" "sites found: $( cut -f1,2 "$TMP/dispatch-sites" | tr '\n\t' ' :' )"
+    fi
+  done
+  tab=$( printf '\t' )
+  while IFS=$tab read -r file line state text; do
+    case $state in
+      carries) pass "dispatch site $file:$line carries the framework skill line" ;;
+      named) pass "dispatch site $file:$line is a named pre-BP-196 site outside the design's edit list (finding, not covered)" ;;
+      *) fail "dispatch site $file:$line carries the framework skill line" "expected: 'framework skill:' on the line" "actual:   $text" ;;
+    esac
+  done < "$TMP/dispatch-sites"
+fi
+
+# ---------------------------------------------------------------------------
+printf '\nBP-196 — refuse before start: an undeclared-but-unresolved framework skill stops the run before any work\n\n'
+# ---------------------------------------------------------------------------
+# F1 (owner): the missing framework plugin is a fact about the machine, found
+# once and before any compute is spent. /build checks it in Step 1 item 5,
+# before Step 2 orders a slice; /start-multi checks it in step 0, before any
+# worktree exists. The resolution itself is executed by scripts/test-skill-path.sh
+# (the not-installed fixture); these pins hold the prose that acts on it.
+ADR_016_MD="$ROOT/docs/adr/ADR-016-a-worker-reads-a-framework-skill-by-its-resolved-file.md"
+PV3_README_MD="$ROOT/plugins/bett3r-pv3-ai-skills/README.md"
+SCENARIOS_JSON="$ROOT/scripts/eval/scenarios.json"
+
+# /build Step 1: item 5 exists, follows item 4 and precedes `## Step 2`.
+s1_lines=$( awk 'index($0, "## Step 1")==1 { s=1; next } /^## / { if (s && index($0, "## Step 2")==1) print "step2\t" NR; s=0 } s && /^[0-9]+\. / { split($0, a, "."); print a[1] "\t" NR }' "$BUILD_MD" )
+l4=$( printf '%s\n' "$s1_lines" | awk -F '\t' '$1=="4" { print $2 }' )
+l5=$( printf '%s\n' "$s1_lines" | awk -F '\t' '$1=="5" { print $2 }' )
+ls2=$( printf '%s\n' "$s1_lines" | awk -F '\t' '$1=="step2" { print $2 }' )
+if [ -n "$l4" ] && [ -n "$l5" ] && [ -n "$ls2" ] && [ "$l4" -lt "$l5" ] && [ "$l5" -lt "$ls2" ]; then
+  pass "/build Step 1 item 5 follows item 4 and precedes Step 2 (lines $l4 < $l5 < $ls2)"
+else
+  fail '/build Step 1 item 5 follows item 4 and precedes Step 2' \
+       "expected: item 4 line < item 5 line < '## Step 2' line" "actual:   item4=${l4:-absent} item5=${l5:-absent} step2=${ls2:-absent}"
+fi
+item5=$( awk 'index($0, "## Step 1")==1 { s=1; next } /^## / { s=0 } s && index($0, "5. ")==1' "$BUILD_MD" )
+for lit in 'designTooling.scaffoldSkill' 'skill-path' '`SKILL-PATH:v1`' '`outcome=error`' 'ends the run `blocked-on` before Step 2' \
+           'before any executor is dispatched' 'the plugin' '`reason=`' 'claude plugin install' '--plugin-dir' 'source checkout'; do
+  case $item5 in
+    *"$lit"*) pass "/build Step 1 item 5 carries '$lit' (refuse before start, F1)" ;;
+    *) fail "/build Step 1 item 5 carries '$lit' (refuse before start, F1)" \
+            "expected: '$lit' in the item" "actual:   absent from: $( printf '%s' "$item5" | cut -c1-120 )…" ;;
+  esac
+done
+case $item5 in
+  *'cannot load'*) fail "/build Step 1 item 5 never says 'cannot load'" 'expected: absent' 'actual:   present' ;;
+  *) pass "/build Step 1 item 5 never says 'cannot load'" ;;
+esac
+# One refusal, not two: slice 2's interim refusal left Step 3 item 0.
+item0=$( step3_item 0 )
+case $item0 in
+  *'`outcome=error` ends the run'*) fail '/build Step 3 item 0 no longer carries its own refusal (moved to Step 1 item 5)' 'expected: absent' 'actual:   present' ;;
+  *) pass '/build Step 3 item 0 no longer carries its own refusal (moved to Step 1 item 5)' ;;
+esac
+n_refusal=$( grep -cF '`outcome=error` ends the run `blocked-on`' "$BUILD_MD" )
+if [ "$n_refusal" -eq 1 ]; then
+  pass '/build states the framework-skill refusal exactly once'
+else
+  fail '/build states the framework-skill refusal exactly once' 'expected: 1 line' "actual:   $n_refusal"
+fi
+
+# /start-multi step 0 holds the same check, before any worktree exists.
+ms_step0=$( awk 'index($0, "**0 —")==1 { s=1 } index($0, "**1 —")==1 { s=0 } s' "$START_MULTI_MD" )
+case $ms_step0 in
+  *'Acquire and snapshot'*) pass '/start-multi step 0 is found (positive control)' ;;
+  *) fail '/start-multi step 0 is found (positive control)' "no '**0 —' paragraph in ${START_MULTI_MD#"$ROOT"/}" ;;
+esac
+for lit in 'designTooling.scaffoldSkill' 'skill-path' 'once per distinct host repo' '`SKILL-PATH:v1`' '`outcome=error`' \
+           'before `<scaffold-wt>` or any lane worktree is cut' '`blocked-on' 'claude plugin install' '--plugin-dir' 'source checkout'; do
+  case $ms_step0 in
+    *"$lit"*) pass "/start-multi step 0 carries '$lit' (refuse before provisioning, F1)" ;;
+    *) fail "/start-multi step 0 carries '$lit' (refuse before provisioning, F1)" "expected: '$lit' in step 0" 'actual:   absent' ;;
+  esac
+done
+case $ms_step0 in
+  *'cannot load'*) fail "/start-multi step 0 never says 'cannot load'" 'expected: absent' 'actual:   present' ;;
+  *) pass "/start-multi step 0 never says 'cannot load'" ;;
+esac
+# Ordering (fix round 1, F1): step 0 is one paragraph read in order, so the
+# check must be anchored before the first thing it refuses ahead of: the
+# anchor's offset in step 0 precedes `cut and push` (int/<run-id>) and the
+# scaffold worktree's first mention.
+ms_anchor='Then run the framework skill check (below); it refuses before anything is cut or pushed.'
+off_anchor=$( printf '%s' "$ms_step0" | awk -v n="$ms_anchor" 'BEGIN { o=0 } { i=index($0, n); if (i) { print o+i; exit } o+=length($0)+1 }' )
+off_cut=$( printf '%s' "$ms_step0" | awk -v n='cut and push' 'BEGIN { o=0 } { i=index($0, n); if (i) { print o+i; exit } o+=length($0)+1 }' )
+off_wt=$( printf '%s' "$ms_step0" | awk -v n='<scaffold-wt>' 'BEGIN { o=0 } { i=index($0, n); if (i) { print o+i; exit } o+=length($0)+1 }' )
+if [ -n "$off_anchor" ] && [ -n "$off_cut" ] && [ -n "$off_wt" ] && [ "$off_anchor" -lt "$off_cut" ] && [ "$off_anchor" -lt "$off_wt" ]; then
+  pass "/start-multi step 0 anchors the framework skill check before 'cut and push' and '<scaffold-wt>' (offsets $off_anchor < $off_cut, $off_wt)"
+else
+  fail "/start-multi step 0 anchors the framework skill check before 'cut and push' and '<scaffold-wt>'" \
+       "expected: anchor offset < 'cut and push' offset and < first '<scaffold-wt>' offset" \
+       "actual:   anchor=${off_anchor:-absent} cut-and-push=${off_cut:-absent} scaffold-wt=${off_wt:-absent}"
+fi
+# F2: a refusal on a fresh run ends the tick before run.yaml would otherwise
+# exist; bin/fleet-loop reads pluginVersion before it acts on the verdict, so
+# the refusing tick must still record it.
+for lit in 'The refusing tick still writes `run.yaml` with this tick'"'"'s `pluginVersion`' 'before it prints its verdict' \
+           'checks the recorded version before it acts on the verdict'; do
+  case $ms_step0 in
+    *"$lit"*) pass "/start-multi step 0 has the refusing tick record pluginVersion: '$lit' (F2)" ;;
+    *) fail "/start-multi step 0 has the refusing tick record pluginVersion: '$lit' (F2)" "expected: '$lit' in step 0" 'actual:   absent' ;;
+  esac
+done
+# Negative half: the check lives only in step 0 (never in step 1b or step 2).
+outside=$( awk 'index($0, "**0 —")==1 { s=1 } index($0, "**1 —")==1 { s=0 } !s && /skill-path/ { print NR }' "$START_MULTI_MD" | tr '\n' ' ' )
+if [ -z "$outside" ]; then
+  pass '/start-multi names skill-path only inside step 0'
+else
+  fail '/start-multi names skill-path only inside step 0' 'expected: no line outside step 0' "actual:   lines $outside"
+fi
+
+# ADR-016 records the decision.
+if [ ! -s "$ADR_016_MD" ]; then
+  fail 'docs/adr/ADR-016 exists and is non-empty (positive control)' "no ${ADR_016_MD#"$ROOT"/}" \
+       'ADR-016 is the number reserved for BP-196 (adrAllocations).'
+else
+  pass 'docs/adr/ADR-016 exists and is non-empty (positive control)'
+  present "$ADR_016_MD" '# A worker reads a framework skill by its resolved file; only the orchestrator resolves it' \
+    'ADR-016 states the decision in its H1, only the orchestrator resolves it (D1)'
+  present "$ADR_016_MD" '## Status' 'ADR-016 carries the Status section every accepted ADR here ends on'
+  present "$ADR_016_MD" '**Rejected: the Skill tool on the executor and the verifier.**' 'ADR-016 records the rejected Skill-tool option (D1)'
+  present "$ADR_016_MD" '**Refuse before start.**' 'ADR-016 records the refuse-before-start rule (F1)'
+  present "$ADR_016_MD" 'no escape hatch' 'ADR-016 records that the refusal has no escape hatch'
+  present "$ADR_016_MD" '`--plugin-dir`' 'ADR-016 names the --plugin-dir blind spot'
+  present "$ADR_016_MD" 'Claude Code 2.1.300' 'ADR-016 carries the owner-confirmation caveat on scope precedence'
+fi
+n_adr016=$( find "$ROOT/docs/adr" -name 'ADR-016-*' | wc -l | tr -d ' ' )
+if [ "$n_adr016" -eq 1 ]; then pass 'exactly one ADR-016 file'; else fail 'exactly one ADR-016 file' "actual: $n_adr016"; fi
+
+# The pv3 README defines scaffoldSkill by the new contract.
+row=$( grep -F '| `scaffoldSkill` |' "$PV3_README_MD" )
+for lit in 'plugin-qualified' 'resolved by `/build` to a file through `skill-path`'; do
+  case $row in
+    *"$lit"*) pass "pv3 README scaffoldSkill row says '$lit' (D1 delta)" ;;
+    *) fail "pv3 README scaffoldSkill row says '$lit' (D1 delta)" "expected: '$lit'" "actual:   ${row:-no scaffoldSkill row}" ;;
+  esac
+done
+for lit in 'named as the Skill tool loads it' 'could not load' 'cannot load'; do
+  case $row in
+    *"$lit"*) fail "pv3 README scaffoldSkill row no longer says '$lit'" 'expected: absent' 'actual:   present' ;;
+    *) pass "pv3 README scaffoldSkill row no longer says '$lit'" ;;
+  esac
+done
+
+# The eval scenario exists and asserts the refusal's shape.
+"$MARKER_PY" - "$SCENARIOS_JSON" > "$TMP/s3-eval" 2>&1 <<'PYT'
+import json, sys
+d = json.load(open(sys.argv[1], encoding="utf-8"))
+hits = [s for s in d["scenarios"] if s.get("why", "").startswith("/build, scaffoldSkill names an uninstalled plugin")]
+if len(hits) != 1:
+    sys.exit(f"expected 1 scenario whose why starts with the title, found {len(hits)}")
+s = hits[0]
+groups = [[a.lower() for a in g] for g in s.get("must_state", [])]
+problems = []
+if s.get("artifact") != "plugins/bett3r-ai-workflow/commands/build.md":
+    problems.append(f"artifact={s.get('artifact')!r}")
+if not any("blocked-on" in g for g in groups):
+    problems.append("no must_state group holds 'blocked-on'")
+if not any(any("before any executor" in a for a in g) for g in groups):
+    problems.append("no must_state group holds 'before any executor'")
+if "cannot load" not in [x.lower() for x in s.get("must_not_state", [])]:
+    problems.append("must_not_state lacks 'cannot load'")
+if problems:
+    sys.exit("; ".join(problems))
+print(s["id"])
+PYT
+if [ $? -eq 0 ]; then
+  pass "eval scenario '/build, scaffoldSkill names an uninstalled plugin' asserts blocked-on before any executor, never 'cannot load' ($( cat "$TMP/s3-eval" ))"
+else
+  fail "eval scenario '/build, scaffoldSkill names an uninstalled plugin' asserts blocked-on before any executor, never 'cannot load'" "$( cat "$TMP/s3-eval" )"
+fi
+
+# ---------------------------------------------------------------------------
+printf '\nSeam — the PV3 create-* skills open from a scaffold (BP-196)\n\n'
+# ---------------------------------------------------------------------------
+
+# Five skills carry '## Starting from a scaffold' (keep the identity, work the
+# markers); no other PV3 skill gains the heading.
+PV3_SKILLS="$ROOT/plugins/bett3r-pv3-ai-skills/skills"
+for n in aggregate policy readmodel schema tests; do
+  f="$PV3_SKILLS/create-$n/SKILL.md"
+  if [ ! -f "$f" ]; then
+    fail "create-$n carries '## Starting from a scaffold'" "missing: ${f#"$ROOT"/}"
+    continue
+  fi
+  if grep -qx '## Starting from a scaffold' "$f"; then
+    pass "create-$n carries '## Starting from a scaffold'"
+    sec="$TMP/scaffold-sec.$n"
+    awk '/^## /{on=($0=="## Starting from a scaffold")} on' "$f" > "$sec"
+    present "$sec" 'TODO(scaffold)' "create-$n's scaffold section names TODO(scaffold)"
+    present "$sec" 'STILL OWED' "create-$n's scaffold section names STILL OWED"
+  else
+    fail "create-$n carries '## Starting from a scaffold'" "heading line not found in ${f#"$ROOT"/}"
+  fi
+done
+for f in "$PV3_SKILLS"/*/SKILL.md; do
+  d=${f%/SKILL.md}; d=${d##*/}
+  case "$d" in create-aggregate|create-policy|create-readmodel|create-schema|create-tests) continue ;; esac
+  if grep -qx '## Starting from a scaffold' "$f"; then
+    fail "$d does not gain '## Starting from a scaffold'" "heading found in ${f#"$ROOT"/}"
+  else
+    pass "$d does not gain '## Starting from a scaffold'"
+  fi
+done
 
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"
