@@ -5,7 +5,7 @@ from the agreed design, made only when the host's declared typecheck is green.
 /design commits its docs (`docs(<id>): design`), then runs Step 4b:
 
   scaffold-commit prepare --item <id> [--repo DIR] [--design FILE] [--graph FILE] [--map FILE ...]
-  (an agent places the topology fragments the report's worklist[] names)
+  (an agent places the topology fragments the report's worklist[] names: the residue)
   scaffold-commit finish  --item <id> [--repo DIR] [--design FILE] [--graph FILE] [--map FILE ...] [--abort]
   scaffold-commit census  --item <id> [--repo DIR]
 
@@ -45,8 +45,12 @@ prepare
   Refuses a dirty tree (reason=dirty-tree): the restore below is only exact
   because the tree was clean. Then, against the committed <path>/scaffold.json
   of an earlier run, deletes each UNTOUCHED stub (`git hash-object` equals its
-  manifest blob) and reports each EDITED one, which is never touched; re-runs
-  `extract` when it deleted any, so the graph no longer counts them as code.
+  manifest blob) and reports each EDITED one, which is never touched. Likewise
+  each placement the scaffolder made (a placed[] entry carrying inserted[]):
+  when every span it inserted is still verbatim it is removed, else the
+  placement is kept whole and listed in edited[] {file, node, key} (see
+  unplace). Re-runs `extract` when it deleted or removed any, so the graph no
+  longer counts them as code.
   A deleted stub the scaffolder does not write again is STALE: each barrel line
   the committed report's appended[] recorded for its node is removed (unless
   this run appends the same line), and listed on the stale entry as barrel[].
@@ -59,9 +63,11 @@ prepare
   questions printed as `asked: <node> <question>`, the tree restored, deleted
   stubs included, as on every other non-ok prepare). Then runs it
   with --write (create-only files plus guarded barrel lines) and writes the
-  draft report. worklist[] is every topology fragment (artifact command, event
-  or invariant) for the placing agent; any other fragment is registration and
-  stays STILL OWED for /build.
+  draft report. worklist[] is the residue: every topology fragment (artifact
+  command, event or invariant) the scaffolder left owed (placement status owed,
+  or no placement reported) for the placing agent; one it placed, or found
+  present, is off it. Any other owed fragment is registration and stays STILL
+  OWED for /build. The draft's placed[] is what the scaffolder placed.
 
 finish
   Needs the draft report and HEAD still at its baseSha. `--abort` restores the
@@ -78,8 +84,13 @@ finish
   recording both exits and error counts. A
   unit still deferred on a worklist node is a placement failure
   (gate-red reason=placement-incomplete); one deferred on anything else is
-  STILL OWED. placed[] is this run's placed worklist plus the committed report's
-  placed[] entries off it (placed by an earlier run). On green it commits every
+  STILL OWED. placed[] is this run's placed worklist, plus every fragment the
+  scaffolder placed (in prepare, and in this run) with the spans it inserted,
+  plus the committed report's placed[] entries for nodes not otherwise in it
+  (placed by an earlier run), one entry per key: a key placed twice keeps this
+  run's scaffolder entry, else prepare's. An entry is {node, file, key}, key
+  node|file|at.kind|declares as the hosted runner's (BP-268 D11), a missing
+  value encoded as "", and a scaffolder-placed one adds inserted[] {offset, text}. On green it commits every
   change plus <path>/scaffold.json as `chore(<id>): scaffold the agreed design`;
   when the report equals the committed one and nothing else changed, it commits
   nothing (reason=unchanged). The comparison leaves out what a re-run recomputes
@@ -99,7 +110,8 @@ census
 
 The report, <path>/scaffold.json (<path> from work-docs-path): the final
 scaffolder JSON (`scaffolder`), manifest[] {file, node, blob}, worklist[],
-placed[], held[], stillOwed[], asked[], stale[] {file, node, barrel[]?}, edited[], observe,
+placed[] {node, file, key, inserted[]?}, held[], stillOwed[], asked[], stale[] {file, node, barrel[]?},
+edited[] ({file, node} for a stub, {file, node, key} for a placement), observe,
 typecheck {exit, and on a red base baseExit, baseErrors, errors}, the
 scaffolder's scenarioTests[], unplaced[] and scenariosExcluded[], input digests
 (inputs.maps[] {file, digest}, one per map in the order given, file
@@ -448,13 +460,48 @@ def classify(result):
         if t.get("outcome") == "decision":
             asked.append({"node": t.get("scenarioId"), "question": "scenario test placement needs a decision"})
     for f in result.get("fragments") or []:
-        if not is_topology(f):
+        if not is_topology(f) and is_owed(f):
             owed.append({"node": f.get("node"), "reason": "registration", "detail": f.get("file")})
     return asked, owed
 
 
 def is_topology(fragment):
     return fragment.get("artifact") in TOPOLOGY and not str(fragment.get("file", "")).startswith("unplaced:")
+
+
+def is_owed(fragment):
+    """Left for someone to place: placement status owed, or no placement at all (a
+    scaffolder that does not place, or one run with --no-place)."""
+    return (fragment.get("placement") or {}).get("status", "owed") == "owed"
+
+
+def fragment_key(fragment):
+    """node|file|at.kind|declares, the key the hosted runner's placed[] carries (BP-268 D11).
+    A missing value (no `at`, no at.kind, no declares) is encoded as the empty string."""
+    at = fragment.get("at") if isinstance(fragment.get("at"), dict) else {}
+    return "|".join(str(v or "") for v in (fragment.get("node"), fragment.get("file"), at.get("kind"),
+                                             fragment.get("declares")))
+
+
+def placed_entry(fragment):
+    return {"node": fragment.get("node"), "file": fragment.get("file"), "key": fragment_key(fragment)}
+
+
+def scaffolder_placed(result):
+    """placed[] entries for every fragment the scaffolder placed itself, each with
+    the spans it inserted, so a later prepare can take them out again."""
+    return [dict(placed_entry(f), inserted=f["placement"].get("inserted") or [])
+            for f in result.get("fragments") or [] if (f.get("placement") or {}).get("status") == "placed"]
+
+
+def once_per_key(entries):
+    """The first entry of each key, in order."""
+    seen, kept = set(), []
+    for entry in entries:
+        if entry.get("key") not in seen:
+            seen.add(entry.get("key"))
+            kept.append(entry)
+    return kept
 
 
 def created_files(result):
@@ -502,7 +549,10 @@ def prepare(repo, flags):
             else:
                 edited.append({"file": rel, "node": entry.get("node")})
                 kept.append(entry)
-        if deleted:
+        # Placements of an earlier scaffold commit: still-verbatim ones go, edited ones stay.
+        removed, edited_placements = unplace(repo, previous.get("placed") or [])
+        edited += edited_placements
+        if deleted or removed:
             extract(repo, tools)
         dry, held = scaffold_agreed(repo, tools, design, graph, maps, write=False)
         asked, _ = classify(dry)
@@ -520,9 +570,11 @@ def prepare(repo, flags):
         report = {
             "phase": "prepared", "ticket": fid, "baseSha": base,
             "created": created, "appended": appended_lines(result, created),
-            "worklist": by_key([f for f in result.get("fragments") or [] if is_topology(f)], "node", "file"),
-            "placed": [], "placedBefore": previous.get("placed") or [], "held": held, "asked": [], "stillOwed": by_key(owed, "node", "reason"),
-            "deleted": deleted, "edited": by_key(edited, "file"), "carried": kept,
+            "worklist": by_key([f for f in result.get("fragments") or [] if is_topology(f) and is_owed(f)],
+                               "node", "file"),
+            "placed": by_key(scaffolder_placed(result), "node", "file", "key"),
+            "placedBefore": [p for p in previous.get("placed") or [] if p not in removed], "held": held, "asked": [], "stillOwed": by_key(owed, "node", "reason"),
+            "deleted": deleted, "edited": by_key(edited, "file", "node"), "carried": kept,
             "stale": stale, "scaffolder": result,
         }
         write_json(report_file, report)
@@ -559,6 +611,64 @@ def unappend(repo, stale, appended, result):
             entry["barrel"] = by_key(removed, "file", "code")
 
 
+def unplace(repo, placed):
+    """Removes, from its file, every span a placed[] entry records as inserted
+    (`inserted` [{offset, text}], scaffold-core's placement.inserted: final-file
+    offsets in UTF-16 code units) when ALL the entry's spans are still verbatim
+    at their recorded offsets (locate). One span not there (edited, or shifted by
+    lines the developer added above it), or overlapping a span already taken, and
+    the entry is EDITED: every span of it stays, and it is returned as an edited[]
+    entry {file, node, key}. Spans are cut last offset first, so the earlier
+    ones stay valid. Entries with no `inserted` (placed by the agent) are never
+    touched. Returns (removed entries, edited entries)."""
+    removed, edited, by_file = [], [], {}
+    for entry in placed:
+        if entry.get("inserted"):
+            by_file.setdefault(entry["file"], []).append(entry)
+    for rel, entries in sorted(by_file.items()):
+        full = os.path.join(repo, rel)
+        if not os.path.isfile(full):
+            continue
+        with open(full, encoding="utf-8", newline="") as fh:
+            text = fh.read()
+        cuts = []
+        for entry in entries:
+            spans = [locate(text, span) for span in entry["inserted"]]
+            if None not in spans and disjoint(cuts + spans):
+                cuts += spans
+                removed.append(entry)
+            else:
+                edited.append({"file": rel, "node": entry.get("node"), "key": entry.get("key")})
+        for start, end in sorted(cuts, reverse=True):
+            text = text[:start] + text[end:]
+        if cuts:
+            with open(full, "w", encoding="utf-8", newline="") as fh:
+                fh.write(text)
+    return removed, edited
+
+
+def locate(text, span):
+    """(start, end) of an inserted span in `text` (Python indices), or None when its
+    text is not verbatim at its recorded UTF-16 offset. Only there: never at "its only
+    occurrence" elsewhere, which is text the developer wrote or moved (a comment quoting
+    the placed line, a hand-written copy) and must not be cut (BP-268 slice 6, N1;
+    ADR-128 Decision 9). A placement that moved off its offset is kept and reported
+    edited."""
+    needle, offset = span["text"], span["offset"]
+    if not isinstance(needle, str) or not needle or not isinstance(offset, int) or offset < 0:
+        return None
+    units, want = text.encode("utf-16-le"), needle.encode("utf-16-le")
+    if units[2 * offset:2 * offset + len(want)] == want:
+        start = len(units[:2 * offset].decode("utf-16-le"))
+        return start, start + len(needle)
+    return None
+
+
+def disjoint(spans):
+    ordered = sorted(spans)
+    return all(a[1] <= b[0] for a, b in zip(ordered, ordered[1:]))
+
+
 def crashed(verb, error, path):
     """An unexpected failure, after the tree was restored: one line naming it, then the verdict."""
     print(f"exception: {type(error).__name__}: {error}")
@@ -588,17 +698,20 @@ def finish(repo, flags):
             raise Refusal("blocked", "asked", asked=len(asked))
 
         worklist = {f.get("node") for f in draft["worklist"]}
-        still_fragments = {f.get("node") for f in result.get("fragments") or [] if is_topology(f)}
+        still_fragments = {f.get("node") for f in result.get("fragments") or [] if is_topology(f) and is_owed(f)}
         for d in result.get("deferred") or []:
             waits = d.get("waitsOn") or []
             if worklist.intersection(waits):
                 print(f"placement: {d.get('node')} still waits on {', '.join(waits)}")
                 raise Refusal("gate-red", "placement-incomplete")
             owed.append({"node": d.get("node"), "reason": "deferred", "detail": ", ".join(waits)})
-        placed = [{"node": f.get("node"), "file": f.get("file")} for f in draft["worklist"]
-                  if f.get("node") not in still_fragments]
+        # One entry per key: this run's scaffolder placement (its spans at current
+        # offsets) over prepare's, over the agent's placement of a worklist fragment.
+        placed = once_per_key(scaffolder_placed(result) + draft["placed"]
+                              + [placed_entry(f) for f in draft["worklist"] if f.get("node") not in still_fragments])
         # Placed by an earlier run (its fragment is in code, so it is off this worklist): kept.
-        placed += [p for p in draft.get("placedBefore") or [] if p.get("node") not in worklist]
+        now = {p.get("node") for p in placed}
+        placed += [p for p in draft.get("placedBefore") or [] if p.get("node") not in worklist | now]
         owed += [{"node": f.get("node"), "reason": "not-placed", "detail": f.get("file")} for f in draft["worklist"]
                  if f.get("node") in still_fragments]
 
@@ -627,7 +740,7 @@ def finish(repo, flags):
             "inputs": {"maps": [{"file": m["file"], "digest": digest(m["path"])} for m in maps],
                        "design": digest(design), "graph": digest(graph)},
             "created": created, "appended": by_key(draft["appended"] + appended_lines(result, created), "file", "code"),
-            "manifest": manifest, "worklist": draft["worklist"], "placed": by_key(placed, "node"),
+            "manifest": manifest, "worklist": draft["worklist"], "placed": by_key(placed, "node", "file", "key"),
             "held": held, "asked": [], "stillOwed": by_key(owed, "node", "reason"),
             "stale": [{k: v for k, v in d.items() if k != "blob"} for d in draft["stale"]
                       if not os.path.exists(os.path.join(repo, d["file"]))],

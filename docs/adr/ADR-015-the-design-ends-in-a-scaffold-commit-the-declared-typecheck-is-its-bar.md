@@ -16,8 +16,8 @@ mechanics live in `plugins/bett3r-ai-workflow/scripts/scaffold-commit.py` (the l
 **`/design` ends in one commit of everything derivable from the agreed design, made on top of its docs
 commit.** Step 4b runs after `docs(<id>): design`. The launcher's `prepare` verb dry-runs the declared
 scaffolder over the agreed design and the committed `map.json`, classifies its blocks, and writes the
-mechanical half (create-only files plus guarded barrel lines). An agent then places the topology
-fragments. The `finish` verb re-extracts, re-runs the scaffolder so units deferred on a placed fragment
+mechanical half (create-only files plus guarded barrel lines). An agent then places the residue:
+the topology fragments the scaffolder left owed (BP-268). The `finish` verb re-extracts, re-runs the scaffolder so units deferred on a placed fragment
 get written, runs the declared typecheck and, when it is green, commits the files together with
 `<path>/scaffold.json` as `chore(<id>): scaffold the agreed design`.
 
@@ -33,8 +33,8 @@ decision, `prepare` ends `outcome=blocked reason=asked`, and the question goes b
 ## Placement is topology only
 
 **The placing agent writes topology fragments only (commands, events, their schemas and invariant
-wiring), and never registration.** The launcher's worklist is every fragment whose artifact is
-`command`, `event` or `invariant` (`TOPOLOGY`, `scaffold-commit.py:117`); every other fragment is
+wiring), and never registration.** The launcher's worklist is every owed fragment whose artifact
+is `command`, `event` or `invariant` (`TOPOLOGY`, `scaffold-commit.py:138`); every other fragment is
 registration or a test and stays STILL OWED for `/build`. This is ESAS-289-F3 option B, "mechanical +
 placement", chosen by the owner because it is the only option that delivers one commit of everything
 agreed when a design adds events, which most designs do. Option A, mechanical only, is the floor B
