@@ -7,7 +7,7 @@
     "blueprint": {
       "command": "node",
       "args": [
-        "/Users/dev/development/blueprint/packages/blueprint-mcp/bin/blueprint-mcp.mjs"
+        "/Users/dev/development/blueprint/src/services/blueprint-mcp/bin/blueprint-mcp.mjs"
       ]
     }
   }

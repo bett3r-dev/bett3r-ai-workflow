@@ -61,7 +61,7 @@ A map is `structureVersion: 2`. Two committed files describe it:
   skills/design-map/map.schema.json           the vocabulary: the closed sets
       (fork status kind, decided source, node level, map shape), a
       byte-identical copy of what blueprint emits
-      (packages/blueprint-schema/schema/map.schema.json). Never hand-edited.
+      (src/packages/backend/blueprint-schema/schema/map.schema.json). Never hand-edited.
   skills/design-map/map-structure.schema.json the structure: nodes, forks,
       cards, options, links. It names every closed set by a `$ref` into
       map.schema.json, resolved from its own directory, so the values are
@@ -82,7 +82,8 @@ reason=schema-invalid. After the schema, the checks JSON Schema cannot express:
   decided-title-only (id=)           a fork with no card is decided: there is
                                      no option for the status to name
   dangling-ref (id= at=)             an anchor or a parent names no node, a
-                                     restsOn entry names no fork, or a link's
+                                     restsOn entry names no fork, an affects
+                                     entry names no node or fork, or a link's
                                      deliverableId names no node
 
 `validate` runs the bare-actor check (below), the schema and these checks,
@@ -370,7 +371,8 @@ stamps each answer with the mapId of the fork's own map.
 `project --ticket K <map>...` (ESAS-166 D10) validates every input (refusals
 name map=), then prints a v2 map on stdout: the forks whose tickets contain K,
 in input order; the nodes their anchors name, with every ancestor reached
-through parents; restsOn pruned to kept forks; the links whose deliverableId
+through parents; restsOn pruned to kept forks; affects pruned to kept nodes
+and forks, dropped when nothing is left (BP-232); the links whose deliverableId
 is a kept node; mapId K; grounded and shape from the inputs
 (grounded-mismatch, shape-mismatch when they disagree). A node id defined
 differently in two inputs is node-conflict; a fork id in two inputs is
@@ -762,18 +764,26 @@ def check_semantics(payload):
                     if walk.get("kind") == "structural" and gwt:
                         raise Refusal("walk-structural-gwt", id=fid, option=option["id"],
                                       at=pointer(at))
+                    # BP-229 (D4): a structural walk derives no scenario, so a
+                    # rejection marker on it would mark a refusal case nothing
+                    # carries; blueprint-store's checkWalks refuses the same.
+                    if walk.get("kind") == "structural" and "rejection" in walk:
+                        raise Refusal("walk-structural-rejection", id=fid, option=option["id"],
+                                      at=pointer(at))
         if "option" in status:
             if card is None:
                 raise Refusal("decided-title-only", id=fid)
             if status["option"] not in options:
                 raise Refusal("unknown-option", id=fid, at=pointer(("forks", i, "status", "option")))
     refs = []
+    entries = nodes | forks  # affects may name a node or a fork (blueprint mapEntryById)
     for i, node in enumerate(payload["nodes"]):
         refs += [(p, nodes, ("nodes", i, "parents", j)) for j, p in enumerate(node["parents"])]
     for i, fork in enumerate(payload["forks"]):
         if "anchor" in fork:
             refs.append((fork["anchor"], nodes, ("forks", i, "anchor")))
         refs += [(r, forks, ("forks", i, "restsOn", j)) for j, r in enumerate(fork["restsOn"])]
+        refs += [(a, entries, ("forks", i, "affects", j)) for j, a in enumerate(fork.get("affects", []))]
     for i, link in enumerate(payload.get("links", [])):
         refs.append((link["deliverableId"], nodes, ("links", i, "deliverableId")))
     for ref, known, at in refs:
@@ -1486,15 +1496,34 @@ def has_gherkin(walk):
     return all(f in walk for f in ("given", "when", "then"))
 
 
-def steps_of(text):
-    return [] if text is None else [{"text": text}]
+def steps_of(walk, keyword):
+    """BP-231 (D11): a keyword's step carries the element the walk names for
+    that keyword, and no `exercises` key without one."""
+    text = walk.get(keyword)
+    if text is None:
+        return []
+    element = (walk.get("exercises") or {}).get(keyword)
+    return [{"text": text} if element is None else {"text": text, "exercises": {"esId": element["esId"]}}]
+
+
+def exercised_id(walk, keyword):
+    return ((walk.get("exercises") or {}).get(keyword) or {}).get("esId")
+
+
+def same_rejection(walk, basis):
+    """BP-229 (D8): absent means no rejection; a marker on one side only, or a
+    different code, is a change."""
+    return (walk is None) == (basis is None) and (walk or {}).get("code") == (basis or {}).get("code")
 
 
 def same_walk(walk, basis):
-    """The walk's fields a basis records; `kind` absent reads as behavioral."""
+    """The walk's fields a basis records; `kind` absent reads as behavioral. An
+    element absent on one side only, or a different id, is a change (BP-231 D11)."""
     return (walk.get("text") == basis.get("text")
             and is_structural(walk) == is_structural(basis)
-            and all(walk.get(f) == basis.get(f) for f in ("given", "when", "then")))
+            and all(walk.get(f) == basis.get(f) for f in ("given", "when", "then"))
+            and same_rejection(walk.get("rejection"), basis.get("rejection"))
+            and all(exercised_id(walk, f) == exercised_id(basis, f) for f in ("given", "when", "then")))
 
 
 def review_reason(derived_from, forks):
@@ -1544,15 +1573,19 @@ def fork_scenarios(payload):
             if is_structural(walk) or key in stored:
                 continue
             ready = has_gherkin(walk)
-            proposals.append({
+            proposal = {
                 "key": key, "forkId": fork["id"], "optionId": status["option"],
                 "walk": walk["scenario"], "source": status["source"],
                 "state": "ready" if ready else "needs-gherkin",
                 "title": walk["scenario"], "text": walk["text"],
                 "anchors": [fork.get("anchor", fork["id"])],
-                "given": steps_of(walk.get("given")) if ready else [],
-                "when": steps_of(walk.get("when")) if ready else [],
-                "then": steps_of(walk.get("then")) if ready else []})
+                "given": steps_of(walk, "given") if ready else [],
+                "when": steps_of(walk, "when") if ready else [],
+                "then": steps_of(walk, "then") if ready else []}
+            # BP-229 (D7): the walk's declared rejection, copied only when the walk carries one.
+            if "rejection" in walk:
+                proposal["rejection"] = walk["rejection"]
+            proposals.append(proposal)
     forks = {f["id"]: f for f in payload["forks"]}
     derived = [{"scenarioId": s["id"], "reviewReason": review_reason(s["derivedFrom"], forks)}
                for s in scenarios if s.get("derivedFrom") is not None]
@@ -2041,13 +2074,26 @@ def project(positional, flags):
     out["grounded"] = first["grounded"]
     out["mapId"] = ticket
     out["nodes"] = [n for nid, n in nodes.items() if nid in reached]
-    out["forks"] = [dict(f, restsOn=[r for r in f["restsOn"] if r in kept_forks]) for f in forks]
+    out["forks"] = [project_fork(f, kept_forks, reached) for f in forks]
     kept_links = [l for l in links if l["deliverableId"] in reached]
     if kept_links:
         out["links"] = kept_links
     validate(out)
     sys.stdout.write(json.dumps(out, indent=2, ensure_ascii=False) + "\n")
     return dict(ticket=ticket, forks=len(out["forks"]), nodes=len(out["nodes"]))
+
+
+def project_fork(fork, kept_forks, reached):
+    """restsOn narrowed to kept forks, affects to kept nodes and forks; an
+    affects left empty is dropped, as an absent one already claims nothing."""
+    out = dict(fork, restsOn=[r for r in fork["restsOn"] if r in kept_forks])
+    if "affects" in fork:
+        affects = [a for a in fork["affects"] if a in kept_forks or a in reached]
+        if affects:
+            out["affects"] = affects
+        else:
+            del out["affects"]
+    return out
 
 
 def one_line(text):
@@ -2386,7 +2432,7 @@ def post(positional, flags):
 # map-structure.ts), in the order an exported entry spells them; any other key a
 # get_map body decorates an entry with is not carried.
 SCENARIO_FIELDS = ("id", "title", "anchors", "given", "when", "then", "examples", "derivedFrom",
-                   "supersedes", "proposedBy", "status")
+                   "supersedes", "rejection", "proposedBy", "status")
 OBSERVATION_FIELDS = ("id", "title", "anchors", "kpi", "expect", "supersedes", "proposedBy", "status")
 
 

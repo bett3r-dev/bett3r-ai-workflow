@@ -94,7 +94,7 @@ Done when every unit ruled `merge` is in `int/<run-id>` at its ruled sha, every 
 Every unit's tests meet only here, so a scenario a sibling owns, which a lane's `/verify-build` only warned on, is ruled here. With every unit ruled `merge` merged, run `scaffold-commit census --item <run-id> --repo <integration worktree>` on `int/<run-id>`, over the fleet's one scaffold report (`/start-multi` step 0's), and read the last line, `SCAFFOLD-COMMIT:v1 verb=census outcome=…`, not the exit code (ADR-004):
 
 - `outcome=ok` → continue.
-- `outcome=blocked` blocks step 5: each `not-implemented: <id> presence=<absent|pending>` is an agreed scenario no merged unit implemented, a pending `.todo(` test counting as none, and the integration PR body lists each line verbatim.
+- `outcome=blocked` blocks step 5: each `not-implemented: <id> presence=<absent|pending>` is an agreed scenario no merged unit implemented, a pending `.todo(` or `.skip(` test counting as none, and the integration PR body lists each line verbatim.
 - `outcome=error`, or no verdict line → blocks step 5, as `blocked` does.
 - `outcome=skipped reason=no-scaffold-report` → step 0 made no scaffold commit: the integration PR body says so, and there is nothing to census.
 
@@ -195,7 +195,7 @@ Without `--land`, stop at step 5 and report the integration PR URL and its `merg
 
 **6b — Push the KPI dashboards: attended only.**
 
-A design's agreed KPIs are committed as `blueprint-kpi-<map>.json` dashboards (ESAS-306, ADR-116 in blueprint), and that repo's Grafana shows them only after the repo's own declared push runs. For each repo the fleet touched, read `observability` from its `.blueprint.config.json` at the default-branch sha step 6 reported:
+A design's agreed KPIs are committed as `blueprint-kpi-<map>.json` dashboards (ESAS-306, ADR-116 in blueprint), and that repo's APM shows them only after the repo's own declared push runs. For each repo the fleet touched, read `observability` from its `.blueprint.config.json` at the default-branch sha step 6 reported:
 
 - **`push` declared, a human present** (no `.work/lane.yaml`, not a headless run): run the command exactly as written, from that repo's root on the landed default branch, and report its output. The repo scopes it (teselly: `--dashboards-only --glob 'blueprint-kpi-*.json'`), so it touches no alert group.
 - **`push` declared, unattended**: never run it. Print `push owed: <command>`, the command verbatim, and carry the line into the step 7 report for a human to run.

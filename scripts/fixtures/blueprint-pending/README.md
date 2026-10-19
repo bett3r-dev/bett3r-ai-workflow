@@ -1,7 +1,7 @@
 # blueprint-pending fixtures
 
 Every `.blueprint/` here was written by the **real `@bett3r-dev/blueprint-store`** (the
-blueprint repo, `packages/blueprint-store`) — the hook reads two files written by another
+blueprint repo, `src/packages/backend/blueprint-store`) — the hook reads two files written by another
 repository, and a fixture that merely *looks* like store output would let the
 hook pass its own tests and fail in production. So the generator drives the
 store's public API (`propose`, `markSynced`, `appendOp`) and copies what lands

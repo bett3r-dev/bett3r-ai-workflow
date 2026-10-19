@@ -49,6 +49,16 @@ key into an existing run: a guessed value would make `recorded == resolved` and
 turn the guard into a false pass, so an old run pays exactly one honestly
 unguarded tick and is guarded from the second.
 
+**A `run.yaml` with no `createdBaseSha` is a run that never started** (BP-196
+D7). A tick that refuses before step 0 pins BASE — the framework skill check, a
+collision, a dirty tree — has by contract already written `run.yaml` with its
+`pluginVersion`, so the file exists and carries no base. Read as a resume, that
+file reaches step 2 with nothing to cut a lane from; so the driver reads it as a
+cold start instead: it says so in one line before tick 1, and carries no
+`previous_recorded` into the version guard, because the version a refusing tick
+recorded belongs to a run that never began. The orchestrator recreates the file
+whole (`commands/start-multi.md` step 0); the driver writes nothing.
+
 Usage:
     fleet-loop --run <run-dir> --tick <shell-command>
 
@@ -95,6 +105,10 @@ USAGE = 2
 # installing it), and one scalar does not justify adding one.
 PLUGIN_VERSION_IN_RUN = re.compile(r"^pluginVersion:[ \t]*['\"]?([^'\"\s]+)")
 
+# `createdBaseSha: <sha>` at the top level of run.yaml: the record step 0 writes
+# once BASE is pinned, and the one key whose absence means the run never started.
+CREATED_BASE_IN_RUN = re.compile(r"^createdBaseSha:[ \t]*['\"]?([^'\"\s]+)")
+
 # `waves=k/N` as the verdict carries it. The MARKER line itself is parsed by
 # bin/lane-step; this is only the shape of one attribute's value, after that
 # parser has already accepted it.
@@ -128,6 +142,23 @@ def recorded_version(run_yaml):
     with open(run_yaml, encoding="utf-8") as handle:
         for line in handle:
             match = PLUGIN_VERSION_IN_RUN.match(line)
+            if match:
+                return match.group(1)
+    return None
+
+
+def recorded_base(run_yaml):
+    """The `createdBaseSha` run.yaml recorded, or None when it recorded none.
+
+    None for a missing file and for a file without the key alike: both are a
+    run no tick has carried past step 0's BASE pin, which is the only state in
+    which a later `/start-multi` on the same ids must not resume.
+    """
+    if not os.path.isfile(run_yaml):
+        return None
+    with open(run_yaml, encoding="utf-8") as handle:
+        for line in handle:
+            match = CREATED_BASE_IN_RUN.match(line)
             if match:
                 return match.group(1)
     return None
@@ -193,6 +224,17 @@ def main(argv):
     run_yaml = os.path.join(run_dir, "run.yaml")
     resolved = resolved_version()
     recorded = recorded_version(run_yaml)
+    if os.path.isfile(run_yaml) and recorded_base(run_yaml) is None:
+        # A refusing tick leaves exactly this shape: pluginVersion written, no
+        # BASE pinned. It is not a resume (there is nothing to resume from) and
+        # its recorded version is not a previous tick of THIS run, so the guard
+        # starts from nothing, as on a fresh run.
+        print(
+            "fleet-loop: %s records no createdBaseSha — a tick refused before step 0 "
+            "pinned BASE, so this run never started; treating it as a fresh run (the "
+            "orchestrator recreates run.yaml, no resume)." % run_yaml
+        )
+        recorded = None
     if recorded is None:
         print(
             "fleet-loop: proceeding — %s records no pluginVersion yet (resolved=%s). "

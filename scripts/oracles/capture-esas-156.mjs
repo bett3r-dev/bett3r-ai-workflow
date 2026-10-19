@@ -9,12 +9,12 @@
 // `.blueprint/` until `start_map_session` makes one. <map.json> is the plugin map
 // whose nodes, forks and statuses are replayed into the store.
 //
-// blueprint's own launcher (packages/blueprint-mcp/bin/blueprint-mcp.mjs) runs the TypeScript
+// blueprint's own launcher (src/services/blueprint-mcp/bin/blueprint-mcp.mjs) runs the TypeScript
 // sources through tsx, and its workspace packages export `./src/index.ts`, so
 // the tsc build output cannot resolve them under plain node. This driver does
 // what that launcher does: register tsx, then import `src/server.ts`. The
 // server is reached over the SDK's InMemoryTransport, as
-// packages/blueprint-mcp/oracles/epic-esas-156.oracle.test.ts does.
+// src/services/blueprint-mcp/oracles/epic-esas-156.oracle.test.ts does.
 //
 // Written files:
 //   tools.txt    listTools names, one per line
@@ -40,14 +40,14 @@ if ( !blueprint || !mapPath || !captures || !repo ){
   process.exit( 2 );
 }
 
-const fromMcp = createRequire( join( blueprint, 'packages', 'blueprint-mcp', 'package.json' ));
+const fromMcp = createRequire( join( blueprint, 'src', 'services', 'blueprint-mcp', 'package.json' ));
 const { register } = await import( pathToFileURL( fromMcp.resolve( 'tsx/esm/api' )).href );
 register();
 
 const { Client } = await import( pathToFileURL( fromMcp.resolve( '@modelcontextprotocol/sdk/client/index.js' )).href );
 const { InMemoryTransport } = await import( pathToFileURL( fromMcp.resolve( '@modelcontextprotocol/sdk/inMemory.js' )).href );
-const { createBlueprintMcpServer } = await import( pathToFileURL( join( blueprint, 'packages', 'blueprint-mcp', 'src', 'server.ts' )).href );
-const { createBlueprintStore, BOARD_KINDS } = await import( pathToFileURL( join( blueprint, 'packages', 'blueprint-store', 'src', 'index.ts' )).href );
+const { createBlueprintMcpServer } = await import( pathToFileURL( join( blueprint, 'src', 'services', 'blueprint-mcp', 'src', 'server.ts' )).href );
+const { createBlueprintStore, BOARD_KINDS } = await import( pathToFileURL( join( blueprint, 'src', 'packages', 'backend', 'blueprint-store', 'src', 'index.ts' )).href );
 
 mkdirSync( repo );
 execFileSync( 'git', [ 'init', '-q' ], { cwd: repo });

@@ -60,6 +60,11 @@
         "card": { "$ref": "#/$defs/card" },
         "anchor": { "$ref": "#/$defs/id" },
         "restsOn": { "type": "array", "items": { "$ref": "#/$defs/forkId" } },
+        "affects": {
+          "$comment": "BP-232 (D3): optional, the map entries (node or fork ids) the fork's decision can change beyond its anchor's subtree (blueprint MapFork.affects). validate resolves each id against the map.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" }
+        },
         "status": { "$ref": "#/$defs/status" },
         "testable": { "const": false }
       }
@@ -145,7 +150,9 @@
               "kind": { "$ref": "map.schema.json#/$defs/walkKind" },
               "given": { "$ref": "#/$defs/text" },
               "when": { "$ref": "#/$defs/text" },
-              "then": { "$ref": "#/$defs/text" }
+              "then": { "$ref": "#/$defs/text" },
+              "rejection": { "$ref": "#/$defs/rejection" },
+              "exercises": { "$ref": "#/$defs/walkExercises" }
             }
           }
         },
@@ -154,7 +161,7 @@
       }
     },
     "link": {
-      "$comment": "blueprint MapLink (packages/blueprint-schema/src/map-structure.ts): an ES node id to a map deliverable.",
+      "$comment": "blueprint MapLink (src/packages/backend/blueprint-schema/src/map-structure.ts): an ES node id to a map deliverable.",
       "type": "object",
       "required": ["esId", "deliverableId"],
       "additionalProperties": false,
@@ -162,6 +169,12 @@
         "esId": { "$ref": "#/$defs/text" },
         "deliverableId": { "$ref": "#/$defs/id" }
       }
+    },
+    "rejection": {
+      "$comment": "blueprint ScenarioRejection (BP-229 D6), on a walk, a stored scenario and a derived basis: present means the walk or scenario declares a refusal case; code, when known, names the error code it is refused with, non-empty with no whitespace (blueprint map-write.ts isRejection). Optional and additive: no structureVersion bump.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "code": { "type": "string", "pattern": "^\\S+$" } }
     },
     "scenarioId": { "type": "string", "pattern": "^SCN-[0-9A-HJKMNP-TV-Z]{8}$" },
     "observationId": { "type": "string", "pattern": "^OBS-[0-9A-HJKMNP-TV-Z]{8}$" },
@@ -202,10 +215,31 @@
       "$ref": "#/$defs/text"
     },
     "gherkinStep": {
+      "$comment": "blueprint GherkinStep (BP-231, ADR-123): a step may name the eventstorming element it exercises.",
       "type": "object",
       "required": ["text"],
       "additionalProperties": false,
-      "properties": { "text": { "$ref": "#/$defs/text" } }
+      "properties": {
+        "text": { "$ref": "#/$defs/text" },
+        "exercises": { "$ref": "#/$defs/stepElement" }
+      }
+    },
+    "stepElement": {
+      "$comment": "blueprint's store (map-write.ts isStepElement) takes {esId} with an id that is not blank, and nothing else; the pattern refuses a whitespace-only id as its trim() does.",
+      "type": "object",
+      "required": ["esId"],
+      "additionalProperties": false,
+      "properties": { "esId": { "type": "string", "minLength": 1, "pattern": "\\S" } }
+    },
+    "walkExercises": {
+      "$comment": "blueprint WalkExercises (BP-231 D11): per given, when or then, the element that keyword's derived step names (fork-scenarios.ts stepsOf). {} reads as absent, and an element on a keyword with no text or on a structural walk is admitted, as the store's isWalkExercises admits it (BP-231 D17).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "given": { "$ref": "#/$defs/stepElement" },
+        "when": { "$ref": "#/$defs/stepElement" },
+        "then": { "$ref": "#/$defs/stepElement" }
+      }
     },
     "gherkinSteps": { "type": "array", "items": { "$ref": "#/$defs/gherkinStep" } },
     "scenarioDerivation": {
@@ -243,6 +277,7 @@
         },
         "derivedFrom": { "$ref": "#/$defs/scenarioDerivation" },
         "supersedes": { "$ref": "#/$defs/scenarioId" },
+        "rejection": { "$ref": "#/$defs/rejection" },
         "proposedBy": { "$ref": "#/$defs/proposedBy" },
         "status": { "$ref": "#/$defs/exampleStatus" }
       }
@@ -283,7 +318,8 @@
           "properties": {
             "kind": { "const": "query" },
             "datasource": { "$ref": "#/$defs/text" },
-            "expr": { "$ref": "#/$defs/text" }
+            "expr": { "$ref": "#/$defs/text" },
+            "language": { "$ref": "map.schema.json#/$defs/kpiQueryLanguage" }
           }
         }
       ]

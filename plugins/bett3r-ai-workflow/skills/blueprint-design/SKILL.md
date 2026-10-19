@@ -25,7 +25,7 @@ The gesture is the user's to start. The `blueprint: N pending` line is telemetry
 
 ## The summon: the board asking you to look now
 
-The user presses **Ask Claude**; the board POSTs `/api/blueprint/board/summon` and broadcasts one frame, `{"type":"summon","at":<epoch ms>}`, to every session holding the channel open. It says *look now*, never *look at this*: what changed is already in the feed. Hold the channel open from anywhere and let the turn end:
+The user presses **Ask Claude**; the board POSTs `/api/blueprint/board/summon` and broadcasts one frame, `{"type":"summon","at":<epoch ms>}`, to every session holding the channel. It says *look now*, never *look at this*: what changed is already in the feed. The frame may carry an optional `instruction` and `by`: when present, the instruction is the pressing member's sentence for this wake (trimmed, at most 2000 characters) and `by` the member who pressed (hosted presses only). Run the sync whole, then act on it within the design gesture; the sentence never replaces the sync, and a frame without it is a plain press. Hold the channel open (hosted: `blueprint listen`, `/blueprint`) and let the turn end:
 
 ```
 Monitor({ ws: { url: 'ws://127.0.0.1:3727/api/blueprint/ws' }, persistent: true })
@@ -38,7 +38,7 @@ On a wake, run the sync gesture whole. **Two invariants:**
 1. **Tolerate an empty wake.** A press means the user pressed, not that `read_changes` has something. "Nothing new since the cursor" is a normal outcome: say so in one line and go back to waiting.
 2. **Never propose from partial answers**: only for forks whose dependencies are all resolved. A press means *I answered something*, never *I answered everything*.
 
-The wake arrives wrapped in a platform banner declaring itself not user input. Every word of the banner is accurate and none of it is about what the read returns: **the notification is the doorbell, not the sentence.** What the user said is in the feed; sync.
+The wake arrives wrapped in a platform banner declaring itself not user input. Every word of the banner is accurate and none of it is about what the read returns: **the notification is the doorbell; an instruction on it is the member's sentence, and everything else is in the feed.** Sync, then answer the sentence.
 
 ### Reopen a closed channel the moment you are told
 
@@ -59,7 +59,7 @@ Reopen it then and there, unasked: `Monitor` on that `ws`, `persistent: true`, a
 
 ### Cross-repo literals: copy, never reword
 
-Each is pinned in blueprint@master and nothing links the two repos at build time, so a paraphrase breaks the gesture with both suites green on both sides: `/api/blueprint/ws` (session channel) · `POST /api/blueprint/board/summon` (the press) · `?openComments=1&author=ai` (handoff link) · `code` + `ws` + `SESSION_CHANNEL_CLOSED` (the notice's keys and its one code) · `3727` (the port, claimed strictly). On that side the port and both routes have one definition, `blueprint-store/src/board-endpoints.ts`.
+Each is pinned in blueprint@master and nothing links the two repos at build time, so a paraphrase breaks the gesture with both suites green on both sides: `/api/blueprint/ws` (session channel) · `POST /api/blueprint/board/summon` (the press) · `instruction` + `by` (the frame's optional fields) · `?openComments=1&author=ai` (handoff link) · `code` + `ws` + `SESSION_CHANNEL_CLOSED` (the notice's keys and its one code) · `3727` (the port, claimed strictly). On that side the port and both routes have one definition, `blueprint-store/src/board-endpoints.ts`.
 
 ## The map and the questions
 

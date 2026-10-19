@@ -204,6 +204,8 @@ graph: absent
 design: absent
 ops: absent
 mcp: registered
+board_script: absent
+  launch: node <blueprint checkout>/src/apps/sticky-notes-board/bin/blueprint-board.mjs .
 board: off'
 
 assert_report 'board-ready' \
@@ -214,6 +216,8 @@ graph: present
 design: absent
 ops: absent
 mcp: registered
+board_script: present
+  launch: yarn run blueprint:board
 board: off'
 
 assert_report 'unregistered' \
@@ -224,6 +228,8 @@ graph: present
 design: absent
 ops: absent
 mcp: unregistered
+board_script: absent
+  launch: node <blueprint checkout>/src/apps/sticky-notes-board/bin/blueprint-board.mjs .
 board: off'
 
 assert_report 'no-mcp-json' \
@@ -234,6 +240,8 @@ graph: present
 design: absent
 ops: absent
 mcp: absent
+board_script: absent
+  launch: node <blueprint checkout>/src/apps/sticky-notes-board/bin/blueprint-board.mjs .
 board: off'
 
 # A design layer already on disk. The bytes are real store output, borrowed
@@ -252,6 +260,8 @@ graph: present
 design: present
 ops: present
 mcp: registered
+board_script: present
+  launch: yarn run blueprint:board
 board: off'
 if [ "$out" != "$expected" ]; then
   fail 'a design.json + ops.jsonl already on disk are reported, not assumed fresh' \
@@ -261,6 +271,91 @@ elif [ -s "$TMP/err" ]; then
 else
   pass 'a design.json + ops.jsonl already on disk are reported, not assumed fresh'
 fi
+
+# ── The board launch line ─────────────────────────────────────────────────────
+#
+# The board is user-launched, so what the preflight owes is the exact line to
+# hand over, and that line depends on the host: its own `blueprint:board` script
+# run through its own package manager (`packageManager`, else the lockfile, else
+# npm), with `BLUEPRINT_CHECKOUT=<blueprint checkout>` in front when the script
+# reads that variable (a `${BLUEPRINT_CHECKOUT:?}` aborts a background launch
+# unread), and the blueprint checkout's own bin when there is no script. The
+# checkout stays a placeholder: the agent resolves it, the preflight does not.
+#
+# The full-report cases pin the lines in place; the composed cases below them
+# pin one precedence each and compare only the two board_script lines.
+
+printf '\nthe board launch line (board_script)\n'
+
+assert_report 'board-pnpm' \
+  'a pnpm host whose script reads BLUEPRINT_CHECKOUT gets the pnpm line with the checkout in front' \
+  'plugin: unknown
+blueprint_dir: present
+graph: present
+design: absent
+ops: absent
+mcp: registered
+board_script: present
+  launch: BLUEPRINT_CHECKOUT=<blueprint checkout> pnpm run blueprint:board
+board: off'
+
+assert_report 'board-lockfile' \
+  'no packageManager: the package manager is read off the lockfile' \
+  'plugin: unknown
+blueprint_dir: present
+graph: present
+design: absent
+ops: absent
+mcp: registered
+board_script: present
+  launch: pnpm run blueprint:board
+board: off'
+
+# assert_launch <fixture> <description> <expected board_script lines> <setup>
+# Copies the fixture, runs <setup> inside the copy, and compares only the
+# `board_script:` line and the `  launch:` line under it.
+assert_launch(){
+  work="$TMP/work"
+  rm -rf "$work"; mkdir -p "$work"
+  cp -R "$FIXTURES/$1/." "$work/"
+  ( cd "$work" && eval "$4" )
+  out=$( cd "$work" && PATH="$CLEAN_PATH" BLUEPRINT_BOARD_PORT=1 "$PREFLIGHT_SH" "$PREFLIGHT" 2>"$TMP/err" )
+  actual=$( printf '%s\n' "$out" | grep -A1 '^board_script:' )
+  if [ -s "$TMP/err" ]; then
+    fail "$2" "stderr: $( cat "$TMP/err" )"
+  elif [ "$actual" != "$3" ]; then
+    fail "$2" 'expected:' "$3" 'actual:' "$actual"
+  else
+    pass "$2"
+  fi
+}
+
+node_line='board_script: absent
+  launch: node <blueprint checkout>/src/apps/sticky-notes-board/bin/blueprint-board.mjs .'
+
+assert_launch 'no-mcp-json' 'no package.json at all counts as no script' \
+  "$node_line" 'rm package.json'
+assert_launch 'board-ready' 'packageManager wins over a lockfile that names another manager' \
+  'board_script: present
+  launch: yarn run blueprint:board' ': >pnpm-lock.yaml'
+assert_launch 'board-lockfile' 'a yarn.lock alone means yarn' \
+  'board_script: present
+  launch: yarn run blueprint:board' 'rm pnpm-lock.yaml; : >yarn.lock'
+assert_launch 'board-lockfile' 'a package-lock.json alone means npm' \
+  'board_script: present
+  launch: npm run blueprint:board' 'rm pnpm-lock.yaml; : >package-lock.json'
+assert_launch 'board-lockfile' 'no packageManager and no lockfile: npm' \
+  'board_script: present
+  launch: npm run blueprint:board' 'rm pnpm-lock.yaml'
+assert_launch 'board-lockfile' 'packageManager npm@ is npm, whatever the lockfile says' \
+  'board_script: present
+  launch: npm run blueprint:board' \
+  'sed "s/\"private\": true,/\"private\": true, \"packageManager\": \"npm@10.9.0\",/" package.json >p.tmp && mv p.tmp package.json'
+# `"blueprint"` is a key too, and a prefix of the one that matters: a matcher
+# loose enough to read it as `blueprint:board` would launch the extractor.
+assert_launch 'board-lockfile' 'a "blueprint" script alone is not a board script' \
+  "$node_line" \
+  'grep -v "blueprint:board" package.json | sed "s/blueprint\",/blueprint\"/" >p.tmp && mv p.tmp package.json'
 
 # ── The plugin line ───────────────────────────────────────────────────────────
 #
@@ -379,6 +474,8 @@ graph: present
 design: absent
 ops: absent
 mcp: registered
+board_script: present
+  launch: yarn run blueprint:board
 board: serving
   status: {"repoPath":"'"$TMP/work"'","gitSha":"deadbee","lastSeq":7,"sessions":0}' \
       "$BOARD_PORT"
@@ -400,6 +497,8 @@ graph: present
 design: absent
 ops: absent
 mcp: registered
+board_script: present
+  launch: yarn run blueprint:board
 board: serving
   status: {"repoPath": "'"$TMP/work"'", "gitSha": "deadbee", "lastSeq": 7, "sessions": 0}' \
       "$BOARD_PORT"
@@ -420,6 +519,8 @@ graph: present
 design: absent
 ops: absent
 mcp: registered
+board_script: present
+  launch: yarn run blueprint:board
 board: other-repo
   status: {"repoPath":"/somewhere/else","gitSha":"deadbee","lastSeq":7,"sessions":0}' \
       "$BOARD_PORT"
@@ -463,6 +564,8 @@ graph: present
 design: absent
 ops: absent
 mcp: registered
+board_script: present
+  launch: yarn run blueprint:board
 board: off' \
       "$dead_port"
   fi
@@ -665,7 +768,38 @@ assert_md "$BOARD_MD" 'the .mcp.json edit merges rather than replaces' \
 # The board is a projection. Its absence costs a second screen, not the design.
 assert_md "$BOARD_MD" 'a board that is not running does not block the command' \
   'Never block the design on the board'
-assert_md "$BOARD_MD" 'it hands the user the launch line their repo uses' 'yarn blueprint:board'
+
+# The launch line is the preflight's (its `launch:` sub-line, under the
+# `board_script:` verdict), so the doc defers to it rather than re-deriving it:
+# a derivation rule in prose is one the agent re-runs every time and nothing
+# tests. The refutes keep blueprint's pre-`src/` layout and the `link:` rule
+# (which matches no consumer) from coming back.
+assert_md "$BOARD_MD" 'it offers the launch line the preflight printed' 'launch line'
+assert_md "$BOARD_MD" 'it names the script the launch line runs' 'run blueprint:board'
+refute_md "$BOARD_MD" 'it carries no launch-line derivation rule of its own' 'packageManager'
+# The old root is spliced in from a variable so these needles are not
+# themselves hits for the stale-path census (BP-173 D8), which greps
+# plugins/ and scripts/ for that layout's literal paths.
+OLD_ROOT=packages
+refute_md "$BOARD_MD" 'it names no board bin under the old packages/ layout' "$OLD_ROOT/sticky-notes-board"
+refute_md "$BOARD_MD" 'it names no MCP bin under the old packages/ layout' "$OLD_ROOT/blueprint-mcp"
+refute_md "$BOARD_MD" 'it does not resolve the checkout from a link: dependency' 'link:../blueprint'
+assert_md "$BOARD_MD" 'the .mcp.json template points at the src/ layout bin' \
+  '<abs path to the blueprint checkout>/src/services/blueprint-mcp/bin/blueprint-mcp.mjs'
+assert_md "$BOARD_MD" 'checkout resolution consults $BLUEPRINT_CHECKOUT' '`$BLUEPRINT_CHECKOUT`'
+assert_md "$BOARD_MD" 'checkout resolution tries the sibling checkout' 'sibling `../blueprint`'
+assert_md "$BOARD_MD" 'checkout resolution takes the first candidate holding the MCP bin, starting with the path the repo already uses' \
+  'the first of these that holds `src/services/blueprint-mcp/bin/blueprint-mcp.mjs`: the path the repo already uses'
+assert_md "$BOARD_MD" 'checkout resolution tries $BLUEPRINT_CHECKOUT before the sibling, then asks' \
+  '`$BLUEPRINT_CHECKOUT`; the sibling `../blueprint`. If none does, ask.'
+assert_md "$BOARD_MD" 'the launch line resolves the checkout the same way registration does' \
+  'with `<blueprint checkout>` resolved as in §2'
+assert_md "$BOARD_MD" 'a launch with no board build is named by its exit' 'no board build at'
+assert_md "$BOARD_MD" 'a board build with no index.html is named by its exit too' \
+  '`the board build at … has no index.html`'
+assert_md "$BOARD_MD" 'the board-build line is handed over' 'yarn workspace sticky-notes-board build'
+assert_md "$BOARD_MD" 'the board build is never run unasked' 'never run it unasked'
+assert_md "$BOARD_MD" 'the server is not pinned to one checkout' 'Do not set `BLUEPRINT_REPO_PATH`'
 
 # These two are asserted on BOARD-SETUP.md rather than on the command *because*
 # the command still contains both literals — the preflight probes
@@ -986,8 +1120,23 @@ assert_md "$SKILL_MD" 'the channel route, spelled as blueprint spells it' '/api/
 assert_md "$SKILL_MD" 'the full ws URL the session dials' 'ws://127.0.0.1:3727/api/blueprint/ws'
 assert_md "$SKILL_MD" 'the wake is held open with Monitor, not polled for' 'Monitor({ ws:'
 assert_md "$SKILL_MD" 'and it is persistent, which is what makes it session-scoped' 'persistent: true'
-assert_md "$SKILL_MD" 'the frame carries a type and a timestamp and nothing else' \
+assert_md "$SKILL_MD" 'the bare frame carries a type and a timestamp' \
   '{"type":"summon","at":<epoch ms>}'
+
+# BP-171 (ADR-130): a press may carry the member's sentence. The frame gains two
+# optional fields, spelled as blueprint-store's SummonFrame spells them, and the
+# skill says what an instruction on the wake means: the pressing member's
+# sentence, acted on after a whole sync, never instead of one. The refute is the
+# negative half: the old "doorbell, not the sentence" would tell the model to
+# drop the very sentence the frame now carries.
+assert_md "$SKILL_MD" 'the frame may carry an optional instruction and by' \
+  'optional `instruction` and `by`'
+assert_md "$SKILL_MD" "an instruction on the wake is the pressing member's sentence" \
+  "the pressing member's sentence for this wake"
+assert_md "$SKILL_MD" 'and it is acted on after a whole sync, inside the gesture' \
+  'sync whole, then act on it within the design gesture'
+assert_md "$SKILL_MD" 'the cross-repo literals name the instruction field' \
+  '`instruction` + `by` (the frame'
 
 # Two invariants, and the count is stated so a later edit cannot quietly grow
 # the list back without the prose disagreeing with itself.
@@ -1043,6 +1192,10 @@ assert_md "$SKILL_MD" 'and the three silent states are named, so absence is neve
 # bearing.
 assert_md "$SKILL_MD" 'the not-user-input banner on the wake is not a refusal' \
   'the notification is the doorbell'
+assert_md "$SKILL_MD" "and an instruction on the doorbell is the member's sentence" \
+  "the notification is the doorbell; an instruction on it is the member's sentence, and everything else is in the feed"
+refute_md "$SKILL_MD" 'and the doorbell no longer disowns the sentence it carries' \
+  'the doorbell, not the sentence'
 
 # The contradiction that would deadlock the whole gesture: `blueprint-pending` carries
 # "never sync unless the user asks", and the summon arrives through a channel
@@ -1052,6 +1205,14 @@ assert_md "$SKILL_MD" 'the not-user-input banner on the wake is not a refusal' \
 # a press is an ask, a count still is not.
 assert_md "$PENDING_MD" 'the carve-out: a summon is the user asking' \
   'A summon is the user asking'
+# BP-171: the sibling names the instruction the summon may carry, in the words
+# blueprint-design uses, so the two skills cannot disagree on what it means.
+assert_md "$PENDING_MD" 'blueprint-pending names the instruction a summon may carry' \
+  'optional `instruction`'
+assert_md "$PENDING_MD" "with blueprint-design's wording: the pressing member's sentence" \
+  "the pressing member's sentence for this wake"
+assert_md "$PENDING_MD" 'and the same order: sync whole, then act on it' \
+  'sync whole, then act on it within the design gesture'
 assert_md "$PENDING_MD" 'and it stays narrow — the pending count is still telemetry' \
   'it is telemetry, never a trigger'
 
@@ -1279,7 +1440,7 @@ if [ ! -f "$SESSION_HOOK" ]; then
   fail 'the SessionStart hook ships' "no file at $SESSION_HOOK"
 else
   pass 'the SessionStart hook ships'
-  assert_md "$SESSION_HOOK" 'it bails on line 2 when there is no design layer here' \
+  assert_md "$SESSION_HOOK" 'it bails at its gate when there is no design layer here' \
     '[ -d "${CLAUDE_PROJECT_DIR:-.}/.blueprint" ] || exit 0'
   assert_md "$SESSION_HOOK" 'it probes the board rather than assuming one' '/api/blueprint/status'
   assert_md "$SESSION_HOOK" 'it emits the Monitor call, which is the whole instruction' \
@@ -1301,6 +1462,330 @@ else
       "not found in $HOOKS_JSON"
   fi
 fi
+
+# ── Hosted rows: a checkout connected to a hosted session (BP-277) ────────────
+#
+# `/blueprint connect` writes the checkout's connection record to
+# `$(git rev-parse --git-dir)/blueprint-connection.json` (BP-277 D7), and from
+# then on blueprint-mcp works on that hosted session (D8). The laptop hears its
+# Asks only through `blueprint listen` running under a `Monitor` command
+# (plugin ADR-018), so the SessionStart hook gains one state of its own: a
+# record and no listener prints the listen instruction. No record is the state
+# of every checkout that never connected, and there the hook's output must be
+# today's to the byte; that half is pinned first, against the hook's
+# pre-BP-277 output written out literally, not recomputed from the hook.
+#
+# The fixture owns everything ambient the hook reads: git config (scrubbed),
+# the repos above `$TMP` (GIT_CEILING_DIRECTORIES), BLUEPRINT_HOST_URL (unset
+# unless a case sets it), and which `blueprint` is on PATH (a stub, or none).
+
+printf '\nthe SessionStart hook, hosted rows (BP-277: a connection record in the git dir)\n'
+
+HOSTED_HOST='https://bp.example.test'
+HOSTED_SESSION='ses-feat-1'
+HOSTED_BIN="$TMP/hosted-bin"
+HOSTED_LOG="$TMP/hosted-probe.log"
+mkdir -p "$HOSTED_BIN"
+cat >"$HOSTED_BIN/blueprint" <<'STUB'
+#!/bin/sh
+printf '%s\n' "$*" >>"$BLUEPRINT_STUB_LOG"
+[ -z "$BLUEPRINT_STUB_SLEEP" ] || sleep "$BLUEPRINT_STUB_SLEEP"
+exit "${BLUEPRINT_STUB_RC:-1}"
+STUB
+chmod +x "$HOSTED_BIN/blueprint"
+
+# CLEAN_PATH without any directory holding a real `blueprint`, so "no CLI" is
+# a state this suite makes, not one the machine happens to be in.
+NO_CLI_PATH=''
+path_rest=$CLEAN_PATH
+while [ -n "$path_rest" ]; do
+  path_entry=${path_rest%%:*}
+  case $path_rest in
+    *:*) path_rest=${path_rest#*:} ;;
+    *)   path_rest='' ;;
+  esac
+  [ -x "$path_entry/blueprint" ] && continue
+  NO_CLI_PATH=${NO_CLI_PATH:+$NO_CLI_PATH:}$path_entry
+done
+if ( PATH="$NO_CLI_PATH"; command -v blueprint >/dev/null 2>&1 ); then
+  fail 'the no-CLI PATH has no blueprint on it (control)' "found: $( PATH="$NO_CLI_PATH" command -v blueprint )"
+elif ! ( PATH="$HOSTED_BIN:$NO_CLI_PATH"; command -v blueprint >/dev/null 2>&1 && command -v git >/dev/null 2>&1 ); then
+  fail 'the stub PATH resolves the stub blueprint and git (control)' 'one of them is missing'
+else
+  pass 'the fixture PATHs: one with no blueprint CLI, one with the stub (controls)'
+fi
+
+HOSTED_WORK="$TMP/hosted"
+hosted_git(){
+  GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CEILING_DIRECTORIES="$TMP" \
+    git -C "$HOSTED_WORK" -c user.name=suite -c user.email=suite@example.test "$@" >/dev/null 2>&1
+}
+# $1 = 'git' or 'plain', $2 = the branch HEAD names (git only).
+hosted_checkout(){
+  rm -rf "$HOSTED_WORK"; mkdir -p "$HOSTED_WORK/.blueprint"
+  [ "$1" = git ] || return 0
+  hosted_git init -q
+  hosted_git symbolic-ref HEAD "refs/heads/$2"
+}
+# The record as blueprint-mcp writes it: `JSON.stringify(record, null, 2)`.
+hosted_record(){
+  printf '{\n  "host": "%s",\n  "sessionId": "%s",\n  "branchAtConnect": "%s",\n  "connectedAt": "2026-10-17T00:00:00.000Z"\n}\n' \
+    "$HOSTED_HOST" "$HOSTED_SESSION" "$1" >"$HOSTED_WORK/.git/blueprint-connection.json"
+}
+# $1 = the board port, $2 = the PATH, $3 = the stub probe's exit code (default
+# 1, no listener), $4 = seconds the stub probe hangs, $5 = a BLUEPRINT_HOST_URL
+# to set. Positional, because an assignment prefixed to a function call may
+# outlive it in some shells. Run from `/` so only CLAUDE_PROJECT_DIR names the
+# checkout.
+# $6 = a GIT_DIR to set.
+run_hosted_hook(){
+  rm -f "$HOSTED_LOG"
+  ( cd / && env -u BLUEPRINT_HOST_URL -u GIT_DIR ${5:+BLUEPRINT_HOST_URL="$5"} ${6:+GIT_DIR="$6"} \
+      CLAUDE_PROJECT_DIR="$HOSTED_WORK" BLUEPRINT_BOARD_PORT="$1" PATH="$2" \
+      GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CEILING_DIRECTORIES="$TMP" \
+      BLUEPRINT_STUB_LOG="$HOSTED_LOG" BLUEPRINT_STUB_RC="${3:-1}" BLUEPRINT_STUB_SLEEP="${4:-}" \
+      "$PREFLIGHT_SH" "$SESSION_HOOK" ) >"$TMP/hout" 2>"$TMP/herr" </dev/null
+  hosted_status=$?
+}
+# assert_hook <description> <expected stdout, whole>
+assert_hook(){
+  hout=$( cat "$TMP/hout" )
+  if [ "$hosted_status" -ne 0 ]; then
+    fail "$1" "exit status $hosted_status, every path must exit 0" "stderr: $( cat "$TMP/herr" )"
+  elif [ -s "$TMP/herr" ]; then
+    fail "$1" "wrote to stderr at session start: $( cat "$TMP/herr" )"
+  elif [ "$hout" != "$2" ]; then
+    fail "$1" 'expected:' "[$2]" 'actual:' "[$hout]"
+  else
+    pass "$1"
+  fi
+}
+
+# The hook's output before BP-277, written out: the notice for a board serving
+# this checkout with sessions 0, and silence in every other state.
+today_notice(){
+  printf 'blueprint: the board is serving this repo and NO session is holding the summon channel open, so the "Ask Claude" button cannot reach anyone. Open it now, and let the turn end: Monitor({ ws: { url: "ws://127.0.0.1:%s/api/blueprint/ws" }, persistent: true })' "$1"
+}
+listen_notice(){
+  printf 'blueprint: this checkout is connected to hosted session %s at %s, and no laptop connection of yours holds its summon socket, so your Asks go to the hosted agent instead of here. Start the listener now, and let the turn end: Monitor({ command: "blueprint listen --host %s --session %s", persistent: true }). If it ends NOT_SIGNED_IN or LISTEN_REFUSED, ask the user to run ! blueprint login --host %s; /blueprint status says more.' \
+    "$HOSTED_SESSION" "$HOSTED_HOST" "$HOSTED_HOST" "$HOSTED_SESSION" "$HOSTED_HOST"
+}
+# connection.ts's reminder (blueprint-mcp, BP-277 F2), prefixed as the hook's lines are.
+reminder_line(){
+  printf "blueprint: This checkout is on %s, but Blueprint is connected to the session for branch %s; your Asks still ring here for %s. Run /blueprint connect to switch to %s." \
+    "$1" "$2" "$2" "$3"
+}
+
+if [ ! -f "$SESSION_HOOK" ]; then
+  fail 'the hosted rows need the SessionStart hook' "no file at $SESSION_HOOK"
+elif ! command -v python3 >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1 || ! command -v git >/dev/null 2>&1; then
+  fail 'the hosted cases need python3, curl and git' 'one of them is missing on this machine'
+else
+  # Scenario "No record is byte-identical": three checkouts with no record the
+  # hook can use (not a git repo; a git repo with none; a git repo whose record
+  # is not one, which blueprint-mcp also ignores) against the three board states.
+  for hosted_shape in plain git unparsable; do
+    case $hosted_shape in
+      plain) hosted_checkout plain ;;
+      git)   hosted_checkout git feat ;;
+      unparsable) hosted_checkout git feat; printf '{ "host": "%s" }\n' "$HOSTED_HOST" >"$HOSTED_WORK/.git/blueprint-connection.json" ;;
+    esac
+    hosted_physical=$( CDPATH= cd -- "$HOSTED_WORK" && pwd -P )
+    run_hosted_hook 1 "$HOSTED_BIN:$NO_CLI_PATH"
+    assert_hook "no record ($hosted_shape), no board: silent, as today" ''
+    start_stub_board "$hosted_physical" compact 0
+    run_hosted_hook "$BOARD_PORT" "$HOSTED_BIN:$NO_CLI_PATH"
+    assert_hook "no record ($hosted_shape), board serving with sessions 0: today's notice, byte for byte" "$( today_notice "$BOARD_PORT" )"
+    stop_stub_board
+    start_stub_board "$hosted_physical" compact 1
+    run_hosted_hook "$BOARD_PORT" "$HOSTED_BIN:$NO_CLI_PATH"
+    assert_hook "no record ($hosted_shape), board serving with sessions 1: silent, as today" ''
+    stop_stub_board
+    if [ -s "$HOSTED_LOG" ]; then
+      fail "no record ($hosted_shape): the listener is never probed" "probe ran: $( cat "$HOSTED_LOG" )"
+    else
+      pass "no record ($hosted_shape): the listener is never probed"
+    fi
+  done
+
+  # Scenario "Record without listener". A local board serving this checkout
+  # with sessions 0 is up on purpose: the connection decides the target
+  # (D8), so today's local notice is the negative half and must not print.
+  hosted_checkout git feat
+  hosted_record feat
+  hosted_physical=$( CDPATH= cd -- "$HOSTED_WORK" && pwd -P )
+  start_stub_board "$hosted_physical" compact 0
+  run_hosted_hook "$BOARD_PORT" "$HOSTED_BIN:$NO_CLI_PATH" 1
+  assert_hook 'a record and no listener: it prints the blueprint listen instruction, not the local channel notice' "$( listen_notice )"
+  if [ "$( cat "$HOSTED_LOG" 2>/dev/null )" = "listen --probe --host $HOSTED_HOST --session $HOSTED_SESSION" ]; then
+    pass 'and it asked the CLI with the record'"'"'s host and session'
+  else
+    fail 'and it asked the CLI with the record'"'"'s host and session' \
+      "expected: [listen --probe --host $HOSTED_HOST --session $HOSTED_SESSION]" "actual: [$( cat "$HOSTED_LOG" 2>/dev/null )]"
+  fi
+
+  run_hosted_hook "$BOARD_PORT" "$HOSTED_BIN:$NO_CLI_PATH" 0
+  assert_hook 'a record and a listener the host reports: silent (negative control)' ''
+
+  run_hosted_hook "$BOARD_PORT" "$NO_CLI_PATH"
+  assert_hook 'a record and no blueprint CLI at all: the listen instruction' "$( listen_notice )"
+
+  run_hosted_hook "$BOARD_PORT" "$HOSTED_BIN:$NO_CLI_PATH" 0 30
+  assert_hook 'a probe that hangs is cut short and reads as no listener' "$( listen_notice )"
+
+  run_hosted_hook "$BOARD_PORT" "$HOSTED_BIN:$NO_CLI_PATH" 1 '' "$HOSTED_HOST"
+  assert_hook 'BLUEPRINT_HOST_URL set: env vars override the record (D8), so today'"'"'s output' "$( today_notice "$BOARD_PORT" )"
+  stop_stub_board
+
+  # F2 = A: a branch switch keeps the connection and says so in one line.
+  hosted_git symbolic-ref HEAD refs/heads/exp-1
+  run_hosted_hook 1 "$HOSTED_BIN:$NO_CLI_PATH" 0
+  assert_hook 'on another branch with a listener: the one-line reminder only' \
+    "$( reminder_line 'branch exp-1' feat "exp-1's session" )"
+  run_hosted_hook 1 "$HOSTED_BIN:$NO_CLI_PATH" 1
+  assert_hook 'on another branch without a listener: the reminder, then the listen instruction' \
+    "$( reminder_line 'branch exp-1' feat "exp-1's session" )
+$( listen_notice )"
+  hosted_git symbolic-ref HEAD refs/heads/feat
+  hosted_git commit -q --allow-empty -m fixture
+  hosted_git checkout -q --detach
+  run_hosted_hook 1 "$HOSTED_BIN:$NO_CLI_PATH" 0
+  assert_hook 'on a detached HEAD: the reminder names it and offers another session' \
+    "$( reminder_line 'a detached HEAD' feat 'another session' )"
+
+  # A linked worktree (every fleet lane) has no `.blueprint/`, which is
+  # gitignored, but a git dir of its own, where `/blueprint connect` puts the
+  # record (D7). The gate looks for the record before it gives up on the
+  # missing `.blueprint/`; with no record that worktree stays as silent as before.
+  hosted_main=$HOSTED_WORK
+  hosted_git worktree add -q -b wt "$TMP/hosted-wt"
+  HOSTED_WORK="$TMP/hosted-wt"
+  hosted_wt_physical=$( CDPATH= cd -- "$HOSTED_WORK" && pwd -P )
+  hosted_wt_gitdir=$( cd "$HOSTED_WORK" && GIT_CEILING_DIRECTORIES="$TMP" git rev-parse --absolute-git-dir 2>/dev/null )
+  if [ -d "$HOSTED_WORK/.blueprint" ] || [ ! -f "$HOSTED_WORK/.git" ] || [ -z "$hosted_wt_gitdir" ]; then
+    fail 'the linked-worktree fixture: a .git file, no .blueprint/' \
+      "blueprint: $( ls -a "$HOSTED_WORK" | tr '\n' ' ' ) gitdir: [$hosted_wt_gitdir]"
+  else
+    pass 'the linked-worktree fixture: a .git file, no .blueprint/'
+  fi
+  start_stub_board "$hosted_wt_physical" compact 0
+  run_hosted_hook "$BOARD_PORT" "$HOSTED_BIN:$NO_CLI_PATH" 1
+  assert_hook 'a linked worktree, no .blueprint/, no record, a board serving it with sessions 0: silent, as today' ''
+  if [ -f "$HOSTED_LOG" ]; then
+    fail 'and the listener is never probed' "probe ran: $( cat "$HOSTED_LOG" )"
+  else
+    pass 'and the listener is never probed'
+  fi
+  printf '{ "host": "%s" }\n' "$HOSTED_HOST" >"$hosted_wt_gitdir/blueprint-connection.json"
+  run_hosted_hook "$BOARD_PORT" "$HOSTED_BIN:$NO_CLI_PATH" 1
+  assert_hook 'a linked worktree, no .blueprint/, an unusable record: silent, the local table needs a .blueprint/' ''
+  printf '{\n  "host": "%s",\n  "sessionId": "%s",\n  "branchAtConnect": "wt",\n  "connectedAt": "2026-10-17T00:00:00.000Z"\n}\n' \
+    "$HOSTED_HOST" "$HOSTED_SESSION" >"$hosted_wt_gitdir/blueprint-connection.json"
+  run_hosted_hook "$BOARD_PORT" "$HOSTED_BIN:$NO_CLI_PATH" 1
+  assert_hook 'a linked worktree, no .blueprint/, a record and no listener: the listen instruction' "$( listen_notice )"
+  # A relative `gitdir:` line (git worktree --relative-paths) resolves against the checkout.
+  printf 'gitdir: ../hosted/.git/worktrees/hosted-wt\n' >"$HOSTED_WORK/.git"
+  run_hosted_hook "$BOARD_PORT" "$HOSTED_BIN:$NO_CLI_PATH" 1
+  assert_hook 'a linked worktree whose .git names its git dir relatively: the listen instruction' "$( listen_notice )"
+  stop_stub_board
+  HOSTED_WORK=$hosted_main
+
+  # GIT_DIR names the git dir, as it does for git itself: the record is looked
+  # for there, not under the checkout's own `.git`. A checkout with no `.git`
+  # and no `.blueprint/` (a plain directory, so only the gate's GIT_DIR read can
+  # let the hook past line 9) is connected through it; a relative GIT_DIR
+  # resolves against the checkout, as `git -C` resolves it.
+  hosted_checkout git feat
+  hosted_record feat
+  hosted_ext="$TMP/hosted-ext"
+  rm -rf "$hosted_ext"; mkdir -p "$hosted_ext"
+  hosted_ext_physical=$( CDPATH= cd -- "$hosted_ext" && pwd -P )
+  hosted_main=$HOSTED_WORK
+  HOSTED_WORK=$hosted_ext
+  start_stub_board "$hosted_ext_physical" compact 0
+  run_hosted_hook "$BOARD_PORT" "$HOSTED_BIN:$NO_CLI_PATH" 1 '' '' "$hosted_main/.git"
+  assert_hook 'GIT_DIR naming a git dir with a record, from a checkout with no .git: the listen instruction' "$( listen_notice )"
+  run_hosted_hook "$BOARD_PORT" "$HOSTED_BIN:$NO_CLI_PATH" 1 '' '' "../hosted/.git"
+  assert_hook 'a relative GIT_DIR resolves against the checkout: the listen instruction' "$( listen_notice )"
+  mkdir -p "$hosted_ext/.blueprint"
+  run_hosted_hook "$BOARD_PORT" "$HOSTED_BIN:$NO_CLI_PATH" 1
+  assert_hook 'the same checkout without GIT_DIR has no record: today'"'"'s notice (control)' "$( today_notice "$BOARD_PORT" )"
+  rm -f "$hosted_main/.git/blueprint-connection.json"
+  run_hosted_hook "$BOARD_PORT" "$HOSTED_BIN:$NO_CLI_PATH" 1 '' '' "$hosted_main/.git"
+  assert_hook 'GIT_DIR naming a git dir with no record: today'"'"'s notice' "$( today_notice "$BOARD_PORT" )"
+  stop_stub_board
+  HOSTED_WORK=$hosted_main
+fi
+
+# The preflight's hosted row: one `connection: hosted` verdict, printed only
+# when the record exists, so every report above (none of them a git repo with
+# a record) is unchanged.
+printf '\nthe preflight, hosted row (BP-277)\n'
+
+hosted_checkout git feat
+cp -R "$FIXTURES/board-ready/." "$HOSTED_WORK/"
+hosted_preflight(){
+  ( cd "$HOSTED_WORK" && env -u BLUEPRINT_HOST_URL PATH="$CLEAN_PATH" BLUEPRINT_BOARD_PORT=1 \
+      GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CEILING_DIRECTORIES="$TMP" \
+      "$PREFLIGHT_SH" "$PREFLIGHT" ) >"$TMP/hout" 2>"$TMP/herr" </dev/null
+  hosted_status=$?
+}
+hosted_preflight
+assert_hook 'a git checkout with no record: the report is unchanged' 'plugin: unknown
+blueprint_dir: present
+graph: present
+design: absent
+ops: absent
+mcp: registered
+board_script: present
+  launch: yarn run blueprint:board
+board: off'
+hosted_record feat
+hosted_preflight
+assert_hook 'a connection record: `connection: hosted` with its host, session and branch' "plugin: unknown
+blueprint_dir: present
+graph: present
+design: absent
+ops: absent
+mcp: registered
+board_script: present
+  launch: yarn run blueprint:board
+board: off
+connection: hosted
+  host: $HOSTED_HOST
+  session: $HOSTED_SESSION
+  branch: feat"
+
+# The command and the prose rows. Presence only: what they promise is a review.
+printf '\ncommands/blueprint.md and the hosted prose rows (BP-277)\n'
+
+BLUEPRINT_CMD_MD="$PLUGIN/commands/blueprint.md"
+ADR_018_MD="$ROOT/docs/adr/ADR-018-the-plugin-speaks-to-a-hosted-server-through-a-local-listener.md"
+
+assert_md "$BLUEPRINT_CMD_MD" 'the command takes connect, disconnect and status' '| `connect '
+assert_md "$BLUEPRINT_CMD_MD" 'and disconnect' '| `disconnect`'
+assert_md "$BLUEPRINT_CMD_MD" 'and status' '| `status`'
+assert_md "$BLUEPRINT_CMD_MD" 'sign-in is the user typing the CLI at the prompt' '! blueprint login'
+refute_md "$BLUEPRINT_CMD_MD" 'and never a yarn script, which exists only inside the blueprint repo' 'yarn blueprint'
+assert_md "$BLUEPRINT_CMD_MD" 'connect goes through the MCP tool' 'mcp__blueprint__connect'
+assert_md "$BLUEPRINT_CMD_MD" 'disconnect goes through the MCP tool' 'mcp__blueprint__disconnect'
+assert_md "$BLUEPRINT_CMD_MD" 'it arms Monitor in its command form on blueprint listen (D16)' 'Monitor({ command: "blueprint listen --host <h> --session <id>", persistent: true })'
+assert_md "$BLUEPRINT_CMD_MD" 'it re-arms on a timeout_ms expiry' 'timeout_ms'
+assert_md "$BLUEPRINT_CMD_MD" 'it decides on 2>&1 (D16)' 'No `2>&1`'
+assert_md "$BLUEPRINT_CMD_MD" 'it reads the listener'"'"'s end reasons' 'LISTEN_CLOSED'
+assert_md "$BLUEPRINT_CMD_MD" 'disconnect stops the running listener (D12, D21)' 'TaskStop'
+assert_md "$BLUEPRINT_CMD_MD" 'it names the branch-switch reminder (F2)' 'Run /blueprint connect to switch'
+refute_md "$BLUEPRINT_CMD_MD" 'it never dials a Monitor ws URL at the host (ADR-018)' 'ws: { url: "wss://'
+assert_md "$SESSION_HOOK" 'the hook reads the record from the git dir' 'blueprint-connection.json'
+assert_md "$SKILL_MD" 'the skill names the hosted wake' 'blueprint listen'
+assert_md "$BOARD_MD" 'board setup routes a connected checkout to the command' '/blueprint connect'
+assert_md "$PREFLIGHT_MD" 'the preflight table has the hosted row' '`connection: hosted`'
+if [ -f "$ADR_018_MD" ] && head -n 1 "$ADR_018_MD" | grep -qF 'never a token-bearing Monitor URL'; then
+  pass 'plugin ADR-018 records the local-listener rule under its reserved name'
+else
+  fail 'plugin ADR-018 records the local-listener rule under its reserved name' "no such title line in ${ADR_018_MD#"$ROOT"/}"
+fi
+assert_md "$ADR_018_MD" 'and it ends on a Status section' '## Status'
 
 # ── design-lane — the map-posting tools are forbidden, not merely unmentioned ──
 #

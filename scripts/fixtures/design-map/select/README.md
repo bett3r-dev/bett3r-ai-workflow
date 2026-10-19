@@ -7,23 +7,25 @@ case under `$TMP`, copying these under the names `select` reads (`tools.txt`,
 are `/work/design-repo`, the `repoPath` of `board-map.json`.
 
 The JSON shapes are copied from blueprint at the ESAS-156 integration base
-(`blueprint-int156` @ de920db):
+(`blueprint-int156` @ de920db). The paths below name blueprint's current `src/`
+layout (they lived under a top-level `packages/` at de920db); the line numbers
+are de920db's and were not re-read against the move:
 
 - `status-*.json`: the `status` tool's body. Success is `BlueprintStatusResult`
-  (`packages/blueprint-store/src/design-store.ts:554`) plus `capabilities`
-  (`packages/blueprint-mcp/src/handlers.ts:714-732`, `capabilities.ts`); a failure is
+  (`src/packages/backend/blueprint-store/src/design-store.ts:554`) plus `capabilities`
+  (`src/services/blueprint-mcp/src/handlers.ts:714-732`, `capabilities.ts`); a failure is
   `ToolFailure` `{ok:false, error:{code,message,details?}, capabilities?}`
-  (`packages/blueprint-mcp/src/tool-result.ts:24-39`). The `BLUEPRINT_DIR_MISSING` message
-  and details are `missingBlueprintDir` (`packages/blueprint-store/src/local-fs-substrate.ts:133-139`).
+  (`src/services/blueprint-mcp/src/tool-result.ts:24-39`). The `BLUEPRINT_DIR_MISSING` message
+  and details are `missingBlueprintDir` (`src/packages/backend/blueprint-store/src/local-fs-substrate.ts:133-139`).
   `-old` variants carry no `capabilities`: an blueprint-mcp that predates ADR-061.
-- `tools-*.txt`: the tool names `packages/blueprint-mcp/src/server.ts` registers, one
+- `tools-*.txt`: the tool names `src/services/blueprint-mcp/src/server.ts` registers, one
   per line; `tools-no-post.txt` lacks `map_post`.
 - `board-*.json`: `BoardStatus`
-  (`packages/sticky-notes-board/src/vite-plugin-blueprint-fs/board-identity.ts:79-165`),
-  `boardKinds` from `BOARD_KINDS` (`packages/blueprint-store/src/board-endpoints.ts:196`).
+  (`src/apps/sticky-notes-board/src/vite-plugin-blueprint-fs/board-identity.ts:79-165`),
+  `boardKinds` from `BOARD_KINDS` (`src/packages/backend/blueprint-store/src/board-endpoints.ts:196`).
   `board-nokinds.json` is a board that predates the map view.
 - `start-*.json`: `start_map_session`'s body, `MapSessionResult`
-  (`packages/blueprint-store/src/start-map-session.ts:38-43`) on success; the
+  (`src/packages/backend/blueprint-store/src/start-map-session.ts:38-43`) on success; the
   `LINKED_WORKTREE` refusal is `start-map-session.ts:87-91`.
 - `map-pinned-artifact.json`: `../decision-3-forks.json` with top-level
   `target: "artifact"` (D9).
@@ -34,11 +36,11 @@ The JSON shapes are copied from blueprint at the ESAS-156 integration base
   decided(recommendation), moot, open. `post-map-4-open.json` is the same map
   with every fork open, the local map before a D5 readback.
 - `getmap-*.json`: the `get_map` tool body, `ToolSuccess<MapReadResult>`
-  (`packages/blueprint-mcp/src/tool-result.ts:19-21`, `handlers.ts:801`,
-  `packages/blueprint-store/src/map-write.ts:161-165`). Its map is blueprint's `MapFile`
-  (`packages/blueprint-schema/src/map-structure.ts:120-129`): `structureVersion: 1`,
+  (`src/services/blueprint-mcp/src/tool-result.ts:19-21`, `handlers.ts:801`,
+  `src/packages/backend/blueprint-store/src/map-write.ts:161-165`). Its map is blueprint's `MapFile`
+  (`src/packages/backend/blueprint-schema/src/map-structure.ts:120-129`): `structureVersion: 1`,
   `links` required, and forks as `postedMapEntry` folds them
-  (`packages/blueprint-store/src/replay.ts:703-722`), with no `tickets`.
+  (`src/packages/backend/blueprint-store/src/replay.ts:703-722`), with no `tickets`.
   `getmap-4.json` matches `post-map-4.json`. `-3` drops the open fork,
   `-flipped` turns recommendation into owner, `-option` changes a decided
   option, `-reason` changes the moot reason, and `-kind` turns the open fork

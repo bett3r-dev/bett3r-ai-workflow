@@ -4,10 +4,10 @@ Opened from `/design` Step 0 only when both gates said yes: **relevance** (the d
 
 ## 1. Registered: call `status`
 
-On `mcp: registered`, call the `status` tool. It answers in one of three ways:
+On `mcp: registered`, call the `status` tool. On `connection: hosted` (`/blueprint connect`), skip §3, §4 and §5's channel, all the host's. Otherwise it answers in one of three ways:
 
 - **`{repoPath, gitSha, lastSeq, cursorSeq, pendingByAuthor, lockState, warnings}`**: board mode is live. Keep `lastSeq` for the board comparison; read `warnings` out loud.
-- **No such tool in this session**: do §2's restart once, writing nothing again. Still missing after it means the server failed to spawn, which no restart fixes: check the entry's path and the checkout's dependencies, and read Claude Code's spawn log.
+- **No such tool in this session**: do §2's restart once, writing nothing again. Still missing after it means the server failed to spawn: check the entry's path, the checkout's dependencies and Claude Code's spawn log.
 - **`BLUEPRINT_DIR_MISSING`**: this checkout has no `.blueprint/`. Correct in a fleet worktree (the skill's main-checkout rule); in the main checkout run the repo's `designTooling.extract` from `.blueprint.config.json` and re-check. A repo with no graph can still get a map: `design-map select` judges MCP capability and board reachability, `start_map_session` creates a bare `.blueprint/`, and the owner launches with `blueprint-session-server --non-anchor`.
 
 Done when `status` has answered and its row is acted on.
@@ -20,11 +20,11 @@ On `mcp: unregistered` or `mcp: absent`, unless the `mcp__blueprint__*` tools ar
 "blueprint": {
   "type": "stdio",
   "command": "node",
-  "args": [ "<abs path to the blueprint checkout>/packages/blueprint-mcp/bin/blueprint-mcp.mjs" ]
+  "args": [ "<abs path to the blueprint checkout>/src/services/blueprint-mcp/bin/blueprint-mcp.mjs" ]
 }
 ```
 
-Resolve the checkout from a `link:../blueprint/...` dependency the host repo has, absolute; if nothing links blueprint, ask. **Do not set `BLUEPRINT_REPO_PATH`.** The server designs against its working directory, and `.mcp.json` is byte-identical across a fleet's worktrees, so a pinned path would point every worktree at one checkout's layer. The edit dirties the tree: say so.
+Resolve the checkout, absolute, from the first of these that holds `src/services/blueprint-mcp/bin/blueprint-mcp.mjs`: the path the repo already uses (an existing `blueprint` entry in `.mcp.json`, or its `blueprint:board` script); `$BLUEPRINT_CHECKOUT`; the sibling `../blueprint`. If none does, ask. **Do not set `BLUEPRINT_REPO_PATH`.** The server designs against its working directory, and `.mcp.json` is byte-identical across a fleet's worktrees, so a pinned path would point every worktree at one checkout's layer. The edit dirties the tree: say so.
 
 Then stop the command with this, verbatim:
 
@@ -43,13 +43,13 @@ Done when the RESTART block is printed and no `mcp__blueprint__*` call follows.
 
 ## 3. Seeding
 
-The store is the only writer of `.blueprint/design.json`, one attributed op in `.blueprint/ops.jsonl` per batch. **Never create or edit `.blueprint/design.json` by hand**: a hand-written verb has no op, so no author and no validation, and the next `rebuild` drops it. `design: absent` already reads as the empty design; **The first `propose` seeds it**.
+The store is the only writer of `.blueprint/design.json`, one attributed op in `.blueprint/ops.jsonl` per batch. **Never create or edit `.blueprint/design.json` by hand**: a hand-written verb has no op, and the next `rebuild` drops it. `design: absent` already reads as the empty design; **The first `propose` seeds it**.
 
 `design: present` or `ops: present` before you have written anything is a resume or residue: **ask whose session it is**. Starting clean means the *user* deletes `.blueprint/design.json`, `.blueprint/design.json.bak`, `.blueprint/ops.jsonl` and `.blueprint/.claude-cursor`, which are not in git.
 
 ## 4. The board: offer it, verify it, never spawn it unasked
 
-Offer the board when **the first batch of questions is ready to post**. Offer the repo's line, `yarn blueprint:board` or `node <blueprint checkout>/packages/sticky-notes-board/bin/blueprint-board.mjs`, with the link the questions are behind, `?openComments=1&author=ai`. On a yes, start it as a `Bash` call with `run_in_background`; on a no, leave the line: the board is a projection and opens current whenever launched.
+Offer the board when **the first batch of questions is ready to post**. Offer the preflight's launch line, the `launch:` line under its `board_script:` verdict (a `run blueprint:board` through the host's package manager, or the board's bin in the blueprint checkout), with `<blueprint checkout>` resolved as in §2, and the link the questions are behind, `?openComments=1&author=ai`. On a yes, start it as a `Bash` call with `run_in_background`; on a no, leave the line: the board is a projection and opens current whenever launched. A launch that exits with `no board build at …` or `the board build at … has no index.html` means the blueprint checkout has not built the board: hand the user `yarn workspace sticky-notes-board build`, run in the blueprint checkout, and never run it unasked, since it writes another repo's tree.
 
 The board claims **:3727 strictly**, so `GET /api/blueprint/status` there either answers for this repo or not at all, with `{repoPath, gitSha, lastSeq, sessions}`: `lastSeq` matches the `status` tool's when the link is live; `sessions` is how many sessions hold the summon channel (`/api/blueprint/ws`) open. `sessions: 0` on a board serving this checkout means nobody would hear the button: open the channel.
 

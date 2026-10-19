@@ -104,7 +104,7 @@ step (saying so) when the block does not name its command:
 | `framework` | The adapter pair's framework. |
 | `extract` | Rewrites `.blueprint/graph.json` from code. In any PV3 repo, `yarn pv3 g blueprint`. |
 | `scaffold` | Accepts `--nodes`, `--design`, `--graph`, `--write`, `--json`, runs from the repo root, exits `0` clean · `1` unreadable input · `3` blocked. In any PV3 repo, `yarn pv3 g scaffold`. |
-| `scaffoldSkill` | The scaffold bridge: the skill that reads the scaffold output and owns what it leaves unwritten, named as the Skill tool loads it (plugin-qualified, `<plugin>:<skill>`, when a plugin hosts it). When the session cannot load it, `/build` still runs the scaffold and reports the skill it could not load instead of staying silent. |
+| `scaffoldSkill` | The scaffold bridge: the skill that reads the scaffold output and owns what it leaves unwritten, plugin-qualified (`<plugin>:<skill>`) when a plugin hosts it, resolved by `/build` to a file through `skill-path` (the plugin's live copy, named by `installed_plugins.json`). This file is the framework skill: `/build` hands its path to every executor and verifier, which reach the framework's `create-*` skills from it. When it does not resolve, `/build` and `/start-multi` refuse before any work starts, naming the plugin and its install command. |
 
 Teselly routes both through its `scripts/pv3Cli.js` wrapper, so its values are the `yarn blueprint*`
 scripts shown above.

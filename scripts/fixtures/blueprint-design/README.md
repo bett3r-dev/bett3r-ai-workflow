@@ -31,6 +31,8 @@ has to survive.
 | `no-mcp-json` | extracted, and the repo has no `.mcp.json` at all | `mcp: absent` — the entry has to create the file |
 | `unregistered` | extracted, `.mcp.json` carries other servers but no blueprint | `mcp: unregistered` — the case that must not read as absent |
 | `board-ready` | extracted, registered, no design layer yet | the clean board-mode start |
+| `board-pnpm` | `board-ready` on pnpm (`packageManager: pnpm@…`), its `blueprint:board` script reading `BLUEPRINT_CHECKOUT` | `board_script: present`, launched as `BLUEPRINT_CHECKOUT=<blueprint checkout> pnpm run blueprint:board` |
+| `board-lockfile` | a `blueprint:board` script, no `packageManager`, a `pnpm-lock.yaml` | the package manager read off the lockfile: `pnpm run blueprint:board` |
 
 Two more cases are composed at run time rather than committed:
 

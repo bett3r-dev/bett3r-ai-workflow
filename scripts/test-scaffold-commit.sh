@@ -3,7 +3,8 @@
 #
 # /design ends with the docs commit, then Step 4b: `prepare` dry-runs the
 # declared scaffolder over the agreed design, classifies its blocks and writes
-# the mechanical half; an agent places the topology fragments; `finish`
+# the mechanical half; an agent places the topology fragments the scaffolder
+# left owed (the residue); `finish`
 # re-extracts, re-runs the scaffolder, runs the declared typecheck and, only on
 # green, commits the files plus <path>/scaffold.json as
 # "chore(<id>): scaffold the agreed design". Red restores the tree and the docs
@@ -92,6 +93,8 @@ STUBS="$TMP/stubs"; mkdir -p "$STUBS"
 STUB_LOG="$TMP/calls.log"; export STUB_LOG
 # Every --map the scaffolder received, one run per line, in argv order.
 MAP_LOG="$TMP/maps.log"; export MAP_LOG
+# What src/events.ts declared as each placing scaffolder run started (SC_STUB_PLACE=1).
+SEEN_LOG="$TMP/seen.log"; export SEEN_LOG
 
 # A scaffolder speaking the scaffold-core CLI contract (--design --graph, --map
 # repeatable, --json [--write]; exit 3 when a unit is blocked). It logs the
@@ -108,6 +111,18 @@ MAP_LOG="$TMP/maps.log"; export MAP_LOG
 #                   the event it projects is what turns it into a block)
 # SC_STUB_MODE=oops adds a malformed "skipped" entry (a string, not an object);
 # SC_STUB_MODE=fail exits 1 before printing anything.
+# SC_STUB_PLACE=1 makes it a placer (ADR-128): every fragment carries
+# at {kind: top-level} and declares <label>, and under --write it reports
+# placement on each. One with a line in its file starting with its code is
+# present. Else one whose node's note is "place" is appended to its file
+# (placed, inserted [{offset, text}] at its final-file offset, in UTF-16 code
+# units); "place-imported" also gets `import '<label>';` inserted at offset 0
+# (two spans, both final-file offsets when it is placed first); an event whose
+# note is "place-after-shipped" is deferred on orders_evt_order-shipped until
+# src/events.ts declares OrderShipped, then placed; one whose note is
+# "place-when-shipped" is owed anchor-not-found until src/events.ts declares
+# OrderShipped, then placed; any other is owed anchor-not-found. Each run also logs to $SEEN_LOG the events src/events.ts
+# declares when it starts.
 # A node already in the graph is satisfied. map.json scenarios: agreed ones
 # become scenarioTests[] (unplaced when they have no anchor), review ones
 # scenariosExcluded[].
@@ -135,6 +150,36 @@ def slug(s):
     return re.sub(r"[^a-zA-Z0-9]+", "-", s).strip("-").lower()
 def nid(n):
     return f"{slug(n['subdomain'])}_{ABBR[n['type']]}_{slug(n['label'])}"
+PLACE = os.environ.get("SC_STUB_PLACE") == "1"
+def declared():
+    return re.findall(r"^export const (\w+) = '", open("src/events.ts").read(), re.M)
+if PLACE:
+    with open(os.environ["SEEN_LOG"], "a") as log:
+        log.write(("write" if "--write" in flags else "dry") + ": " + " ".join(declared()) + "\n")
+def place(n, frag):
+    if not PLACE:
+        return frag
+    frag.update({"at": {"kind": "top-level"}, "declares": n["label"]})
+    if "--write" not in flags:
+        return frag
+    host = frag["file"]
+    text = open(host, newline="").read() if os.path.exists(host) else ""
+    if re.search("^" + re.escape(frag["code"]), text, re.M):  # declared: a line starts with it
+        frag["placement"] = {"status": "present"}
+        return frag
+    if n.get("note") not in ("place", "place-imported", "place-after-shipped", "place-when-shipped") or (
+            n["note"] == "place-when-shipped" and "OrderShipped" not in declared()):
+        frag["placement"] = {"status": "owed", "reason": "anchor-not-found"}
+        return frag
+    spans = []
+    if n["note"] == "place-imported":  # an import line at the top, then the code
+        spans.append({"offset": 0, "text": f"import '{n['label']}';\n"})
+        text = spans[0]["text"] + text
+    # Offsets in UTF-16 code units, as scaffold-core (TypeScript) counts them.
+    spans.append({"offset": len(text.encode("utf-16-le")) // 2, "text": frag["code"] + "\n"})
+    with open(host, "w", newline="") as fh: fh.write(text + spans[-1]["text"])
+    frag["placement"] = {"status": "placed", "inserted": spans}
+    return frag
 design = json.load(open(flags["--design"]))
 graph = json.load(open(flags["--graph"]))
 scenarios = [s for m in maps for s in json.load(open(m)).get("scenarios", [])]
@@ -157,11 +202,14 @@ for n in prop.get("nodes", []):
                                "decisions": [{"node": i, "code": "no-template", "question": "no template for external-system", "needed": "template"}]})
         continue
     if t == "event":
-        out["fragments"].append({"file": "src/events.ts", "anchor": "end of file", "imports": [], "todo": [],
-                                 "code": f"export const {label} = '{label}';", "node": i, "artifact": "event"})
+        if PLACE and n.get("note") == "place-after-shipped" and "OrderShipped" not in declared():
+            out["deferred"].append({"node": i, "artifact": "event", "waitsOn": ["orders_evt_order-shipped"],
+                                    "reason": "emitted beside an event not in code"}); continue
+        out["fragments"].append(place(n, {"file": "src/events.ts", "anchor": "end of file", "imports": [], "todo": [],
+                                          "code": f"export const {label} = '{label}';", "node": i, "artifact": "event"}))
     elif t == "policy":
-        out["fragments"].append({"file": "src/registry.ts", "anchor": "registry list", "imports": [], "todo": ["register it"],
-                                 "code": f"register({label});", "node": i, "artifact": "policy"})
+        out["fragments"].append(place(n, {"file": "src/registry.ts", "anchor": "registry list", "imports": [], "todo": ["register it"],
+                                          "code": f"register({label});", "node": i, "artifact": "policy"}))
     elif t == "read-model":
         waits = sorted(e["from"] for e in edges if e["to"] == i and e["from"] not in real)
         if waits:
@@ -659,6 +707,22 @@ sc census --item ESAS-304
 check 'census: once both are implemented, outcome=ok notImplemented=0' \
   "$( attr "$LINE" outcome ) $( attr "$LINE" notImplemented ) $( attr "$LINE" holds )" 'ok 0 1' "$LINE"
 check 'census: exactly one verdict line' "$NV" 1
+# BP-269 D2: the scaffolder renders a wired scenario test as it.skip(title, body);
+# `.skip(`, like `.todo(`, optionally `.each`, is pending. `.skipIf(` is a runtime
+# condition, not a pending test, and stays implemented.
+printf "it.skip('S1: ships', async () => {});\nit.skipIf(process.env.CI)('S2: lists', () => {});\n" > "$REPO/test/scenarios.test.ts"
+git -C "$REPO" commit -qam 'test: skipped'
+sc census --item ESAS-304
+check 'census: an it.skip( scenario line is pending (BP-269 D2)' \
+  "$( grep -cx 'not-implemented: S1 presence=pending' "$OUT" )" 1 "$( cat "$OUT" )"
+check 'census: it.skipIf(c)( stays implemented (BP-269 D2)' "$( grep -c 'not-implemented: S2' "$OUT" )" 0 "$( cat "$OUT" )"
+printf "it.skip.each([[1], [2]])('S1: ships %%s', async () => {});\nit.todo.each([[1]])('S2: lists %%s');\nit('S3: audits', () => {});\n" \
+  > "$REPO/test/scenarios.test.ts"
+git -C "$REPO" commit -qam 'test: skipped tables'
+sc census --item ESAS-304
+check 'census: .skip.each( and .todo.each( scenario lines are pending (BP-269 D2)' \
+  "$( grep -cx 'not-implemented: S1 presence=pending' "$OUT" )|$( grep -cx 'not-implemented: S2 presence=pending' "$OUT" )|$( attr "$LINE" outcome )" \
+  '1|1|blocked' "$( cat "$OUT" )"
 
 # ---------------------------------------------------------------------------
 printf '\nasked at finish: placement turns a deferred unit into a block\n'
@@ -887,6 +951,207 @@ sc prepare --item ESAS-304 --design .work/design-snapshot/design.json --graph .w
 check 'no-layer: a named --design/--graph is read: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( tail -5 "$OUT" )"
 
 # ---------------------------------------------------------------------------
+printf '\nplacer: the scaffolder places what it can; the agent gets only the residue (BP-268 D7)\n'
+# ---------------------------------------------------------------------------
+SC_STUB_PLACE=1; export SC_STUB_PLACE
+N_PACKED='{"type":"event","label":"OrderPacked","subdomain":"orders","note":"place"}'
+N_LABELLED='{"type":"event","label":"OrderLabelled","subdomain":"orders","note":"place-after-shipped"}'
+N_NOTIFY='{"type":"policy","label":"NotifyWarehouse","subdomain":"orders","note":"place"}'
+new_repo placer "$FULL_TOOLING"
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_PACKED,$N_SHIPPED,$N_LABELLED,$N_NOTIFY],\"edges\":[]}}"
+sc prepare --item ESAS-304
+check 'placer: prepare ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( tail -5 "$OUT" )"
+check 'placer: worklist[] lists only the fragment the scaffolder left owed' \
+  "$( js "$REPO/$REPORT" "[f['node'] for f in d['worklist']]" )" "['orders_evt_order-shipped']"
+check 'placer: the placed fragment is in its file once, before the agent runs' \
+  "$( grep -cx "export const OrderPacked = 'OrderPacked';" "$REPO/src/events.ts" )" 1
+agent
+sc finish --item ESAS-304
+check 'placer: finish commits, placed=4 stillOwed=0 (a placed registration fragment is not owed)' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" placed ) $( attr "$LINE" stillOwed )" 'ok 4 0' "$LINE" "$( tail -5 "$OUT" )"
+check 'placer: placed[] holds the scaffolder-placed fragments (in prepare and in finish) with their key (node|file|at.kind|declares), beside the agent-placed one' \
+  "$( js "$REPO/$REPORT" "[(p['node'], p['file'], p.get('key')) for p in d['placed']]" )" \
+  "[('orders_evt_order-labelled', 'src/events.ts', 'orders_evt_order-labelled|src/events.ts|top-level|OrderLabelled'), ('orders_evt_order-packed', 'src/events.ts', 'orders_evt_order-packed|src/events.ts|top-level|OrderPacked'), ('orders_evt_order-shipped', 'src/events.ts', 'orders_evt_order-shipped|src/events.ts|top-level|OrderShipped'), ('orders_pol_notify-warehouse', 'src/registry.ts', 'orders_pol_notify-warehouse|src/registry.ts|top-level|NotifyWarehouse')]"
+check 'placer: the commit holds each event once' \
+  "$( git -C "$REPO" show HEAD:src/events.ts | tr '\n' '|' )" \
+  "export const OrderPlaced = 'OrderPlaced';|export const OrderPacked = 'OrderPacked';|export const OrderShipped = 'OrderShipped';|export const OrderLabelled = 'OrderLabelled';|"
+# Re-run with the registry gone and a hand-forged second record of Packed's insertion.
+git -C "$REPO" rm -q src/registry.ts
+python3 - "$REPO/$REPORT" <<'PY2'
+import json, sys
+d = json.load(open(sys.argv[1]))
+packed = [p for p in d["placed"] if p["node"] == "orders_evt_order-packed"][0]
+d["placed"].insert(0, dict(packed, node="orders_evt_ghost", key="orders_evt_ghost"))
+json.dump(d, open(sys.argv[1], "w"), indent=2, sort_keys=True)
+PY2
+git -C "$REPO" commit -qam 'chore: drop the registry'
+: > "$SEEN_LOG"
+sc prepare --item ESAS-304
+check 'placer re-run: prepare ok with a placement whose file is gone' "$( attr "$LINE" outcome )" ok "$LINE" "$( tail -5 "$OUT" )"
+check 'placer re-run: the scaffolder'"'"'s insertions went before it ran; the agent'"'"'s (no inserted[]) stayed' \
+  "$( head -n 1 "$SEEN_LOG" )" 'dry: OrderPlaced OrderShipped'
+check 'placer re-run: a span another placement already claims is not cut twice; that placement is edited' \
+  "$( js "$REPO/$REPORT" "[e['node'] for e in d['edited']]" )" "['orders_evt_order-packed']"
+sc finish --item ESAS-304 --abort
+# With no extract declared, finish's scaffolder still finds every placed fragment in its
+# file (present): one the agent placed is placed, not owed.
+new_repo placer-noextract "\"scaffold\": \"python3 $STUBS/scaffold.py\", \"typecheck\": \"sh $STUBS/typecheck.sh\""
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_PACKED,$N_SHIPPED],\"edges\":[]}}"
+sc prepare --item ESAS-304
+agent
+sc finish --item ESAS-304
+check 'placer, no extract: a fragment finish finds present is placed, not owed (placed=2 stillOwed=0)' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" placed ) $( attr "$LINE" stillOwed )" 'ok 2 0' "$LINE" "$( tail -5 "$OUT" )"
+
+# ---------------------------------------------------------------------------
+printf '\nunplace: a re-run first removes each still-verbatim insertion; an edited one is kept and listed edited (BP-268 F3)\n'
+# ---------------------------------------------------------------------------
+N_BOXED='{"type":"event","label":"OrderBoxed","subdomain":"orders","note":"place-imported"}'
+N_SEALED='{"type":"event","label":"OrderSealed","subdomain":"orders","note":"place"}'
+new_repo unplace "$FULL_TOOLING"
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_BOXED,$N_PACKED,$N_SEALED],\"edges\":[]}}"
+sc prepare --item ESAS-304
+sc finish --item ESAS-304
+check 'unplace: the first run commits three placements' "$( attr "$LINE" outcome ) $( attr "$LINE" placed )" 'ok 3' "$LINE"
+# Hand-edit the LAST insertion: the other two (three spans) stay verbatim at their offsets.
+sed "s|^export const OrderSealed = 'OrderSealed';\$|&  // hand edit|" "$REPO/src/events.ts" > "$TMP/ev" && mv "$TMP/ev" "$REPO/src/events.ts"
+git -C "$REPO" commit -qam 'feat: tune sealed'
+: > "$SEEN_LOG"
+sc prepare --item ESAS-304
+check 'unplace: prepare ok, edited=1' "$( attr "$LINE" outcome ) $( attr "$LINE" edited )" 'ok 1' "$LINE" "$( tail -5 "$OUT" )"
+check 'unplace: the scaffolder first ran with the untouched insertions gone and the edited one in place' \
+  "$( head -n 1 "$SEEN_LOG" )" 'dry: OrderPlaced OrderSealed'
+check 'unplace: edited[] lists the edited placement by file, node and key' \
+  "$( js "$REPO/$REPORT" "[(e['file'], e['node'], e.get('key')) for e in d['edited']]" )" \
+  "[('src/events.ts', 'orders_evt_order-sealed', 'orders_evt_order-sealed|src/events.ts|top-level|OrderSealed')]"
+check 'unplace: the edited insertion is kept, the removed ones placed again, nothing doubled' \
+  "$( tr '\n' '|' < "$REPO/src/events.ts" )" \
+  "import 'OrderBoxed';|export const OrderPlaced = 'OrderPlaced';|export const OrderSealed = 'OrderSealed';  // hand edit|export const OrderBoxed = 'OrderBoxed';|export const OrderPacked = 'OrderPacked';|"
+sc finish --item ESAS-304
+check 'unplace: finish ok, placed[] names all three, once each' \
+  "$( attr "$LINE" outcome )|$( js "$REPO/$REPORT" "[p['node'] for p in d['placed']]" )" \
+  "ok|['orders_evt_order-boxed', 'orders_evt_order-packed', 'orders_evt_order-sealed']" "$LINE" "$( tail -5 "$OUT" )"
+# Hand-edit Boxed's code line: its import span is still verbatim, the fragment is edited as a whole;
+# the edit shifts Packed down the file, so its recorded offset no longer holds its text. A span is
+# found at its recorded offset only, byte-exact (BP-268 slice 6): a shifted placement is kept whole
+# and reported edited, never searched for elsewhere in the file.
+sed "s|^export const OrderBoxed = 'OrderBoxed';\$|&  // hand edit|" "$REPO/src/events.ts" > "$TMP/ev" && mv "$TMP/ev" "$REPO/src/events.ts"
+git -C "$REPO" commit -qam 'feat: tune boxed'
+: > "$SEEN_LOG"
+sc prepare --item ESAS-304
+check 'unplace: a shifted insertion is kept and edited, as is a partly edited fragment, every span of each' \
+  "$( attr "$LINE" edited )|$( head -n 1 "$SEEN_LOG" )|$( grep -cx "import 'OrderBoxed';" "$REPO/src/events.ts" )|$( grep -cx "export const OrderPacked = 'OrderPacked';" "$REPO/src/events.ts" )" \
+  '3|dry: OrderPlaced OrderSealed OrderBoxed OrderPacked|1|1' "$LINE"
+check 'unplace: edited[] lists the three edited placements' \
+  "$( js "$REPO/$REPORT" "[e['node'] for e in d['edited']]" )" "['orders_evt_order-boxed', 'orders_evt_order-packed', 'orders_evt_order-sealed']"
+sc finish --item ESAS-304 --abort
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_BOXED,$N_SEALED],\"edges\":[]}}"
+sc prepare --item ESAS-304
+sc finish --item ESAS-304
+check 'unplace: a shifted placement the design no longer asks for stays in the tree as the developer'"'"'s and in placed[] as edited' \
+  "$( attr "$LINE" outcome )|$( grep -c OrderPacked "$REPO/src/events.ts" )|$( js "$REPO/$REPORT" "[p['node'] for p in d['placed']]" )" \
+  "ok|1|['orders_evt_order-boxed', 'orders_evt_order-packed', 'orders_evt_order-sealed']" "$LINE" "$( tail -5 "$OUT" )"
+
+# An astral character and a CRLF line above the insertion, and its text quoted in a comment:
+# only the recorded offset, counted in UTF-16 code units, finds it; the CRLF survives the cut.
+new_repo unplace-offsets "$FULL_TOOLING"
+printf "// \360\237\223\246 crlf\r\n// was: export const OrderPacked = 'OrderPacked';\n" | cat - "$REPO/src/events.ts" > "$TMP/ev" && mv "$TMP/ev" "$REPO/src/events.ts"
+git -C "$REPO" commit -qam 'chore: header'
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_PACKED],\"edges\":[]}}"
+sc prepare --item ESAS-304
+sc finish --item ESAS-304
+check 'unplace offsets: the first run commits the placement below the header' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" placed ) $( git -C "$REPO" show HEAD:src/events.ts | grep -cx "export const OrderPacked = 'OrderPacked';" )" \
+  'ok 1 1' "$LINE" "$( tail -5 "$OUT" )"
+: > "$SEEN_LOG"
+sc prepare --item ESAS-304
+check 'unplace offsets: removed at its UTF-16 offset though its text occurs twice; the CRLF line kept' \
+  "$( attr "$LINE" edited )|$( head -n 1 "$SEEN_LOG" )|$( grep -c "$( printf '\r' )" "$REPO/src/events.ts" )" \
+  '0|dry: OrderPlaced|1' "$LINE" "$( tail -5 "$OUT" )"
+sc finish --item ESAS-304 --abort
+printf '// shifted\n' | cat - "$REPO/src/events.ts" > "$TMP/ev" && mv "$TMP/ev" "$REPO/src/events.ts"
+git -C "$REPO" commit -qam 'chore: shift'
+sc prepare --item ESAS-304
+check 'unplace offsets: shifted off its offset and found twice, the insertion is kept and edited' \
+  "$( attr "$LINE" edited )|$( js "$REPO/$REPORT" "[e['node'] for e in d['edited']]" )" \
+  "1|['orders_evt_order-packed']" "$LINE" "$( tail -5 "$OUT" )"
+sc finish --item ESAS-304 --abort
+
+# BP-268 slice 6 N1 shape, the local flow: the developer edited the placed line in place (so
+# nothing is at its offset) and quoted the placed text once, in a hand-written comment line
+# above it. A span is found at its recorded offset only, byte-exact; never at "its only
+# occurrence", which here is the inside of the developer's line: cutting it would glue
+# `// was: ` to the line below and reorder the developer's code.
+new_repo unplace-hand-written "$FULL_TOOLING"
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_PACKED],\"edges\":[]}}"
+sc prepare --item ESAS-304
+sc finish --item ESAS-304
+check 'unplace hand-written: the first run commits the placement' "$( attr "$LINE" outcome ) $( attr "$LINE" placed )" 'ok 1' "$LINE"
+printf "export const OrderPlaced = 'OrderPlaced';\n// was: export const OrderPacked = 'OrderPacked';\n// hand-written, keep me\nexport const OrderPacked = 'order.packed';\n" > "$REPO/src/events.ts"
+git -C "$REPO" commit -qam 'feat: rename the value, note the old one'
+cp "$REPO/src/events.ts" "$TMP/hand-written.copy"
+sc prepare --item ESAS-304
+check 'unplace hand-written: edited in place and quoted once elsewhere, the placement is kept and edited; the developer'"'"'s lines are byte-identical' \
+  "$( attr "$LINE" edited )|$( js "$REPO/$REPORT" "[e['node'] for e in d['edited']]" )|$( cmp -s "$REPO/src/events.ts" "$TMP/hand-written.copy" && echo same )" \
+  "1|['orders_evt_order-packed']|same" "$LINE" "$( tail -5 "$OUT" )" "$( cat "$REPO/src/events.ts" )"
+sc finish --item ESAS-304 --abort
+
+# One placement, one placed[] entry (keyed node|file|at.kind|declares): the agent deletes
+# prepare's placement of Packed and finish's scaffolder places it again at a new offset.
+new_repo placed-once "$FULL_TOOLING"
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_PACKED,$N_SHIPPED],\"edges\":[]}}"
+sc prepare --item ESAS-304
+agent
+grep -v OrderPacked "$REPO/src/events.ts" > "$TMP/ev" && mv "$TMP/ev" "$REPO/src/events.ts"
+sc finish --item ESAS-304
+check 'placed once: a placement prepare made and finish made again is one placed[] entry, with finish'"'"'s spans' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" placed )|$( js "$REPO/$REPORT" "[(p['node'], [s['offset'] for s in p.get('inserted', [])]) for p in d['placed']]" )" \
+  "ok 2|[('orders_evt_order-packed', [86]), ('orders_evt_order-shipped', [])]" "$LINE" "$( tail -5 "$OUT" )"
+sc prepare --item ESAS-304
+check 'placed once: the next prepare removes it and reports nothing edited' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" edited )|$( tr '\n' '|' < "$REPO/src/events.ts" )" \
+  "ok 0|export const OrderPlaced = 'OrderPlaced';|export const OrderShipped = 'OrderShipped';|export const OrderPacked = 'OrderPacked';|" \
+  "$LINE" "$( tail -5 "$OUT" )"
+sc finish --item ESAS-304 --abort
+# A worklist fragment finish's own scaffolder places (Stamped is owed until Shipped is
+# declared; the agent places only Shipped): one entry, the scaffolder's, with its spans.
+N_STAMPED='{"type":"event","label":"OrderStamped","subdomain":"orders","note":"place-when-shipped"}'
+new_repo placed-once-worklist "$FULL_TOOLING"
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_SHIPPED,$N_STAMPED],\"edges\":[]}}"
+sc prepare --item ESAS-304
+check 'placed once, worklist: prepare leaves both events owed' \
+  "$( js "$REPO/$REPORT" "[f['node'] for f in d['worklist']]" )" "['orders_evt_order-shipped', 'orders_evt_order-stamped']"
+printf "export const OrderShipped = 'OrderShipped';\n" >> "$REPO/src/events.ts"
+sc finish --item ESAS-304
+check 'placed once, worklist: a worklist fragment finish'"'"'s scaffolder places is one placed[] entry, with its spans' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" placed )|$( js "$REPO/$REPORT" "[(p['node'], 'inserted' in p) for p in d['placed']]" )" \
+  "ok 2|[('orders_evt_order-shipped', False), ('orders_evt_order-stamped', True)]" "$LINE" "$( tail -5 "$OUT" )"
+sc prepare --item ESAS-304
+check 'placed once, worklist: the next prepare removes it and reports nothing edited' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" edited ) $( grep -c OrderStamped "$REPO/src/events.ts" )" 'ok 0 1' "$LINE" "$( tail -5 "$OUT" )"
+sc finish --item ESAS-304 --abort
+
+# A re-run of an unchanged design whose agent-placed residue shares a file with a scaffolder
+# placement commits again: prepare removes the scaffolder's insertion and the scaffolder
+# appends it after the residue, so the two swap places in the file.
+new_repo rerun-reorders "$FULL_TOOLING"
+design "{\"schemaVersion\":1,\"propose\":{\"nodes\":[$N_PACKED,$N_SHIPPED],\"edges\":[]}}"
+sc prepare --item ESAS-304
+agent
+sc finish --item ESAS-304
+FIRST=$( git -C "$REPO" rev-parse HEAD )
+check 'rerun reorders: the first run commits Packed (scaffolder) before Shipped (agent)' \
+  "$( attr "$LINE" outcome ) $( git -C "$REPO" show HEAD:src/events.ts | tr '\n' '|' )" \
+  "ok export const OrderPlaced = 'OrderPlaced';|export const OrderPacked = 'OrderPacked';|export const OrderShipped = 'OrderShipped';|" "$LINE"
+sc prepare --item ESAS-304
+sc finish --item ESAS-304
+check 'rerun reorders: the unchanged re-run makes a second scaffold commit, Shipped now before Packed' \
+  "$( attr "$LINE" outcome ) $( attr "$LINE" reason )x $( git -C "$REPO" rev-parse HEAD~1 ) $( git -C "$REPO" show HEAD:src/events.ts | tr '\n' '|' )" \
+  "ok x $FIRST export const OrderPlaced = 'OrderPlaced';|export const OrderShipped = 'OrderShipped';|export const OrderPacked = 'OrderPacked';|" \
+  "$LINE" "$( tail -5 "$OUT" )"
+unset SC_STUB_PLACE
+
+# ---------------------------------------------------------------------------
 printf '\nfleet step 0: the design layer carried into <scaffold-wt>/.blueprint/, both verbs on the defaults\n'
 # ---------------------------------------------------------------------------
 # /start-multi step 0's own sequence: a clean worktree on int/<run-id> cut from
@@ -932,6 +1197,35 @@ check 'step0: scaffold.json placed[] names the event, and stillOwed[] is empty' 
 check 'step0: the read model that waited on the event was created in the same commit' \
   "$( git -C "$WT" show --name-only --format= HEAD -- src/read-models | tr '\n' '|' )" 'src/read-models/shipped-orders.ts|'
 check 'step0: the main checkout is untouched' "$( git -C "$MAIN" status --porcelain | tr '\n' '|' )x" x
+
+# BP-267 (D6): an edge stub carries the edge and its subject's artifact (a read
+# model, which TOPOLOGY does not name); its registration fragment carries none.
+# The classifier and the placed[] key are read off the module itself, the same
+# fragments and the same key literals as the hosted runner's scaffold.test.ts.
+printf '\nedge stubs: a fragment carrying edge is topology; its registration is not (BP-267)\n'
+EDGE_PROBE=$( python3 - "$ROOT/plugins/bett3r-ai-workflow/scripts/scaffold-commit.py" <<'PY' 2>&1
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("scaffold_commit", sys.argv[1])
+sc = importlib.util.module_from_spec(spec); spec.loader.exec_module(sc)
+AGG, SERVER = "src/orders/Orders.aggregate.ts", "src/server.ts"
+edge = {"from": "e9", "to": "rm1", "kind": "projected-to"}
+def frag(file, **extra):
+    return dict({"file": file, "anchor": "a", "imports": [], "code": "// rm1", "todo": [], "node": "rm1", "artifact": "read-model"}, **extra)
+stub = frag(AGG, edge=edge, at={"kind": "object-property", "container": {"call": "withProjector", "arg": "returned-object"}},
+            declares="OrderShipped", placement={"status": "owed", "reason": "anchor-not-found"})
+registration = frag(SERVER, placement={"status": "owed", "reason": "no-anchor"})
+entry = dict(stub, at={"kind": "object-property", "container": {"variable": "ORDER_EVENTS"}})
+_, owed = sc.classify({"fragments": [stub, registration]})
+print(sc.is_topology(stub), sc.is_topology(registration), [(o["node"], o["reason"], o["detail"]) for o in owed], sep="|")
+print(sc.fragment_key(entry), sc.fragment_key(stub), sc.fragment_key(registration), sep="\n")
+PY
+)
+check 'edge stubs: is_topology is true for the edge fragment and false for its registration, which alone classify owes registration' \
+  "$( printf '%s\n' "$EDGE_PROBE" | sed -n 1p )" "True|False|[('rm1', 'registration', 'src/server.ts')]" "$EDGE_PROBE"
+check 'edge stubs: the two fragments of one edge get distinct keys (edge and container appended); a fragment with no edge keeps node|file|at.kind|declares' \
+  "$( printf '%s\n' "$EDGE_PROBE" | sed -n '2,4p' | tr '\n' '#' )" \
+  'rm1|src/orders/Orders.aggregate.ts|object-property|OrderShipped|edge:e9|rm1|projected-to|ORDER_EVENTS#rm1|src/orders/Orders.aggregate.ts|object-property|OrderShipped|edge:e9|rm1|projected-to|withProjector(returned-object)#rm1|src/server.ts||#' \
+  "$EDGE_PROBE"
 
 printf '\n'
 if [ "$failed" -eq 0 ]; then
