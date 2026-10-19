@@ -83,7 +83,7 @@ Completion: every decision in the block is marked confirmed, re-opened or correc
 
 ## Step 3 — Grill, then critique
 
-Call the Skill tool with "grill". It layers the flow's fork shape over `grilling`. Where a canonical contribution from Step 1 settles a fork, quote its claim and span in the walk and carry its citation id into the fork's map status as `resolvedBy` beside `source`: a citation that lives only in the draft is destroyed by the next regeneration (ADR-007). Where the map gate said yes, Call the Skill tool with "design-map" and post the tree as it describes. Where the eventstorming gate offered and the user took the board, `blueprint-design` owns that surface.
+Call the Skill tool with "grill". It layers the flow's fork shape over `grilling`. Where a canonical contribution from Step 1 settles a fork, quote its claim and span in the walk and carry its citation id into the fork's map status as `resolvedBy` beside `source`: a citation that lives only in the draft is destroyed by the next regeneration (ADR-007). Where the map gate said yes, Call the Skill tool with "design-map" and post the tree as it describes. On the map, as in the terminal, an open fork stays in prose and its Given/When/Then appears only once an option is chosen; a fork names in `affects` the cards its decision changes, where its decision reaches beyond its anchor's subtree (grill's *Confirming a decided fork*). Where the eventstorming gate offered and the user took the board, `blueprint-design` owns that surface.
 
 Call the Skill tool with "domain-modeling" only when the interview changes the model: a term is challenged, a glossary entry resolves, or a decision earns an ADR, whose number comes from the brief's `adrAllocations` where there is one.
 

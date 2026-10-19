@@ -2,7 +2,14 @@
   "structureVersion": 2,
   "shape": "decision",
   "grounded": true,
-  "nodes": [],
+  "nodes": [
+    {
+      "id": "G",
+      "level": "goal",
+      "title": "Every fork reaches its owner",
+      "parents": []
+    }
+  ],
   "forks": [
     {
       "id": "ESAS-1-F1",
@@ -48,6 +55,9 @@
         "ifOverturned": "A replaces B; nothing else moves."
       },
       "restsOn": [],
+      "affects": [
+        "G"
+      ],
       "status": {
         "kind": "open"
       }

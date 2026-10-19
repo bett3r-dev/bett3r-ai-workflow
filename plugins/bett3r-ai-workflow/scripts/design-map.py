@@ -82,7 +82,8 @@ reason=schema-invalid. After the schema, the checks JSON Schema cannot express:
   decided-title-only (id=)           a fork with no card is decided: there is
                                      no option for the status to name
   dangling-ref (id= at=)             an anchor or a parent names no node, a
-                                     restsOn entry names no fork, or a link's
+                                     restsOn entry names no fork, an affects
+                                     entry names no node or fork, or a link's
                                      deliverableId names no node
 
 `validate` runs the bare-actor check (below), the schema and these checks,
@@ -370,7 +371,8 @@ stamps each answer with the mapId of the fork's own map.
 `project --ticket K <map>...` (ESAS-166 D10) validates every input (refusals
 name map=), then prints a v2 map on stdout: the forks whose tickets contain K,
 in input order; the nodes their anchors name, with every ancestor reached
-through parents; restsOn pruned to kept forks; the links whose deliverableId
+through parents; restsOn pruned to kept forks; affects pruned to kept nodes
+and forks, dropped when nothing is left (BP-232); the links whose deliverableId
 is a kept node; mapId K; grounded and shape from the inputs
 (grounded-mismatch, shape-mismatch when they disagree). A node id defined
 differently in two inputs is node-conflict; a fork id in two inputs is
@@ -774,12 +776,14 @@ def check_semantics(payload):
             if status["option"] not in options:
                 raise Refusal("unknown-option", id=fid, at=pointer(("forks", i, "status", "option")))
     refs = []
+    entries = nodes | forks  # affects may name a node or a fork (blueprint mapEntryById)
     for i, node in enumerate(payload["nodes"]):
         refs += [(p, nodes, ("nodes", i, "parents", j)) for j, p in enumerate(node["parents"])]
     for i, fork in enumerate(payload["forks"]):
         if "anchor" in fork:
             refs.append((fork["anchor"], nodes, ("forks", i, "anchor")))
         refs += [(r, forks, ("forks", i, "restsOn", j)) for j, r in enumerate(fork["restsOn"])]
+        refs += [(a, entries, ("forks", i, "affects", j)) for j, a in enumerate(fork.get("affects", []))]
     for i, link in enumerate(payload.get("links", [])):
         refs.append((link["deliverableId"], nodes, ("links", i, "deliverableId")))
     for ref, known, at in refs:
@@ -2070,13 +2074,26 @@ def project(positional, flags):
     out["grounded"] = first["grounded"]
     out["mapId"] = ticket
     out["nodes"] = [n for nid, n in nodes.items() if nid in reached]
-    out["forks"] = [dict(f, restsOn=[r for r in f["restsOn"] if r in kept_forks]) for f in forks]
+    out["forks"] = [project_fork(f, kept_forks, reached) for f in forks]
     kept_links = [l for l in links if l["deliverableId"] in reached]
     if kept_links:
         out["links"] = kept_links
     validate(out)
     sys.stdout.write(json.dumps(out, indent=2, ensure_ascii=False) + "\n")
     return dict(ticket=ticket, forks=len(out["forks"]), nodes=len(out["nodes"]))
+
+
+def project_fork(fork, kept_forks, reached):
+    """restsOn narrowed to kept forks, affects to kept nodes and forks; an
+    affects left empty is dropped, as an absent one already claims nothing."""
+    out = dict(fork, restsOn=[r for r in fork["restsOn"] if r in kept_forks])
+    if "affects" in fork:
+        affects = [a for a in fork["affects"] if a in kept_forks or a in reached]
+        if affects:
+            out["affects"] = affects
+        else:
+            del out["affects"]
+    return out
 
 
 def one_line(text):
