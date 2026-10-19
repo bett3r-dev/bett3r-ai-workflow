@@ -1056,6 +1056,31 @@ assert_md "$SKILL_MD" 'it separates withdrawing from reclassifying' 'this was ne
 assert_md "$SKILL_MD" 'a stuck refusal is reported, never routed around with another verb' \
   'A refused verb is a fact to report'
 
+# BP-270: a payload change is a data shape, not a note. The skill teaches
+# `dataShape` on propose and `set.dataShape` on modify; the old note-only
+# payload guidance must be gone from every skill under plugins/ (the note on an
+# empty set survives for non-shape changes, so only the payload wording is the
+# negative needle).
+assert_md "$SKILL_MD" 'propose carries a dataShape for a designed payload' '`propose` a command, event, aggregate, read model or view, give it a `dataShape`'
+assert_md "$SKILL_MD" 'modify changes a payload through set.dataShape' '`set.dataShape`'
+assert_md "$SKILL_MD" 'set.dataShape replaces the whole shape' 'replaces the whole shape'
+if grep -rqF -e 'adds `discountCode` to the payload' "$ROOT/plugins" --include=SKILL.md; then
+  fail 'no skill under plugins/ tells the agent a payload change is an empty set with a note' \
+    "still present: $( grep -rlF -e 'adds `discountCode` to the payload' "$ROOT/plugins" --include=SKILL.md | tr '\n' ' ' )"
+else
+  pass 'no skill under plugins/ tells the agent a payload change is an empty set with a note'
+fi
+SCAFFOLD_MD="$PLUGIN/../bett3r-pv3-ai-skills/skills/scaffold-from-design/SKILL.md"
+assert_md "$SCAFFOLD_MD" 'scaffold-from-design renders a designed shape' 'A designed `dataShape` that lists fields is rendered'
+# What stays a placeholder, as pv3's scaffold renders it (placeholder.ts
+# renderPlaceholder/renderType, fragments.ts companionAlias): a `sameAs` shape
+# keeps it too, and an unresolved `ref` or a `schema` field is `S.any()` like
+# an untyped one. The earlier "only an absent shape or an untyped field" was false.
+assert_md "$SCAFFOLD_MD" 'no shape and a sameAs shape both keep the placeholder' 'no shape, or a `sameAs` shape, keeps the placeholder'
+assert_md "$SCAFFOLD_MD" 'a sameAs companion aliases only a proposed command or event declared before it' 'only when its target is a proposed command or event'
+assert_md "$SCAFFOLD_MD" 'an untyped field, an unresolved ref or a schema field renders S.any() under a marker' 'a field with no type, a `ref` the scaffold does not resolve, or a `schema` field renders `S.any()` under its own `TODO(scaffold)` marker'
+refute_md "$SCAFFOLD_MD" 'the false "only an absent shape or an untyped field" claim is gone' 'only an absent shape or an untyped field stays a placeholder'
+
 assert_md "$SKILL_MD" 'the body carries the reclassify gesture' 'that rename is a correction'
 assert_md "$SKILL_MD" 'it warns that a reclassify dirties a git-tracked file' '.blueprint.overrides.json'
 assert_md "$SKILL_MD" 'it warns the diff may be reformatting, not content' 'whitespace'

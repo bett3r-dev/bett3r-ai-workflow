@@ -161,6 +161,10 @@ banners.
 Emitting nothing is not the same as having nothing to say — the table is the honest boundary, and
 the right-hand column is where the work actually is.
 
+A designed `dataShape` that lists fields is rendered into the schema the table names (the matching rows below), as the real `S.shape({…})`, so the "placeholder, `TODO(scaffold)`" in those rows applies only where the scaffold cannot render the shape.
+A node with no shape, or a `sameAs` shape, keeps the placeholder, with one exception: a command's or event's companion schema fragment with a `sameAs` shape is emitted as an alias of its target (`export const X = Y;`) only when its target is a proposed command or event whose own companion lands earlier in the same types module (the target's handling aggregate or emitter is extracted, it waits on no unbuilt ref, its events file is this one's, and its id sorts first).
+Inside a rendered shape, a field with no type, a `ref` the scaffold does not resolve, or a `schema` field renders `S.any()` under its own `TODO(scaffold)` marker and is owed: listed in the file's `STILL OWED` block, or in the fragment's `TODO:` lines; a `ref` resolves only to an extracted node whose graph carries a shape that lists fields.
+
 | Design element | Emitted | You still write |
 |---|---|---|
 | `policy` | whole file + registration | handler bodies, dependency declaration, redelivery safety |
