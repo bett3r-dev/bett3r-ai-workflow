@@ -3900,6 +3900,7 @@ printf '\nESAS-304 — downstream reads the scaffold report\n\n'
 # warns in a fleet lane, blocks a lone unit's /verify-build and /merge-multi.
 VERIFIER_MD="$PLUGIN/agents/verifier.md"
 MERGE_MULTI_MD="$PLUGIN/commands/merge-multi.md"
+EXECUTOR_MD="$PLUGIN/agents/executor.md"
 
 # /build Step 3.0: the report branch first, today's path its permanent fallback.
 present "$BUILD_MD" 'With a scaffold report, run no scaffolder' \
@@ -3918,23 +3919,56 @@ present "$PLAN_MD" 'every `manifest[].file` and `placed[].file` whose `node` is 
   '/plan adds the scaffold report'\''s files to the slice'\''s intended files'
 
 # Verifier check 4.
-present "$VERIFIER_MD" 'A delivered file that declares a scenario test pending, `.todo(` on a title starting `"<scenarioId>: "`, is RETRY' \
-  'verifier check 4 RETRYs a delivered file with .todo( on a "<scenarioId>: " title'
+# BP-269 D2: pending is `.todo(` or `.skip(`, optionally `.each`, on the title's
+# line; `.skipIf(` is a runtime condition and stays a test.
+present "$VERIFIER_MD" 'A delivered file that declares a scenario test pending, `.todo(` or `.skip(` (optionally `.each`, as in `.skip.each(`) on a title starting `"<scenarioId>: "`, is RETRY' \
+  'verifier check 4 RETRYs a delivered file with .todo( or .skip( (optionally .each) on a "<scenarioId>: " title (BP-269 D2)'
 present "$VERIFIER_MD" 'the match keys on the scenario id only' \
   'verifier check 4 keys the pending rule on the scenario id only'
+present "$VERIFIER_MD" '`.skipIf(` is a runtime condition, not a pending test' \
+  'verifier check 4 keeps .skipIf( implemented (BP-269 D2)'
+# BP-269 D9: a pending test the scaffolder created for this slice is RETRY,
+# whatever its title; a deliberate skip elsewhere is not refused.
+present "$VERIFIER_MD" 'A `.skip(` or `.todo(` test in a file the scaffold report'\''s `created[]` lists for a node in the slice'\''s `designs:` is RETRY' \
+  'verifier check 4: a .skip(/.todo( test in a created[] file of a designs: node is RETRY (BP-269 D9)'
+present "$VERIFIER_MD" 'a deliberate skip in any other file is not refused by this rule' \
+  'verifier check 4: a deliberate skip outside the created[] files is not refused by D9 (BP-269 D9)'
+present "$VERIFIER_MD" 'The scaffold report is `<path>/scaffold.json`, or in a fleet lane at the brief'\''s `scaffoldReport:`' \
+  'verifier check 4 names where the scaffold report D9 reads lives (BP-269 D9)'
+present "$EXECUTOR_MD" 'flip each `.skip(` you satisfy' \
+  'executor.md tells the executor to flip each .skip( it satisfies (BP-269 D9)'
+present "$EXECUTOR_MD" 'a `.skip(` or `.todo(` test left in a file the report created for a node in your slice'\''s `designs:` is verifier RETRY' \
+  'executor.md names the D9 RETRY rule (BP-269 D9)'
+present "$VERIFY_BUILD_MD" 'a pending `.todo(` or `.skip(` test counts as none' \
+  '/verify-build Step 2a: a pending .todo( or .skip( test counts as none (BP-269 D2)'
+present "$MERGE_MULTI_MD" 'a pending `.todo(` or `.skip(` test counting as none' \
+  '/merge-multi 2b: a pending .todo( or .skip( test counts as none (BP-269 D2)'
 # The base refusal stands: ANY TODO(scaffold) marker in a delivered file. Only a
 # marker that names a node is scoped to designs:; one that names none (PV3's bare
-# `TODO(scaffold):`, the core's `no subject` case, scaffoldTodo()) refuses
-# unscoped, so a mechanical test left `it.todo(...)` under
-# `// TODO(scaffold) cmd-happy: ...` is never waved through.
-present "$VERIFIER_MD" '4. **Scaffolded slice.** No `TODO(scaffold)` marker, no `scaffoldTodo(` call' \
+# `TODO(scaffold):`, the core's `no subject` case) refuses unscoped, so a
+# mechanical test left `it.todo(...)` under `// TODO(scaffold) cmd-happy: ...` is
+# never waved through.
+present "$VERIFIER_MD" '4. **Scaffolded slice.** No `TODO(scaffold)` marker and no `STILL OWED` block survives in a file the slice delivers.' \
   'verifier check 4 refuses ANY TODO(scaffold) marker in a delivered file (the base clause, unnarrowed)'
-present "$VERIFIER_MD" 'A marker that names no node (the PV3 emitters'\'' bare `TODO(scaffold):`, the scaffold core'\''s `no subject` case, every `scaffoldTodo(`) refuses the file whatever the slice designs.' \
-  'verifier check 4: a marker naming no node (bare TODO(scaffold):, no subject, scaffoldTodo() is unscoped'
+present "$VERIFIER_MD" 'A marker that names no node (the PV3 emitters'\'' bare `TODO(scaffold):` or the scaffold core'\''s `no subject` case) refuses the file whatever the slice designs.' \
+  'verifier check 4: a marker naming no node (bare TODO(scaffold):, no subject) is unscoped'
 present "$VERIFIER_MD" 'Only a marker that names a node, `TODO(scaffold) [<nodeId>]` or the scaffold core'\''s `TODO(scaffold) <key>: subject <nodeId>`, is scoped: it refuses when that node is in the slice'\''s `designs:`' \
   'verifier check 4 scopes only a node-naming marker ([<nodeId>] or the core'\''s subject <id>) to designs:'
-present "$VERIFIER_MD" 'no `scaffoldTodo(` call' \
-  'verifier check 4 names scaffoldTodo( (ESAS-300'\''s typed hole)'
+# [STRUCTURAL] BP-269: `scaffoldTodo(` names a function nothing defines; no file
+# under the plugin names it. Positive control first: the walk finds a planted one.
+mkdir -p "$TMP/scaffoldtodo-control/agents"
+printf 'no `scaffoldTodo(` call\n' > "$TMP/scaffoldtodo-control/agents/x.md"
+if grep -rlF 'scaffoldTodo(' "$TMP/scaffoldtodo-control" >/dev/null; then
+  pass 'the scaffoldTodo( walk finds a planted reference (positive control)'
+else
+  fail 'the scaffoldTodo( walk finds a planted reference (positive control)'
+fi
+hits=$( grep -rlF 'scaffoldTodo(' "$PLUGIN" || true )
+if [ -z "$hits" ]; then
+  pass '[STRUCTURAL] no file under plugins/bett3r-ai-workflow names scaffoldTodo( (BP-269)'
+else
+  fail '[STRUCTURAL] no file under plugins/bett3r-ai-workflow names scaffoldTodo( (BP-269)' "$hits"
+fi
 # [STRUCTURAL] negative half: `.todo(` is read in check 4 alone, and no sentence
 # in verifier.md lets a pending scenario test count as delivered.
 todo_lines=$( grep -nF '.todo(' "$VERIFIER_MD" || true )
