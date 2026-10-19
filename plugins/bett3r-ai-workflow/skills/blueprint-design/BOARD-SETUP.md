@@ -4,10 +4,10 @@ Opened from `/design` Step 0 only when both gates said yes: **relevance** (the d
 
 ## 1. Registered: call `status`
 
-On `mcp: registered`, call the `status` tool. It answers in one of three ways:
+On `mcp: registered`, call the `status` tool. On `connection: hosted` (`/blueprint connect`), skip §3, §4 and §5's channel, all the host's. Otherwise it answers in one of three ways:
 
 - **`{repoPath, gitSha, lastSeq, cursorSeq, pendingByAuthor, lockState, warnings}`**: board mode is live. Keep `lastSeq` for the board comparison; read `warnings` out loud.
-- **No such tool in this session**: do §2's restart once, writing nothing again. Still missing after it means the server failed to spawn, which no restart fixes: check the entry's path and the checkout's dependencies, and read Claude Code's spawn log.
+- **No such tool in this session**: do §2's restart once, writing nothing again. Still missing after it means the server failed to spawn: check the entry's path, the checkout's dependencies and Claude Code's spawn log.
 - **`BLUEPRINT_DIR_MISSING`**: this checkout has no `.blueprint/`. Correct in a fleet worktree (the skill's main-checkout rule); in the main checkout run the repo's `designTooling.extract` from `.blueprint.config.json` and re-check. A repo with no graph can still get a map: `design-map select` judges MCP capability and board reachability, `start_map_session` creates a bare `.blueprint/`, and the owner launches with `blueprint-session-server --non-anchor`.
 
 Done when `status` has answered and its row is acted on.
@@ -43,7 +43,7 @@ Done when the RESTART block is printed and no `mcp__blueprint__*` call follows.
 
 ## 3. Seeding
 
-The store is the only writer of `.blueprint/design.json`, one attributed op in `.blueprint/ops.jsonl` per batch. **Never create or edit `.blueprint/design.json` by hand**: a hand-written verb has no op, so no author and no validation, and the next `rebuild` drops it. `design: absent` already reads as the empty design; **The first `propose` seeds it**.
+The store is the only writer of `.blueprint/design.json`, one attributed op in `.blueprint/ops.jsonl` per batch. **Never create or edit `.blueprint/design.json` by hand**: a hand-written verb has no op, and the next `rebuild` drops it. `design: absent` already reads as the empty design; **The first `propose` seeds it**.
 
 `design: present` or `ops: present` before you have written anything is a resume or residue: **ask whose session it is**. Starting clean means the *user* deletes `.blueprint/design.json`, `.blueprint/design.json.bak`, `.blueprint/ops.jsonl` and `.blueprint/.claude-cursor`, which are not in git.
 
