@@ -70,6 +70,48 @@ else
     fi
   fi
 
+  # The line the user launches the board with, read the way the .mcp.json
+  # probe reads: line by line, by pattern, no JSON parser. The host's own
+  # `blueprint:board` script through its own package manager (`packageManager`,
+  # else the lockfile, else npm), with the checkout in front when the script
+  # reads BLUEPRINT_CHECKOUT, since a `${BLUEPRINT_CHECKOUT:?}` aborts a
+  # background launch unread. No script (or no package.json) gets the blueprint
+  # checkout's own bin. `<blueprint checkout>` is left for the agent to resolve.
+  blueprint_board_script=no
+  blueprint_needs_checkout=no
+  blueprint_pm=''
+  if [ -f package.json ]; then
+    while IFS= read -r blueprint_line || [ -n "$blueprint_line" ]; do
+      case $blueprint_line in
+        *'"blueprint:board"'*:*)
+          blueprint_board_script=yes
+          case $blueprint_line in *BLUEPRINT_CHECKOUT*) blueprint_needs_checkout=yes ;; esac ;;
+      esac
+      case $blueprint_line in
+        *'"packageManager"'*'"yarn@'*) blueprint_pm=yarn ;;
+        *'"packageManager"'*'"pnpm@'*) blueprint_pm=pnpm ;;
+        *'"packageManager"'*'"npm@'*)  blueprint_pm=npm ;;
+      esac
+    done < package.json
+  fi
+  if [ -z "$blueprint_pm" ]; then
+    if   [ -f pnpm-lock.yaml ];    then blueprint_pm=pnpm
+    elif [ -f yarn.lock ];         then blueprint_pm=yarn
+    elif [ -f package-lock.json ]; then blueprint_pm=npm
+    else                                blueprint_pm=npm
+    fi
+  fi
+  if [ "$blueprint_board_script" = yes ]; then
+    blueprint_launch="$blueprint_pm run blueprint:board"
+    if [ "$blueprint_needs_checkout" = yes ]; then
+      blueprint_launch="BLUEPRINT_CHECKOUT=<blueprint checkout> $blueprint_launch"
+    fi
+    printf 'board_script: present\n'; printf '  launch: %s\n' "$blueprint_launch"
+  else
+    printf 'board_script: absent\n'
+    printf '  launch: %s\n' 'node <blueprint checkout>/src/apps/sticky-notes-board/bin/blueprint-board.mjs .'
+  fi
+
   if ! command -v curl >/dev/null 2>&1; then
     printf 'board: unknown\n'
   else
@@ -110,6 +152,8 @@ fi
 | `design: present` or `ops: present` | A design layer is already on disk. | The unit you are resuming, or the residue of one that shipped. Ask whose session it is: BOARD-SETUP.md §3. |
 | `mcp: registered` | The entry is in `.mcp.json`; that is not the same as the server running. | Call the `status` tool now: BOARD-SETUP.md §1. |
 | `mcp: unregistered` / `mcp: absent` | This repo's `.mcp.json` does not register the server (the preflight reads the project file only). | Write the entry, then stop: BOARD-SETUP.md §2. Skip the write when the `mcp__blueprint__*` tools are already in this session (a user-scoped `~/.claude.json`); it would cost a needless restart and a duplicate entry in a git-tracked file. |
+| `board_script: present` | `package.json` has a `blueprint:board` script. The `launch:` line under it runs that script through the host's package manager (`packageManager`, else the lockfile, else npm), prefixed with `BLUEPRINT_CHECKOUT=<blueprint checkout>` when the script reads that variable. | The `launch:` line is the one to offer when the board is off: BOARD-SETUP.md §4. Replace `<blueprint checkout>` with the resolved checkout path before handing it over. |
+| `board_script: absent` | No `blueprint:board` script, or no `package.json`. The `launch:` line under it runs the board's bin straight from the blueprint checkout, serving this directory. | The same: offer the `launch:` line, with `<blueprint checkout>` resolved first: BOARD-SETUP.md §4. |
 | `board: off` | Nothing is serving this repo on :3727. | The normal state before the user launches it. Carry on; the offer comes when the first batch of questions is ready: BOARD-SETUP.md §4. |
 | `board: serving` | A board is up on this checkout. The `status:` line under it is the board's whole answer, including `sessions`: how many sessions hold the summon channel (`/api/blueprint/ws`) open. | Compare its `lastSeq` with the `status` tool's; the same number means the link is live. `"sessions":0` means nobody would hear the *Ask Claude* button: open the channel (`blueprint-design`, the summon). A count of one or more is not proof anyone is listening (no heartbeat, so a half-open socket counts) and never decides against opening one; an older board omits the field, which is unknown, never zero. |
 | `board: other-repo` | Something holds :3727 serving a different checkout, and the `status:` line says which. | **Name the repo that holds it** (the `repoPath` in the `status:` line is the project root that board serves) before the first proposal: until it is closed this repo's board cannot claim the port, and the screen the user is watching will never move. Then carry on. |

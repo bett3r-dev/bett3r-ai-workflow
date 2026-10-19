@@ -1,0 +1,171 @@
+{
+  "structureVersion": 2,
+  "shape": "decision",
+  "grounded": true,
+  "mapId": "BP-173",
+  "nodes": [
+    {
+      "id": "g-board-setup-true",
+      "level": "goal",
+      "title": "The plugin's board setup works as written in every host repo (yarn, pnpm, npm)",
+      "parents": []
+    },
+    {
+      "id": "a-design-agent",
+      "level": "mapActor",
+      "title": "The /design agent following BOARD-SETUP.md in a host repo",
+      "parents": [
+        "g-board-setup-true"
+      ]
+    },
+    {
+      "id": "i-launch-and-register-work",
+      "level": "impact",
+      "title": "Registering blueprint-mcp and launching the board succeed on the first try in teselly and kixie",
+      "parents": [
+        "a-design-agent"
+      ]
+    },
+    {
+      "id": "d-board-setup-fixed",
+      "level": "deliverable",
+      "title": "BOARD-SETUP.md: src/ paths, <pm> run blueprint:board, checkout resolution order, board-build line; test needles; version bump",
+      "parents": [
+        "i-launch-and-register-work"
+      ]
+    },
+    {
+      "id": "d-stale-paths-swept",
+      "level": "deliverable",
+      "title": "Every live stale packages/ blueprint path in the plugin repointed (design-map skill, script, schema comment, test, fixtures)",
+      "parents": [
+        "i-launch-and-register-work"
+      ]
+    }
+  ],
+  "forks": [
+    {
+      "id": "BP-173-F1",
+      "title": "Should the preflight work out the board launch line, or should the agent read it off the repo by following the doc?",
+      "tickets": [
+        "BP-173"
+      ],
+      "anchor": "d-board-setup-fixed",
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "preflight-prints"
+      },
+      "card": {
+        "problem": "BOARD-SETUP §4 tells the agent to offer the repo's launch line and then names a yarn command, which is wrong in kixie (pnpm, and its script needs BLUEPRINT_CHECKOUT). The /design preflight already reports on-disk facts such as .blueprint/, the .mcp.json registration and the board on :3727, but not how this repo launches the board. Either the doc carries the rule and the agent applies it each run, or the preflight prints it as a tested fact.",
+        "useCases": [
+          "teselly: yarn, script present, sibling blueprint checkout",
+          "kixie: pnpm, script present, needs BLUEPRINT_CHECKOUT",
+          "a host repo with no blueprint:board script",
+          "a host repo on npm"
+        ],
+        "options": [
+          {
+            "id": "preflight-prints",
+            "label": "The preflight prints a board_script verdict with the launch line",
+            "walks": [
+              {
+                "scenario": "kixie launch",
+                "text": "The preflight sees pnpm and the script's BLUEPRINT_CHECKOUT use, and the agent offers that line verbatim.",
+                "kind": "behavioral",
+                "given": "a pnpm host repo whose blueprint:board script reads BLUEPRINT_CHECKOUT",
+                "when": "the preflight runs",
+                "then": "it prints board_script: present with launch: pnpm run blueprint:board (needs BLUEPRINT_CHECKOUT)"
+              },
+              {
+                "scenario": "no script",
+                "text": "The preflight reports no script, and the agent offers the direct node line.",
+                "kind": "behavioral",
+                "given": "a host repo with no blueprint:board script",
+                "when": "the preflight runs",
+                "then": "it prints board_script: absent and the doc's fallback is the direct node src/apps/sticky-notes-board/bin/blueprint-board.mjs line"
+              }
+            ]
+          },
+          {
+            "id": "doc-rule",
+            "label": "The doc spells out the rule and the agent derives the line each time",
+            "walks": [
+              {
+                "scenario": "kixie launch",
+                "text": "The agent reads packageManager and the script itself at offer time, and nothing tests that it gets it right.",
+                "kind": "behavioral",
+                "given": "a pnpm host repo whose blueprint:board script reads BLUEPRINT_CHECKOUT",
+                "when": "the agent reaches the board offer",
+                "then": "it must derive pnpm run blueprint:board with the variable set from the doc's prose"
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "preflight-prints",
+          "why": "It turns a judgement the agent repeats on every run into a fact that is tested under two shells, which is the reason the preflight exists. It also costs one row and two fixtures."
+        },
+        "ifOverturned": "Drop the preflight change; §4 carries the three checks in prose, and the test pins only 'run blueprint:board'."
+      }
+    },
+    {
+      "id": "BP-173-F2",
+      "title": "Should this ticket fix only the board-setup doc, or every place in the plugin that still points at blueprint's old packages/ layout?",
+      "tickets": [
+        "BP-173"
+      ],
+      "anchor": "d-stale-paths-swept",
+      "restsOn": [],
+      "status": {
+        "kind": "decided",
+        "source": "owner",
+        "option": "sweep"
+      },
+      "card": {
+        "problem": "Besides BOARD-SETUP.md, the old packages/ layout appears in the design-map skill, scripts/design-map.py, a schema comment, the design-map test, three fixtures and a fixture README. The design-map test's vocabulary check fails whenever someone points it at a real blueprint checkout, because it looks in packages/blueprint-schema/, while the copy is actually in sync. The gate never sets the variable, so the check has silently been a skip.",
+        "useCases": [
+          "a reader follows the design-map skill's pointer to blueprint's schema",
+          "a maintainer runs the vocabulary check against a blueprint checkout",
+          "the gate runs without BLUEPRINT_CHECKOUT"
+        ],
+        "options": [
+          {
+            "id": "sweep",
+            "label": "Sweep every live stale path in the plugin in the same release",
+            "walks": [
+              {
+                "scenario": "vocabulary check",
+                "text": "The check finds blueprint's schema at its real path and passes.",
+                "kind": "behavioral",
+                "given": "BLUEPRINT_CHECKOUT set to a blueprint checkout at cd44e8e3",
+                "when": "scripts/test-design-map.sh runs",
+                "then": "the vocabulary copy is compared with src/packages/backend/blueprint-schema/schema/map.schema.json and reported fresh"
+              }
+            ]
+          },
+          {
+            "id": "board-setup-only",
+            "label": "Fix BOARD-SETUP.md only; the rest waits for a follow-up",
+            "walks": [
+              {
+                "scenario": "vocabulary check",
+                "text": "The check stays red against a real checkout until a follow-up lands.",
+                "kind": "behavioral",
+                "given": "BLUEPRINT_CHECKOUT set to a blueprint checkout at cd44e8e3",
+                "when": "scripts/test-design-map.sh runs",
+                "then": "it fails 'BLUEPRINT_CHECKOUT holds the emitted map.schema.json' with no file at packages/blueprint-schema/..."
+              }
+            ]
+          }
+        ],
+        "recommendation": {
+          "option": "sweep",
+          "why": "It is the same defect, in the same repo and the same release, about a dozen lines. Leaving it means a second plugin bump later for the identical fix."
+        },
+        "ifOverturned": "Ship BOARD-SETUP only and file a plugin follow-up for the remaining stale paths."
+      }
+    }
+  ]
+}

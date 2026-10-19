@@ -204,6 +204,8 @@ graph: absent
 design: absent
 ops: absent
 mcp: registered
+board_script: absent
+  launch: node <blueprint checkout>/src/apps/sticky-notes-board/bin/blueprint-board.mjs .
 board: off'
 
 assert_report 'board-ready' \
@@ -214,6 +216,8 @@ graph: present
 design: absent
 ops: absent
 mcp: registered
+board_script: present
+  launch: yarn run blueprint:board
 board: off'
 
 assert_report 'unregistered' \
@@ -224,6 +228,8 @@ graph: present
 design: absent
 ops: absent
 mcp: unregistered
+board_script: absent
+  launch: node <blueprint checkout>/src/apps/sticky-notes-board/bin/blueprint-board.mjs .
 board: off'
 
 assert_report 'no-mcp-json' \
@@ -234,6 +240,8 @@ graph: present
 design: absent
 ops: absent
 mcp: absent
+board_script: absent
+  launch: node <blueprint checkout>/src/apps/sticky-notes-board/bin/blueprint-board.mjs .
 board: off'
 
 # A design layer already on disk. The bytes are real store output, borrowed
@@ -252,6 +260,8 @@ graph: present
 design: present
 ops: present
 mcp: registered
+board_script: present
+  launch: yarn run blueprint:board
 board: off'
 if [ "$out" != "$expected" ]; then
   fail 'a design.json + ops.jsonl already on disk are reported, not assumed fresh' \
@@ -261,6 +271,91 @@ elif [ -s "$TMP/err" ]; then
 else
   pass 'a design.json + ops.jsonl already on disk are reported, not assumed fresh'
 fi
+
+# ── The board launch line ─────────────────────────────────────────────────────
+#
+# The board is user-launched, so what the preflight owes is the exact line to
+# hand over, and that line depends on the host: its own `blueprint:board` script
+# run through its own package manager (`packageManager`, else the lockfile, else
+# npm), with `BLUEPRINT_CHECKOUT=<blueprint checkout>` in front when the script
+# reads that variable (a `${BLUEPRINT_CHECKOUT:?}` aborts a background launch
+# unread), and the blueprint checkout's own bin when there is no script. The
+# checkout stays a placeholder: the agent resolves it, the preflight does not.
+#
+# The full-report cases pin the lines in place; the composed cases below them
+# pin one precedence each and compare only the two board_script lines.
+
+printf '\nthe board launch line (board_script)\n'
+
+assert_report 'board-pnpm' \
+  'a pnpm host whose script reads BLUEPRINT_CHECKOUT gets the pnpm line with the checkout in front' \
+  'plugin: unknown
+blueprint_dir: present
+graph: present
+design: absent
+ops: absent
+mcp: registered
+board_script: present
+  launch: BLUEPRINT_CHECKOUT=<blueprint checkout> pnpm run blueprint:board
+board: off'
+
+assert_report 'board-lockfile' \
+  'no packageManager: the package manager is read off the lockfile' \
+  'plugin: unknown
+blueprint_dir: present
+graph: present
+design: absent
+ops: absent
+mcp: registered
+board_script: present
+  launch: pnpm run blueprint:board
+board: off'
+
+# assert_launch <fixture> <description> <expected board_script lines> <setup>
+# Copies the fixture, runs <setup> inside the copy, and compares only the
+# `board_script:` line and the `  launch:` line under it.
+assert_launch(){
+  work="$TMP/work"
+  rm -rf "$work"; mkdir -p "$work"
+  cp -R "$FIXTURES/$1/." "$work/"
+  ( cd "$work" && eval "$4" )
+  out=$( cd "$work" && PATH="$CLEAN_PATH" BLUEPRINT_BOARD_PORT=1 "$PREFLIGHT_SH" "$PREFLIGHT" 2>"$TMP/err" )
+  actual=$( printf '%s\n' "$out" | grep -A1 '^board_script:' )
+  if [ -s "$TMP/err" ]; then
+    fail "$2" "stderr: $( cat "$TMP/err" )"
+  elif [ "$actual" != "$3" ]; then
+    fail "$2" 'expected:' "$3" 'actual:' "$actual"
+  else
+    pass "$2"
+  fi
+}
+
+node_line='board_script: absent
+  launch: node <blueprint checkout>/src/apps/sticky-notes-board/bin/blueprint-board.mjs .'
+
+assert_launch 'no-mcp-json' 'no package.json at all counts as no script' \
+  "$node_line" 'rm package.json'
+assert_launch 'board-ready' 'packageManager wins over a lockfile that names another manager' \
+  'board_script: present
+  launch: yarn run blueprint:board' ': >pnpm-lock.yaml'
+assert_launch 'board-lockfile' 'a yarn.lock alone means yarn' \
+  'board_script: present
+  launch: yarn run blueprint:board' 'rm pnpm-lock.yaml; : >yarn.lock'
+assert_launch 'board-lockfile' 'a package-lock.json alone means npm' \
+  'board_script: present
+  launch: npm run blueprint:board' 'rm pnpm-lock.yaml; : >package-lock.json'
+assert_launch 'board-lockfile' 'no packageManager and no lockfile: npm' \
+  'board_script: present
+  launch: npm run blueprint:board' 'rm pnpm-lock.yaml'
+assert_launch 'board-lockfile' 'packageManager npm@ is npm, whatever the lockfile says' \
+  'board_script: present
+  launch: npm run blueprint:board' \
+  'sed "s/\"private\": true,/\"private\": true, \"packageManager\": \"npm@10.9.0\",/" package.json >p.tmp && mv p.tmp package.json'
+# `"blueprint"` is a key too, and a prefix of the one that matters: a matcher
+# loose enough to read it as `blueprint:board` would launch the extractor.
+assert_launch 'board-lockfile' 'a "blueprint" script alone is not a board script' \
+  "$node_line" \
+  'grep -v "blueprint:board" package.json | sed "s/blueprint\",/blueprint\"/" >p.tmp && mv p.tmp package.json'
 
 # ── The plugin line ───────────────────────────────────────────────────────────
 #
@@ -379,6 +474,8 @@ graph: present
 design: absent
 ops: absent
 mcp: registered
+board_script: present
+  launch: yarn run blueprint:board
 board: serving
   status: {"repoPath":"'"$TMP/work"'","gitSha":"deadbee","lastSeq":7,"sessions":0}' \
       "$BOARD_PORT"
@@ -400,6 +497,8 @@ graph: present
 design: absent
 ops: absent
 mcp: registered
+board_script: present
+  launch: yarn run blueprint:board
 board: serving
   status: {"repoPath": "'"$TMP/work"'", "gitSha": "deadbee", "lastSeq": 7, "sessions": 0}' \
       "$BOARD_PORT"
@@ -420,6 +519,8 @@ graph: present
 design: absent
 ops: absent
 mcp: registered
+board_script: present
+  launch: yarn run blueprint:board
 board: other-repo
   status: {"repoPath":"/somewhere/else","gitSha":"deadbee","lastSeq":7,"sessions":0}' \
       "$BOARD_PORT"
@@ -463,6 +564,8 @@ graph: present
 design: absent
 ops: absent
 mcp: registered
+board_script: present
+  launch: yarn run blueprint:board
 board: off' \
       "$dead_port"
   fi
@@ -665,7 +768,38 @@ assert_md "$BOARD_MD" 'the .mcp.json edit merges rather than replaces' \
 # The board is a projection. Its absence costs a second screen, not the design.
 assert_md "$BOARD_MD" 'a board that is not running does not block the command' \
   'Never block the design on the board'
-assert_md "$BOARD_MD" 'it hands the user the launch line their repo uses' 'yarn blueprint:board'
+
+# The launch line is the preflight's (its `launch:` sub-line, under the
+# `board_script:` verdict), so the doc defers to it rather than re-deriving it:
+# a derivation rule in prose is one the agent re-runs every time and nothing
+# tests. The refutes keep blueprint's pre-`src/` layout and the `link:` rule
+# (which matches no consumer) from coming back.
+assert_md "$BOARD_MD" 'it offers the launch line the preflight printed' 'launch line'
+assert_md "$BOARD_MD" 'it names the script the launch line runs' 'run blueprint:board'
+refute_md "$BOARD_MD" 'it carries no launch-line derivation rule of its own' 'packageManager'
+# The old root is spliced in from a variable so these needles are not
+# themselves hits for the stale-path census (BP-173 D8), which greps
+# plugins/ and scripts/ for that layout's literal paths.
+OLD_ROOT=packages
+refute_md "$BOARD_MD" 'it names no board bin under the old packages/ layout' "$OLD_ROOT/sticky-notes-board"
+refute_md "$BOARD_MD" 'it names no MCP bin under the old packages/ layout' "$OLD_ROOT/blueprint-mcp"
+refute_md "$BOARD_MD" 'it does not resolve the checkout from a link: dependency' 'link:../blueprint'
+assert_md "$BOARD_MD" 'the .mcp.json template points at the src/ layout bin' \
+  '<abs path to the blueprint checkout>/src/services/blueprint-mcp/bin/blueprint-mcp.mjs'
+assert_md "$BOARD_MD" 'checkout resolution consults $BLUEPRINT_CHECKOUT' '`$BLUEPRINT_CHECKOUT`'
+assert_md "$BOARD_MD" 'checkout resolution tries the sibling checkout' 'sibling `../blueprint`'
+assert_md "$BOARD_MD" 'checkout resolution takes the first candidate holding the MCP bin, starting with the path the repo already uses' \
+  'the first of these that holds `src/services/blueprint-mcp/bin/blueprint-mcp.mjs`: the path the repo already uses'
+assert_md "$BOARD_MD" 'checkout resolution tries $BLUEPRINT_CHECKOUT before the sibling, then asks' \
+  '`$BLUEPRINT_CHECKOUT`; the sibling `../blueprint`. If none does, ask.'
+assert_md "$BOARD_MD" 'the launch line resolves the checkout the same way registration does' \
+  'with `<blueprint checkout>` resolved as in §2'
+assert_md "$BOARD_MD" 'a launch with no board build is named by its exit' 'no board build at'
+assert_md "$BOARD_MD" 'a board build with no index.html is named by its exit too' \
+  '`the board build at … has no index.html`'
+assert_md "$BOARD_MD" 'the board-build line is handed over' 'yarn workspace sticky-notes-board build'
+assert_md "$BOARD_MD" 'the board build is never run unasked' 'never run it unasked'
+assert_md "$BOARD_MD" 'the server is not pinned to one checkout' 'Do not set `BLUEPRINT_REPO_PATH`'
 
 # These two are asserted on BOARD-SETUP.md rather than on the command *because*
 # the command still contains both literals — the preflight probes

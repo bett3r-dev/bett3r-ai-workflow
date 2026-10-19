@@ -378,8 +378,9 @@ fi
 # ---------------------------------------------------------------------------
 # Stage 6 — the blueprint half: `npx --no vitest run -c vitest.oracle.config.ts`
 # from the blueprint REPO ROOT ($BLUEPRINT_CHECKOUT; the config lives there and its
-# include is root-relative, packages/blueprint-mcp/oracles/**/*.oracle.test.ts —
-# the block's "in packages/blueprint-mcp" names where the test lives). Never
+# include is root-relative, src/services/blueprint-mcp/oracles/**/*.oracle.test.ts —
+# the ESAS-156 block names the package directory the test lives in; it predates
+# the move to src/services/). Never
 # installs anything: `--no` refuses a download, and a checkout without a
 # local vitest is `reason=vitest-unavailable`. The blueprint test writes only into
 # its own mkdtemp dir, so this stage leaves no captures behind (stage 7).
