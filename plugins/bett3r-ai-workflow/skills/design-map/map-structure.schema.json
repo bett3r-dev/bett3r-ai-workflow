@@ -318,7 +318,8 @@
           "properties": {
             "kind": { "const": "query" },
             "datasource": { "$ref": "#/$defs/text" },
-            "expr": { "$ref": "#/$defs/text" }
+            "expr": { "$ref": "#/$defs/text" },
+            "language": { "$ref": "map.schema.json#/$defs/kpiQueryLanguage" }
           }
         }
       ]

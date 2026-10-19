@@ -450,7 +450,7 @@ PINNED_FILE = [
     ["6 — Land (`--land` only).", "Done when the ancestor check succeeded and every referenced issue printed `CLOSED`."],
     ["6 — Land (`--land` only).", "Without `--land`, stop at step 5 and report the integration PR URL and its `mergeable` state, saying plainly that nothing has landed."],
     ["6b — Push the KPI dashboards: attended only.", "6b — Push the KPI dashboards: attended only."],
-    ["6b — Push the KPI dashboards: attended only.", "A design's agreed KPIs are committed as `blueprint-kpi-<map>.json` dashboards (ESAS-306, ADR-116 in blueprint), and that repo's Grafana shows them only after the repo's own declared push runs."],
+    ["6b — Push the KPI dashboards: attended only.", "A design's agreed KPIs are committed as `blueprint-kpi-<map>.json` dashboards (ESAS-306, ADR-116 in blueprint), and that repo's APM shows them only after the repo's own declared push runs."],
     ["6b — Push the KPI dashboards: attended only.", "For each repo the fleet touched, read `observability` from its `.blueprint.config.json` at the default-branch sha step 6 reported:"],
     ["6b — Push the KPI dashboards: attended only.", "- `push` declared, a human present (no `.work/lane.yaml`, not a headless run): run the command exactly as written, from that repo's root on the landed default branch, and report its output."],
     ["6b — Push the KPI dashboards: attended only.", "The repo scopes it (teselly: `--dashboards-only --glob 'blueprint-kpi-*.json'`), so it touches no alert group."],

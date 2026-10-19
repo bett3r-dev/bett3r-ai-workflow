@@ -2020,6 +2020,22 @@ check 'a structural walk carrying a rejection: option' "$( attr "$LINE" option )
 mutate structural-walk-rejection-no-code "$STRUCT0"'; '"$WALK0"'["rejection"] = {}'
 expect_error 'a structural walk carrying a code-less rejection' walk-structural-rejection validate "$TMP/car-structural-walk-rejection-no-code.json"
 
+# A query KPI may state its language from map.schema.json's kpiQueryLanguage, promql alone (BP-230 D3):
+# the agreed OBS-0000000A rewritten as a query source, with promql, with none, and with datadog.
+QUERY='m["observations"][0]["kpi"]["definition"]["source"] = {"kind": "query", "datasource": "metrics", "expr": "sum(rate(scaffold_committed_total[5m]))"'
+mutate query-promql "$QUERY"', "language": "promql"}'
+dm validate "$TMP/car-query-promql.json"
+check 'a grounded map whose agreed query KPI carries language promql validates: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+check 'a query KPI with language promql validates: exit 0' "$rc" 0
+mutate query-no-language "$QUERY"'}'
+dm validate "$TMP/car-query-no-language.json"
+check 'a query KPI stating no language still validates: outcome=ok' "$( attr "$LINE" outcome )" ok "$LINE" "$( cat "$OUT" )"
+mutate query-datadog "$QUERY"', "language": "datadog"}'
+refuse_validate 'a query KPI with language datadog' schema-invalid "$TMP/car-query-datadog.json"
+# by the vocabulary, not as an unknown key: before D3 the same map was refused rule=additionalProperties.
+check 'a query KPI with language datadog: at' "$( attr "$LINE" at )" /observations/0/kpi/definition/source/language "$LINE"
+check 'a query KPI with language datadog: rule' "$( attr "$LINE" rule )" enum "$LINE"
+
 # export-examples: agreed stored entries only, written whole and deterministically.
 mkdir -p "$TMP/exp/a" "$TMP/exp/b"
 cp "$CAR/export-target.map.json" "$TMP/exp/a/map.json"

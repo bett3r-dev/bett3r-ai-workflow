@@ -195,7 +195,7 @@ Without `--land`, stop at step 5 and report the integration PR URL and its `merg
 
 **6b — Push the KPI dashboards: attended only.**
 
-A design's agreed KPIs are committed as `blueprint-kpi-<map>.json` dashboards (ESAS-306, ADR-116 in blueprint), and that repo's Grafana shows them only after the repo's own declared push runs. For each repo the fleet touched, read `observability` from its `.blueprint.config.json` at the default-branch sha step 6 reported:
+A design's agreed KPIs are committed as `blueprint-kpi-<map>.json` dashboards (ESAS-306, ADR-116 in blueprint), and that repo's APM shows them only after the repo's own declared push runs. For each repo the fleet touched, read `observability` from its `.blueprint.config.json` at the default-branch sha step 6 reported:
 
 - **`push` declared, a human present** (no `.work/lane.yaml`, not a headless run): run the command exactly as written, from that repo's root on the landed default branch, and report its output. The repo scopes it (teselly: `--dashboards-only --glob 'blueprint-kpi-*.json'`), so it touches no alert group.
 - **`push` declared, unattended**: never run it. Print `push owed: <command>`, the command verbatim, and carry the line into the step 7 report for a human to run.
