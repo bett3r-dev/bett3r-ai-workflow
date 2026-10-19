@@ -1737,6 +1737,8 @@ graph: present
 design: absent
 ops: absent
 mcp: registered
+board_script: present
+  launch: yarn run blueprint:board
 board: off'
 hosted_record feat
 hosted_preflight
@@ -1746,6 +1748,8 @@ graph: present
 design: absent
 ops: absent
 mcp: registered
+board_script: present
+  launch: yarn run blueprint:board
 board: off
 connection: hosted
   host: $HOSTED_HOST

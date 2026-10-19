@@ -97,7 +97,8 @@
       "description": "The logical outcome a KPI event side may be filtered on.",
       "enum": [
         "ok",
-        "rejected"
+        "rejected",
+        "aborted"
       ]
     },
     "walkKind": {
