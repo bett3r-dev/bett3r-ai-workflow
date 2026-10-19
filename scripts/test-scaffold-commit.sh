@@ -1182,6 +1182,35 @@ check 'step0: the read model that waited on the event was created in the same co
   "$( git -C "$WT" show --name-only --format= HEAD -- src/read-models | tr '\n' '|' )" 'src/read-models/shipped-orders.ts|'
 check 'step0: the main checkout is untouched' "$( git -C "$MAIN" status --porcelain | tr '\n' '|' )x" x
 
+# BP-267 (D6): an edge stub carries the edge and its subject's artifact (a read
+# model, which TOPOLOGY does not name); its registration fragment carries none.
+# The classifier and the placed[] key are read off the module itself, the same
+# fragments and the same key literals as the hosted runner's scaffold.test.ts.
+printf '\nedge stubs: a fragment carrying edge is topology; its registration is not (BP-267)\n'
+EDGE_PROBE=$( python3 - "$ROOT/plugins/bett3r-ai-workflow/scripts/scaffold-commit.py" <<'PY' 2>&1
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("scaffold_commit", sys.argv[1])
+sc = importlib.util.module_from_spec(spec); spec.loader.exec_module(sc)
+AGG, SERVER = "src/orders/Orders.aggregate.ts", "src/server.ts"
+edge = {"from": "e9", "to": "rm1", "kind": "projected-to"}
+def frag(file, **extra):
+    return dict({"file": file, "anchor": "a", "imports": [], "code": "// rm1", "todo": [], "node": "rm1", "artifact": "read-model"}, **extra)
+stub = frag(AGG, edge=edge, at={"kind": "object-property", "container": {"call": "withProjector", "arg": "returned-object"}},
+            declares="OrderShipped", placement={"status": "owed", "reason": "anchor-not-found"})
+registration = frag(SERVER, placement={"status": "owed", "reason": "no-anchor"})
+entry = dict(stub, at={"kind": "object-property", "container": {"variable": "ORDER_EVENTS"}})
+_, owed = sc.classify({"fragments": [stub, registration]})
+print(sc.is_topology(stub), sc.is_topology(registration), [(o["node"], o["reason"], o["detail"]) for o in owed], sep="|")
+print(sc.fragment_key(entry), sc.fragment_key(stub), sc.fragment_key(registration), sep="\n")
+PY
+)
+check 'edge stubs: is_topology is true for the edge fragment and false for its registration, which alone classify owes registration' \
+  "$( printf '%s\n' "$EDGE_PROBE" | sed -n 1p )" "True|False|[('rm1', 'registration', 'src/server.ts')]" "$EDGE_PROBE"
+check 'edge stubs: the two fragments of one edge get distinct keys (edge and container appended); a fragment with no edge keeps node|file|at.kind|declares' \
+  "$( printf '%s\n' "$EDGE_PROBE" | sed -n '2,4p' | tr '\n' '#' )" \
+  'rm1|src/orders/Orders.aggregate.ts|object-property|OrderShipped|edge:e9|rm1|projected-to|ORDER_EVENTS#rm1|src/orders/Orders.aggregate.ts|object-property|OrderShipped|edge:e9|rm1|projected-to|withProjector(returned-object)#rm1|src/server.ts||#' \
+  "$EDGE_PROBE"
+
 printf '\n'
 if [ "$failed" -eq 0 ]; then
   printf '\033[32m✓ %d passed\033[0m\n' "$passed"

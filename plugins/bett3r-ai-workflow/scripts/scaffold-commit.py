@@ -90,7 +90,8 @@ finish
   (placed by an earlier run), one entry per key: a key placed twice keeps this
   run's scaffolder entry, else prepare's. An entry is {node, file, key}, key
   node|file|at.kind|declares as the hosted runner's (BP-268 D11), a missing
-  value encoded as "", and a scaffolder-placed one adds inserted[] {offset, text}. On green it commits every
+  value encoded as "" (a fragment carrying edge appends |edge:<from>|<to>|<kind>|<container>,
+  BP-267), and a scaffolder-placed one adds inserted[] {offset, text}. On green it commits every
   change plus <path>/scaffold.json as `chore(<id>): scaffold the agreed design`;
   when the report equals the committed one and nothing else changed, it commits
   nothing (reason=unchanged). The comparison leaves out what a re-run recomputes
@@ -466,7 +467,12 @@ def classify(result):
 
 
 def is_topology(fragment):
-    return fragment.get("artifact") in TOPOLOGY and not str(fragment.get("file", "")).startswith("unplaced:")
+    """A topology fragment, for the placing agent: a command, event or invariant, or
+    (BP-267 D6) any fragment carrying edge, an edge stub placed and owed as topology of
+    its subject. Its subject's registration fragment carries no edge and stays
+    registration. Same rule as the hosted runner's isTopology."""
+    return ((fragment.get("artifact") in TOPOLOGY or bool(fragment.get("edge")))
+            and not str(fragment.get("file", "")).startswith("unplaced:"))
 
 
 def is_owed(fragment):
@@ -475,12 +481,32 @@ def is_owed(fragment):
     return (fragment.get("placement") or {}).get("status", "owed") == "owed"
 
 
+def container_key(container):
+    """A structured anchor's container as a key segment: a variable's name, else
+    [within.]call(arg); none is the empty string. The hosted runner's containerKey."""
+    if not isinstance(container, dict):
+        return ""
+    if container.get("variable") is not None:
+        return str(container["variable"])
+    if container.get("call") is not None:
+        within = f"{container['within']}." if container.get("within") else ""
+        return f"{within}{container['call']}({container.get('arg') or ''})"
+    return ""
+
+
 def fragment_key(fragment):
     """node|file|at.kind|declares, the key the hosted runner's placed[] carries (BP-268 D11).
-    A missing value (no `at`, no at.kind, no declares) is encoded as the empty string."""
+    A missing value (no `at`, no at.kind, no declares) is encoded as the empty string.
+    BP-267: the two fragments of one edge (a projector stub and its events-map entry)
+    share all four, so a fragment carrying edge appends
+    |edge:<from>|<to>|<kind>|<container>; one with no edge keeps the four-field key."""
     at = fragment.get("at") if isinstance(fragment.get("at"), dict) else {}
-    return "|".join(str(v or "") for v in (fragment.get("node"), fragment.get("file"), at.get("kind"),
-                                             fragment.get("declares")))
+    key = "|".join(str(v or "") for v in (fragment.get("node"), fragment.get("file"), at.get("kind"),
+                                            fragment.get("declares")))
+    edge = fragment.get("edge")
+    if not edge:
+        return key
+    return f"{key}|edge:" + "|".join(str(edge.get(k) or "") for k in ("from", "to", "kind")) + f"|{container_key(at.get('container'))}"
 
 
 def placed_entry(fragment):

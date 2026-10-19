@@ -54,7 +54,7 @@ The design-end scaffold's terms. Why it is shaped this way is in `docs/adr/ADR-0
 - **Untouched stub**: a scaffolded file whose `git hash-object` still equals the blob its manifest entry recorded. A re-run deletes untouched stubs before it scaffolds again, so one the design no longer derives is gone (`stale[]`); a stub that differs is edited, and is reported and never touched.
 - **Held element**: a proposed node or edge whose comment thread has a remark that is neither resolved nor a reaction, and every edge touching a held node. It is not agreed yet, so the scaffold leaves it out and lists it under `held[]`.
 - **Asked vs still-owed block**: the two kinds of scaffolder block. An asked block is a missing decision: it stops the scaffold commit and goes back to the owner. A still-owed block has code `no-template`, nothing to decide: it is reported as STILL OWED and the commit proceeds.
-- **Topology vs registration fragment**: a fragment is a piece of code the scaffolder hands back for an existing file instead of writing it. Topology fragments (commands, events, their schemas, invariant wiring) are placed by an agent in `/design`, before the scaffold commit; every other fragment is registration or a test, and stays STILL OWED for the slice that wires it in `/build`.
+- **Topology vs registration fragment**: a fragment is a piece of code the scaffolder hands back for an existing file instead of writing it. Topology fragments (commands, events, their schemas, invariant wiring, and any edge stub: a fragment carrying `edge`, BP-267) are placed by an agent in `/design`, before the scaffold commit; every other fragment is registration or a test, and stays STILL OWED for the slice that wires it in `/build`.
 
 ## Hooks
 

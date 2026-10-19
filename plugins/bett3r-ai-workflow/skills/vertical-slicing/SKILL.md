@@ -101,6 +101,8 @@ slices:
     model: sonnet                  # OPTIONAL. Present only on mechanical slices; absent means opus.
     designs: [subdomain_pol_slug]  # OPTIONAL. Design node ids this slice delivers, when the
                                    #   unit has an .blueprint/design.json. Scopes /build's scaffold.
+                                   #   An edge rides with its new end's id; only an edge between
+                                   #   two artifacts in code is listed, as edge:<from>|<to>|<kind>.
     origin: plan                   # plan (default, may be omitted) | verify-build (a fix slice)
     jira: TICKET-NNN               # only when published as a sub-task (--publish)
     commit: <sha>                  # written by /build at the land, pool slices only

@@ -30,7 +30,7 @@ Call the Skill tool with "vertical-slicing": the method, the adequacy rules and 
 - **Resolve every symbol at the base** (`git show <base>:<path>` or a repo-wide grep) and record where it resolved. The design's `file:line` citations were true when the board session wrote them; re-check each one a slice relies on, and a citation that no longer holds is a finding the slice records, not a fact to build on.
 - **The tracer bullet is the design's.** When Testing Decisions names one, it is slice 1, at the seam it names.
 - **Seams** named at the top level (`seams:`); every slice's `seam:` names one.
-- **The scaffold report's files are intended files.** When `scaffold.json` exists, each `manifest[].file` and `placed[].file` belongs to the slice that delivers its `node`, that slice's `designs:` lists the node id, and the files count in its `surface:`. `/build` hands the executor those entries and runs no scaffolder.
+- **The scaffold report's files are intended files.** When `scaffold.json` exists, each `manifest[].file` and `placed[].file` belongs to the slice that delivers its `node`, that slice's `designs:` lists the node id, and the files count in its `surface:`. `/build` hands the executor those entries and runs no scaffolder. An edge stub's entry (it carries `edge`; its `node` is the edge's existing end) belongs instead to the slice whose `designs:` holds the edge's new end, or, with both ends in code, to the slice listing its key `edge:<from>|<to>|<kind>`.
 - `surface:` counted at the base with a positive control on its pathspec; over the cap, split.
 - Every Risk the design names is either the oracle of some slice or recorded in the slice that leaves it open.
 - `model: sonnet` only where the skill calls a slice mechanical.
