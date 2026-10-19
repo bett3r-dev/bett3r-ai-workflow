@@ -19,6 +19,6 @@ The count says your picture of the design is stale; knowing is the entire job, a
 
 ## The one ask
 
-**A summon is the user asking.** The board's *Ask Claude* button broadcasts one frame on the BLUEPRINT session channel (`/api/blueprint/ws`) this session holds open with `Monitor`, so you arrive at a turn nobody typed. Sync, whole, as `blueprint-design` says. A press is a sentence; the count is a thermometer.
+**A summon is the user asking.** The board's *Ask Claude* button broadcasts one frame on the BLUEPRINT session channel (`/api/blueprint/ws`) this session holds open with `Monitor`, so you arrive at a turn nobody typed. Sync, whole, as `blueprint-design` says. A summon may carry an optional `instruction`: the pressing member's sentence for this wake; sync whole, then act on it within the design gesture. A press is a sentence; the count is a thermometer.
 
 Absent means nothing pending, or no `.blueprint/` here (a fleet worktree); both normal. An inflated count right after a new unit of work is a stale cursor reporting from seq 0; it clears on the next sync.
