@@ -85,8 +85,8 @@ slices:
     scenarios:                     # REQUIRED, >=1. check-plan refuses the plan without it.
       - scenario: "<what this case is called>"
         id: SCN-0000000A           # OPTIONAL. Only on an agreed scenario copied from map.json.
-        given: "<the state the case starts in>"
-        when: "<the one thing that happens>"
+        given: "<what already happened, as past-tense events, not a state>"
+        when: "<the ONE action under test, usually a command; never a sequence>"
         then: "<what must be observably true — the assertion, not the setup>"
         expected_from: spec        # literal | worked-example | spec | existing-behaviour
         expected_source: "<file:line, doc section or ticket>"   # REQUIRED unless `literal`
