@@ -24,8 +24,10 @@
 #
 # BLUEPRINT_CHECKOUT, when set, names an blueprint checkout: the vocabulary copy
 # skills/design-map/map.schema.json is compared byte for byte with its
-# src/packages/backend/blueprint-schema/schema/map.schema.json (and with serialiseMapSchema()
-# when src/packages/backend/blueprint-schema/build/esm/index.js exists). Unset, that case prints
+# src/packages/backend/blueprint-schema/schema/map.schema.json (and with
+# serialiseMapSchema() when src/packages/backend/blueprint-schema/build/esm/index.js
+# exists), and the fork-scenarios fixture set with its
+# src/packages/backend/blueprint-schema/__tests__/fixtures/fork-scenarios/. Unset, each case prints
 # `SKIP reason=no-blueprint-checkout` and is counted as skipped, never as passed.
 
 ROOT=$( CDPATH= cd -- "$( dirname -- "$0" )/.." && pwd )
@@ -1929,6 +1931,43 @@ car_invalid coverage-no-scenario 'del m["coverage"][0]["scenarioId"]' /coverage/
 car_invalid node-description-empty 'm["nodes"][0]["description"] = ""' /nodes/0/description minLength
 car_invalid observations-not-array 'm["observations"] = {}' /observations type
 
+# BP-229 (D6): a declared rejection on a scenario, a walk or a derived basis is
+# blueprint's ScenarioRejection { code? }: present means a refusal case, the code
+# (optional) is non-empty with no whitespace, and it is the object's only key.
+# car_ok <name> <statement> — a temp copy of examples.map.json, edited, that validates.
+car_ok(){
+  mutate "$1" "$2"
+  dm validate "$TMP/car-$1.json"
+  check "carrier positive $1: validates" "$( attr "$LINE" outcome )" ok "$LINE"
+}
+WALK0='m["forks"][0]["card"]["options"][0]["walks"][0]'
+car_ok rejection-scenario 'm["scenarios"][0]["rejection"] = {"code": "PAYMENT_REFUSED"}'
+car_ok rejection-scenario-no-code 'm["scenarios"][0]["rejection"] = {}'
+car_ok rejection-walk "$WALK0"'["rejection"] = {"code": "PAYMENT_REFUSED"}'
+car_ok rejection-basis 'm["scenarios"][0]["derivedFrom"]["basis"]["rejection"] = {"code": "PAYMENT_REFUSED"}'
+car_invalid rejection-code-empty 'm["scenarios"][0]["rejection"] = {"code": ""}' /scenarios/0/rejection/code pattern
+car_invalid rejection-code-space 'm["scenarios"][0]["rejection"] = {"code": "PAYMENT REFUSED"}' /scenarios/0/rejection/code pattern
+car_invalid rejection-extra-key 'm["scenarios"][0]["rejection"] = {"code": "X", "reason": "y"}' /scenarios/0/rejection/reason additionalProperties
+car_invalid rejection-not-object 'm["scenarios"][0]["rejection"] = True' /scenarios/0/rejection type
+car_invalid rejection-walk-extra-key "$WALK0"'["rejection"] = {"message": "no"}' \
+  /forks/0/card/options/0/walks/0/rejection/message additionalProperties
+car_invalid rejection-basis-code-empty 'm["scenarios"][0]["derivedFrom"]["basis"]["rejection"] = {"code": ""}' \
+  /scenarios/0/derivedFrom/basis/rejection/code pattern
+
+# BP-229 (D4): a structural walk derives no scenario, so it carries no rejection
+# marker; check_semantics refuses one as walk-structural-rejection, mirroring
+# blueprint-store's checkWalks (MAP_ENTRY_INVALID). The positive controls: a
+# structural walk with no marker, and a behavioral walk with one, both validate.
+STRUCT0="$WALK0"'.update(kind="structural"); [ '"$WALK0"'.pop(k) for k in ("given", "when", "then") ]'
+car_ok structural-walk-no-rejection "$STRUCT0"
+car_ok behavioral-walk-rejection "$WALK0"'["kind"] = "behavioral"; '"$WALK0"'["rejection"] = {"code": "PAYMENT_REFUSED"}'
+mutate structural-walk-rejection "$STRUCT0"'; '"$WALK0"'["rejection"] = {"code": "PAYMENT_REFUSED"}'
+expect_error 'a structural walk carrying a rejection' walk-structural-rejection validate "$TMP/car-structural-walk-rejection.json"
+check 'a structural walk carrying a rejection: at' "$( attr "$LINE" at )" /forks/0/card/options/0/walks/0 "$LINE"
+check 'a structural walk carrying a rejection: option' "$( attr "$LINE" option )" A "$LINE"
+mutate structural-walk-rejection-no-code "$STRUCT0"'; '"$WALK0"'["rejection"] = {}'
+expect_error 'a structural walk carrying a code-less rejection' walk-structural-rejection validate "$TMP/car-structural-walk-rejection-no-code.json"
+
 # export-examples: agreed stored entries only, written whole and deterministically.
 mkdir -p "$TMP/exp/a" "$TMP/exp/b"
 cp "$CAR/export-target.map.json" "$TMP/exp/a/map.json"
@@ -2028,6 +2067,21 @@ dm export-examples "$TMP/exp/empty-title/map.json" --from "$TMP/exp/feed-empty-t
 check 'export-examples, an agreed scenario titled "": reason=schema-invalid' "$( attr "$LINE" reason )" schema-invalid "$LINE"
 check 'export-examples, an agreed scenario titled "": at' "$( attr "$LINE" at )" /scenarios/0/title "$LINE"
 holds_cmp 'export-examples, an agreed scenario titled "": the map is byte-identical' "$TMP/exp/first.json" "$TMP/exp/empty-title/map.json"
+# BP-229 (Testing Decisions 9): an agreed derived scenario carrying a rejection
+# marker on itself and on its basis is carried with both (BASE: the scenario's
+# marker dropped by the field whitelist, the basis's refused as schema-invalid).
+feed rejection '
+s = next(s for s in b["map"]["scenarios"] if s["id"] == "SCN-0000000A")
+s["rejection"] = {"code": "PAYMENT_REFUSED"}
+s["derivedFrom"]["basis"]["rejection"] = {"code": "PAYMENT_REFUSED"}
+next(s for s in b["map"]["scenarios"] if s["id"] == "SCN-0000000D")["rejection"] = {}'
+export_fresh rejection
+check 'export-examples, agreed scenarios carrying rejection: ok' "$( attr "$LINE" outcome ) $( attr "$LINE" reason )" 'ok ' "$LINE"
+check 'export-examples: the scenario marker, the basis marker and a codeless marker are kept' \
+  "$( python3 -c 'import json,sys; s={x["id"]: x for x in json.load(open(sys.argv[1]))["scenarios"]}; print(json.dumps([s["SCN-0000000A"].get("rejection"), s["SCN-0000000A"]["derivedFrom"]["basis"].get("rejection"), s["SCN-0000000D"].get("rejection")]))' "$TMP/exp/rejection/map.json" 2>&1 )" \
+  '[{"code": "PAYMENT_REFUSED"}, {"code": "PAYMENT_REFUSED"}, {}]'
+dm validate "$TMP/exp/rejection/map.json"
+check 'export-examples: the map carrying the markers validates' "$( attr "$LINE" outcome )" ok "$LINE"
 
 cp "$TMP/exp/first.json" "$TMP/exp/keep.json"
 expect_error 'export-examples: no --from' missing-from export-examples "$TMP/exp/first.json"
@@ -2050,8 +2104,8 @@ printf 'ESAS-296: fork-derived scenarios — one derivation, pinned to blueprint
 # proposals and reasons out) pins the two: blueprint's vitest drives the TS over
 # it, the driver below drives the Python over this byte-identical copy.
 FSC="$FIX/fork-scenarios"
-check 'control: the PL copy holds 18 maps, each with its expected file' \
-  "$( ls "$FSC"/*.map.json | wc -l | tr -d ' ' ) $( ls "$FSC"/*.expected.json | wc -l | tr -d ' ' ) $( ls "$FSC" | wc -l | tr -d ' ' )" '18 18 36'
+check 'control: the PL copy holds 19 maps, each with its expected file' \
+  "$( ls "$FSC"/*.map.json | wc -l | tr -d ' ' ) $( ls "$FSC"/*.expected.json | wc -l | tr -d ' ' ) $( ls "$FSC" | wc -l | tr -d ' ' )" '19 19 38'
 
 # derive_all <dir> — runs design-map.py's fork_scenarios over every <case>.map.json
 # in <dir> and compares the JSON.stringify(_, null, 2) + "\n" bytes with
@@ -2075,7 +2129,7 @@ print(f"match={len(cases) - len(differs)} total={len(cases)} differs={','.join(d
 PY
 }
 check 'the Python derivation reproduces every expected file byte for byte' \
-  "$( derive_all "$FSC" 2>&1 )" 'match=18 total=18 differs=none'
+  "$( derive_all "$FSC" 2>&1 )" 'match=19 total=19 differs=none'
 mkdir -p "$TMP/fsc"
 cp "$FSC"/* "$TMP/fsc/"
 python3 - "$TMP/fsc/review-option-changed.expected.json" <<'PY'
@@ -2084,7 +2138,7 @@ p = sys.argv[1]; b = open(p, "rb").read()
 open(p, "wb").write(b.replace(b'"option-changed"', b'"reopened"'))
 PY
 check 'one reason planted in a temp copy of an expected file is caught' \
-  "$( derive_all "$TMP/fsc" 2>&1 )" 'match=17 total=18 differs=review-option-changed'
+  "$( derive_all "$TMP/fsc" 2>&1 )" 'match=18 total=19 differs=review-option-changed'
 
 # same_set <a> <b> — fresh when both directories list the same names and every
 # file is byte-identical (cmp), else stale.
