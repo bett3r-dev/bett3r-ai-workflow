@@ -58,13 +58,14 @@ The design-end scaffold's terms; the why is `docs/adr/ADR-015` at the repo root.
 
 ## Hooks
 
-Three, all in `hooks/hooks.json`, each one cheap check and gone where it does not apply:
+Four, all in `hooks/hooks.json`, each one cheap check and gone where it does not apply:
 
 | Hook | Fires | Does |
 |---|---|---|
 | `blueprint-pending.sh` | `UserPromptSubmit` | Prefixes the prompt with `blueprint: N pending (seq A→B)` while the user has unsynced board edits. Telemetry, never a trigger. |
 | `blueprint-session-channel.sh` | `SessionStart` | Tells a session to open the board's summon channel when a board serves this repo and nobody holds it; in a checkout connected to a hosted session (a record in its git dir, `GIT_DIR` honoured), to start `blueprint listen` when nothing listens, plus a reminder when the branch moved. |
 | `lane-git-guard.sh` | `PreToolUse` on `Bash` | In a checkout holding `.work/lane.yaml` (an unattended lane), blocks the git commands that discard or shelve the working tree. |
+| `blueprint-precompact-note.sh` | `PreCompact` | In a Blueprint design run (Steward's worktree, `<repo>.blueprint-worktrees/<session id>`), asks the compaction summary to keep what the run was doing, its dead ends and the person's preferences, and to have the agent write them with `WriteNote` first when its tools include it (otherwise the note stays in the summary). Silent elsewhere; never blocks. |
 
 ## It's working if
 
