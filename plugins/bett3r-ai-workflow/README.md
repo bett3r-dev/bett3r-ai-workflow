@@ -21,7 +21,7 @@ Fleet:
 | Multi | `/bett3r-ai-workflow:start-multi` | Drives N units through the flow unattended, one worktree each, parallel where safe. Every unit PR targets one integration branch, `int/<run-id>`; the run ends at N PRs, merging nothing. `/bett3r-ai-workflow:design-multi` does the same for N designs, batching the genuine forks into one sitting. |
 | Land | `/bett3r-ai-workflow:merge-multi` | After review, in a fresh session: merges the unit PRs into the integration branch (conflicts resolved once), runs the gate once there, opens one integration PR. `--land` merges it. |
 
-Utilities: `/bett3r-ai-workflow:commit` (logically grouped commits for ad-hoc work), `/bett3r-ai-workflow:run-report` (where a unit's time and tokens went, from the transcripts; `--aggregate` compares runs by plugin version), `/bett3r-ai-workflow:cpu-pool` (lift the compiler token pool before a compile-heavy fleet) and `/bett3r-ai-workflow:blueprint` (`connect` this checkout to its hosted Blueprint session and run the local listener your Asks ring; `disconnect`; `status`; `docs/adr/ADR-018`).
+Utilities: `/bett3r-ai-workflow:commit` (logically grouped commits for ad-hoc work), `/bett3r-ai-workflow:run-report` (where a unit's time and tokens went, from the transcripts; `--aggregate` compares runs by plugin version), `/bett3r-ai-workflow:cpu-pool` (lift the compiler token pool before a compile-heavy fleet), `/bett3r-ai-workflow:blueprint-send` (this conversation into Blueprint's memory, the secret check first) and `/bett3r-ai-workflow:blueprint` (`connect` this checkout to its hosted Blueprint session and run the local listener your Asks ring; `disconnect`; `status`; `docs/adr/ADR-018`).
 
 ## The gate is the host repo's
 
@@ -58,7 +58,7 @@ The design-end scaffold's terms; the why is `docs/adr/ADR-015` at the repo root.
 
 ## Hooks
 
-Four, all in `hooks/hooks.json`, each one cheap check and gone where it does not apply:
+Five, all in `hooks/hooks.json`, each one cheap check and gone where it does not apply:
 
 | Hook | Fires | Does |
 |---|---|---|
@@ -66,6 +66,7 @@ Four, all in `hooks/hooks.json`, each one cheap check and gone where it does not
 | `blueprint-session-channel.sh` | `SessionStart` | Tells a session to open the board's summon channel when a board serves this repo and nobody holds it; in a checkout connected to a hosted session (a record in its git dir, `GIT_DIR` honoured), to start `blueprint listen` when nothing listens, plus a reminder when the branch moved. |
 | `lane-git-guard.sh` | `PreToolUse` on `Bash` | In a checkout holding `.work/lane.yaml` (an unattended lane), blocks the git commands that discard or shelve the working tree. |
 | `blueprint-precompact-note.sh` | `PreCompact` | In a Blueprint design run (Steward's worktree, `<repo>.blueprint-worktrees/<session id>`), asks the compaction summary to keep what the run was doing, its dead ends and the person's preferences, and to have the agent write them with `WriteNote` first when its tools include it (otherwise the note stays in the summary). Silent elsewhere; never blocks. |
+| `blueprint-capture.sh` | `Stop`, `SessionEnd`, `SessionStart` | In a repository whose checked-in settings name `BLUEPRINT_CAPTURE_REPOSITORY`, per person `BLUEPRINT_CAPTURE` off / ask / always (default ask): in `ask`, has the agent ask once a session "Send this conversation to Blueprint's memory?" with a one-line summary (never in `claude -p`, an SDK, a lane or a Steward design run), and on yes sends the whole conversation at the session end, nothing on no; in `always`, sends at the session end unasked. The secret check runs first and stops the send with "This looks like a secret"; one found at the session end is raised by the next session in the repository. Without a sign-in it can read (the `blueprint` CLI keeps one in the OS keychain unless `--store file`) it does not ask and says so in one line. `/bett3r-ai-workflow:blueprint-send` sends any time. Never blocks work; fails open: a failure is one line. |
 
 ## It's working if
 

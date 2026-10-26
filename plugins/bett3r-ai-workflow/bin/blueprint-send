@@ -1,0 +1,8 @@
+#!/bin/sh
+# Launcher for hooks/blueprint-capture.py's send: this conversation, or the one
+# --transcript names, to Blueprint's memory, the secret check first. Exits 0 sent,
+# 3 "This looks like a secret" (nothing sent), 1 any other failure (one line).
+#
+# Here for the same reason as `work-docs-path`: `CLAUDE_PLUGIN_ROOT` is substituted
+# for hook invocations only, while every enabled plugin's `bin/` is on `PATH`.
+exec python3 "$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)/hooks/blueprint-capture.py" send "$@"
