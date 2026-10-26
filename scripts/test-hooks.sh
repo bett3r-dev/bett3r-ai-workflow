@@ -647,6 +647,134 @@ else
   fi
 fi
 
+# ── The note before compaction (hooks/blueprint-precompact-note.sh) ──────────
+#
+# A PreCompact hook. Claude Code appends its stdout, on exit 0, to the
+# compaction's custom instructions, and an exit 2 BLOCKS the compaction; so it
+# speaks only in a Blueprint design run (Steward's hosted worktree,
+# `<repo>.blueprint-worktrees/<session id>`), is silent everywhere else, and
+# exits 0 on every path. The cases run the hook as hooks.json declares it, the
+# ${CLAUDE_PLUGIN_ROOT} substituted, so a missing or mis-pointed entry fails the
+# behaviour cases and not only the wiring grep below.
+
+printf '\nblueprint-precompact-note hook (PreCompact)\n'
+
+# The PreCompact entries' args, one per line, ${CLAUDE_PLUGIN_ROOT} resolved;
+# empty when hooks.json declares none.
+precompact_args(){
+  python3 - "$HOOKS_JSON" "$PLUGIN" <<'PYPC' 2>/dev/null
+import json, sys
+h = json.load(open(sys.argv[1], encoding="utf-8")).get("hooks", {})
+for entry in h.get("PreCompact", []):
+    for x in entry.get("hooks", []):
+        for a in x.get("args", []):
+            print(str(a).replace("${CLAUDE_PLUGIN_ROOT}", sys.argv[2]))
+PYPC
+}
+
+# precompact_payload <trigger> <cwd> — a PreCompact event as the harness sends it.
+precompact_payload(){
+  printf '{"session_id":"s1","transcript_path":"/tmp/t.jsonl","cwd":"%s","hook_event_name":"PreCompact","trigger":"%s","custom_instructions":""}' "$2" "$1"
+}
+
+# run_precompact <project dir> <trigger> — every PreCompact script hooks.json
+# declares, under HOOK_SH, the payload on stdin; stdout, stderr, status in $TMP.
+run_precompact(){
+  : >"$TMP/pout"; : >"$TMP/perr"; pstatus=0
+  pscripts=$( precompact_args )
+  if [ -z "$pscripts" ]; then pstatus=missing; return; fi
+  for pscript in $pscripts; do
+    precompact_payload "$2" "$1" | CLAUDE_PROJECT_DIR="$1" "$HOOK_SH" "$pscript" >>"$TMP/pout" 2>>"$TMP/perr"
+    prc=$?
+    [ "$prc" -eq 0 ] || pstatus=$prc
+  done
+}
+
+# assert_precompact <project dir> <trigger> <speaks|silent> <description>
+assert_precompact(){
+  run_precompact "$1" "$2"
+  pout=$( cat "$TMP/pout" )
+  perr=$( cat "$TMP/perr" )
+  if [ "$pstatus" = missing ]; then
+    fail "$4" "hooks.json declares no PreCompact hook"
+    return
+  fi
+  if [ "$pstatus" -ne 0 ]; then
+    fail "$4" "exit status $pstatus — expected 0; a PreCompact hook that exits 2 blocks the compaction" "stderr: $perr"
+    return
+  fi
+  if [ -n "$perr" ]; then
+    fail "$4" "wrote to stderr" "stderr: $perr"
+    return
+  fi
+  if [ "$3" = silent ]; then
+    if [ -n "$pout" ]; then fail "$4" "expected no output" "stdout: $pout"; else pass "$4"; fi
+    return
+  fi
+  plines=$( printf '%s\n' "$pout" | grep -c . )
+  for pword in 'mcp__blueprint__WriteNote' 'dead ends' 'preferences'; do
+    case $pout in
+      *"$pword"*) ;;
+      *) fail "$4" "expected the one line asking for WriteNote with the dead ends and preferences; missing: $pword" "stdout: [$pout]"; return ;;
+    esac
+  done
+  # Version skew (design, Risks): a Blueprint server older than WriteNote has no
+  # such tool, so the call is conditional on the tool being there, with the
+  # summary itself as the fallback; and the summary keeps the session id the
+  # call needs.
+  for pword in 'if your tools include mcp__blueprint__WriteNote' 'if they do not, keep the note in the summary' 'session id'; do
+    case $pout in
+      *"$pword"*) ;;
+      *) fail "$4" "expected the WriteNote call to be conditional on the tool existing, with the summary as fallback, and the session id kept; missing: $pword" "stdout: [$pout]"; return ;;
+    esac
+  done
+  if [ "$plines" = 1 ]; then pass "$4"; else fail "$4" "expected exactly 1 line, got $plines" "stdout: $pout"; fi
+}
+
+if ! command -v python3 >/dev/null 2>&1; then
+  fail 'the precompact cases need python3' 'python3 is missing on this machine'
+else
+  prun="$TMP/acme.blueprint-worktrees/0f9c2a51-5c1e-4c47-9d0b-3a1f6e2b7c11"
+  pplain="$TMP/acme"
+  pboard="$TMP/acme-board"
+  pconn="$TMP/acme-connected"
+  rm -rf "$prun" "$pplain" "$pboard" "$pconn"
+  mkdir -p "$prun" "$pplain" "$pboard/.blueprint" "$pconn/.git"
+  printf '{"host":"https://bp.example","sessionId":"s1","branchAtConnect":"main","connectedAt":"2026-10-26T00:00:00Z"}\n' \
+    >"$pconn/.git/blueprint-connection.json"
+
+  assert_precompact "$prun" auto speaks \
+    'a Blueprint design run, auto compaction: one line asking for WriteNote before the context goes'
+  assert_precompact "$prun" manual speaks \
+    'a Blueprint design run, /compact: the same line'
+  assert_precompact "$pplain" auto silent \
+    'no Blueprint run: prints nothing and exits 0'
+  assert_precompact "$pboard" auto silent \
+    'a checkout with a .blueprint/ but no design run: prints nothing and exits 0'
+  assert_precompact "$pconn" auto silent \
+    'a checkout with a /blueprint connect record but no design run: prints nothing and exits 0'
+  assert_precompact "$TMP/acme.blueprint-worktrees" auto silent \
+    'the worktrees folder itself is not a run: prints nothing and exits 0'
+
+  # Never blocks, whatever arrives: no payload, and a project dir that is gone.
+  pscripts=$( precompact_args )
+  if [ -z "$pscripts" ]; then
+    fail 'an empty payload, a vanished project dir and no CLAUDE_PROJECT_DIR all exit 0' 'hooks.json declares no PreCompact hook'
+  else
+    pbad=''
+    for pscript in $pscripts; do
+      CLAUDE_PROJECT_DIR="$prun" "$HOOK_SH" "$pscript" >/dev/null 2>&1 </dev/null || pbad="$pbad empty-payload"
+      CLAUDE_PROJECT_DIR="$TMP/gone.blueprint-worktrees/x" "$HOOK_SH" "$pscript" >/dev/null 2>&1 </dev/null || pbad="$pbad vanished-dir"
+      env -u CLAUDE_PROJECT_DIR "$HOOK_SH" "$pscript" >/dev/null 2>&1 </dev/null || pbad="$pbad no-project-dir"
+    done
+    if [ -z "$pbad" ]; then
+      pass 'an empty payload, a vanished project dir and no CLAUDE_PROJECT_DIR all exit 0'
+    else
+      fail 'an empty payload, a vanished project dir and no CLAUDE_PROJECT_DIR all exit 0' "non-zero on:$pbad"
+    fi
+  fi
+fi
+
 # ── The mechanism: how the plugin declares the hooks ─────────────────────────
 #
 # The script working is worth nothing if Claude Code never runs it, and that
@@ -673,6 +801,23 @@ else
   assert_json 'it declares a PreToolUse hook' '"PreToolUse"'
   assert_json 'matched on the Bash tool' '"matcher": *"Bash"'
   assert_json 'and points that one at the lane git guard' 'CLAUDE_PLUGIN_ROOT}/hooks/lane-git-guard.sh'
+  assert_json 'it declares a PreCompact hook' '"PreCompact"'
+  assert_json 'and points that one at the note-before-compaction script' 'CLAUDE_PLUGIN_ROOT}/hooks/blueprint-precompact-note.sh'
+  # Once, and with no matcher: a matcher on PreCompact selects the trigger, and
+  # the note is owed before an auto compaction and a /compact alike.
+  pc_wiring=$( python3 - "$HOOKS_JSON" <<'PYW' 2>&1
+import json, sys
+h = json.load(open(sys.argv[1], encoding="utf-8"))["hooks"]
+hits = [(entry.get("matcher"), x.get("timeout")) for entry in h.get("PreCompact", []) for x in entry.get("hooks", [])
+        if any(str(a).endswith("hooks/blueprint-precompact-note.sh") for a in x.get("args", []))]
+print(hits)
+PYW
+)
+  if [ "$pc_wiring" = '[(None, 5)]' ]; then
+    pass 'blueprint-precompact-note.sh is registered once, under PreCompact, with no matcher and a 5s timeout'
+  else
+    fail 'blueprint-precompact-note.sh is registered once, under PreCompact, with no matcher and a 5s timeout' "got: $pc_wiring"
+  fi
   if python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$HOOKS_JSON" 2>/dev/null; then
     pass 'hooks.json is valid JSON'
   else
