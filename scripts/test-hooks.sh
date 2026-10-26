@@ -807,9 +807,11 @@ PYCA
 
 cat >"$TMP/capture-server.py" <<'PYSRV'
 # A Blueprint stub: /secret-check answers spans as the real route does (every
-# rule's matches, sorted by start and not merged, in UTF-16 units) for three
-# rules: GitHub tokens (the shape of gitleaks' github-pat), private-key (the
-# route's own pattern, which runs across lines) and a generic-api-key stand-in
+# rule's matches, sorted by start and not merged, in UTF-16 units) for five
+# rules: GitHub tokens (the shape of gitleaks' github-pat), private-key
+# (gitleaks' pattern, which runs across lines), private-key-whole (Blueprint's
+# own, a key from its header through its END line), private-key-open (Blueprint's
+# own, a key with no END line) and a generic-api-key stand-in
 # whose match ends inside a token after `api_key=`, so two spans overlap;
 # /documents/upload-grant a presigned POST at its own /bucket with the D44
 # checksum fields, /bucket refuses bytes whose SHA-256 is not the checksum (as
@@ -819,7 +821,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 log_path, upload_path = sys.argv[1], sys.argv[2]
 RULES = [("github-pat", re.compile(r"ghp_[0-9a-zA-Z]{36}")),
          ("generic-api-key", re.compile(r"api_key=\S{12}")),
-         ("private-key", re.compile(r"(?i)-----BEGIN[ A-Z0-9_-]{0,100}PRIVATE KEY(?: BLOCK)?-----[\s\S-]{64,}?KEY(?: BLOCK)?-----"))]
+         ("private-key", re.compile(r"(?i)-----BEGIN[ A-Z0-9_-]{0,100}PRIVATE KEY(?: BLOCK)?-----[\s\S-]{64,}?KEY(?: BLOCK)?-----")),
+         ("private-key-whole", re.compile(r"(?i)-----BEGIN[ A-Z0-9_-]{0,100}PRIVATE KEY(?: BLOCK)?-----(?:[^-]|-{1,4}[^-]){64,}?-----END[ A-Z0-9_-]{0,100}PRIVATE KEY(?: BLOCK)?-----")),
+         ("private-key-open", re.compile(r"(?i)-----BEGIN[ A-Z0-9_-]{0,100}PRIVATE KEY(?: BLOCK)?-----(?:(?:\r?\n|\\r\\n|\\n)[ \t]*(?:\d+(?:\t|→)[ \t]*)?[A-Za-z][A-Za-z0-9-]*:[^\r\n\\]*)*(?:(?:\r?\n|\\r\\n|\\n)[ \t]*(?:\d+(?:\t|→)[ \t]*)?)?(?:\r?\n|\\r\\n|\\n)[ \t]*(?:\d+(?:\t|→)[ \t]*)?[A-Za-z0-9+/=]{16,}(?:(?:\r?\n|\\r\\n|\\n)[ \t]*(?:\d+(?:\t|→)[ \t]*)?[A-Za-z0-9+/=]{16,})*(?:(?:\r?\n|\\r\\n|\\n)[ \t]*(?:\d+(?:\t|→)[ \t]*)?[A-Za-z0-9+/=]+)?"))]
 def u16(s): return len(s.encode("utf-16-le")) // 2
 class H(BaseHTTPRequestHandler):
     def reply(self, status, obj):
@@ -1274,6 +1278,177 @@ PYCB
       fail 'send anyway: the text goes as it is' "exit $cstatus" "stdout: [$( cat "$TMP/cout" )] stderr: [$( cat "$TMP/cerr" )]"
     fi
 
+    # A tool output is never cut inside a private key. `cat ~/.ssh/id_ed25519`
+    # prints a 432-character file: cut at 400 it would keep the whole body and
+    # drop the END line the private-key rule closes on, so nothing would match
+    # and the key would go. A synthetic PEM of that shape (never a real key),
+    # nothing after it; its body lines are KEYBODY1..KEYBODY5 and KEYB6.
+    python3 - "$TMP/claude-sshkey.jsonl" <<'PYSSH'
+import json, sys
+body = ["KEYBODY%d" % i + "A" * 62 for i in range(1, 6)] + ["KEYB6A"]
+pem = "-----BEGIN OPENSSH PRIVATE KEY-----\n" + "".join(l + "\n" for l in body) + "-----END OPENSSH PRIVATE KEY-----\n"
+assert len(pem) == 432, len(pem)
+lines = [
+    {"type": "user", "message": {"role": "user", "content": "which key does this box use?"}},
+    {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t9", "name": "Bash", "input": {"command": "cat ~/.ssh/id_ed25519"}}]}},
+    {"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t9", "content": pem}]}},
+]
+with open(sys.argv[1], "w", encoding="utf-8") as f:
+    for l in lines:
+        f.write(json.dumps(l) + "\n")
+PYSSH
+    : >"$TMP/creq"; rm -f "$TMP/cupload"
+    capture_send -- --transcript "$TMP/claude-sshkey.jsonl"
+    creqs=$( creq_paths ); cout=$( cat "$TMP/cout" )
+    case $cout in *'This looks like a secret: 3 matches of private-key, private-key-open, private-key-whole, '*) csaid=1 ;; *) csaid=0 ;; esac
+    if [ "$cstatus" = 3 ] && [ "$creqs" = /secret-check ] && [ ! -e "$TMP/cupload" ] && [ "$csaid" = 1 ]; then
+      pass 'a tool output that is a whole private key file (432 characters) is not cut inside the key: the send blocks'
+    else
+      fail 'a tool output that is a whole private key file (432 characters) is not cut inside the key: the send blocks' \
+        "exit $cstatus (expected 3); requests [$creqs] (expected [/secret-check]); uploaded: $( [ -e "$TMP/cupload" ] && echo "yes, key body lines $( grep -c 'KEYBODY\|KEYB6' "$TMP/cupload" )" || echo no ) (expected no)" \
+        "stdout: [$cout]"
+    fi
+    : >"$TMP/creq"; rm -f "$TMP/cupload"
+    capture_send -- --transcript "$TMP/claude-sshkey.jsonl" --redact
+    if [ "$cstatus" = 0 ] && grep -q 'tool output: \[redacted: private-key-open\]' "$TMP/cupload" 2>/dev/null \
+       && ! grep -q 'KEYBODY\|KEYB6' "$TMP/cupload" && grep -q 'which key does this box use?' "$TMP/cupload"; then
+      pass 'redact and send: the private key a tool printed is replaced by a marker, no line of its body sent'
+    else
+      fail 'redact and send: the private key a tool printed is replaced by a marker, no line of its body sent' \
+        "exit $cstatus (expected 0); private-key-open marker: $( grep -c 'redacted: private-key-open' "$TMP/cupload" 2>/dev/null ) (expected 1); key body lines sent: $( grep -c 'KEYBODY\|KEYB6' "$TMP/cupload" 2>/dev/null ) (expected 0)" \
+        "stdout: [$( cat "$TMP/cout" )]"
+    fi
+
+    # Only a private key's header keeps the rest: a public PEM block (a
+    # certificate) in a 600-character tool output is cut at 400 as any other.
+    python3 - "$TMP/claude-cert.jsonl" <<'PYCERT'
+import json, sys
+out = "-----BEGIN CERTIFICATE-----\n" + "M" * 372 + "CERT-BEYOND-400" + "N" * 185 + "\n-----END CERTIFICATE-----\n"
+with open(sys.argv[1], "w", encoding="utf-8") as f:
+    f.write(json.dumps({"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t8", "content": out}]}}) + "\n")
+PYCERT
+    : >"$TMP/creq"; rm -f "$TMP/cupload"
+    capture_send -- --transcript "$TMP/claude-cert.jsonl"
+    if [ "$cstatus" = 0 ] && grep -q "tool output: -----BEGIN CERTIFICATE-----" "$TMP/cupload" 2>/dev/null \
+       && grep -qx "M* \[cut: 227 more characters\]" "$TMP/cupload" && ! grep -q 'CERT-BEYOND-400' "$TMP/cupload"; then
+      pass 'a tool output with no private key header is still cut at 400 characters'
+    else
+      fail 'a tool output with no private key header is still cut at 400 characters' \
+        "exit $cstatus (expected 0); past 400 sent: $( grep -c 'CERT-BEYOND-400' "$TMP/cupload" 2>/dev/null ) (expected 0)" \
+        "upload: [$( cat "$TMP/cupload" 2>/dev/null )]"
+    fi
+
+    # Where the cut falls around keys, read from the text the secret check
+    # gets: a short key inside the first 400 characters leaves the cut at 400
+    # (WITHIN-400 kept, PAST-400 not), and a key whose header lies past the cut
+    # is cut away (LATEKEY); a key with no END line moves the cut back to its
+    # header's start, so nothing of it is kept (NOEND-TAIL, 543 characters
+    # cut), nor of an EC key's scalar whose header starts at 360 with 10
+    # characters left before 400 (ECSCALAR, 226 characters cut); of two keys
+    # back to back, the
+    # first crossing the cut is kept through its END line (FIRSTKEY5) and the
+    # second, whose header then lies past the cut, is cut away whole (SECONDKEY)
+    # with the 532 characters after; a header named in prose, without its
+    # closing dashes, leaves the cut at 400 though an END line follows
+    # (PROSE-TAIL); a lowercase key is kept through its END line (lckey5) and
+    # nothing after it (LC-AFTER); a header with no END line of its own,
+    # another key's header before the next END line, moves the cut back to
+    # its start though a public key block (KEY----- markers) and that later
+    # key follow: nothing of it (PARTIAL01), of the text between (MIDDLE-TEXT)
+    # nor of the later key (UNCLOSEDK) is kept, 3246 characters cut; and an
+    # unclosed header at 100 before a complete key whose header starts at 300
+    # moves the cut back to 100: the complete key goes with it, whole
+    # (UNCLOSEDHEAD, SECONDCOMPLETE, 644 characters cut); a 150-character
+    # output, under 400, whose header at 50 has no END line is cut there too
+    # (SHORTBODY, 100 characters cut).
+    python3 - "$TMP/claude-keycuts.jsonl" <<'PYKC'
+import json, sys
+def key(word):
+    return ("-----BEGIN OPENSSH PRIVATE KEY-----\n" + "".join(word + "%d" % i + "A" * (70 - len(word) - 1) + "\n" for i in range(1, 6))
+            + "KEYB6A\n-----END OPENSSH PRIVATE KEY-----\n")
+small = "-----BEGIN EC PRIVATE KEY-----\n" + "E" * 64 + "\n-----END EC PRIVATE KEY-----\n"
+a = small + "w" * (400 - len(small) - len("WITHIN-400")) + "WITHIN-400" + "PAST-400 " + "v" * 50 + "\n" + key("LATEKEY")
+b = "-----BEGIN OPENSSH PRIVATE KEY-----\n" + ("N" * 70 + "\n") * 7 + "NOEND-TAIL"
+c = key("FIRSTKEY") + key("SECONDKEY") + "AFTER-KEYS" + "z" * 89
+d = "docs/keys.md:3: keys start with -----BEGIN OPENSSH PRIVATE KEY\n" + "p" * 400 + "PROSE-TAIL\n-----END OPENSSH PRIVATE KEY-----\n"
+e = key("lckey").lower() + "LC-AFTER" + "y" * 40
+partial = "-----BEGIN RSA PRIVATE KEY-----\n" + "".join("PARTIAL%02d" % i + "Q" * 55 + "\n" for i in range(1, 6))
+g = partial + "-----BEGIN PUBLIC KEY-----\nMFkw\n-----END PUBLIC KEY-----\n" + "MIDDLE-TEXT " * 200 + key("UNCLOSEDK")
+h = "j" * 360 + "-----BEGIN EC PRIVATE KEY-----\n" + "".join("ECSCALAR%d" % i + "Z" * 55 + "\n" for i in range(1, 4))
+i2 = "u" * 100 + "-----BEGIN RSA PRIVATE KEY-----\n" + "UNCLOSEDHEAD" + "Q" * 55 + "\n" + "s" * 100 + key("SECONDCOMPLETE") + "AFTER-SECOND"
+k = "k" * 50 + "-----BEGIN DSA PRIVATE KEY-----\n" + "SHORTBODY" + "D" * 59
+assert len(key("X")) == 432 and len(b) == 543 and len(k) == 150 and e.startswith("-----begin openssh private key-----")
+assert g.index("MIDDLE-TEXT") > 400 and len(g) == 3246
+assert h.index("-----BEGIN EC") == 360 and len(h) == 586
+assert i2.index("-----BEGIN RSA") == 100 and i2.index("-----BEGIN OPENSSH") == 300 and i2.index("-----END OPENSSH") > 400 and len(i2) == 744
+with open(sys.argv[1], "w", encoding="utf-8") as f:
+    for i, out in enumerate((a, b, c, d, e, g, h, i2, k)):
+        f.write(json.dumps({"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "k%d" % i, "content": out}]}}) + "\n")
+PYKC
+    : >"$TMP/creq"; rm -f "$TMP/cupload"
+    capture_send -- --transcript "$TMP/claude-keycuts.jsonl"
+    ccuts=$( python3 - "$TMP/creq" <<'PYKV'
+import json, sys
+t = "".join(json.loads(l)["body"]["text"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["path"] == "/secret-check")
+if not t: print("the secret check got no text"); sys.exit()
+bad = []
+if "WITHIN-400" not in t: bad.append("a short key inside the first 400 characters moved the cut before 400")
+if "PAST-400" in t: bad.append("text past 400 after a short key was kept")
+if "LATEKEY" in t: bad.append("a key whose header lies past the cut was kept")
+if "NOEND-TAIL" in t or "NNNN" in t or "tool output:  [cut: 543 more characters]" not in t: bad.append("a key with no END line was not cut at its header's start")
+if "ECSCALAR" in t or "jjj [cut: 226 more characters]" not in t: bad.append("an EC key with no END line, its header at 360, was not cut at the header's start (%d ECSCALAR)" % t.count("ECSCALAR"))
+if "FIRSTKEY5" not in t: bad.append("the first of two back-to-back keys was cut inside")
+if "SECONDKEY" in t or "-----END OPENSSH PRIVATE KEY----- [cut: 532 more characters]" not in t:
+    bad.append("two back-to-back keys were not cut at the first's END line")
+if "PROSE-TAIL" in t: bad.append("a header named in prose, without its closing dashes, moved the cut")
+if "lckey5" not in t or "LC-AFTER" in t or "-----end openssh private key----- [cut: 49 more characters]" not in t:
+    bad.append("a lowercase key was not cut at its END line")
+if "PARTIAL01" in t or "MIDDLE-TEXT" in t or "UNCLOSEDK" in t or "tool output:  [cut: 3246 more characters]" not in t:
+    bad.append("a header with no END line of its own, another key's header before the next END line, was not cut at its start (PARTIAL01 %d, MIDDLE-TEXT %d, UNCLOSEDK %d)" % (t.count("PARTIAL01"), t.count("MIDDLE-TEXT"), t.count("UNCLOSEDK")))
+if "UNCLOSEDHEAD" in t or "SECONDCOMPLETE" in t or "uuu [cut: 644 more characters]" not in t:
+    bad.append("an unclosed header at 100 before a complete key at 300 was not cut at 100 (UNCLOSEDHEAD %d, SECONDCOMPLETE %d)" % (t.count("UNCLOSEDHEAD"), t.count("SECONDCOMPLETE")))
+if "SHORTBODY" in t or "kkk [cut: 100 more characters]" not in t:
+    bad.append("a 150-character output with an unclosed header at 50 was not cut at the header (%d SHORTBODY)" % t.count("SHORTBODY"))
+print("; ".join(bad) or "ok")
+PYKV
+)
+    if [ "$ccuts" = ok ]; then
+      pass 'the cut around keys: a short key leaves it at 400, a key past it is cut away, a key with no END line is cut at its header, back-to-back keys are cut between them, a prose header leaves it at 400, a lowercase key is kept to its END line, an unclosed header before another key is cut at its start, an output under 400 is cut at its unclosed header'
+    else
+      fail 'the cut around keys: a short key leaves it at 400, a key past it is cut away, a key with no END line is cut at its header, back-to-back keys are cut between them, a prose header leaves it at 400, a lowercase key is kept to its END line, an unclosed header before another key is cut at its start, an output under 400 is cut at its unclosed header' "$ccuts"
+    fi
+
+    # A tool call's input is one line of JSON (its newlines escaped), so the
+    # cut after a key ends at the key's END marker, not at a newline: a Write
+    # of a key followed by 14 KB of other content keeps nothing past the
+    # marker (TRAILING-CONTENT), so --redact never sends that content whole.
+    python3 - "$TMP/claude-writekey.jsonl" <<'PYWK'
+import json, sys
+pem = "-----BEGIN OPENSSH PRIVATE KEY-----\n" + "".join("WKEYBODY%d" % i + "A" * 61 + "\n" for i in range(1, 6)) + "-----END OPENSSH PRIVATE KEY-----\n"
+inp = {"file_path": "/repo/fixtures/deploy_key", "content": pem + "TRAILING-CONTENT " * 840}
+with open(sys.argv[1], "w", encoding="utf-8") as f:
+    f.write(json.dumps({"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "w1", "name": "Write", "input": inp}]}}) + "\n")
+PYWK
+    : >"$TMP/creq"; rm -f "$TMP/cupload"
+    capture_send -- --transcript "$TMP/claude-writekey.jsonl"
+    cwk=$( python3 - "$TMP/creq" <<'PYWV'
+import json, re, sys
+t = "".join(json.loads(l)["body"]["text"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["path"] == "/secret-check")
+if not t: print("the secret check got no text"); sys.exit()
+bad = []
+if "WKEYBODY5" not in t: bad.append("the key was cut inside")
+if not re.search(r"-----END OPENSSH PRIVATE KEY----- \[cut: \d+ more characters\]", t): bad.append("the cut is not at the key's END marker")
+n = t.count("TRAILING-CONTENT")
+if n: bad.append("%d characters past the END marker kept (%d TRAILING-CONTENT)" % (len(t.split("PRIVATE KEY-----")[-1].split(" [cut:")[0]), n))
+print("; ".join(bad) or "ok")
+PYWV
+)
+    if [ "$cwk" = ok ] && [ "$cstatus" = 3 ]; then
+      pass 'a tool call that writes a key and more is cut at the key'"'"'s END marker: nothing past it goes to the secret check'
+    else
+      fail 'a tool call that writes a key and more is cut at the key'"'"'s END marker: nothing past it goes to the secret check' "$cwk; exit $cstatus (expected 3)"
+    fi
+
     printf 'user: my token is %s\n' "$CAP_KEY" >"$TMP/cedit-still.txt"
     printf 'user: my token is [removed by hand]\n' >"$TMP/cedit.txt"
     : >"$TMP/creq"; rm -f "$TMP/cupload"
@@ -1396,7 +1571,8 @@ PYCB
     # (F11). A message sent anyway that only mentions a private key's header is
     # harmless alone; a key pasted later makes the private-key rule (which runs
     # across lines to the first KEY-----) match from that mention into the new
-    # message. That match is not the old choice's: the session's end blocks.
+    # message. That match is not the old choice's: the session's end blocks, and
+    # its warning counts it beside private-key-whole's match of the new key.
     CAP_PEM_LINE='b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW'
     printf '{"type": "user", "message": {"role": "user", "content": "my token is %s and my deploy keys are PEM files; they start with -----BEGIN OPENSSH PRIVATE KEY----- and I keep them in ~/.ssh. Why do retries stop at three?"}}\n' "$CAP_KEY" >"$TMP/claude-mention.jsonl"
     printf '%s\n' '{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "Because the broker caps them."}]}}' >>"$TMP/claude-mention.jsonl"
@@ -1410,7 +1586,7 @@ PYCB
     capture_hook SessionEnd claude-mention "$TMP/claude-mention.jsonl" false
     creqs=$( creq_paths )
     cwarn=$( python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["lines"][0])' "$cpending/claude-mention.json" 2>/dev/null )
-    case $cwarn in *'This looks like a secret: 1 match of private-key,'*) csaid=1 ;; *) csaid=0 ;; esac
+    case $cwarn in *'This looks like a secret: 3 matches of private-key, private-key-open, private-key-whole, '*) csaid=1 ;; *) csaid=0 ;; esac
     if [ "$csent" = 30 ] && [ "$cstatus" = 0 ] && [ "$creqs" = /secret-check ] && [ ! -e "$TMP/cupload" ] && [ "$csaid" = 1 ]; then
       pass 'a match that runs from a message sent anyway into a later one is not covered: the session end blocks on the pasted key'
     else

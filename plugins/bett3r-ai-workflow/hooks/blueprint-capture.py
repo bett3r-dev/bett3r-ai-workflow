@@ -22,11 +22,12 @@ A secret SessionEnd finds is left as a pending record of the repository, which t
 SessionStart in it raises so the person can redact, edit or send anyway.
 
 A send renders the transcript (prompts and replies in full, tool calls and tool output
-cut to 400 characters, no thinking, meta or system lines), runs Blueprint's secret check
-(POST /secret-check) and stops on a match with "This looks like a secret"; otherwise it
-takes an upload grant (POST /documents/upload-grant), posts the bytes to the bucket with
-the grant's fields and their SHA-256 checksum (D44), and names the object to
-CaptureConversation (D59). Every failure is one line; a hook always exits 0.
+cut to 400 characters, a private key that starts before the cut kept through its END
+marker or, with no END marker of its own, cut at its header; no thinking, meta or
+system lines), runs Blueprint's secret check (POST /secret-check) and stops on a match
+with "This looks like a secret"; otherwise it takes an upload grant (POST
+/documents/upload-grant), posts the bytes to the bucket with the grant's fields and
+their SHA-256 checksum (D44), and names the object to CaptureConversation (D59). Every failure is one line; a hook always exits 0.
 
 Host: BLUEPRINT_HOST_URL, else the /blueprint connect record in the git dir (whose
 sessionId the capture is attached to). Token: BLUEPRINT_ACCESS_TOKEN, else the
@@ -46,6 +47,9 @@ import urllib.request
 import uuid
 
 CUT = 400
+# Only where a cut may fall, never a secret check: that is Blueprint's (POST /secret-check).
+PEM_HEADER = re.compile(r"(?i)-----BEGIN[ A-Z0-9_-]{0,100}PRIVATE KEY(?: BLOCK)?-----")
+PEM_END = re.compile(r"(?i)-----END[ A-Z0-9_-]{0,100}PRIVATE KEY(?: BLOCK)?-----")
 QUESTION = "Send this conversation to Blueprint's memory?"
 SECRET = "This looks like a secret"
 TIMEOUT = 5
@@ -215,7 +219,22 @@ def find_transcript(env, project, session_id):
 # ---- what is sent -----------------------------------------------------------
 
 def cut(text):
-    return text if len(text) <= CUT else text[:CUT] + " [cut: %d more characters]" % (len(text) - CUT)
+    """The first CUT characters, extended so a private key whose header starts before
+    the cut is kept through its END marker and the secret check sees it whole. A
+    header before the cut with no END marker of its own (none after it, or another
+    header before the next one) moves the cut back to its start, so nothing of that
+    key, nor anything after it, is kept."""
+    end = CUT
+    for m in PEM_HEADER.finditer(text):
+        if m.start() >= end:
+            break
+        close = PEM_END.search(text, m.end())
+        later = PEM_HEADER.search(text, m.end())
+        if not close or (later and later.start() < close.start()):
+            end = m.start()
+            break
+        end = max(end, close.end())
+    return text if len(text) <= end else text[:end] + " [cut: %d more characters]" % (len(text) - end)
 
 
 def result_text(content):
