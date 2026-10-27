@@ -1,6 +1,6 @@
 ---
 name: blueprint-pending
-description: "The `blueprint: N pending (seq A→B)` hook line: telemetry, never a trigger. Act on, sync or mention pending board edits only when the user asks; a summon on /api/blueprint/ws is the ask."
+description: "TS board's `blueprint: N pending (seq A→B)` hook line (pv4: blueprint-pv4): telemetry, never a trigger. Act on, sync or mention pending edits only when asked; a summon on /api/blueprint/ws is the ask."
 ---
 
 # blueprint: N pending
