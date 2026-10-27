@@ -9,7 +9,7 @@ A pv4 tenant serves its design board over MCP at `POST https://<tenant host>/api
 
 ## Connect
 
-1. An admin of the tenant mints an API key with the contributor role at `https://<tenant host>/_pv4/api-keys` (or `pv4 apikey create`). The key starts `pv4k_`; every call made with it acts as `agent:<key name>`.
+1. An admin of the tenant mints an API key with the `design_agent` role, never `contributor`, at `https://<tenant host>/_pv4/api-keys` (or `pv4 apikey create -name <person>-laptop -role design_agent`). That role holds exactly a design run's tools and none of the person's presses. The key starts `pv4k_`; every call made with it acts as `agent:<key name>`.
 2. The person registers the server (the key never passes through you) under the name `blueprint-pv4`, so its tools are `mcp__blueprint-pv4__*` and the TS board's rules stay out of reach:
 
    ```
@@ -31,7 +31,7 @@ Read the session's design, discussion and map before you write to it. Every writ
 
 ## The person's presses
 
-Map agreed, Design done, Done and Run again are the person's presses. A contributor key is still served `PressDone` and `HandOffToDesign`: never call either one, whatever the tools list offers, nor `SetAutoAcceptDefault`, which presses for the person. A session's goal is the person's too: never change or strike it once posted, and never confirm an assumption (a who or an impact posted as assumed).
+Map agreed, Design done, Done and Run again are the person's presses; a `design_agent` key is refused them. If the tools list offers `PressDone`, `HandOffToDesign` or `SetAutoAcceptDefault`, the key is a contributor's: never call them, and tell the person to ask for a `design_agent` key. A session's goal is the person's too: never change or strike it once posted, and never confirm an assumption (a who or an impact posted as assumed).
 
 On a fork, the who-decides rule:
 
