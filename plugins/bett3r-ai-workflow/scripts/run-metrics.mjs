@@ -32,18 +32,16 @@ import { readFileSync, readdirSync, existsSync, statSync, mkdirSync, writeFileSy
 import { join, basename } from 'node:path'
 import { homedir } from 'node:os'
 import { execFileSync } from 'node:child_process'
+import { timeSplit, unionMs, classifyCommand, isWaitCall, GAP_REPORT_MS, SPAWN_TOOLS } from './lib/time-split.mjs'
 
 const PROJECTS = join(homedir(), '.claude', 'projects')
 const STORE = join(homedir(), '.claude', 'bett3r-metrics')
 const INDEX = join(STORE, 'index.jsonl')
 const CACHE = join(STORE, '.session-index.json')
 
-/** Non-tool silence beyond this is not the model working — it is a parked session. */
-const STALL_MS = 3 * 60_000
-/** Dead gaps at or above this are listed individually, so "one lunch" != "ten pauses". */
-const GAP_REPORT_MS = 15 * 60_000
-/** Spawning tools whose duration belongs to the child, never the caller. */
-const SPAWN_TOOLS = new Set(['Agent', 'Task', 'Workflow'])
+// The stall threshold (3 minutes of silence is a parked session), GAP_REPORT_MS (dead
+// gaps listed individually) and SPAWN_TOOLS (a spawn's duration is the child's) live in
+// lib/time-split.mjs, the one classifier.
 
 const PIPELINE = ['start-multi', 'start', 'design-multi', 'design', 'plan', 'build',
   'verify-build', 'commit', 'capture-learnings', 'evolve', 'inline-fix', 'run-report']
@@ -64,17 +62,7 @@ const fmtDur = (x) => ms2min(x) >= 90 ? `${(x / 3_600_000).toFixed(1)}h` : `${ms
 const fmtTok = (x) => x >= 1e6 ? `${(x / 1e6).toFixed(2)}M` : x >= 1e3 ? `${Math.round(x / 1e3)}k` : `${x}`
 const pct = (a, b) => b > 0 ? `${Math.round(100 * a / b)}%` : '—'
 
-/** Merge overlapping [start,end] intervals and return their total covered span. */
-const unionMs = (iv) => {
-  const s = iv.filter(([a, b]) => b > a).sort((x, y) => x[0] - y[0])
-  const merged = []
-  for (const [a, b] of s) {
-    const last = merged[merged.length - 1]
-    if (last && a <= last[1]) last[1] = Math.max(last[1], b)
-    else merged.push([a, b])
-  }
-  return { merged, total: merged.reduce((t, [a, b]) => t + (b - a), 0) }
-}
+// unionMs (merge overlapping [start,end] intervals) is lib/time-split.mjs's.
 
 // ─────────────────────────────────────────────────────────── session discovery
 
@@ -156,148 +144,24 @@ function listBranches({ since = null } = {}) {
 
 /**
  * Classify one transcript (a session's main thread, or one subagent) into
- * tool / reason / child / stalled, with tokens deduped and edits counted.
+ * tool / reason / child / stalled, with tokens deduped and edits counted. The
+ * classification is lib/time-split.mjs (shared with Steward, ADR-145); this
+ * adds the run's identity and keeps `calls` in the shape the reports print.
+ * `split` carries the declared test/build command prefixes, which only move
+ * `activities`.
  */
-function analyzeRun(rows, meta = {}) {
-  const ev = rows.filter(r => r.timestamp).map(r => ({ ...r, t: Date.parse(r.timestamp) }))
-    .filter(r => Number.isFinite(r.t)).sort((a, b) => a.t - b.t)
-  if (!ev.length) return null
-
-  // tool_use id -> when it was issued, and what it was
-  const useAt = new Map(), useName = new Map(), useInput = new Map()
-  for (const r of ev) {
-    if (r.type !== 'assistant' || !Array.isArray(r.message?.content)) continue
-    for (const c of r.message.content) {
-      if (c.type !== 'tool_use') continue
-      useAt.set(c.id, r.t); useName.set(c.id, c.name)
-      const i = c.input ?? {}
-      useInput.set(c.id, String(i.command ?? i.file_path ?? i.pattern ?? i.description ?? '').replace(/\s+/g, ' ').trim())
-    }
-  }
-
-  // `calls`: every non-spawn call on its own, so one blocked call can be named
-  // (BIGGEST SINGLE CALLS) instead of disappearing into `tool`.
-  const toolIv = [], childIv = [], byTool = new Map(), bashCalls = [], calls = []
-  let added = 0, removed = 0
-  const files = new Set()
-
-  for (const r of ev) {
-    if (r.type !== 'user' || !Array.isArray(r.message?.content)) continue
-    for (const c of r.message.content) {
-      if (c.type !== 'tool_result' || !useAt.has(c.tool_use_id)) continue
-      const a = useAt.get(c.tool_use_id), b = r.t
-      const name = useName.get(c.tool_use_id) ?? '?'
-      const dur = Math.max(0, b - a)
-
-      const agg = byTool.get(name) ?? { n: 0, ms: 0 }
-      agg.n++; agg.ms += dur; byTool.set(name, agg)
-
-      // (4) a spawn's duration is the child's run, never the caller's work
-      if (SPAWN_TOOLS.has(name)) childIv.push([a, b])
-      else { toolIv.push([a, b]); calls.push({ id: c.tool_use_id, tool: name, at: a, ms: dur, cmd: useInput.get(c.tool_use_id) }) }
-      if (name === 'Bash') bashCalls.push({ ms: dur, cmd: useInput.get(c.tool_use_id) ?? '' })
-
-      const T = r.toolUseResult
-      if (T && typeof T === 'object') {
-        if (Array.isArray(T.structuredPatch)) {
-          if (T.filePath) files.add(T.filePath)
-          for (const h of T.structuredPatch) for (const ln of (h.lines ?? [])) {
-            if (ln.startsWith('+')) added++
-            else if (ln.startsWith('-')) removed++
-          }
-        } else if (T.type === 'create' && typeof T.content === 'string') {
-          if (T.filePath) files.add(T.filePath)
-          added += T.content.split('\n').length
-        }
-      }
-    }
-  }
-
-  const tool = unionMs(toolIv)
-  const child = unionMs(childIv)
-  // a spawn interval swallows the tools the parent ran concurrently; count each ms once
-  const busy = unionMs([...toolIv, ...childIv])
-
-  // (2) walk the lifetime and classify every gap that is not tool or child.
-  // Reasoning is kept as INTERVALS, not just a total: a run is "alive" while it
-  // thinks, so a total alone would let the report claim the machine was idle
-  // during the 78% of a verifier's life that is pure reasoning.
-  const span0 = ev[0].t, span1 = ev[ev.length - 1].t
-  let reason = 0, stalled = 0, cursor = span0
-  const deadGaps = [], reasonIv = []
-  const classifyGap = (from, to) => {
-    const gap = to - from
-    if (gap <= 0) return
-    const think = Math.min(gap, STALL_MS)
-    reason += think
-    reasonIv.push([from, from + think])
-    stalled += Math.max(0, gap - STALL_MS)
-    if (gap >= GAP_REPORT_MS) deadGaps.push({ from, to, ms: gap })
-  }
-  for (const [a, b] of busy.merged) {
-    classifyGap(cursor, a)
-    cursor = Math.max(cursor, b)
-  }
-  classifyGap(cursor, span1)
-
-  // (3) dedupe usage by message id
-  const usage = new Map()
-  const models = new Map(), efforts = new Map()
-  for (const r of ev) {
-    if (r.type !== 'assistant' || !r.message?.usage) continue
-    usage.set(r.message.id, r.message.usage)
-    if (r.message.model) models.set(r.message.model, (models.get(r.message.model) ?? 0) + 1)
-    const eff = r.effort ?? null
-    if (eff) efforts.set(eff, (efforts.get(eff) ?? 0) + 1)
-  }
-  const tok = { input: 0, cacheWrite: 0, cacheRead: 0, output: 0 }
-  for (const u of usage.values()) {
-    tok.input += u.input_tokens ?? 0
-    tok.cacheWrite += u.cache_creation_input_tokens ?? 0
-    tok.cacheRead += u.cache_read_input_tokens ?? 0
-    tok.output += u.output_tokens ?? 0
-  }
-  const top = (m) => [...m.entries()].sort((a, b) => b[1] - a[1])
-  const dominant = (m) => (top(m)[0]?.[0]) ?? 'unknown'
-
-  // A fix round sent to an agent that already reported (SendMessage) writes no
-  // new transcript: the resume lands in THIS one, as a later user row carrying
-  // text. Count those, so a continued executor is still a second pass. The one
-  // other later text row seen in real transcripts is the background-wake
-  // banner, which is not a pass.
-  const userText = (r) => {
-    const c = r.message?.content
-    if (typeof c === 'string') return c
-    if (!Array.isArray(c) || c.some(x => x.type === 'tool_result')) return null
-    const t = c.filter(x => x.type === 'text').map(x => x.text ?? '')
-    return t.length ? t.join('\n') : null
-  }
-  const texts = ev.filter(r => r.type === 'user').map(userText).filter(t => t !== null)
-  const resumes = texts.slice(1).filter(t => !t.startsWith('[SYSTEM NOTIFICATION')).length
-
+function analyzeRun(rows, meta = {}, split = {}) {
+  const s = timeSplit(rows, split)
+  if (!s) return null
+  const { resumes, activities, usageByModel, calls, ...rest } = s
   return {
     agentType: meta.agentType ?? null,
     resumes,
     description: meta.description ?? null,
     spawnDepth: meta.spawnDepth ?? 0,
-    start: span0, end: span1,
-    elapsedMs: span1 - span0,
-    toolMs: tool.total, childMs: child.total, reasonMs: reason, stalledMs: stalled,
-    activeMs: tool.total + reason,
-    // tool and reason never overlap (reason is measured in the gaps between busy
-    // spans), so their union is exactly activeMs and clipping stays additive.
-    toolIntervals: tool.merged,
-    reasonIntervals: unionMs(reasonIv).merged,
-    activeIntervals: unionMs([...tool.merged, ...reasonIv]).merged,
-    childIntervals: child.merged,
-    model: dominant(models), models: top(models).map(([k, v]) => ({ model: k, calls: v })),
-    effort: dominant(efforts), efforts: top(efforts).map(([k, v]) => ({ effort: k, calls: v })),
-    apiCalls: usage.size,
-    tokens: tok,
-    toolCalls: [...byTool.values()].reduce((t, x) => t + x.n, 0),
-    byTool: Object.fromEntries([...byTool.entries()].map(([k, v]) => [k, v])),
-    linesAdded: added, linesRemoved: removed, filesTouched: files.size,
-    bashCalls, calls, deadGaps,
+    ...rest,
+    calls: calls.map(({ activity, ...c }) => c),
+    activities, usageByModel,
   }
 }
 
@@ -617,15 +481,24 @@ function collectRun(branch, sessionFiles) {
   const sessions = []
   const cwdVotes = new Map(); let droppedDetached = 0 // a detached pool worktree's worker (R7)
 
+  // The work dir (the cwd most rows ran in) is known only once every session is
+  // read, and its declared test/build commands classify every run, so the
+  // sessions are read first and analysed second.
+  const parents = []
   for (const parentFile of sessionFiles) {
     const all = readJsonl(parentFile)
     const rows = rowsOnBranch(all, branch)
     if (!rows.length) continue
-    const sid = basename(parentFile, '.jsonl')
+    parents.push({ parentFile, rows })
     marks.push(...extractPhaseMarks(rows))
     for (const r of rows) if (r.cwd) cwdVotes.set(r.cwd, (cwdVotes.get(r.cwd) ?? 0) + 1)
+  }
+  const workDir = [...cwdVotes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+  const split = declaredCommands(workDir)
 
-    const main = analyzeRun(rows, { agentType: 'orchestrator' })
+  for (const { parentFile, rows } of parents) {
+    const sid = basename(parentFile, '.jsonl')
+    const main = analyzeRun(rows, { agentType: 'orchestrator' }, split)
     if (main) { main.sessionId = sid; main.file = parentFile; runs.push(main) }
     sessions.push({ sessionId: sid, file: parentFile })
 
@@ -647,14 +520,30 @@ function collectRun(branch, sessionFiles) {
       const mp = p.replace(/\.jsonl$/, '.meta.json')
       let meta = {}
       if (existsSync(mp)) { try { meta = JSON.parse(readFileSync(mp, 'utf8')) } catch { /* keep going */ } }
-      const a = analyzeRun(sub, meta)
+      const a = analyzeRun(sub, meta, split)
       if (a) { a.sessionId = sid; a.agentId = basename(f, '.jsonl'); runs.push(a) }
     }
   }
 
   marks.sort((a, b) => a.t - b.t)
-  const workDir = [...cwdVotes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
   return { runs, marks, sessions, workDir, droppedDetached }
+}
+
+/**
+ * The repository's declared test and build commands (ADR-145 point 5), from
+ * `designTooling.testCommands` / `buildCommands` in the work dir's
+ * `.blueprint.config.json`. A Bash command starting with one is tests or
+ * building whatever the built-in patterns say. Absent or unreadable: none, and
+ * the built-in patterns decide alone.
+ */
+function declaredCommands(workDir) {
+  if (!workDir) return {}
+  const p = join(workDir, '.blueprint.config.json')
+  let t = null
+  try { if (existsSync(p)) t = JSON.parse(readFileSync(p, 'utf8'))?.designTooling ?? null } catch { return {} }
+  if (!t || typeof t !== 'object') return {}
+  const strings = (x) => Array.isArray(x) ? x.filter(c => typeof c === 'string' && c.trim()) : []
+  return { testCommands: strings(t.testCommands), buildCommands: strings(t.buildCommands) }
 }
 
 // ─────────────────────────────────────────────────────────── fix-round ledger
@@ -916,25 +805,6 @@ function summarize(branch, { runs, marks, sessions, workDir }) {
     })),
     provenance: provenance(workDir, runEnd),
   }
-}
-
-/** Bucket a shell command by what it costs, not by its exact text. */
-function classifyCommand(cmd) {
-  const c = cmd.toLowerCase()
-  const pairs = [
-    [/\b(yarn|npm|pnpm)\s+(run\s+)?build\b|tsc\s+-b|turbo\s+run\s+build/, 'build'],
-    [/\b(yarn|npm|pnpm)\s+(run\s+)?typecheck\b|tsc\s+--noemit/, 'typecheck'],
-    [/\b(yarn|npm|pnpm)\s+(run\s+)?test\b|vitest|jest|node\s+--test/, 'test'],
-    [/\b(yarn|npm|pnpm)\s+install\b|yarn\s*$/, 'install'],
-    [/\b(yarn|npm|pnpm)\s+(run\s+)?lint\b|eslint/, 'lint'],
-    [/\bgenerate/, 'generate'],
-    [/^\s*git\b/, 'git'],
-    [/\b(rg|grep|find|ls|cat|head|tail|wc|sed|awk)\b/, 'search/read'],
-    [/\bgh\b/, 'gh'],
-    [/\bdocker|kubectl|helm|k3d\b/, 'infra'],
-  ]
-  for (const [re, name] of pairs) if (re.test(c)) return name
-  return 'other'
 }
 
 // ─────────────────────────────────────────────────────────── rendering
@@ -1383,9 +1253,6 @@ function resolveUnit(branch, lane, { since = null, quiet = false } = {}) {
 
 /** The N longest single calls a whole-run report names. */
 const BIGGEST_CALLS = 5
-
-/** A call that only waits: a shell sleep or poll loop, or a Monitor. */
-const isWaitCall = (c) => c.tool === 'Monitor' || (c.tool === 'Bash' && /\bsleep\b/.test(c.cmd ?? ''))
 
 /** `iv` minus `cut`, both merged interval lists, as a total in ms. */
 function subtractMs(iv, cut) {

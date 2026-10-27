@@ -1,0 +1,76 @@
+{
+  "_comment": "Hand-computed from records.jsonl (10:00:00 -> 10:27:10, 1630 s). Busy spans: Read 10-15s, Edit 20-30s, three parallel calls issued together at 40s (yarn test 60s, make check 20s, Grep 30s: yarn test was issued first, so it owns the minute), Read 1:50-2:10 overlapping the Agent spawn 2:00-5:00 (the Read started first and owns 2:00-2:10; the spawn owns the other 170 s, and the git status it shadows gets 0 ms), Task 5:10-5:40, a 20-minute gap (3 min thinking, 17 min idle, one dead gap), sleep 30 (idle), a blueprint board call, npm run build, TodoWrite. m1 is written twice and counted once; m12 carries thinking_tokens.",
+  "default": {
+    "options": {},
+    "fields": {
+      "resumes": 0,
+      "elapsedMs": 1630000,
+      "toolMs": 162000,
+      "childMs": 210000,
+      "reasonMs": 258000,
+      "stalledMs": 1020000,
+      "activeMs": 420000,
+      "apiCalls": 12,
+      "toolCalls": 13,
+      "model": "claude-opus-4",
+      "linesAdded": 2,
+      "linesRemoved": 1,
+      "filesTouched": 1,
+      "tokens": { "input": 106, "cacheWrite": 200, "cacheRead": 1100, "output": 54 },
+      "deadGaps": [{ "from": 1767261940000, "to": 1767263140000, "ms": 1200000 }]
+    },
+    "callActivities": [
+      ["r1", "reading"], ["e1", "editing"], ["b2", "other"], ["g1", "reading"], ["b1", "tests"],
+      ["r2", "reading"], ["k1", "git"], ["w1", "idle"], ["bd1", "board"], ["x1", "building"], ["z1", "other"]
+    ],
+    "activities": {
+      "thinking": { "ms": 258000, "calls": 0 },
+      "reading": { "ms": 25000, "calls": 3 },
+      "editing": { "ms": 10000, "calls": 1 },
+      "tests": { "ms": 60000, "calls": 1 },
+      "building": { "ms": 20000, "calls": 1 },
+      "git": { "ms": 0, "calls": 1 },
+      "board": { "ms": 5000, "calls": 1 },
+      "other": { "ms": 2000, "calls": 2 },
+      "idle": { "ms": 1050000, "calls": 1 },
+      "subagent": {
+        "bett3r-ai-workflow:executor": { "ms": 170000, "calls": 1 },
+        "review": { "ms": 30000, "calls": 1 }
+      }
+    },
+    "usageByModel": {
+      "claude-opus-4": { "inputTokens": 100, "outputTokens": 50, "cacheReadTokens": 1000, "cacheWriteTokens": 200, "thinkingTokens": 7 },
+      "claude-sonnet-4": { "inputTokens": 6, "outputTokens": 4, "cacheReadTokens": 100, "cacheWriteTokens": 0 }
+    }
+  },
+  "declared": {
+    "_comment": "Declared prefixes beat the built-in patterns: make check becomes tests, yarn test becomes building. Only activities move.",
+    "options": { "testCommands": ["make check"], "buildCommands": ["yarn test"] },
+    "callActivities": [
+      ["r1", "reading"], ["e1", "editing"], ["b2", "tests"], ["g1", "reading"], ["b1", "building"],
+      ["r2", "reading"], ["k1", "git"], ["w1", "idle"], ["bd1", "board"], ["x1", "building"], ["z1", "other"]
+    ],
+    "activities": {
+      "thinking": { "ms": 258000, "calls": 0 },
+      "reading": { "ms": 25000, "calls": 3 },
+      "editing": { "ms": 10000, "calls": 1 },
+      "tests": { "ms": 0, "calls": 1 },
+      "building": { "ms": 80000, "calls": 2 },
+      "git": { "ms": 0, "calls": 1 },
+      "board": { "ms": 5000, "calls": 1 },
+      "other": { "ms": 2000, "calls": 1 },
+      "idle": { "ms": 1050000, "calls": 1 },
+      "subagent": {
+        "bett3r-ai-workflow:executor": { "ms": 170000, "calls": 1 },
+        "review": { "ms": 30000, "calls": 1 }
+      }
+    }
+  },
+  "stall": {
+    "_comment": "stallMs 60000: every gap of the run is under a minute except the 20-minute one, which now thinks 1 min and idles 19.",
+    "options": { "stallMs": 60000 },
+    "fields": { "reasonMs": 138000, "stalledMs": 1140000 },
+    "thinkingMs": 138000,
+    "idleMs": 1170000
+  }
+}
