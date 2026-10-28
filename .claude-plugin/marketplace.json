@@ -6,8 +6,8 @@
     "email": "tomasruizr@gmail.com"
   },
   "metadata": {
-    "description": "Bett3r internal AI development tooling: the project-agnostic vertical-slice workflow plus the PV3 DDD framework skills.",
-    "version": "0.53.0"
+    "description": "Bett3r internal AI development tooling: the project-agnostic vertical-slice workflow, the PV3 DDD framework skills, the Blueprint routine lane and the pv4 + Blueprint plugin.",
+    "version": "0.54.0"
   },
   "plugins": [
     {
@@ -29,6 +29,11 @@
       "name": "bett3r-routine",
       "source": "./plugins/bett3r-routine",
       "description": "The unattended implementation lane a Blueprint routine runs: the design is the board's agreed blueprint.md, so /implement goes plan \u2192 build \u2192 verify on the claude/ branch and signals done or needs-human with one git trailer. No /start, no /design, no PR. Requires bett3r-ai-workflow."
+    },
+    {
+      "name": "bett3r-pv4",
+      "source": "./plugins/bett3r-pv4",
+      "description": "The pv4 + Blueprint plugin: skills for designing and building pv4 apps on a Blueprint board. Its first skill, framework-adapter, is the pv4 vocabulary a Blueprint design run reads before modelling: each pv4.yaml term mapped to a board kind, pv4's naming, and the file each kind becomes. Vocabulary only; the method stays in Blueprint."
     }
   ]
 }

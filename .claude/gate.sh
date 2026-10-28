@@ -276,6 +276,11 @@ fi
 step time-split full 'plugins/bett3r-ai-workflow/scripts/lib/time-split.mjs' 'plugins/bett3r-ai-workflow/scripts/fixtures/time-split/*' 'scripts/test-time-split.mjs' <<'EOF'
 { node --test scripts/test-time-split.mjs 2>&1; echo "NODE-EXIT $?"; } | awk 'BEGIN{n=1} /^NODE-EXIT /{n=$2; next} {print} /^[^ ]+ pass [0-9]+$/{p=$3} /^[^ ]+ fail [0-9]+$/{f=$3} END{printf "%d passed, %d failed\n", p, f; exit (f>0 || n!=0)}'
 EOF
+# Every framework adapter (plugins/*/skills/framework-adapter) maps the board's 8 kinds and
+# carries no method word; needs only node.
+step framework-adapter full 'plugins/*/skills/framework-adapter/*' 'scripts/test-framework-adapter.mjs' <<'EOF'
+{ node --test scripts/test-framework-adapter.mjs 2>&1; echo "NODE-EXIT $?"; } | awk 'BEGIN{n=1} /^NODE-EXIT /{n=$2; next} {print} /^[^ ]+ pass [0-9]+$/{p=$3} /^[^ ]+ fail [0-9]+$/{f=$3} END{printf "%d passed, %d failed\n", p, f; exit (f>0 || n!=0)}'
+EOF
 step skill-shadows full 'plugins/bett3r-ai-workflow/bin/check-skill-shadows' 'plugins/*/skills/*' 'plugins/installed_plugins.json' 'scripts/test-skill-shadows.sh' <<'EOF'
 sh scripts/test-skill-shadows.sh
 SHADOW_PY=python3 sh scripts/test-skill-shadows.sh
