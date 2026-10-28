@@ -480,6 +480,19 @@ function collectRun(branch, sessionFiles) {
   const runs = [], marks = []
   const sessions = []
   const cwdVotes = new Map(); let droppedDetached = 0 // a detached pool worktree's worker (R7)
+  // The run's opening: its first assistant record (model and the Claude Code version
+  // that wrote it), and failing that the first record carrying a version at all.
+  // Read only by --routine-metrics; summarize() never sees it.
+  const opening = { assistant: null, versioned: null }
+  const noteOpening = (rows) => {
+    for (const r of rows) {
+      const t = Date.parse(r.timestamp)
+      if (!Number.isFinite(t)) continue
+      if (typeof r.version === 'string' && (!opening.versioned || t < opening.versioned.t)) opening.versioned = { t, version: r.version }
+      const m = r.type === 'assistant' ? r.message?.model : null
+      if (typeof m === 'string' && m && m !== '<synthetic>' && (!opening.assistant || t < opening.assistant.t)) opening.assistant = { t, model: m, version: typeof r.version === 'string' ? r.version : null }
+    }
+  }
 
   // The work dir (the cwd most rows ran in) is known only once every session is
   // read, and its declared test/build commands classify every run, so the
@@ -490,6 +503,7 @@ function collectRun(branch, sessionFiles) {
     const rows = rowsOnBranch(all, branch)
     if (!rows.length) continue
     parents.push({ parentFile, rows })
+    noteOpening(rows)
     marks.push(...extractPhaseMarks(rows))
     for (const r of rows) if (r.cwd) cwdVotes.set(r.cwd, (cwdVotes.get(r.cwd) ?? 0) + 1)
   }
@@ -521,12 +535,12 @@ function collectRun(branch, sessionFiles) {
       let meta = {}
       if (existsSync(mp)) { try { meta = JSON.parse(readFileSync(mp, 'utf8')) } catch { /* keep going */ } }
       const a = analyzeRun(sub, meta, split)
-      if (a) { a.sessionId = sid; a.agentId = basename(f, '.jsonl'); runs.push(a) }
+      if (a) { a.sessionId = sid; a.agentId = basename(f, '.jsonl'); runs.push(a); noteOpening(sub) }
     }
   }
 
   marks.sort((a, b) => a.t - b.t)
-  return { runs, marks, sessions, workDir, droppedDetached }
+  return { runs, marks, sessions, workDir, droppedDetached, opening }
 }
 
 /**
@@ -622,7 +636,12 @@ function provenance(workDir = null, atMs = null) {
   if (!out.pluginSha) {
     try {
       const manifest = join(mkt, 'plugins', 'bett3r-ai-workflow', '.claude-plugin', 'plugin.json')
+      // A Routine's cloud environment installs flat, no marketplace (remote-ai-agents
+      // deploy/blueprint-routine/setup.sh: the plugin dir copied to ~/.local/share/bett3r-ai-workflow),
+      // so a version is still known there; no checkout, so no sha.
+      const flat = join(homedir(), '.local', 'share', 'bett3r-ai-workflow', '.claude-plugin', 'plugin.json')
       if (existsSync(manifest)) out.pluginVersion = JSON.parse(readFileSync(manifest, 'utf8')).version ?? null
+      else if (existsSync(flat)) out.pluginVersion = JSON.parse(readFileSync(flat, 'utf8')).version ?? null
     } catch { /* absent when run from a source checkout */ }
     try { out.pluginSha = git(mkt, ['rev-parse', '--short', 'HEAD']); out.pluginShaSource = 'head' } catch { /* not installed as a checkout */ }
     try { out.pluginDirty = git(mkt, ['status', '--porcelain']).length > 0 } catch { /* ignore */ }
@@ -1447,10 +1466,58 @@ function renderFleet(run) {
   return L.join('\n')
 }
 
+// ─────────────────────────────────────────────────────────── routine metrics
+
+/**
+ * `--routine-metrics`: the one flat object a Blueprint Routine commits beside its
+ * design as run-metrics.json in its signal commit (bett3r-routine /implement Step 7),
+ * for Steward to read at that sha. Scalars only (lists come later), `schema: 1`.
+ * A key is omitted when its data is absent: no transcript on the branch is `{schema:1}`.
+ * Nothing here is priced (`cost_source: "unpriced"`); `turns` and `api_ms` have no
+ * source in a transcript and are never sent. `model` is the one with the most tokens
+ * summed over every run's usageByModel; `started_model` and `claude_version` come from
+ * the branch's first assistant record (its `version`, else the first versioned record).
+ */
+const ROUTINE_METRICS_SCHEMA = 1
+function routineMetrics(branch, collected) {
+  const o = { schema: ROUTINE_METRICS_SCHEMA }
+  if (!collected || !collected.runs.length) return o
+  const s = summarize(branch, collected)
+  if (!s) return o
+  const int = (k, v) => { if (Number.isFinite(v)) o[k] = Math.round(v) }
+  int('input_tokens', s.tokens.input)
+  int('output_tokens', s.tokens.output)
+  int('cache_read_tokens', s.tokens.cacheRead)
+  int('cache_write_tokens', s.tokens.cacheWrite)
+  int('wall_ms', s.runElapsedMs)
+  int('active_ms', s.totalActiveMs)
+  int('alive_ms', s.aliveMs)
+  int('stalled_ms', s.totalStalledMs)
+  int('agent_count', s.agentCount)
+  int('api_calls', s.total.apiCalls)
+  if (s.firstPassGreen !== null) int('first_pass_green_permille', s.firstPassGreen * 1000)
+  const byModel = new Map()
+  for (const r of collected.runs) {
+    for (const [m, u] of Object.entries(r.usageByModel ?? {})) {
+      if (m === 'unknown' || m === '<synthetic>') continue
+      const t = (u.inputTokens ?? 0) + (u.outputTokens ?? 0) + (u.cacheReadTokens ?? 0) + (u.cacheWriteTokens ?? 0)
+      byModel.set(m, (byModel.get(m) ?? 0) + t)
+    }
+  }
+  const dominant = [...byModel.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0]
+  if (dominant) o.model = dominant
+  const { assistant, versioned } = collected.opening ?? {}
+  if (assistant?.model) o.started_model = assistant.model
+  const version = assistant?.version ?? versioned?.version
+  if (version) o.claude_version = version
+  o.cost_source = 'unpriced'
+  return o
+}
+
 // ─────────────────────────────────────────────────────────── cli
 
 function parseArgs(argv) {
-  const o = { branch: null, emit: false, json: false, list: false, aggregate: false, agents: false, since: null, quiet: false, fleet: null, usageFragment: false }
+  const o = { branch: null, emit: false, json: false, list: false, aggregate: false, agents: false, since: null, quiet: false, fleet: null, usageFragment: false, routineMetrics: false }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '--emit') o.emit = true
@@ -1462,6 +1529,7 @@ function parseArgs(argv) {
     else if (a === '--agents') o.agents = true
     else if (a === '--quiet') o.quiet = true
     else if (a === '--usage-fragment') o.usageFragment = true
+    else if (a === '--routine-metrics') o.routineMetrics = true
     else if (a === '--since') o.since = argv[++i]
     else if (a === '--branch') o.branch = argv[++i]
     else if (a === '--help' || a === '-h') o.help = true
@@ -1498,6 +1566,12 @@ run-metrics — where a unit of work's time and tokens actually went
                     slice under 'unattributed'; 'verifyBuild.usage' for the /verify-build
                     window. Ends with '# RUN-METRICS-USAGE:v1 outcome=ok|error …'. Writes
                     nothing to ~/.claude/bett3r-metrics/ runs or index.
+  --routine-metrics print one compact JSON object, schema 1, of the branch's flat scalars
+                    (tokens, wall/active/alive/stalled ms, agents, API calls, first-pass
+                    green permille, model, started_model, claude_version, cost_source
+                    "unpriced"); absent data omits its key, no transcript prints
+                    {"schema":1}. Branch records only, no fleet resolution. What a
+                    Blueprint Routine commits as run-metrics.json. Writes no run or index.
   --since <5d|2w|1m|ISO>   limit transcript scan / aggregation window
   --fleet <run-dir> a /start-multi run dir (.work/multi/<run-id>) whose agents.yaml
                     maps the branch (or unit id) to its lane agent. Found automatically
@@ -1552,6 +1626,13 @@ function main() {
   }
   if (!branch && o.fleet) fleetUnresolved()
   if (!branch) { console.error('No branch given and not inside a git repo. Pass one, or use --list.'); fragmentError('no-branch', 2) }
+
+  if (o.routineMetrics) {
+    // The branch's own records only: a Routine's .work/lane.yaml is no fleet lane.
+    const files = existsSync(PROJECTS) ? findSessions(branch, { since: sinceToMs(o.since), quiet: true }) : []
+    console.log(JSON.stringify(routineMetrics(branch, files.length ? collectRun(branch, files) : null)))
+    return
+  }
 
   const quiet = o.quiet || o.json || o.usageFragment
   // A fleet unit's transcript is a subagent of the orchestrator's session and is
