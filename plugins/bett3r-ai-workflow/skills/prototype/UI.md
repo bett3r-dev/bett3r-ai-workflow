@@ -31,6 +31,18 @@ Before committing to sub-shape B, sanity-check: is there really no existing page
 
 In both sub-shapes the floating bottom bar is identical.
 
+## On a pv4 host
+
+A repo with `pv4.yaml` at its root is a pv4 app, and pv4 owns its UI: framework partials and layouts, styled by framework tokens, enhanced by framework behaviours that markup switches on by attribute. Build the variants from those same parts, so the winner promotes into a real composed route unchanged. This section replaces steps 2 to 4's stack choices below; the rest of the process holds. Paths are under pv4's source, the folder `go list -m -f {{.Dir}} github.com/bett3r-dev/pv4` prints; the design behind them is its `docs/mvp/designs/ui-port.md` (§2 the rule, §4.1 the composed route).
+
+- **Picture first.** A page's scripts-off render is its _picture_: the HTML the server sends before any script runs is the whole screen, and JavaScript adds behaviour, never content. Build each variant scripts-off, GET it and read its picture before adding any behaviour attribute. The user judges the pictures.
+- **Mount.** Each variant renders in one composed route: a hand route declared under `routes:` in `pv4.yaml` (e.g. `SettingsPrototype: { method: GET, path: /prototype/settings }`), its body the stub `make gen` writes at `handroutes/<route>_serve.go`, listed in the app's `escape-hatches.yaml` with "prototype" as its reason. Gen writes the generated pages, so sub-shape A on pv4 is this route reading the page's own read model with `web.Rows[T](r, "<module>/<page>", filters)` (`web/rows.go`): the same rows, tenant and role filtering `/api` serves, so the real data and density come along.
+- **Compose.** Parse the partials in `web/ui/partials/` with `ui.Funcs()` (`web/ui/funcs.go`) and one layout from `web/ui/layouts/` (`column`, `topbar`, `sidebar`, `console`, `stage`); the package comment of `web/ui/ui.go` shows the parse, and each partial's data contract is the comment above its `{{define}}`. Variants disagree by layout and by which partials carry the hierarchy. Link the styles with `web.AssetTags` (`web/assets.go`): `tokens.css`, then the theme the generated pages use, `themes/plain.css` (`web/styles/themes/`), then `pv4.css` (`web/styles/pv4.css`).
+- **Behaviours by attribute.** pv4 serves its behaviours from `/pv4/v1/` (`web/behaviours/`), each file's header comment its contract and attribute vocabulary. Refresh a region with `data-poll`, `data-poll-every`, `data-poll-push[=URL]` and `data-poll-key` (`shim.js`). A live page gets its one EventSource from `web.Live(r, "<module>/<page>", filters)`, whose tag already carries the shim, so the page links the shim through that tag alone.
+- **Markup and attributes only.** `make pv4lint` refuses an inline `<script>` (a JSON data block excepted), an `on*=` attribute and a `javascript:` URL, and a route's own stylesheet or a script from outside `/pv4/` is a hatch needing its reason. Where a variant wants behaviour pv4 lacks, show its scripts-off form and note the behaviour as a pv4 proposal.
+- **Switcher.** The bar is a row of plain links (`?variant=A`, `?variant=B`, …) with the current one marked: it works scripts-off, shareable and reload-stable, with no keyboard cycling. A hand route with no capability serves admin only, which keeps the bar from users while the route lives on the throwaway branch.
+- **Promote.** The winner's template becomes the real composed route, without the bar. Its scenario test GETs it and calls `pvtest.Picture(t, "<module>_ui_<route>", res.Body)` (`pvtest/picture.go`), which writes `pictures/<node>.html` for the board, and the pictures lint judges that it carries data.
+
 ## Process
 
 ### 1. State the question and pick N
@@ -48,7 +60,7 @@ This works whether the user is here to push back or not.
 Draft each variant. Hold each one to:
 
 - The page's purpose and the data it has access to.
-- The project's component library / styling system (TailwindCSS, shadcn, MUI, plain CSS, whatever).
+- The project's component library / styling system (TailwindCSS, shadcn, MUI, plain CSS, whatever; on pv4, its partials and tokens, per [On a pv4 host](#on-a-pv4-host)).
 - A clear exported component name, e.g. `VariantA`, `VariantB`, `VariantC`.
 
 Variants must be **structurally different**: different layout, different information hierarchy, different primary affordance, not just different colours. Three slightly-tweaked card grids isn't a UI prototype, it's wallpaper. If two drafts come out too similar, redo one with explicit "do not use a card grid" guidance.
@@ -87,7 +99,7 @@ Behaviour:
 - Clicking an arrow updates the URL search param (use the framework's router, e.g. `router.replace` on Next, `navigate` on React Router, etc) so the variant is shareable and reload-stable.
 - Keyboard: `←` and `→` arrow keys also cycle. Don't intercept arrow keys when an `<input>`, `<textarea>`, or `[contenteditable]` is focused.
 - Visually distinct from the page (e.g. high-contrast pill, subtle shadow) so it's obviously not part of the design being evaluated.
-- Hidden in production builds: gate on `process.env.NODE_ENV !== 'production'` or an equivalent check, so a stray prototype merge can't ship the bar to users.
+- Hidden in production builds: gate on `process.env.NODE_ENV !== 'production'` or an equivalent check, so a stray prototype merge can't ship the bar to users. (On pv4, the plain-link bar of [On a pv4 host](#on-a-pv4-host).)
 
 Put the switcher in a single shared component so both sub-shapes can reuse it. Locate it wherever shared UI lives in the project.
 
