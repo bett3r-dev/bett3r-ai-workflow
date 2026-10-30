@@ -1350,6 +1350,12 @@
       "was_in": "plugins/bett3r-pv3-ai-skills/skills/scaffold-from-design/SKILL.md",
       "file": "plugins/bett3r-pv3-ai-skills/skills/scaffold-from-design/SKILL.md",
       "note": "BP-267 F2=C: the scaffold skill's emitted table states an edge stub's either-end marker scope, the new end's node id or the edge key edge:<from>|<to>|<kind>. Pinned: the skill is the reader of the scaffolder's output."
+    },
+    {
+      "needle": "the key is a contributor's: never call them",
+      "issue": null,
+      "was_in": "plugins/bett3r-ai-workflow/skills/blueprint-pv4/SKILL.md",
+      "note": "Roadmap 0.3: a local session on a pv4 tenant never presses for the person (Map agreed, Design done, Done, Run again); a contributor key is still served PressDone and HandOffToDesign, so the tools list is not the permission."
     }
   ]
 }

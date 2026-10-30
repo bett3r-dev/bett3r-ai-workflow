@@ -17,7 +17,7 @@ re-does that work and, worse, cannot write: the folder already holds Blueprint's
 
 | Command | Does | Replaces, for the routine |
 |---|---|---|
-| `/implement <dispatch text>` | The entry point. Cuts or resumes `claude/<ticket branch>`, writes the brief, runs the three steps below, and ends with the commit trailer Blueprint reads (`done` or `needs-human`). | `/start`, and the routine prompt's branch and trailer rules |
+| `/implement <fire JSON>` | The entry point. Reads the fire (Specification v1 JSON: `key`, `branch`, `agentBranch`, `design`, `signal`, `answer`, `options`), cuts or resumes its `agentBranch` (`claude/<branch>`), writes the brief (with `answer`, the person's reply to the last needs-human), runs the three steps below, and ends with the signal commit Steward reads: the trailer (`done` or `needs-human`) and `run-metrics.json` beside the design. | `/start`, and the routine prompt's branch and trailer rules |
 | `/routine-plan` | Slices `blueprint.md` unattended into `.work/slices.yaml`, every ready scenario copied into one slice. | `/design` + `/plan` |
 | *(core)* `/build` | Unchanged. Reads `slices.yaml` and Blueprint's `scaffold.json`. | — |
 | `/routine-verify` | Scoped gate, scaffold census, standards + spec review, ripple sweeps; commits `verification.md` beside the design. No PR. | `/verify-build` |

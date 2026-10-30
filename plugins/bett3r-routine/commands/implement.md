@@ -1,31 +1,39 @@
 ---
-description: Routine entry point. Implement one Blueprint ticket unattended from its dispatch text — cut claude/<branch>, plan from blueprint.md, build, verify — and end with the trailer Blueprint reads (done or needs-human). No /start, no /design, no PR.
+description: Routine entry point. Implement one Blueprint ticket unattended from its fire (Specification v1 JSON) — cut its agentBranch, plan from blueprint.md, build, verify — and end with the trailer Blueprint reads (done or needs-human). No /start, no /design, no PR.
 ---
 
 # /implement — the routine's implementation lane
 
 The whole run of one Blueprint implementation dispatch. Blueprint already holds the agreed design (`blueprint.md`, written by the board session and grounded against the code there), so this lane does not design: it plans, builds and verifies, then signals the outcome with one git trailer. No human watches this session: ask no one anything.
 
-**Argument** `$ARGUMENTS`: the dispatch text Blueprint fired the routine with, whole. Its lines, composed by Blueprint's `implementationDispatchText`:
+**Argument** `$ARGUMENTS`: the fire Steward sent the routine, whole: one JSON object, Specification v1 §1 (`steward-pv4-sdlc/docs/specification.md`; the tenant writes it in `FireText`):
 
-```
-Implement <KEY>[: <title>].
-Branch: <ticket branch>. Work on claude/<ticket branch>, cut from <ticket branch>, and push only to claude/<ticket branch>; ...
-Pull request: <url> | Pull request: none is recorded for this branch.
-Design: <docsRoot>/<KEY>/blueprint.md on that branch (...)
-When the implementation is complete, end your last commit's message with the git trailer "<TRAILER>: done". ...
+```json
+{"specification":1,"key":"PROJ-1","title":"Reserve stock on checkout","branch":"PROJ-1-reserve-stock-on-checkout",
+ "agentBranch":"claude/PROJ-1-reserve-stock-on-checkout","pullRequest":null,"design":"docs/prs/PROJ-1/blueprint.md",
+ "signal":"Blueprint-Status","answer":null,"options":{}}
 ```
 
-## Step 1 — Read the dispatch
+## Step 1 — Read the fire
 
-Take four values from `$ARGUMENTS`:
+Write `$ARGUMENTS` verbatim to `${TMPDIR:-/tmp}/fire.json` with the Write tool (no shell quoting of it), then:
 
-- `KEY`: the ticket key in `Implement <KEY>`, up to the first `:` or `.`.
-- `TICKET_BRANCH`: the value after `Branch: `, up to the `.` that ends it.
-- `DESIGN`: the path after `Design: `, up to ` on that branch`.
-- `TRAILER`: the key before `: done` in the quoted trailer, e.g. `Blueprint-Status`.
+```bash
+node -e '
+const f = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"))
+if (f === null || typeof f !== "object" || f.specification !== 1) throw new Error("specification is " + JSON.stringify(f && f.specification) + ", not 1")
+for (const k of ["key", "branch", "agentBranch", "design", "signal"]) if (typeof f[k] !== "string" || !f[k]) throw new Error(k + " is missing")
+if (f.agentBranch !== "claude/" + f.branch) throw new Error("agentBranch " + f.agentBranch + " is not claude/" + f.branch)
+console.log(JSON.stringify(f, null, 1))' "${TMPDIR:-/tmp}/fire.json"
+```
 
-If any is missing, **stop**: say which, and create no branch, write no file, run no command. Nothing can be signalled without a branch. Let `WORK_BRANCH` be `claude/<TICKET_BRANCH>`; Blueprint merges that branch, and only that one, into the ticket branch (its `agentBranchOf` must keep this prefix).
+It fails (not JSON, `specification` not `1`, a field missing, or `agentBranch` not `claude/` + `branch`): **stop**. Say why, citing its error, and create no branch, write no other file, run no other command. There is no needs-human without a branch to signal on, and there is no prose fallback. Otherwise take:
+
+- `KEY` ← `key`; `TICKET_BRANCH` ← `branch`; `DESIGN` ← `design`; `TRAILER` ← `signal`, e.g. `Blueprint-Status`.
+- `WORK_BRANCH` ← `agentBranch`: Steward merges that branch, and only that one, into the ticket branch.
+- `ANSWER` ← `answer`: the person's reply to the last needs-human, or `null` on a first fire. Not null, it is what the human decided: it goes into the brief (Step 4) and the plan reads it.
+- `OPTIONS` ← `options`, passed through untouched in the brief.
+- `title` and `pullRequest` are for information only.
 
 ## Step 2 — The work branch
 
@@ -45,7 +53,7 @@ git ls-remote --exit-code --heads origin "<WORK_BRANCH>"
 1. `DESIGN` must exist on this branch. Absent: needs-human, `<KEY>: no design at <DESIGN>`.
 2. Run `work-docs-path --item <KEY>` and read its last line. Its `path=` must equal `dirname <DESIGN>`: it is the folder `/build` writes `decisions.md` and `build-summary.md` into, and a record beside a different design is one nobody reads together. `outcome=error` or a different folder: needs-human, naming both paths.
 
-Do not run `/design` and do not write `design.md`. The folder belongs to Blueprint: `blueprint.md`, `decisions.md` (the board's decisions; `/build` appends its `D<n>` entries after them), `scaffold.json`, and the bundle under `blueprint/`. Never edit `blueprint.md` or anything under `blueprint/`; the runner's flush rewrites them.
+Do not run `/design` and do not write `design.md`. The folder belongs to Blueprint: `blueprint.md`, `decisions.md` (the board's decisions; `/build` appends its `D<n>` entries after them), `scaffold.json`, and the bundle under `blueprint/`. Never edit `blueprint.md` or anything under `blueprint/`; Steward's flush rewrites them.
 
 ## Step 4 — Working state
 
@@ -60,9 +68,11 @@ This replaces `/start`, which would cut or rename branches and scrub the brief.
    work_item: <KEY>
    worktree: <output of pwd>
    design: <DESIGN>
+   answer: <ANSWER as a JSON string, or null>
+   options: <OPTIONS as compact JSON>
    ```
 
-   It marks every step as an unattended lane; `design:` is what `/routine-plan` and `/routine-verify` read.
+   It marks every step as an unattended lane; `design:` is what `/routine-plan` and `/routine-verify` read, and `answer:` is the context `/routine-plan` plans the re-fire with. JSON is YAML, so write both values as `JSON.stringify` prints them.
 3. Write `.work/mode.yaml` with `mode: start`, `work_item: <KEY>`, `branch: <WORK_BRANCH>`, `updated:` now (ISO-8601 UTC).
 4. Write `.work/known-baseline-failures.md`: the base sha (`git rev-parse origin/<TICKET_BRANCH>`), the branch, and the line `not captured — capture on demand`.
 
@@ -80,12 +90,18 @@ Invoke each as its bare slash command, in order. Each ends by printing a `LANE-S
 
 ## Step 7 — Signal the outcome
 
-Blueprint reads one trailer off the commits on `<WORK_BRANCH>`. Write the signal as its own commit, so it always carries the run's record even when every earlier commit is already pushed:
+Steward reads one trailer off the commits on `<WORK_BRANCH>`. Write the signal as its own commit, so it always carries the run's record even when every earlier commit is already pushed. It also carries the run's metrics, `<dirname DESIGN>/run-metrics.json`, which Steward reads at the signal's sha:
 
 ```bash
+M="$(dirname "<DESIGN>")/run-metrics.json"
+if run-metrics "<WORK_BRANCH>" --routine-metrics > "${TMPDIR:-/tmp}/run-metrics.json" 2> "${TMPDIR:-/tmp}/run-metrics.err"; then
+  mkdir -p "$(dirname "$M")" && cp "${TMPDIR:-/tmp}/run-metrics.json" "$M" && git add -- "$M"
+fi
 git commit --allow-empty --cleanup=verbatim -F "${TMPDIR:-/tmp}/signal.txt"
 git push -u origin "<WORK_BRANCH>"
 ```
+
+`run-metrics --routine-metrics` prints one compact object, `schema: 1`, of the run's scalars read from this session's transcripts (a run with none prints `{"schema":1}`). **A metrics failure never blocks the signal and never changes the trailer:** when the command fails, commit without the file and add one line to the body, `run-metrics: not recorded (<first line of run-metrics.err>)`.
 
 The message file:
 
@@ -96,10 +112,12 @@ The message file:
 
 <every LANE-STEP:v1 line Step 5 collected, one per line, in order>
 
+<only when the metrics failed: run-metrics: not recorded (<reason>)>
+
 <TRAILER>: <done|needs-human>
 ```
 
-- **Done** (Step 5 ended with `/routine-verify` `success`): subject `<KEY>: implementation done`, trailer `<TRAILER>: done`. Blueprint then merges `<WORK_BRANCH>` into the ticket branch and readies the PR.
+- **Done** (Step 5 ended with `/routine-verify` `success`): subject `<KEY>: implementation done`, trailer `<TRAILER>: done`. Steward then merges `<WORK_BRANCH>` into the ticket branch and readies the PR.
 - **Needs a human** (any stop above): the subject says why in one line, e.g. `<KEY>: build gate-red on slice 3`, trailer `<TRAILER>: needs-human`. Everything already committed stays pushed; the body names the step, the blocking line and what the human does next (fix on `<TICKET_BRANCH>` and re-fire, which resumes on this branch).
 
 A refused push: say so with git's output, and stop. Then report the trailer you wrote, the branch, and every `LANE-STEP` line.
@@ -108,4 +126,5 @@ A refused push: say so with git's output, and stop. Then report the trailer you 
 
 - No `/start`, no `/design`, no `design.md`: the design is `blueprint.md`, agreed on the board.
 - One branch, `<WORK_BRANCH>`; no pull request, no commit status, no tracker writes. Blueprint moves the ticket from the trailer.
+- One file outside the lane's own record: `run-metrics.json` beside the design, in the signal commit only.
 - A step's verdict is its `LANE-STEP` line, never your reading of its prose.

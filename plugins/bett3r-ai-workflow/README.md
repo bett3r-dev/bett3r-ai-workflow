@@ -45,6 +45,8 @@ Roles and method ship here; domain knowledge stays in the host repo and its fram
 
 In a repo with a `.blueprint/` design layer, `/design` opens a second surface: decisions still go to the committed design, structure goes to a live board the user watches, through the `blueprint-mcp` tools. The `blueprint-design` skill carries the standing rules, `blueprint-pending` the rule for the hook line below, and `skills/blueprint-design/BOARD-SETUP.md` everything downstream of a board being present, opened only when the command's gates say so.
 
+This mode, both skills and their hooks are the TypeScript `blueprint-mcp` board (a local board, or `/blueprint connect`). A pv4 tenant (blueprint-pv4) is a different server: the `blueprint-pv4` skill carries how to connect a local session to it and the rules for its tools.
+
 ## Glossary
 
 The design-end scaffold's terms; the why is `docs/adr/ADR-015` at the repo root.

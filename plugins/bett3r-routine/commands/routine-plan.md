@@ -8,7 +8,7 @@ The routine's `plan` step; its verdict is `LANE-STEP:v1 step=plan outcome=<succe
 
 ## Step protocol
 
-**Brief.** `.work/lane.yaml` must exist; take `work_item`, `branch` and `design` from it and ask no one anything. Without it, or without `design:`, end `blocked-on`: this command runs only inside `/implement`. A fact the design states is a claim to verify against the tree before you build on it.
+**Brief.** `.work/lane.yaml` must exist; take `work_item`, `branch` and `design` from it and ask no one anything. Without it, or without `design:`, end `blocked-on`: this command runs only inside `/implement`. A fact the design states is a claim to verify against the tree before you build on it. An `answer:` that is not null is the person's reply to the last needs-human on this branch (a re-fire): plan with it, and where it settles what the design left open or what stopped the last run, it wins; slice only what is still to do.
 
 **Mode marker.** Rewrite `.work/mode.yaml` whole: `mode: plan`, `work_item:` and `branch:` carried forward exactly, `updated:` now.
 
