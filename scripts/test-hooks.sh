@@ -408,6 +408,18 @@ else
       *'persistent: true'*) pass 'and the Monitor call it emits is persistent' ;;
       *) fail 'and the Monitor call it emits is persistent' "actual: [$( cat "$TMP/sout" )]" ;;
     esac
+    # Byte for byte what the hook printed at 4b670ad, before the pv4 branch
+    # (1.12): a checkout with no blueprint-pv4-connection.json reads the same.
+    # Every other case above and below is asserted silent, so this is the whole
+    # output of the no-pv4-record cases.
+    printf 'blueprint: the board is serving this repo and NO session is holding the summon channel open, so the "Ask Claude" button cannot reach anyone. Open it now, and let the turn end: Monitor({ ws: { url: "ws://127.0.0.1:%s/api/blueprint/ws" }, persistent: true })\n' \
+      "$SESSION_BOARD_PORT" >"$TMP/sout-4b670ad"
+    if cmp -s "$TMP/sout" "$TMP/sout-4b670ad"; then
+      pass 'no pv4 record: the output is byte-identical to the hook before the pv4 branch'
+    else
+      fail 'no pv4 record: the output is byte-identical to the hook before the pv4 branch' \
+        "expected: [$( cat "$TMP/sout-4b670ad" )]" "actual: [$( cat "$TMP/sout" )]"
+    fi
   fi
   stop_session_board
 
@@ -459,6 +471,89 @@ else
   else
     pass 'without curl it says nothing, quietly'
   fi
+fi
+
+# ── The SessionStart hook's pv4 branch (1.12) ────────────────────────────────
+#
+# `blueprint-pv4 connect` writes $(git rev-parse --git-dir)/blueprint-pv4-connection.json
+# ({host, sessionId, branchAtConnect, connectedAt, repository}). With it, and no
+# listener of this checkout on that session, the hook prints the Monitor line
+# for `blueprint-pv4 listen --session <id>`. A listener is one whose
+# `<git dir>/blueprint-pv4-listen.pid` reads `<pid> <sessionId>`, the pid alive
+# and the session the record's. The work dir has a `.git/` directory and no
+# `.blueprint/`, as a fleet worktree or an undesigned repo connected to pv4 has.
+
+printf '\nblueprint-session-channel hook (SessionStart), the pv4 record\n'
+
+PV4_MONITOR='Monitor({ command: "blueprint-pv4 listen --session s-pv4-7", persistent: true })'
+
+# run_pv4_session_hook <sessionId|-> [<pid file contents>]: '-' writes no record;
+# the record's host is PV4_HOST, else https://acme.blueprint.example.
+run_pv4_session_hook(){
+  pwork="$TMP/pwork"
+  rm -rf "$pwork"; mkdir -p "$pwork/.git"
+  if [ "$1" != - ]; then
+    printf '{"host":"%s","sessionId":"%s","branchAtConnect":"main","connectedAt":"2026-11-09T00:00:00+00:00","repository":"github.com/acme/shop"}\n' \
+      "${PV4_HOST:-https://acme.blueprint.example}" "$1" >"$pwork/.git/blueprint-pv4-connection.json"
+  fi
+  [ $# -lt 2 ] || printf '%s\n' "$2" >"$pwork/.git/blueprint-pv4-listen.pid"
+  env -u GIT_DIR -u BLUEPRINT_HOST_URL CLAUDE_PROJECT_DIR="$pwork" BLUEPRINT_BOARD_PORT=1 "$HOOK_SH" "$SESSION_HOOK" \
+    >"$TMP/pout" 2>"$TMP/perr" </dev/null
+  pstatus=$?
+}
+
+# assert_pv4_session <offers|silent> <description> <hook args...>
+assert_pv4_session(){
+  pwant=$1 pdesc=$2
+  shift 2
+  run_pv4_session_hook "$@"
+  pout=$( cat "$TMP/pout" )
+  if [ "$pstatus" -ne 0 ] || [ -s "$TMP/perr" ]; then
+    fail "$pdesc" "exit $pstatus, expected 0 and a quiet stderr" "stderr: [$( cat "$TMP/perr" )]"
+  elif [ "$pwant" = silent ] && [ -n "$pout" ]; then
+    fail "$pdesc" "expected silence" "actual: [$pout]"
+  elif [ "$pwant" = offers ]; then
+    case $pout in
+      'blueprint: '*"$PV4_MONITOR"*) pass "$pdesc" ;;
+      *) fail "$pdesc" "expected a line starting 'blueprint: ' carrying [$PV4_MONITOR]" "actual: [$pout]" ;;
+    esac
+  else
+    pass "$pdesc"
+  fi
+}
+
+if [ ! -f "$SESSION_HOOK" ]; then
+  fail 'hooks/blueprint-session-channel.sh ships (pv4 cases)' "no file at $SESSION_HOOK"
+else
+  assert_pv4_session silent 'no pv4 record and no .blueprint/: silent' -
+  assert_pv4_session offers 'a pv4 record and no listener: it prints the Monitor line for blueprint-pv4 listen --session <id>' s-pv4-7
+  printf '%s\n' 'blueprint: this checkout is connected to Blueprint session s-pv4-7 at https://acme.blueprint.example, and no listener of this checkout holds it, so your Asks go to the hosted agent instead of here. Start the listener now, and let the turn end: Monitor({ command: "blueprint-pv4 listen --session s-pv4-7", persistent: true }). If it says this laptop is not signed in, ask the user to run ! blueprint-pv4 login --host https://acme.blueprint.example; blueprint-pv4 status says more.' \
+    >"$TMP/pout-expected"
+  if cmp -s "$TMP/pout" "$TMP/pout-expected"; then
+    pass 'and that is the whole output, one line naming the session, its host and the sign-in'
+  else
+    fail 'and that is the whole output, one line naming the session, its host and the sign-in' \
+      "expected: [$( cat "$TMP/pout-expected" )]" "actual: [$( cat "$TMP/pout" )]"
+  fi
+  # This shell is alive: a listener of this checkout on the record's session.
+  assert_pv4_session silent 'a live listener on the same session: silent' s-pv4-7 "$$ s-pv4-7"
+  # A listener on another session (connected again since) is not one on this.
+  assert_pv4_session offers 'a live listener on another session: it still offers the listener' s-pv4-7 "$$ s-other"
+  # A listener that died without removing its pid file.
+  sh -c 'exit 0' & pdead=$!
+  wait "$pdead" 2>/dev/null
+  assert_pv4_session offers 'a pid file whose listener died: it offers the listener' s-pv4-7 "$pdead s-pv4-7"
+  # `kill -0 -1` asks about every process this user owns, and succeeds: a pid
+  # that is not a plain number is no listener.
+  assert_pv4_session offers 'a pid file whose pid is not a number (-1): it offers the listener' s-pv4-7 "-1 s-pv4-7"
+  # The id is printed into a command the model runs: anything but an id's
+  # characters is no record.
+  assert_pv4_session silent 'a record whose sessionId is not an id (a semicolon, spaces): silent' 's-1;rm -rf ~'
+  PV4_HOST='https://acme.example; rm -rf ~'
+  assert_pv4_session silent 'a record whose host carries a semicolon and spaces: silent' s-pv4-7
+  PV4_HOST='acme.blueprint.example'
+  assert_pv4_session silent 'a record whose host is not an http(s) URL: silent' s-pv4-7
+  PV4_HOST=''
 fi
 
 # ── The lane git guard (hooks/lane-git-guard.sh) ─────────────────────────────
@@ -1835,6 +1930,56 @@ for l in open(sys.argv[1]):
     else
       fail 'blueprint-send --session-id sends that conversation of this project' "exit $cstatus; expected claude-old; actual [$cconv]" "stdout: [$( cat "$TMP/cout" )]"
     fi
+
+    # ── a checkout connected by blueprint-pv4 (1.12): its record and its token ──
+    # No TS record and no blueprint CLI sign-in; the pv4 record names the stub and
+    # session s-pv4-9, and ~/.config/blueprint-pv4/credentials.json holds the
+    # device sign-in's pv4s_ token for it, as `blueprint-pv4 login` writes it.
+    cmain_home=$chome cmain_work=$cwork
+    chome="$TMP/chome-pv4"; cwork="$TMP/cwork-pv4"
+    rm -rf "$chome" "$cwork"
+    mkdir -p "$chome/.config/blueprint-pv4" "$cwork/.git"
+    printf '{"hosts": {"http://127.0.0.1:%s": {"token": "pv4s_laptop"}}}\n' "$CAPTURE_PORT" \
+      >"$chome/.config/blueprint-pv4/credentials.json"
+    printf '{"host":"http://127.0.0.1:%s","sessionId":"s-pv4-9","branchAtConnect":"main","connectedAt":"2026-11-09T00:00:00+00:00","repository":"github.com/acme/shop"}\n' \
+      "$CAPTURE_PORT" >"$cwork/.git/blueprint-pv4-connection.json"
+    : >"$TMP/creq"
+    capture_hook SessionEnd claude-pv4 "$TMP/claude-7f3a.jsonl" false BLUEPRINT_CAPTURE=always
+    cpv4=$( python3 -c 'import json,sys
+reqs = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+print(" ".join(r["path"] for r in reqs))
+print(" ".join(sorted(set(r["auth"] for r in reqs if r["path"] != "/bucket"))))
+print(" ".join(r["body"].get("session", "-") for r in reqs if r["path"].endswith("capture-conversation")))' "$TMP/creq" )
+    cexpect='/secret-check /documents/upload-grant /bucket /api/conversations/capture-conversation
+Bearer pv4s_laptop
+s-pv4-9'
+    if [ "$cstatus" = 0 ] && [ "$cpv4" = "$cexpect" ]; then
+      pass 'a pv4 record and a blueprint-pv4 sign-in: capture posts to the record'"'"'s host as Bearer pv4s_, attached to its session'
+    else
+      fail 'a pv4 record and a blueprint-pv4 sign-in: capture posts to the record'"'"'s host as Bearer pv4s_, attached to its session' \
+        "exit $cstatus; expected [$cexpect]" "actual [$cpv4] stderr: [$( cat "$TMP/cerr" )]"
+    fi
+    # Both records and both sign-ins, for the same host: the TS record and the
+    # blueprint CLI's token keep their place (design R3), the pv4 ones are the
+    # fallback only.
+    mkdir -p "$chome/.config/blueprint"
+    cp "$cmain_home/.config/blueprint/credentials.json" "$chome/.config/blueprint/credentials.json"
+    cp "$cmain_work/.git/blueprint-connection.json" "$cwork/.git/blueprint-connection.json"
+    : >"$TMP/creq"
+    capture_hook SessionEnd claude-both "$TMP/claude-7f3a.jsonl" false BLUEPRINT_CAPTURE=always
+    cboth=$( python3 -c 'import json,sys
+reqs = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+print(" ".join(sorted(set(r["auth"] for r in reqs if r["path"] != "/bucket"))))
+print(" ".join(r["body"].get("session", "-") for r in reqs if r["path"].endswith("capture-conversation")))' "$TMP/creq" )
+    cexpect='Bearer pv4k_test
+s-42'
+    if [ "$cstatus" = 0 ] && [ "$cboth" = "$cexpect" ]; then
+      pass 'a TS record beside a pv4 one: capture keeps the TS record and the blueprint CLI token'
+    else
+      fail 'a TS record beside a pv4 one: capture keeps the TS record and the blueprint CLI token' \
+        "exit $cstatus; expected [$cexpect]" "actual [$cboth] stderr: [$( cat "$TMP/cerr" )]"
+    fi
+    chome=$cmain_home cwork=$cmain_work
 
     # ── Blueprint unreachable: fail open, one line ──
     stop_capture_server

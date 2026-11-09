@@ -29,9 +29,11 @@ with "This looks like a secret"; otherwise it takes an upload grant (POST
 /documents/upload-grant), posts the bytes to the bucket with the grant's fields and
 their SHA-256 checksum (D44), and names the object to CaptureConversation (D59). Every failure is one line; a hook always exits 0.
 
-Host: BLUEPRINT_HOST_URL, else the /blueprint connect record in the git dir (whose
-sessionId the capture is attached to). Token: BLUEPRINT_ACCESS_TOKEN, else the
-blueprint CLI's credentials file (~/.config/blueprint/credentials.json).
+Host: BLUEPRINT_HOST_URL, else the /blueprint connect record in the git dir, else, with
+none, the `blueprint-pv4 connect` record there (blueprint-pv4-connection.json); the
+record's sessionId is what the capture is attached to. Token: BLUEPRINT_ACCESS_TOKEN,
+else the blueprint CLI's credentials file (~/.config/blueprint/credentials.json), else
+blueprint-pv4 login's (~/.config/blueprint-pv4/credentials.json), each for the host's origin.
 """
 
 import base64
@@ -95,12 +97,17 @@ def git_dir(env, project):
 
 
 def target(env, project):
-    """(host, the Blueprint session the checkout is connected to or "")."""
+    """(host, the Blueprint session the checkout is connected to or ""): the /blueprint
+    connect record, else, when there is none, the `blueprint-pv4 connect` one."""
     host = (env.get("BLUEPRINT_HOST_URL") or "").strip()
     if host:
         return host.rstrip("/"), ""
+    gd = git_dir(env, project)
+    name = "blueprint-connection.json"
+    if not os.path.exists(os.path.join(gd, name)):
+        name = "blueprint-pv4-connection.json"
     try:
-        with open(os.path.join(git_dir(env, project), "blueprint-connection.json"), encoding="utf-8") as f:
+        with open(os.path.join(gd, name), encoding="utf-8") as f:
             record = json.load(f)
     except (OSError, ValueError):
         return "", ""
@@ -123,6 +130,14 @@ def token_of(env, host):
         with open(os.path.join(home(env), ".config", "blueprint", "credentials.json"), encoding="utf-8") as f:
             secret = json.load(f)["accounts"][origin]
         token = json.loads(secret)["token"]
+    except (OSError, ValueError, KeyError, TypeError):
+        token = ""
+    if isinstance(token, str) and token:
+        return token
+    # blueprint-pv4 login's store: {"hosts": {"<scheme://host[:port]>": {"token": "pv4s_..."}}}.
+    try:
+        with open(os.path.join(home(env), ".config", "blueprint-pv4", "credentials.json"), encoding="utf-8") as f:
+            token = json.load(f)["hosts"][origin]["token"]
     except (OSError, ValueError, KeyError, TypeError):
         return ""
     return token if isinstance(token, str) else ""

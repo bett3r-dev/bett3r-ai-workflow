@@ -6,6 +6,7 @@ if [ -f "$blueprint_gate" ]; then
 fi
 case $blueprint_gate in /*) ;; *) blueprint_gate=${CLAUDE_PROJECT_DIR:-.}/$blueprint_gate ;; esac
 [ -f "$blueprint_gate/blueprint-connection.json" ] ||
+[ -f "$blueprint_gate/blueprint-pv4-connection.json" ] ||
 [ -d "${CLAUDE_PROJECT_DIR:-.}/.blueprint" ] || exit 0
 #
 # SessionStart — "open the BLUEPRINT session channel".
@@ -101,9 +102,52 @@ case $blueprint_gate in /*) ;; *) blueprint_gate=${CLAUDE_PROJECT_DIR:-.}/$bluep
 # cannot ack (plugin ADR-018). Instructing when the probe cannot answer is the
 # opposite of the local table's default, on purpose: a second listener costs a
 # duplicate ring line, a missing one leaves this laptop deaf to its own Asks.
+#
+# ## pv4 rows: a checkout connected by `blueprint-pv4 connect` (1.12)
+#
+# A separate branch, before the two above and whatever they print.
+# `blueprint-pv4 connect` writes `<git dir>/blueprint-pv4-connection.json`
+# ({host, sessionId, branchAtConnect, connectedAt, repository}); with no such
+# file this branch prints nothing and starts nothing, so the output is what it
+# was before 1.12, byte for byte (scripts/test-hooks.sh pins it). With one whose
+# sessionId is an id (letters, digits, `.`, `_`, `-`) and whose host is an
+# http(s) URL of URL characters (anything else is no record, because both are
+# printed into a command), it prints the `Monitor` line
+# for `blueprint-pv4 listen --session <id>` unless a listener of this checkout
+# already holds that session. A listener holds it while
+# `<git dir>/blueprint-pv4-listen.pid` reads `<pid> <sessionId>` with the pid
+# alive (`kill -0`) and the session the record's. That file is the contract the
+# `blueprint-pv4 listen` subcommand is to keep: write it when it starts, remove
+# it when it ends; this hook only reads it, and while no listener writes it the
+# line is offered at every start. The listener check is local and starts no
+# process, unlike `blueprint listen --probe` above; a stale file whose pid was
+# reused is the one false "held", and costs a silent start.
 
 blueprint_root=${CLAUDE_PROJECT_DIR:-.}
 blueprint_port=${BLUEPRINT_BOARD_PORT:-3727}
+
+if [ -f "$blueprint_gate/blueprint-pv4-connection.json" ]; then
+  blueprint_pv4_session=$( tr -d '\n' <"$blueprint_gate/blueprint-pv4-connection.json" 2>/dev/null |
+    sed -n 's/.*"sessionId"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' )
+  blueprint_pv4_host=$( tr -d '\n' <"$blueprint_gate/blueprint-pv4-connection.json" 2>/dev/null |
+    sed -n 's/.*"host"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' )
+  case $blueprint_pv4_session in ''|*[!A-Za-z0-9._-]*) blueprint_pv4_session='' ;; esac
+  case $blueprint_pv4_host in
+    *[!A-Za-z0-9.:/_-]*) blueprint_pv4_session='' ;;
+    http://?*|https://?*) ;;
+    *) blueprint_pv4_session='' ;;
+  esac
+  if [ -n "$blueprint_pv4_session" ]; then
+    blueprint_pv4_pid='' blueprint_pv4_held=''
+    { read -r blueprint_pv4_pid blueprint_pv4_held <"$blueprint_gate/blueprint-pv4-listen.pid"; } 2>/dev/null
+    case $blueprint_pv4_pid in ''|*[!0-9]*) blueprint_pv4_pid='' ;; esac
+    if [ -z "$blueprint_pv4_pid" ] || [ "$blueprint_pv4_held" != "$blueprint_pv4_session" ] ||
+       ! kill -0 "$blueprint_pv4_pid" 2>/dev/null; then
+      printf 'blueprint: this checkout is connected to Blueprint session %s at %s, and no listener of this checkout holds it, so your Asks go to the hosted agent instead of here. Start the listener now, and let the turn end: Monitor({ command: "blueprint-pv4 listen --session %s", persistent: true }). If it says this laptop is not signed in, ask the user to run ! blueprint-pv4 login --host %s; blueprint-pv4 status says more.\n' \
+        "$blueprint_pv4_session" "$blueprint_pv4_host" "$blueprint_pv4_session" "$blueprint_pv4_host"
+    fi
+  fi
+fi
 
 blueprint_record=''
 if [ -z "${BLUEPRINT_HOST_URL:-}" ] && command -v git >/dev/null 2>&1; then
