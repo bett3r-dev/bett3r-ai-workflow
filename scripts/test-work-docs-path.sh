@@ -200,6 +200,15 @@ expect_ok 'fleet run id over two Jira unit ids, as-is' \
 # Upper-case MULTI-7 is a Jira key and stays one: only a lower-case `multi-`
 # prefix makes a run id.
 expect_ok 'MULTI-7 is still a Jira key'   docs/prs/MULTI-7 MULTI-7 docs/prs default --item MULTI-7
+# A roadmap row id — a markdown tracker's `| 7.10 |` (pv4-style docs/tracking)
+# — is dot-joined alphanumeric segments, two or more, used as-is; and a fleet
+# run id over such units keeps the dots.
+expect_ok 'roadmap row id 1.12, as-is'          docs/prs/1.12 1.12 docs/prs default --item 1.12
+expect_ok 'roadmap row id 7.10, as-is'          docs/prs/7.10 7.10 docs/prs default --item 7.10
+expect_ok 'roadmap row id FU.25, as-is'         docs/prs/FU.25 FU.25 docs/prs default --item FU.25
+expect_ok 'roadmap row id M6.229, as-is'        docs/prs/M6.229 M6.229 docs/prs default --item M6.229
+expect_ok 'fleet run id over roadmap row ids'   docs/prs/multi-1.12-7.8-7.10 multi-1.12-7.8-7.10 docs/prs default --item multi-1.12-7.8-7.10
+expect_ok 'fleet run id mixing a Jira unit and a row id' docs/prs/multi-ESAS-29-7.10 multi-ESAS-29-7.10 docs/prs default --item multi-ESAS-29-7.10
 
 expect_ok 'two dated folders for one slug are not ambiguous: the id names one' \
   docs/prs/2026-04-05-twice 2026-04-05-twice docs/prs default --item 2026-04-05-twice
@@ -252,7 +261,7 @@ expect_error 'root with whitespace'          config-root-whitespace   --item TV1
 printf '\nmalformed work item and usage\n'
 # ---------------------------------------------------------------------------
 new_repo baditem
-for bad in tv1-2400 TV1- -2400 '#' '#abc' '#12a' gh- 'TV1-2400/x' 'TV1 2400'; do
+for bad in tv1-2400 TV1- -2400 '#' '#abc' '#12a' gh- 'TV1-2400/x' 'TV1 2400' '1.' '.12' '1..2' '1.12-x' '7.1 0'; do
   expect_error "malformed item '$bad'" malformed-item --item "$bad"
 done
 # A no-id work item is `<yyyy-mm-dd>-<slug>`. Its slug half is lower-case
@@ -262,7 +271,7 @@ for bad in 'Add-Widget' 'feat/widget' 'add--widget' '-add' 'add widget' ''; do
 done
 # A fleet run id is `multi-` then a slug; anything else starting `multi` is no
 # work item at all.
-for bad in multi multi- 'multi--x' 'multi-x-' 'multi-x_y' 'multi-a/b' 'multi-a b' 'multi-a.b' 'Multi-ESAS-29'; do
+for bad in multi multi- 'multi--x' 'multi-x-' 'multi-x_y' 'multi-a/b' 'multi-a b' 'multi-1.' 'multi-.1' 'multi-1..2' 'Multi-ESAS-29'; do
   expect_error "malformed run id '$bad'" malformed-item --item "$bad"
 done
 expect_error 'a date with no slug'           malformed-slug    --item 2026-09-12
