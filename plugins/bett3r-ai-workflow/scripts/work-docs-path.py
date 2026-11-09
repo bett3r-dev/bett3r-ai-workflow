@@ -25,14 +25,22 @@ the calling command never classifies it, re-dates it or rewrites it:
   --item TV1-2400              a Jira key, used as-is                  -> <root>/TV1-2400
   --item '#268'                a GitHub issue (`gh-268` is accepted)  -> <root>/gh-268
   --item 2026-09-12-add-widget no id: the date `/start` ran + a slug   -> <root>/2026-09-12-add-widget
+  --item 7.10                  a roadmap row id (a markdown tracker)   -> <root>/7.10
   --item multi-ESAS-93-94      a fleet run id (`run.yaml`'s runId)     -> <root>/multi-ESAS-93-94
 
+  A roadmap row id is the id of a row in a markdown tracker (pv4-style
+  `docs/tracking/*.md`): letters and digits in dot-joined segments, at least
+  two (`1.12`, `7.10`, `FU.25`, `M6.229`), used as-is. It is checked after the
+  Jira key and GitHub issue shapes and never carries a dash, so `TV1-2400`
+  and a dated id are unaffected; `1.`, `.12` and `1..2` are malformed-item.
+
   A fleet run id is the lower-case prefix `multi-`, then the unit ids joined
-  by `-`, as written: letters (either case) and digits in dash-separated words.
+  by `-`, as written: letters (either case) and digits in dash-separated words,
+  a word being a Jira-key half or a roadmap row id (`multi-1.12-7.8-7.10`).
   The folder is the run id exactly, never case-folded. It names the run-level
   folder `/merge-multi` writes decisions.md into. `multi-`, `multi--x`,
-  `multi-x-` or `multi-x_y` is reason=malformed-item, and upper-case `MULTI-7`
-  stays a Jira key (that shape is checked first).
+  `multi-x-`, `multi-x_y` or `multi-1.` is reason=malformed-item, and
+  upper-case `MULTI-7` stays a Jira key (that shape is checked first).
 
   A Jira key is upper-case letters/digits/underscore, a dash, digits. A no-id
   work item is `<yyyy-mm-dd>-<slug>`: a real calendar date in exactly that shape
@@ -147,7 +155,11 @@ SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 # A fleet run id (`run.yaml`'s `runId:`): the lower-case prefix `multi-`, then
 # the unit ids as written — mixed-case letters and digits in dash-joined words.
 # Checked after the Jira key and GitHub issue shapes, so `MULTI-7` stays a key.
-RUN_ID = re.compile(r"multi-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*")
+# A roadmap row id (a markdown tracker's `| 7.10 |`): alphanumeric segments
+# joined by dots, at least two. Checked after the Jira and GitHub shapes; it
+# holds no dash, so it never overlaps a key, a run id or a dated id.
+ROW_ID = re.compile(r"[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)+")
+RUN_ID = re.compile(r"multi-[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)*(?:-[A-Za-z0-9]+(?:\.[A-Za-z0-9]+)*)*")
 # A no-id work item: the date half, then (after one dash) whatever claims to be
 # the slug. A value that is a date alone, or a date then `-`, is a dated id,
 # well-formed or not (`2026-09-12x` is not one: malformed-item).
@@ -199,6 +211,8 @@ def normalise_item(item):
     if gh:
         return f"gh-{gh.group(1)}"
     if RUN_ID.fullmatch(item):
+        return item
+    if ROW_ID.fullmatch(item):
         return item
     dated = DATED.fullmatch(item)
     if dated:
