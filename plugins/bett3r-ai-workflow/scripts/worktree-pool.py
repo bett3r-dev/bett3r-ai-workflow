@@ -66,11 +66,30 @@ Subcommands (run from the main checkout, which has the task branch checked out):
       modifications (`reason=main-checkout-dirty`); untracked files in the main
       checkout are accepted.
 
+      Regenerate after the land. A pick goes through git's merge machinery, so a
+      path whose `merge` attribute names a configured custom driver (a host that
+      keeps its own side of a generated file and regenerates instead) can drop
+      the slice's change to it. When `.blueprint.config.json` declares
+      `designTooling.regenerate`, every landed outcome (already=true included,
+      for a resume that died before its regen) runs it in the main checkout,
+      commits what it changed as its own commit and reports `regen=committed
+      regenSha=<sha>`, or `regen=clean`; then `designTooling.regenerateCheck`,
+      when declared, must exit 0 (`check=ran`, else `check=none`). `sha=` stays
+      the slice's landed commit, picked with `-x` so a re-land finds it by the
+      source sha its message names (the driver can make its patch differ from
+      the source's, which defeats the patch-id match). A failing command is outcome=failed
+      step=regenerate|regenerate-check, the slice's commit already on the
+      branch. A host that declares nothing gets `regen=none` and today's
+      behaviour, except that a pick whose both sides changed a custom-driver
+      path is refused before it (`reason=merge-driver-without-regenerate
+      paths=`), branch untouched: landing it would leave the tip stale.
+
   teardown [--root DIR]
       outcome=removed n=N. Removes every worktree under DIR. Refuses
       (`reason=unlanded`, then `reason=dirty`) while any of them holds a commit
       whose change is not on the task branch, or any tracked or untracked change.
 """
+import json
 import os
 import re
 import subprocess
@@ -419,6 +438,13 @@ def landed_equivalent(top, sha):
     rc, base, _ = git("merge-base", sha, "HEAD", cwd=top)
     if rc != 0:
         return None
+    # A pick through a keep-one-side merge driver lands a different patch than
+    # the source, so patch ids cannot find it; a host that regenerates lands with
+    # `cherry-pick -x`, and the line it appends names the source.
+    _, marked, _ = git("log", "--format=%H", "-F", f"--grep=(cherry picked from commit {sha})",
+                       f"{base}..HEAD", cwd=top)
+    if marked:
+        return marked.splitlines()[0]
 
     def patch_ids(*log_args):
         log = subprocess.run(["git", *log_args], cwd=top, capture_output=True)
@@ -432,6 +458,99 @@ def landed_equivalent(top, sha):
         if pid == want[0][0]:
             return commit
     return None
+
+
+CONFIG = ".blueprint.config.json"
+BUILTIN_MERGE = {"unspecified", "set", "unset", "text", "binary", "union"}
+
+
+class ConfigError(Exception):
+    pass
+
+
+def regen_tooling(top):
+    """`designTooling.regenerate` and `.regenerateCheck`, each a command or None."""
+    path = os.path.join(top, CONFIG)
+    if not os.path.exists(path):
+        return None, None
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, UnicodeDecodeError, ValueError):
+        raise ConfigError("config-unparseable")
+    tools = data.get("designTooling") if isinstance(data, dict) else None
+    tools = tools if isinstance(tools, dict) else {}
+    out = []
+    for key in ("regenerate", "regenerateCheck"):
+        value = tools.get(key)
+        if value is not None and not (isinstance(value, str) and value.strip()):
+            raise ConfigError(f"designTooling.{key}-not-a-command")
+        out.append(value)
+    if out[1] and not out[0]:
+        raise ConfigError("designTooling.regenerateCheck-without-regenerate")
+    return out[0], out[1]
+
+
+def driver_merged_paths(top, sha):
+    """Paths the pick of `sha` would hand to a configured custom merge driver.
+
+    A pick merges with `sha^` as base, `sha` as theirs and HEAD as ours; a driver
+    runs only on a path both sides changed, and only a driver git has a
+    `merge.<name>.driver` for (an undefined one falls back to the text merge).
+    """
+    def changed(a, b):
+        _, out, _ = git("diff", "--name-only", "--no-renames", a, b, cwd=top)
+        return set(out.splitlines())
+    both = sorted(changed(f"{sha}^", sha) & changed(f"{sha}^", "HEAD"))
+    if not both:
+        return []
+    r = subprocess.run(["git", "check-attr", "-z", "merge", "--", *both], cwd=top, capture_output=True, text=True)
+    fields = r.stdout.split("\0")
+    hits = []
+    for i in range(0, len(fields) - 2, 3):
+        p, val = fields[i], fields[i + 2]
+        if val in BUILTIN_MERGE:
+            continue
+        if git("config", "--get", f"merge.{val}.driver", cwd=top)[0] == 0:
+            hits.append(p)
+    return hits
+
+
+def untracked(top):
+    _, out, _ = git("ls-files", "--others", "--exclude-standard", "-z", cwd=top)
+    return {p for p in out.split("\0") if p}
+
+
+def regenerate(top, regen, check, picked, **landed):
+    """Run the host's regenerate (and its check) on the landed tip; one verdict either way."""
+    if not regen:
+        return verdict("land", "landed", **landed, regen="none")
+    before = untracked(top)
+    _, rc = run_host(regen, top)
+    if rc != 0:
+        return verdict("land", "failed", step="regenerate", rc=rc, **landed)
+    # Only what the regen wrote: tracked changes, and untracked files it created.
+    # The orchestrator's own untracked scratch stays out of the commit.
+    new = sorted(untracked(top) - before)
+    git("add", "-u", cwd=top)
+    if new:
+        git("add", "--", *new, cwd=top)
+    if git("diff", "--cached", "--quiet", cwd=top)[0] == 0:
+        state = {"regen": "clean"}
+    else:
+        msg = (f"chore: regenerate after landing {picked[:12]}\n\n"
+               f"designTooling.regenerate ({regen}) on the tip after the pick; a merge\n"
+               f"driver that keeps one side can drop the slice's generated change.")
+        rc, _, err = git("commit", "-q", "--no-verify", "-m", msg, cwd=top)
+        if rc != 0:
+            note(err)
+            return verdict("land", "failed", step="regenerate-commit", **landed)
+        state = {"regen": "committed", "regenSha": git("rev-parse", "HEAD", cwd=top)[1]}
+    if check:
+        _, rc = run_host(check, top)
+        if rc != 0:
+            return verdict("land", "failed", step="regenerate-check", rc=rc, **landed, **state)
+    return verdict("land", "landed", **landed, **state, check="ran" if check else "none")
 
 
 def cmd_land(args):
@@ -455,10 +574,16 @@ def cmd_land(args):
     # without this the idempotent path below would call an unbuilt slice landed.
     if git("merge-base", "--is-ancestor", sha, base, cwd=top)[0] == 0:
         return verdict("land", "refused", reason="sha-not-after-base", source=sha, base=base)
+    try:
+        regen, check = regen_tooling(top)
+    except ConfigError as e:
+        return verdict("land", "error", reason=str(e))
     equivalent = landed_equivalent(top, sha)
     if equivalent:
         note(f"already on {branch} as {equivalent}")
-        return verdict("land", "landed", already="true", sha=equivalent, source=sha, branch=branch)
+        if regen and git("status", "--porcelain", "--untracked-files=no", cwd=top)[1]:
+            return verdict("land", "refused", reason="main-checkout-dirty", source=sha)
+        return regenerate(top, regen, check, sha, already="true", sha=equivalent, source=sha, branch=branch)
     # Tracked modifications only: untracked files in the main checkout (the
     # orchestrator's own scratch) are accepted, and git itself refuses a pick
     # that would overwrite one — reported below as failed step=cherry-pick.
@@ -466,11 +591,17 @@ def cmd_land(args):
     if dirty:
         note(dirty)
         return verdict("land", "refused", reason="main-checkout-dirty", source=sha)
+    if not regen:
+        driven = driver_merged_paths(top, sha)
+        if driven:
+            for p in driven:
+                note(f"merge driver would merge: {p}")
+            return verdict("land", "refused", reason="merge-driver-without-regenerate", paths=enc(driven), source=sha)
     _, before, _ = git("rev-parse", "HEAD", cwd=top)
-    rc, _, err = git("cherry-pick", sha, cwd=top)
+    rc, _, err = git("cherry-pick", *(["-x"] if regen else []), sha, cwd=top)
     if rc == 0:
         _, after, _ = git("rev-parse", "HEAD", cwd=top)
-        return verdict("land", "landed", already="false", sha=after, source=sha, branch=branch)
+        return regenerate(top, regen, check, sha, already="false", sha=after, source=sha, branch=branch)
     _, conflicted, _ = git("diff", "--name-only", "--diff-filter=U", cwd=top)
     paths = conflicted.splitlines()
     in_progress = git("rev-parse", "-q", "--verify", "CHERRY_PICK_HEAD", cwd=top)[0] == 0

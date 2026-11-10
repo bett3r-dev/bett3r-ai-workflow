@@ -537,6 +537,97 @@ v=$( verdict "$TMP/out" )
 check 'teardown: removes it once clean' "$( attr "$v" outcome )" 'removed' "$( cat "$TMP/out" )"
 
 # ---------------------------------------------------------------------------
+printf '\nland + regenerate — a keep-ours merge driver drops a slice'\''s generated change; the declared regen restores it\n\n'
+# ---------------------------------------------------------------------------
+# The host shape: out_gen.txt is derived from every in-*.txt, and git merges it
+# with a custom driver that keeps the branch's side (`true` leaves %A as is), on
+# the contract that whoever merges regenerates. Each worker regenerates in its
+# own tree, so two sibling slices both change out_gen.txt from the same base.
+new_repo repo-g
+GEN="cat \$(ls in-*.txt | sort) > out_gen.txt"
+GENCHECK="cat \$(ls in-*.txt | sort) | cmp -s - out_gen.txt"
+printf '*_gen* merge=keep\n' > "$REPO/.gitattributes"
+g config merge.keep.driver true
+printf 'zero\n' > "$REPO/in-0.txt"
+( cd "$REPO" && sh -c "$GEN" )
+g add -A && g commit -q -m 'gen fixture'
+BG=$( g rev-parse task )
+pool "$TMP/out" provision 2 --root "$TMP/pool-g"
+WG1="$TMP/pool-g/wt-1"; WG2="$TMP/pool-g/wt-2"
+pool "$TMP/out" reset "$WG1" task --install '' --build ''
+pool "$TMP/out" reset "$WG2" task --install '' --build ''
+gen_slice(){ printf '%s\n' "$3" > "$1/$2" && ( cd "$1" && sh -c "$GEN" ) && git -C "$1" add -A && git -C "$1" commit -q -m "$4" && git -C "$1" rev-parse HEAD; }
+G1=$( gen_slice "$WG1" in-1.txt one 'gen slice 1' )
+G2=$( gen_slice "$WG2" in-2.txt two 'gen slice 2' )
+
+pool "$TMP/out" land "$WG1" "$G1" --base "$BG"
+v=$( verdict "$TMP/out" )
+check 'regen: a host that declares nothing lands as before, regen=none' "$( attr "$v" outcome ) regen=$( attr "$v" regen )" 'landed regen=none' "$( cat "$TMP/out" )"
+
+# The defect, shown with git alone: the second pick keeps slice 1's out_gen.txt.
+T1=$( g rev-parse task )
+g cherry-pick "$G2" >/dev/null 2>&1
+check 'regen: (the defect) a plain pick leaves out_gen.txt without slice 2' "$( g show task:out_gen.txt | tr '\n' , )" 'zero,one,'
+g reset -q --hard "$T1"
+
+pool "$TMP/out" land "$WG2" "$G2" --base "$BG"
+v=$( verdict "$TMP/out" )
+check 'regen: undeclared, a pick through a custom merge driver is refused' \
+      "$( attr "$v" outcome ) reason=$( attr "$v" reason )" 'refused reason=merge-driver-without-regenerate' "$( cat "$TMP/out" )"
+check 'regen: the refusal names the driver-merged path' "$( attr "$v" paths )" 'out_gen.txt'
+check 'regen: the refusal moved nothing' "$( g rev-parse task )" "$T1"
+
+printf '{"designTooling":{"regenerate":"%s","regenerateCheck":"%s"}}\n' "$GEN" "$GENCHECK" > "$REPO/.blueprint.config.json"
+g add -A && g commit -q -m 'declare regenerate'
+T2=$( g rev-parse task )
+printf 'scratch\n' > "$REPO/notes.tmp"
+pool "$TMP/out" land "$WG2" "$G2" --base "$BG"
+v=$( verdict "$TMP/out" )
+RS=$( attr "$v" regenSha )
+check 'regen: declared, the land regenerates and commits it' \
+      "$( attr "$v" outcome ) regen=$( attr "$v" regen ) check=$( attr "$v" check )" 'landed regen=committed check=ran' "$( cat "$TMP/out" )"
+check 'regen: the regen commit is the tip' "$RS" "$( g rev-parse task )"
+check 'regen: sha= is the slice'\''s landed commit, just under the regen' "$( attr "$v" sha )" "$( g rev-parse task^ )"
+check 'regen: the slice commit sits on the pre-land tip' "$( g rev-parse task~2 )" "$T2"
+check 'regen: a declaring host picks with -x, so a re-land can find the slice by its source' \
+      "$( g log -1 --format=%B task^ | grep -c "cherry picked from commit $G2" )" '1'
+check 'regen: an undeclared host'\''s landed commit is left as the worker wrote it' \
+      "$( g log -1 --format=%B "$T1" | grep -c 'cherry picked from' )" '0'
+check 'regen: out_gen.txt carries both slices' "$( g show task:out_gen.txt | tr '\n' , )" 'zero,one,two,'
+check 'regen: the regen commit holds only what the regen wrote' "$( g show --name-only --format= task )" 'out_gen.txt'
+check 'regen: the untracked scratch stays out of it' "$( cat "$REPO/notes.tmp" )" 'scratch'
+rm -f "$REPO/notes.tmp"
+
+pool "$TMP/out" land "$WG2" "$G2" --base "$BG"
+v=$( verdict "$TMP/out" )
+check 'regen: a re-land regenerates again and finds nothing to commit' \
+      "$( attr "$v" outcome ) already=$( attr "$v" already ) regen=$( attr "$v" regen )" 'landed already=true regen=clean' "$( cat "$TMP/out" )"
+check 'regen: the clean re-land moved nothing' "$( g rev-parse task )" "$RS"
+
+printf '{"designTooling":{"regenerate":"exit 5"}}\n' > "$REPO/.blueprint.config.json"
+g commit -q -am 'failing regenerate'
+pool "$TMP/out" land "$WG2" "$G2" --base "$BG"
+v=$( verdict "$TMP/out" )
+check 'regen: a failing regenerate is failed step=regenerate' "$( attr "$v" outcome ) step=$( attr "$v" step )" 'failed step=regenerate' "$( cat "$TMP/out" )"
+printf '{"designTooling":{"regenerate":"%s","regenerateCheck":"exit 4"}}\n' "$GEN" > "$REPO/.blueprint.config.json"
+g commit -q -am 'failing check'
+pool "$TMP/out" land "$WG2" "$G2" --base "$BG"
+v=$( verdict "$TMP/out" )
+check 'regen: a failing check is failed step=regenerate-check' "$( attr "$v" outcome ) step=$( attr "$v" step )" 'failed step=regenerate-check' "$( cat "$TMP/out" )"
+printf '{"designTooling":{"regenerateCheck":"true"}}\n' > "$REPO/.blueprint.config.json"
+g commit -q -am 'check alone'
+pool "$TMP/out" land "$WG2" "$G2" --base "$BG"
+v=$( verdict "$TMP/out" )
+check 'regen: a check with no regenerate is a config error' "$( attr "$v" outcome ) reason=$( attr "$v" reason )" 'error reason=designTooling.regenerateCheck-without-regenerate' "$( cat "$TMP/out" )"
+printf '{not json' > "$REPO/.blueprint.config.json"
+g commit -q -am 'broken config'
+T3=$( g rev-parse task )
+pool "$TMP/out" land "$WG2" "$G2" --base "$BG"
+v=$( verdict "$TMP/out" )
+check 'regen: an unparseable config is an error, not a silent regen=none' "$( attr "$v" outcome ) reason=$( attr "$v" reason )" 'error reason=config-unparseable' "$( cat "$TMP/out" )"
+check 'regen: the config error moved nothing' "$( g rev-parse task )" "$T3"
+
+# ---------------------------------------------------------------------------
 printf '\nverdict lines — parse for every subcommand; a swallowed exit code cannot fake a pass\n\n'
 # ---------------------------------------------------------------------------
 new_repo repo-c
