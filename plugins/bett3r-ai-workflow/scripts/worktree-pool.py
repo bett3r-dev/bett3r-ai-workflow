@@ -84,6 +84,17 @@ Subcommands (run from the main checkout, which has the task branch checked out):
       path is refused before it (`reason=merge-driver-without-regenerate
       paths=`), branch untouched: landing it would leave the tip stale.
 
+  regenerate <merged sha>
+      outcome=regenerated. The same regenerate as `land`'s, for a merge made
+      outside the pool (/merge-multi merging a unit into `int/<run-id>`), run
+      in that checkout right after the merge of <merged sha>: regen=committed
+      regenSha=|clean|none, check=ran|none, `tip=` the merge it ran on. A host
+      that declares nothing is refused (`reason=merge-driver-without-regenerate
+      paths=`) when HEAD is the merge of <merged sha> and a configured custom
+      driver merged a path both parents changed. Refuses a sha HEAD does not
+      contain (`reason=sha-not-merged`) and tracked modifications
+      (`reason=checkout-dirty`), which the regen commit would sweep in.
+
   teardown [--root DIR]
       outcome=removed n=N. Removes every worktree under DIR. Refuses
       (`reason=unlanded`, then `reason=dirty`) while any of them holds a commit
@@ -98,7 +109,7 @@ from urllib.parse import quote
 
 TOKEN = "WORKTREE-POOL:v1"
 EXIT = {"ok": 0, "provisioned": 0, "reset": 0, "landed": 0, "removed": 0,
-        "refused": 1, "conflict": 1, "failed": 1, "error": 2}
+        "regenerated": 0, "refused": 1, "conflict": 1, "failed": 1, "error": 2}
 
 
 def verdict(cmd, outcome, **attrs):
@@ -491,17 +502,19 @@ def regen_tooling(top):
     return out[0], out[1]
 
 
-def driver_merged_paths(top, sha):
-    """Paths the pick of `sha` would hand to a configured custom merge driver.
+def driver_merged_paths(top, base, ours, theirs):
+    """Paths a three-way merge of `ours` and `theirs` over `base` hands to a
+    configured custom merge driver.
 
-    A pick merges with `sha^` as base, `sha` as theirs and HEAD as ours; a driver
-    runs only on a path both sides changed, and only a driver git has a
-    `merge.<name>.driver` for (an undefined one falls back to the text merge).
+    A pick of `sha` is base `sha^`, theirs `sha`, ours HEAD; a merge is its
+    parents over their merge base. A driver runs only on a path both sides
+    changed, and only a driver git has a `merge.<name>.driver` for (an
+    undefined one falls back to the text merge).
     """
     def changed(a, b):
         _, out, _ = git("diff", "--name-only", "--no-renames", a, b, cwd=top)
         return set(out.splitlines())
-    both = sorted(changed(f"{sha}^", sha) & changed(f"{sha}^", "HEAD"))
+    both = sorted(changed(base, theirs) & changed(base, ours))
     if not both:
         return []
     r = subprocess.run(["git", "check-attr", "-z", "merge", "--", *both], cwd=top, capture_output=True, text=True)
@@ -521,14 +534,14 @@ def untracked(top):
     return {p for p in out.split("\0") if p}
 
 
-def regenerate(top, regen, check, picked, **landed):
-    """Run the host's regenerate (and its check) on the landed tip; one verdict either way."""
+def regenerate(top, regen, check, picked, cmd="land", ok="landed", **landed):
+    """Run the host's regenerate (and its check) on the tip; one verdict either way."""
     if not regen:
-        return verdict("land", "landed", **landed, regen="none")
+        return verdict(cmd, ok, **landed, regen="none")
     before = untracked(top)
     _, rc = run_host(regen, top)
     if rc != 0:
-        return verdict("land", "failed", step="regenerate", rc=rc, **landed)
+        return verdict(cmd, "failed", step="regenerate", rc=rc, **landed)
     # Only what the regen wrote: tracked changes, and untracked files it created.
     # The orchestrator's own untracked scratch stays out of the commit.
     new = sorted(untracked(top) - before)
@@ -538,19 +551,19 @@ def regenerate(top, regen, check, picked, **landed):
     if git("diff", "--cached", "--quiet", cwd=top)[0] == 0:
         state = {"regen": "clean"}
     else:
-        msg = (f"chore: regenerate after landing {picked[:12]}\n\n"
+        msg = (f"chore: regenerate after {'landing' if cmd == 'land' else 'merging'} {picked[:12]}\n\n"
                f"designTooling.regenerate ({regen}) on the tip after the pick; a merge\n"
                f"driver that keeps one side can drop the slice's generated change.")
         rc, _, err = git("commit", "-q", "--no-verify", "-m", msg, cwd=top)
         if rc != 0:
             note(err)
-            return verdict("land", "failed", step="regenerate-commit", **landed)
+            return verdict(cmd, "failed", step="regenerate-commit", **landed)
         state = {"regen": "committed", "regenSha": git("rev-parse", "HEAD", cwd=top)[1]}
     if check:
         _, rc = run_host(check, top)
         if rc != 0:
-            return verdict("land", "failed", step="regenerate-check", rc=rc, **landed, **state)
-    return verdict("land", "landed", **landed, **state, check="ran" if check else "none")
+            return verdict(cmd, "failed", step="regenerate-check", rc=rc, **landed, **state)
+    return verdict(cmd, ok, **landed, **state, check="ran" if check else "none")
 
 
 def cmd_land(args):
@@ -592,7 +605,7 @@ def cmd_land(args):
         note(dirty)
         return verdict("land", "refused", reason="main-checkout-dirty", source=sha)
     if not regen:
-        driven = driver_merged_paths(top, sha)
+        driven = driver_merged_paths(top, f"{sha}^", "HEAD", sha)
         if driven:
             for p in driven:
                 note(f"merge driver would merge: {p}")
@@ -621,6 +634,42 @@ def cmd_land(args):
     return verdict("land", "failed", step="cherry-pick", reason=reason, tip=before, source=sha)
 
 
+def cmd_regenerate(args):
+    """After a merge of `sha` into the checked-out branch: regen, or refuse a stale one."""
+    pos, _ = parse_flags(args, set())
+    if len(pos) != 1:
+        raise Usage("regenerate-takes-the-merged-sha")
+    top, branch = checkout()
+    rc, sha, _ = git("rev-parse", "--verify", "-q", pos[0] + "^{commit}")
+    if rc != 0:
+        raise Usage("sha-does-not-resolve")
+    if git("merge-base", "--is-ancestor", sha, "HEAD", cwd=top)[0] != 0:
+        return verdict("regenerate", "refused", reason="sha-not-merged", merged=sha)
+    try:
+        regen, check = regen_tooling(top)
+    except ConfigError as e:
+        return verdict("regenerate", "error", reason=str(e))
+    _, dirty, _ = git("status", "--porcelain", "--untracked-files=no", cwd=top)
+    if dirty:
+        note(dirty)
+        return verdict("regenerate", "refused", reason="checkout-dirty", merged=sha)
+    _, tip, _ = git("rev-parse", "HEAD", cwd=top)
+    if not regen:
+        # Only the merge that brought `sha` in can have run a driver on it: HEAD a
+        # merge commit whose second parent is `sha`. A fast-forward merged nothing.
+        _, parents, _ = git("rev-list", "--parents", "-n", "1", "HEAD", cwd=top)
+        ps = parents.split()[1:]
+        if len(ps) == 2 and ps[1] == sha:
+            _, mb, _ = git("merge-base", ps[0], ps[1], cwd=top)
+            driven = driver_merged_paths(top, mb, ps[0], ps[1])
+            if driven:
+                for p in driven:
+                    note(f"merge driver merged: {p}")
+                return verdict("regenerate", "refused", reason="merge-driver-without-regenerate",
+                               paths=enc(driven), merged=sha, tip=tip)
+    return regenerate(top, regen, check, sha, cmd="regenerate", ok="regenerated", merged=sha, tip=tip, branch=branch)
+
+
 def cmd_teardown(args):
     pos, flags = parse_flags(args, {"--root"})
     if pos:
@@ -646,7 +695,7 @@ def cmd_teardown(args):
 
 
 COMMANDS = {"size": cmd_size, "provision": cmd_provision, "reset": cmd_reset,
-            "land": cmd_land, "teardown": cmd_teardown}
+            "land": cmd_land, "regenerate": cmd_regenerate, "teardown": cmd_teardown}
 
 
 def main(argv):

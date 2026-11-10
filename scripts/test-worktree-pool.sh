@@ -628,6 +628,59 @@ check 'regen: an unparseable config is an error, not a silent regen=none' "$( at
 check 'regen: the config error moved nothing' "$( g rev-parse task )" "$T3"
 
 # ---------------------------------------------------------------------------
+printf '\nregenerate — /merge-multi'\''s merge of a unit into integration gets the same regen, or a refusal\n\n'
+# ---------------------------------------------------------------------------
+# Two unit branches cut from one integration tip, each regenerating out_gen.txt
+# for its own input, merged with `git merge` as /merge-multi step 2 does.
+new_repo repo-m
+printf '*_gen* merge=keep\n' > "$REPO/.gitattributes"
+g config merge.keep.driver true
+printf 'zero\n' > "$REPO/in-0.txt"
+( cd "$REPO" && sh -c "$GEN" )
+g add -A && g commit -q -m 'gen fixture'
+g checkout -q -b int
+unit_branch(){ g checkout -q -b "$1" int && printf '%s\n' "$3" > "$REPO/$2" && ( cd "$REPO" && sh -c "$GEN" ) && g add -A && g commit -q -m "$1" && g rev-parse HEAD && g checkout -q int; }
+UA=$( unit_branch unit-a in-1.txt one )
+UB=$( unit_branch unit-b in-2.txt two )
+
+pool "$TMP/out" regenerate "$UA"
+v=$( verdict "$TMP/out" )
+check 'regenerate: a sha the branch does not contain is refused' "$( attr "$v" outcome ) reason=$( attr "$v" reason )" 'refused reason=sha-not-merged' "$( cat "$TMP/out" )"
+
+g merge -q --no-edit "$UA"
+pool "$TMP/out" regenerate "$UA"
+v=$( verdict "$TMP/out" )
+check 'regenerate: undeclared, a fast-forward merge is regenerated regen=none' "$( attr "$v" outcome ) regen=$( attr "$v" regen )" 'regenerated regen=none' "$( cat "$TMP/out" )"
+
+g merge -q --no-edit "$UB"
+check 'regenerate: (the defect) the merge kept unit-a'\''s out_gen.txt' "$( g show int:out_gen.txt | tr '\n' , )" 'zero,one,'
+M=$( g rev-parse int )
+pool "$TMP/out" regenerate "$UB"
+v=$( verdict "$TMP/out" )
+check 'regenerate: undeclared, a merge through a custom driver is refused' \
+      "$( attr "$v" outcome ) reason=$( attr "$v" reason )" 'refused reason=merge-driver-without-regenerate' "$( cat "$TMP/out" )"
+check 'regenerate: the refusal names the driver-merged path' "$( attr "$v" paths )" 'out_gen.txt'
+check 'regenerate: the refusal committed nothing' "$( g rev-parse int )" "$M"
+
+printf 'edited\n' > "$REPO/base.txt"
+pool "$TMP/out" regenerate "$UB"
+v=$( verdict "$TMP/out" )
+check 'regenerate: tracked modifications are refused, never swept into the regen' "$( attr "$v" outcome ) reason=$( attr "$v" reason )" 'refused reason=checkout-dirty' "$( cat "$TMP/out" )"
+printf 'base\n' > "$REPO/base.txt"
+
+printf '{"designTooling":{"regenerate":"%s","regenerateCheck":"%s"}}\n' "$GEN" "$GENCHECK" > "$REPO/.blueprint.config.json"
+g add -A && g commit -q -m 'declare regenerate'
+pool "$TMP/out" regenerate "$UB"
+v=$( verdict "$TMP/out" )
+check 'regenerate: declared, the merge is regenerated and committed' \
+      "$( attr "$v" outcome ) regen=$( attr "$v" regen ) check=$( attr "$v" check )" 'regenerated regen=committed check=ran' "$( cat "$TMP/out" )"
+check 'regenerate: regenSha is the new tip' "$( attr "$v" regenSha )" "$( g rev-parse int )"
+check 'regenerate: out_gen.txt carries both units' "$( g show int:out_gen.txt | tr '\n' , )" 'zero,one,two,'
+pool "$TMP/out" regenerate "$UB"
+v=$( verdict "$TMP/out" )
+check 'regenerate: a second run finds nothing to commit' "$( attr "$v" outcome ) regen=$( attr "$v" regen )" 'regenerated regen=clean' "$( cat "$TMP/out" )"
+
+# ---------------------------------------------------------------------------
 printf '\nverdict lines — parse for every subcommand; a swallowed exit code cannot fake a pass\n\n'
 # ---------------------------------------------------------------------------
 new_repo repo-c
@@ -644,6 +697,8 @@ pool "$TMP/out" land "$WC1" "$X1" --base "$BC"
 check 'land prints a parseable verdict line' "$( verdict "$TMP/out" >/dev/null && printf ok )" 'ok' "$( cat "$TMP/out" )"
 pool "$TMP/out" teardown --root "$TMP/pool-c"
 check 'teardown prints a parseable verdict line' "$( verdict "$TMP/out" >/dev/null && printf ok )" 'ok' "$( cat "$TMP/out" )"
+pool "$TMP/out" regenerate "$X1"
+check 'regenerate prints a parseable verdict line' "$( verdict "$TMP/out" >/dev/null && printf ok )" 'ok' "$( cat "$TMP/out" )"
 pool "$TMP/out" size "$TMP/w2.yaml"
 check 'size prints a parseable verdict line' "$( verdict "$TMP/out" >/dev/null && printf ok )" 'ok' "$( cat "$TMP/out" )"
 
