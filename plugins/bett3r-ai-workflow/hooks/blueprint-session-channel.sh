@@ -116,10 +116,10 @@ case $blueprint_gate in /*) ;; *) blueprint_gate=${CLAUDE_PROJECT_DIR:-.}/$bluep
 # for `blueprint-pv4 listen --session <id>` unless a listener of this checkout
 # already holds that session. A listener holds it while
 # `<git dir>/blueprint-pv4-listen.pid` reads `<pid> <sessionId>` with the pid
-# alive (`kill -0`) and the session the record's. That file is the contract the
-# `blueprint-pv4 listen` subcommand is to keep: write it when it starts, remove
-# it when it ends; this hook only reads it, and while no listener writes it the
-# line is offered at every start. The listener check is local and starts no
+# alive (`kill -0`) and the session the record's. `blueprint-pv4 listen` writes
+# that file when it starts and removes it when it ends (an interrupt or
+# `blueprint-pv4 disconnect` included); this hook only reads it, and with no
+# file the line is offered. The listener check is local and starts no
 # process, unlike `blueprint listen --probe` above; a stale file whose pid was
 # reused is the one false "held", and costs a silent start.
 
