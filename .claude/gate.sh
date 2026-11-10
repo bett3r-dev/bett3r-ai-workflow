@@ -181,7 +181,7 @@ EOF
 step repeat-causes fast <<'EOF'
 python3 scripts/check-repeat-causes.py
 EOF
-step hooks full 'plugins/bett3r-ai-workflow/hooks/*' 'plugins/*/hooks/*' 'scripts/test-hooks.sh' 'scripts/fixtures/blueprint-pending/*' <<'EOF'
+step hooks full 'plugins/bett3r-ai-workflow/hooks/*' 'plugins/*/hooks/*' 'plugins/bett3r-ai-workflow/bin/blueprint-pv4' 'scripts/test-hooks.sh' 'scripts/fixtures/blueprint-pending/*' <<'EOF'
 sh scripts/test-hooks.sh
 HOOK_SH=dash sh scripts/test-hooks.sh
 HOOK_SH=bash sh scripts/test-hooks.sh
