@@ -1,0 +1,665 @@
+#!/usr/bin/env python3
+"""Sign this laptop in to a Blueprint (pv4) tenant and connect a checkout to its session.
+
+  blueprint-pv4 login --host <url>     sign in by device code as the client blueprint-cli
+  blueprint-pv4 logout [--host <url>]  sign the token out on its host and forget it
+  blueprint-pv4 whoami [--host <url>] [--token]
+                                       who the stored token acts as; --token prints the token
+  blueprint-pv4 connect [--host <url>] [--session <id>]
+                                       record the session of this checkout's branch
+  blueprint-pv4 listen --session <id> [--host <url>]
+                                       attach this laptop to the session and answer its rings
+  blueprint-pv4 status                 the record's host and session, the sign-in, the attachment
+  blueprint-pv4 disconnect             detach, stop this checkout's listener, remove the record
+
+login is RFC 8628 against pv4's device sign-in (POST /_pv4/device/code, then polls POST
+/_pv4/device/token, pv4 web/device.go); the pv4s_ token is kept owner-only (0600) in
+~/.config/blueprint-pv4/credentials.json as {"hosts": {"<scheme://host[:port]>": {"token"}}}.
+
+connect reads GET /api/session_engine/hub-cards?repository=<host/owner/repo>&discarded=false
+with the token as Bearer and keeps the cards whose branch is the checkout's: one is written
+to $(git rev-parse --git-dir)/blueprint-pv4-connection.json as {host, sessionId,
+branchAtConnect, connectedAt, repository}; several print CONNECT_SEVERAL listing them, none
+prints CONNECT_NO_SESSION; neither writes a record, and nothing is started on the host.
+--session <id> records the session the host lists under that id, whatever its branch.
+
+listen sends AttachLaptop (POST /api/session_engine/session/<id>/attach-laptop) and again
+every 4 minutes, holds GET /pv4/live/session_engine/session-boards?session_id=<id>&board=map
+with the token as Bearer, and for each LaptopRungShown push on it prints one line,
+`Ask from <member> on session <id>: <ask>` (the ask on one line, "(… see the board)" after a
+clipped one), then sends AnswerLaptopRing {run} (.../answer-laptop-ring) for up to 8 s; a
+refused answer is printed, not retried. After each (re)connect it reads
+GET /api/session_engine/open-laptop-rings?session_id=<id> and does the same for the rings
+still open, since pv4 replays no push; each run is printed and answered once. While it runs
+it holds $(git rev-parse --git-dir)/blueprint-pv4-listen.pid, one line `<pid> <sessionId>`,
+which the SessionStart hook reads; it removes the file when it ends (SIGTERM, SIGINT,
+SIGHUP or a refusal). disconnect sends DetachLaptop for the record's session and SIGTERMs
+the listener the pid file names.
+
+Refusals print one line starting with their code (CONNECT_NO_SESSION, CONNECT_SEVERAL,
+CONNECT_NOT_SIGNED_IN, CONNECT_NO_ORIGIN, CONNECT_HOST_REQUIRED, LISTEN_HELD,
+LISTEN_FAILED) and exit 1; a usage error exits 2. The TS /blueprint command's
+blueprint-connection.json is never read or written.
+"""
+
+import argparse
+import datetime
+import http.client
+import json
+import os
+import re
+import signal
+import subprocess
+import sys
+import threading
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+CLIENT_ID = "blueprint-cli"
+DEVICE_CODE_PATH = "/_pv4/device/code"
+DEVICE_TOKEN_PATH = "/_pv4/device/token"
+SESSION_PATH = "/_pv4/session"
+SIGN_OUT_PATH = "/_pv4/sign-out"
+HUB_CARDS_PATH = "/api/session_engine/hub-cards"
+DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code"
+TOKEN_PREFIX = "pv4s_"
+RECORD = "blueprint-pv4-connection.json"
+TIMEOUT = 10
+
+# The laptop's half of session_engine (blueprint-pv4 modules/session_engine/web_gen.go
+# routes, served under /api as JSON; pv4 web/live.go LivePrefix for the stream).
+SESSION_COMMAND_PATH = "/api/session_engine/session/%s/%s"
+OPEN_RINGS_PATH = "/api/session_engine/open-laptop-rings"
+BOARD_STREAM_PATH = "/pv4/live/session_engine/session-boards"
+BOARD = "map"
+RING_PUSH = "LaptopRungShown"
+LISTEN_PID = "blueprint-pv4-listen.pid"
+CLIPPED = " (\u2026 see the board)"
+# A repeated answer is refused by OnlyThePresserAnswers (decisions D29): after a retry,
+# an earlier try landed and the run is this laptop's.
+ALREADY_TAKEN = "only the member whose laptop it rang takes run "
+STREAM_READ_TIMEOUT = 60  # pv4 pings every 15 s (live DefaultPing); a silent stream is a dead one
+
+
+def seconds(name, default):
+    """A duration in seconds from the environment (tests shorten them), else default."""
+    try:
+        value = float(os.environ.get(name, ""))
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+REATTACH_S = seconds("BLUEPRINT_PV4_REATTACH_S", 240.0)  # 4 minutes on a 10-minute lease
+ANSWER_S = seconds("BLUEPRINT_PV4_ANSWER_S", 8.0)  # the ring takes an answer for 10 s less 2
+RECONNECT_S = seconds("BLUEPRINT_PV4_RECONNECT_S", 1.0)  # first wait before a reconnect; doubles to 30 s
+STOP_WAIT_S = 3.0  # disconnect waits this long for a stopped listener to exit before it detaches
+
+
+class Refused(Exception):
+    """A refusal: one line, its code first, exit 1."""
+
+
+# ---- where things are -------------------------------------------------------
+
+def credentials_path():
+    home = os.environ.get("HOME") or os.path.expanduser("~")
+    return os.path.join(home, ".config", "blueprint-pv4", "credentials.json")
+
+
+def origin_of(url):
+    """A host as the credentials key it: scheme://host[:port], no path, no trailing slash."""
+    parts = urllib.parse.urlsplit(url.strip())
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        raise Refused("LOGIN_BAD_HOST: %r is not an http(s) URL such as https://acme.blueprint.example" % url)
+    return "%s://%s" % (parts.scheme, parts.netloc)
+
+
+def load_credentials():
+    try:
+        with open(credentials_path(), encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return {"hosts": {}}
+    if not isinstance(data, dict) or not isinstance(data.get("hosts"), dict):
+        return {"hosts": {}}
+    return data
+
+
+def save_credentials(data):
+    """Write owner-only: the directory 0700, the file 0600, replaced atomically."""
+    path = credentials_path()
+    os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+    tmp = "%s.%d.tmp" % (path, os.getpid())
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+            f.write("\n")
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def signed_in_host(host):
+    """(host, token) for --host, else the one host signed in to; refused otherwise."""
+    hosts = load_credentials()["hosts"]
+    if host:
+        key = origin_of(host)
+        token = (hosts.get(key) or {}).get("token")
+        if not token:
+            raise Refused("CONNECT_NOT_SIGNED_IN: this laptop is not signed in to %s; run `blueprint-pv4 login --host %s`" % (key, key))
+        return key, token
+    signed = sorted(k for k, v in hosts.items() if isinstance(v, dict) and v.get("token"))
+    if not signed:
+        raise Refused("CONNECT_NOT_SIGNED_IN: this laptop is signed in to no Blueprint host; run `blueprint-pv4 login --host <url>`")
+    if len(signed) > 1:
+        raise Refused("CONNECT_HOST_REQUIRED: this laptop is signed in to %s; name one with --host" % ", ".join(signed))
+    return signed[0], hosts[signed[0]]["token"]
+
+
+def git(*args):
+    try:
+        out = subprocess.run(["git"] + list(args), capture_output=True, text=True, check=False)
+    except OSError:
+        return ""
+    return out.stdout.strip() if out.returncode == 0 else ""
+
+
+def repository_of(remote):
+    """The origin URL as Blueprint keys a repository, mirroring its Go
+    PlainRepository (modules/branch_overrides/domain/repository.go): host and
+    path, lower case, with no scheme, user, scp ':' or .git; a port is kept.
+    git@github.com:Acme/Shop.git and https://github.com/acme/shop are both
+    github.com/acme/shop. HubCards filters on that spelling exactly."""
+    r = remote.strip()
+    i = r.find("://")
+    if i >= 0:
+        r = r[i + 3:]
+    else:
+        at = r.find("@")
+        if at >= 0:  # scp form: user@host:path
+            r = r[at + 1:].replace(":", "/", 1)
+    at = r.find("@")
+    if 0 <= at < (r + "/").find("/"):
+        r = r[at + 1:]
+    r = r.rstrip("/")
+    if r.endswith(".git"):
+        r = r[:-4]
+    return r.lower().rstrip("/")
+
+
+# ---- talking to the host ----------------------------------------------------
+
+def request(method, url, token=None, form=None, body=None, timeout=TIMEOUT):
+    """(status, parsed JSON body or {}); an unreachable host raises Refused. form is
+    sent form-encoded, body as JSON."""
+    data, kind = None, None
+    if form is not None:
+        data, kind = urllib.parse.urlencode(form).encode(), "application/x-www-form-urlencoded"
+    elif body is not None:
+        data, kind = json.dumps(body).encode(), "application/json"
+    req = urllib.request.Request(url, data=data, method=method)
+    req.add_header("Accept", "application/json")
+    if kind:
+        req.add_header("Content-Type", kind)
+    if token:
+        req.add_header("Authorization", "Bearer " + token)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as res:
+            status, raw = res.status, res.read()
+    except urllib.error.HTTPError as e:
+        status, raw = e.code, e.read()
+    except (urllib.error.URLError, OSError, http.client.HTTPException) as e:
+        raise Refused("UNREACHABLE: %s did not answer (%s)" % (url, getattr(e, "reason", e)))
+    try:
+        body = json.loads(raw) if raw else {}
+    except ValueError:
+        body = {}
+    return status, body
+
+
+def hub_cards(host, token, query):
+    status, rows = request("GET", host + HUB_CARDS_PATH + "?" + urllib.parse.urlencode(query), token)
+    if status == 401:
+        raise Refused("CONNECT_NOT_SIGNED_IN: %s no longer takes this laptop's sign-in; run `blueprint-pv4 login --host %s`" % (host, host))
+    if status != 200 or not isinstance(rows, list):
+        message = rows.get("message", "") if isinstance(rows, dict) else ""
+        raise Refused("CONNECT_FAILED: %s answered %d reading its sessions%s" % (host, status, ": " + message if message else ""))
+    return [r for r in rows if isinstance(r, dict)]
+
+
+# ---- the commands -----------------------------------------------------------
+
+def cmd_login(args):
+    host = origin_of(args.host)
+    status, code = request("POST", host + DEVICE_CODE_PATH, form={"client_id": CLIENT_ID})
+    if status != 200 or not code.get("device_code"):
+        raise Refused("LOGIN_FAILED: %s answered %d to the device code: %s" % (host, status, code.get("error_description") or code.get("error") or ""))
+    print("To sign this laptop in, open %s" % (code.get("verification_uri_complete") or code.get("verification_uri")))
+    print("and approve the code %s." % code.get("user_code"), flush=True)
+    interval = int(code.get("interval", 5))
+    deadline = time.monotonic() + int(code.get("expires_in", 600))
+    while time.monotonic() < deadline:
+        time.sleep(interval)
+        status, answer = request("POST", host + DEVICE_TOKEN_PATH, form={
+            "grant_type": DEVICE_GRANT, "device_code": code["device_code"], "client_id": CLIENT_ID})
+        error = answer.get("error")
+        if status == 200 and str(answer.get("access_token", "")).startswith(TOKEN_PREFIX):
+            data = load_credentials()
+            data["hosts"][host] = {"token": answer["access_token"],
+                                   "signedInAt": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")}
+            save_credentials(data)
+            print("Signed in to %s." % host)
+            return 0
+        if error == "authorization_pending":
+            continue
+        if error == "slow_down":
+            interval += 5
+            continue
+        raise Refused("LOGIN_FAILED: %s: %s" % (error or status, answer.get("error_description", "no pv4s_ token in the answer")))
+    raise Refused("LOGIN_FAILED: the code expired before it was approved; run login again")
+
+
+def cmd_logout(args):
+    host, token = signed_in_host(args.host)
+    request("POST", host + SIGN_OUT_PATH, token)  # best effort: the token is forgotten either way
+    data = load_credentials()
+    data["hosts"].pop(host, None)
+    save_credentials(data)
+    print("Signed out of %s." % host)
+    return 0
+
+
+def cmd_whoami(args):
+    host, token = signed_in_host(args.host)
+    if args.token:
+        print(token)
+        return 0
+    status, who = request("GET", host + SESSION_PATH, token)
+    if status != 200:
+        raise Refused("CONNECT_NOT_SIGNED_IN: %s answered %d for this laptop's sign-in; run `blueprint-pv4 login --host %s`" % (host, status, host))
+    print("%s on %s (role %s, via %s)" % (who.get("actor"), host, who.get("role"), who.get("method")))
+    return 0
+
+
+def checkout():
+    """(git dir, repository, branch) of the current directory; refused without an origin."""
+    git_dir = git("rev-parse", "--absolute-git-dir")
+    remote = git("config", "--get", "remote.origin.url") if git_dir else ""
+    repository = repository_of(remote) if remote else ""
+    if not repository:
+        raise Refused("CONNECT_NO_ORIGIN: this directory is not a git checkout with an origin remote")
+    if repository[0] in "/~." or "/" not in repository:
+        # Blueprint's RepositoryProblem: a folder, or no host/owner/name, names
+        # no repository it can reach, so no hub card can be on it.
+        raise Refused("CONNECT_NO_ORIGIN: origin %s is not a git URL Blueprint can reach" % remote)
+    return git_dir, repository, git("symbolic-ref", "--short", "-q", "HEAD")
+
+
+def describe(card):
+    return "%s  %s  (%s, branch %s)" % (card.get("id"), card.get("name") or "(unnamed)", card.get("column"), card.get("branch"))
+
+
+def cmd_connect(args):
+    git_dir, repository, branch = checkout()
+    host, token = signed_in_host(args.host)
+    if args.session:
+        cards = hub_cards(host, token, {"id": args.session})
+    else:
+        if not branch:
+            raise Refused("CONNECT_NO_SESSION: this checkout is on no branch; check one out, or connect with --session <id>")
+        cards = hub_cards(host, token, {"repository": repository, "discarded": "false"})
+        cards = [c for c in cards if c.get("branch") == branch]
+    if not cards:
+        if args.session:
+            raise Refused("CONNECT_NO_SESSION: %s lists no session %s that you can see" % (host, args.session))
+        raise Refused("CONNECT_NO_SESSION: %s has no session on %s branch %s; start one on the hub, then connect again" % (host, repository, branch))
+    if len(cards) > 1:
+        raise Refused("CONNECT_SEVERAL: %d sessions on %s branch %s; pick one with `blueprint-pv4 connect --session <id>`:\n%s"
+                      % (len(cards), repository, branch, "\n".join("  " + describe(c) for c in cards)))
+    card = cards[0]
+    record = {"host": host, "sessionId": card["id"], "branchAtConnect": branch,
+              "connectedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+              "repository": repository}
+    with open(os.path.join(git_dir, RECORD), "w", encoding="utf-8") as f:
+        json.dump(record, f, indent=2)
+        f.write("\n")
+    print("Connected this checkout to %s" % describe(card))
+    print("on %s." % host)
+    return 0
+
+
+def read_record():
+    git_dir = git("rev-parse", "--absolute-git-dir")
+    if not git_dir:
+        return "", None
+    try:
+        with open(os.path.join(git_dir, RECORD), encoding="utf-8") as f:
+            record = json.load(f)
+    except (OSError, ValueError):
+        return git_dir, None
+    return git_dir, record if isinstance(record, dict) else None
+
+
+def cmd_status(args):
+    git_dir, record = read_record()
+    if not record:
+        print("host: none")
+        print("session: none (run `blueprint-pv4 connect`)")
+    else:
+        print("host: %s" % record.get("host"))
+        print("session: %s (branch at connect %s, %s, connected %s)" % (
+            record.get("sessionId"), record.get("branchAtConnect"), record.get("repository"), record.get("connectedAt")))
+    hosts = load_credentials()["hosts"]
+    host = record.get("host") if record else None
+    if host:
+        print("signed in: %s" % ("yes" if (hosts.get(host) or {}).get("token") else "no (run `blueprint-pv4 login --host %s`)" % host))
+    else:
+        print("signed in: %s" % (", ".join(sorted(hosts)) or "nowhere"))
+    # The laptop's attachment (AttachLaptop's lease) is the listener's, re-sent while it runs.
+    pid = listener(git_dir, record.get("sessionId") if record else None) if git_dir else None
+    if pid:
+        print("attachment: listening (pid %d)" % pid)
+    elif record:
+        print("attachment: none (no listener; run `blueprint-pv4 listen --session %s`)" % record.get("sessionId"))
+    else:
+        print("attachment: none")
+    return 0
+
+
+def cmd_disconnect(args):
+    git_dir, record = read_record()
+    if not git_dir:
+        raise Refused("CONNECT_NO_ORIGIN: this directory is not a git checkout")
+    session = (record or {}).get("sessionId")
+    host = (record or {}).get("host")
+    token = (load_credentials()["hosts"].get(host) or {}).get("token") if host else None
+    # The listener goes first, so a re-attach of its cannot land after the detach.
+    pid = listener(git_dir, None)
+    if pid:
+        try:
+            os.kill(pid, signal.SIGTERM)
+            print("Stopped the listener (pid %d)." % pid)
+        except OSError:
+            pass
+        deadline = time.monotonic() + STOP_WAIT_S
+        while listener(git_dir, None) == pid and time.monotonic() < deadline:
+            time.sleep(0.05)
+    if session and token:
+        try:
+            status, _ = request("POST", host + SESSION_COMMAND_PATH % (urllib.parse.quote(session, safe=""), "detach-laptop"), token, body={})
+        except Refused as e:
+            status = str(e)
+        if status != 200:
+            print("Could not detach this laptop from session %s (%s); its attachment lapses within 10 minutes." % (session, status))
+    try:
+        os.unlink(os.path.join(git_dir, RECORD))
+    except FileNotFoundError:
+        print("This checkout was not connected.")
+        return 0
+    print("Disconnected this checkout from session %s." % session)
+    return 0
+
+
+# ---- the listener -----------------------------------------------------------
+
+def listener(git_dir, session):
+    """The pid of the live listener the git dir's pid file names (on session, when given), else None."""
+    try:
+        with open(os.path.join(git_dir, LISTEN_PID), encoding="utf-8") as f:
+            pid, _, held = f.readline().strip().partition(" ")
+    except OSError:
+        return None
+    if not pid.isdigit() or (session and held != session):
+        return None
+    try:
+        os.kill(int(pid), 0)
+    except PermissionError:
+        return int(pid)
+    except OSError:
+        return None
+    return int(pid)
+
+
+def one_line(text):
+    """An ask as one line for a Monitor: each line break and the blanks around it a space."""
+    return re.sub(r"\s*[\r\n]+\s*", " ", str(text or "")).strip()
+
+
+class Stopped(BaseException):
+    """A signal ended the listener: it removes its pid file and exits 0."""
+
+
+class Listener:
+    def __init__(self, host, token, session, me):
+        self.host, self.token, self.session, self.me = host, token, session, me
+        self.handled = set()  # runs answered: each once, from a push or a reconnect's read
+        self.out = threading.Lock()
+        self.stop = threading.Event()
+
+    def say(self, line):
+        with self.out:
+            print(line, flush=True)
+
+    def command(self, name, body, timeout=TIMEOUT):
+        url = self.host + SESSION_COMMAND_PATH % (urllib.parse.quote(self.session, safe=""), name)
+        return request("POST", url, self.token, body=body, timeout=timeout)
+
+    def attach(self):
+        status, body = self.command("attach-laptop", {})
+        if status == 401:
+            raise Refused("CONNECT_NOT_SIGNED_IN: %s no longer takes this laptop's sign-in; run `blueprint-pv4 login --host %s`" % (self.host, self.host))
+        if status != 200:
+            raise Refused("LISTEN_FAILED: %s answered %d attaching this laptop to session %s%s"
+                          % (self.host, status, self.session, ": " + body.get("message", "") if body.get("message") else ""))
+
+    def reattach(self):
+        """Every REATTACH_S, attach again (the lease is 10 minutes); a failure is printed, the stream holds on."""
+        while not self.stop.wait(REATTACH_S):
+            try:
+                self.attach()
+            except Refused as e:
+                self.say(str(e))
+
+    def ring(self, run, member, ask, clipped, read=False):
+        """Print the ring's line, and answer its run once.
+
+        Every push prints: a fold into a ringing run pushes a second ring for
+        the same run with the folded ask (design 1.12, laptop-summon.yaml), and
+        pv4 replays no push. A ring read after a (re)connect prints only for a
+        run not yet answered here."""
+        if read and run in self.handled:
+            return
+        self.say("Ask from %s on session %s: %s%s" % (member, self.session, one_line(ask), CLIPPED if clipped else ""))
+        if run in self.handled:
+            return
+        self.handled.add(run)
+        self.answer(run)
+
+    def answer(self, run):
+        """AnswerLaptopRing until it lands, is refused, or ANSWER_S has passed."""
+        deadline = time.monotonic() + ANSWER_S
+        tries = 0
+        while True:
+            tries += 1
+            left = deadline - time.monotonic()
+            try:
+                status, body = self.command("answer-laptop-ring", {"run": run}, timeout=max(left, 0.5))
+            except Refused:
+                status, body = 0, {}
+            if status == 200:
+                return
+            message = body.get("message", "") if isinstance(body, dict) else ""
+            if 400 <= status < 500 and status not in (408, 429):
+                if tries > 1 and status == 422 and message.startswith(ALREADY_TAKEN):
+                    return
+                self.say("Run %d on session %s was not taken here: %s" % (run, self.session, message or "%s answered %d" % (self.host, status)))
+                return
+            left = deadline - time.monotonic()
+            if left <= 0:
+                self.say("Run %d on session %s was not taken here: %s did not take the answer within %gs" % (run, self.session, self.host, ANSWER_S))
+                return
+            time.sleep(min(0.25, left))
+
+    def on_push(self, event, data):
+        if event != RING_PUSH:
+            return
+        try:
+            m = json.loads(data)
+            d = m.get("data") or {}
+            run = int(d.get("run"))
+        except (ValueError, TypeError, AttributeError):
+            return
+        if d.get("session_id") != self.session:
+            return
+        member = m.get("who") or d.get("presser") or m.get("actor")
+        self.ring(run, member, d.get("ask"), d.get("clipped") is True)
+
+    def catch_up(self):
+        """The rings still open, read after a (re)connect: pv4 replays no push."""
+        status, rows = request("GET", self.host + OPEN_RINGS_PATH + "?" + urllib.parse.urlencode({"session_id": self.session}), self.token)
+        if status != 200 or not isinstance(rows, list):
+            return
+        for r in rows:
+            if not isinstance(r, dict) or r.get("session_id") != self.session:
+                continue
+            try:
+                run = int(r.get("run"))
+            except (ValueError, TypeError):
+                continue
+            presser = r.get("presser")
+            member = self.me.get("name") if presser == self.me.get("actor") and self.me.get("name") else presser
+            self.ring(run, member, r.get("ask"), False, read=True)
+
+    def follow(self):
+        """Hold the board's stream once: catch up after it opens, then read its frames until it ends."""
+        url = self.host + BOARD_STREAM_PATH + "?" + urllib.parse.urlencode({"session_id": self.session, "board": BOARD})
+        req = urllib.request.Request(url, method="GET")
+        req.add_header("Accept", "text/event-stream")
+        req.add_header("Authorization", "Bearer " + self.token)
+        with urllib.request.urlopen(req, timeout=STREAM_READ_TIMEOUT) as res:
+            self.catch_up()
+            event, data = "", []
+            for raw in res:
+                line = raw.decode("utf-8", "replace").rstrip("\r\n")
+                if not line:
+                    if data:
+                        self.on_push(event, "\n".join(data))
+                    event, data = "", []
+                elif line.startswith(":"):
+                    continue
+                else:
+                    field, _, value = line.partition(":")
+                    value = value[1:] if value.startswith(" ") else value
+                    if field == "event":
+                        event = value
+                    elif field == "data":
+                        data.append(value)
+
+    def run(self):
+        self.attach()
+        threading.Thread(target=self.reattach, daemon=True).start()
+        self.say("Listening for Asks on session %s at %s." % (self.session, self.host))
+        wait = RECONNECT_S
+        while True:
+            try:
+                self.follow()
+                wait = RECONNECT_S  # it held, then ended (pv4 closes a stream after 5 minutes)
+            except urllib.error.HTTPError as e:
+                if e.code == 401:
+                    raise Refused("CONNECT_NOT_SIGNED_IN: %s no longer takes this laptop's sign-in; run `blueprint-pv4 login --host %s`" % (self.host, self.host))
+                if e.code in (403, 404, 422):
+                    raise Refused("LISTEN_FAILED: %s answered %d to the board stream of session %s" % (self.host, e.code, self.session))
+                wait = min(wait * 2, 30.0)
+            except (Refused, urllib.error.URLError, OSError, http.client.HTTPException):
+                wait = min(wait * 2, 30.0)
+            time.sleep(wait)
+
+
+def stopped(signum, frame):
+    raise Stopped()
+
+
+def cmd_listen(args):
+    git_dir = git("rev-parse", "--absolute-git-dir")
+    if not git_dir:
+        raise Refused("CONNECT_NO_ORIGIN: this directory is not a git checkout")
+    held = listener(git_dir, None)
+    if held and held != os.getpid():
+        raise Refused("LISTEN_HELD: a listener (pid %d) already runs in this checkout; `blueprint-pv4 disconnect` stops it" % held)
+    _, record = read_record()
+    host, token = signed_in_host(args.host or (record or {}).get("host"))
+    pid_path = os.path.join(git_dir, LISTEN_PID)
+    for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(signum, stopped)
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
+    try:
+        with open(pid_path, "w", encoding="utf-8") as f:
+            f.write("%d %s\n" % (os.getpid(), args.session))
+        status, me = request("GET", host + SESSION_PATH, token)
+        if status == 401:
+            raise Refused("CONNECT_NOT_SIGNED_IN: %s no longer takes this laptop's sign-in; run `blueprint-pv4 login --host %s`" % (host, host))
+        Listener(host, token, args.session, me if status == 200 and isinstance(me, dict) else {}).run()
+    except Stopped:
+        return 0
+    finally:
+        try:
+            with open(pid_path, encoding="utf-8") as f:
+                mine = f.readline().split(" ")[0] == str(os.getpid())
+            if mine:
+                os.unlink(pid_path)
+        except OSError:
+            pass
+    return 0
+
+
+def parser():
+    p = argparse.ArgumentParser(prog="blueprint-pv4", description="Sign this laptop in to Blueprint (pv4) and connect a checkout to its session.")
+    sub = p.add_subparsers(dest="command", required=True)
+    s = sub.add_parser("login", help="sign in by device code")
+    s.add_argument("--host", required=True)
+    s.set_defaults(run=cmd_login)
+    s = sub.add_parser("logout", help="sign out and forget the token")
+    s.add_argument("--host")
+    s.set_defaults(run=cmd_logout)
+    s = sub.add_parser("whoami", help="who the stored token acts as")
+    s.add_argument("--host")
+    s.add_argument("--token", action="store_true", help="print the stored token alone")
+    s.set_defaults(run=cmd_whoami)
+    s = sub.add_parser("connect", help="record the session of this checkout's branch")
+    s.add_argument("--host")
+    s.add_argument("--session", help="record this session id, whatever its branch")
+    s.set_defaults(run=cmd_connect)
+    s = sub.add_parser("listen", help="attach this laptop to a session and answer its rings")
+    s.add_argument("--session", required=True)
+    s.add_argument("--host")
+    s.set_defaults(run=cmd_listen)
+    s = sub.add_parser("status", help="the record, the sign-in and the attachment")
+    s.set_defaults(run=cmd_status)
+    s = sub.add_parser("disconnect", help="detach, stop the listener, remove the record")
+    s.set_defaults(run=cmd_disconnect)
+    return p
+
+
+def main(argv):
+    args = parser().parse_args(argv)
+    try:
+        return args.run(args)
+    except Refused as e:
+        print(str(e))
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
