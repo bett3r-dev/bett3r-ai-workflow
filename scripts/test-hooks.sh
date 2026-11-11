@@ -408,6 +408,18 @@ else
       *'persistent: true'*) pass 'and the Monitor call it emits is persistent' ;;
       *) fail 'and the Monitor call it emits is persistent' "actual: [$( cat "$TMP/sout" )]" ;;
     esac
+    # Byte for byte what the hook printed at 4b670ad, before the pv4 branch
+    # (1.12): a checkout with no blueprint-pv4-connection.json reads the same.
+    # Every other case above and below is asserted silent, so this is the whole
+    # output of the no-pv4-record cases.
+    printf 'blueprint: the board is serving this repo and NO session is holding the summon channel open, so the "Ask Claude" button cannot reach anyone. Open it now, and let the turn end: Monitor({ ws: { url: "ws://127.0.0.1:%s/api/blueprint/ws" }, persistent: true })\n' \
+      "$SESSION_BOARD_PORT" >"$TMP/sout-4b670ad"
+    if cmp -s "$TMP/sout" "$TMP/sout-4b670ad"; then
+      pass 'no pv4 record: the output is byte-identical to the hook before the pv4 branch'
+    else
+      fail 'no pv4 record: the output is byte-identical to the hook before the pv4 branch' \
+        "expected: [$( cat "$TMP/sout-4b670ad" )]" "actual: [$( cat "$TMP/sout" )]"
+    fi
   fi
   stop_session_board
 
@@ -459,6 +471,89 @@ else
   else
     pass 'without curl it says nothing, quietly'
   fi
+fi
+
+# ── The SessionStart hook's pv4 branch (1.12) ────────────────────────────────
+#
+# `blueprint-pv4 connect` writes $(git rev-parse --git-dir)/blueprint-pv4-connection.json
+# ({host, sessionId, branchAtConnect, connectedAt, repository}). With it, and no
+# listener of this checkout on that session, the hook prints the Monitor line
+# for `blueprint-pv4 listen --session <id>`. A listener is one whose
+# `<git dir>/blueprint-pv4-listen.pid` reads `<pid> <sessionId>`, the pid alive
+# and the session the record's. The work dir has a `.git/` directory and no
+# `.blueprint/`, as a fleet worktree or an undesigned repo connected to pv4 has.
+
+printf '\nblueprint-session-channel hook (SessionStart), the pv4 record\n'
+
+PV4_MONITOR='Monitor({ command: "blueprint-pv4 listen --session s-pv4-7", persistent: true })'
+
+# run_pv4_session_hook <sessionId|-> [<pid file contents>]: '-' writes no record;
+# the record's host is PV4_HOST, else https://acme.blueprint.example.
+run_pv4_session_hook(){
+  pwork="$TMP/pwork"
+  rm -rf "$pwork"; mkdir -p "$pwork/.git"
+  if [ "$1" != - ]; then
+    printf '{"host":"%s","sessionId":"%s","branchAtConnect":"main","connectedAt":"2026-11-09T00:00:00+00:00","repository":"github.com/acme/shop"}\n' \
+      "${PV4_HOST:-https://acme.blueprint.example}" "$1" >"$pwork/.git/blueprint-pv4-connection.json"
+  fi
+  [ $# -lt 2 ] || printf '%s\n' "$2" >"$pwork/.git/blueprint-pv4-listen.pid"
+  env -u GIT_DIR -u BLUEPRINT_HOST_URL CLAUDE_PROJECT_DIR="$pwork" BLUEPRINT_BOARD_PORT=1 "$HOOK_SH" "$SESSION_HOOK" \
+    >"$TMP/pout" 2>"$TMP/perr" </dev/null
+  pstatus=$?
+}
+
+# assert_pv4_session <offers|silent> <description> <hook args...>
+assert_pv4_session(){
+  pwant=$1 pdesc=$2
+  shift 2
+  run_pv4_session_hook "$@"
+  pout=$( cat "$TMP/pout" )
+  if [ "$pstatus" -ne 0 ] || [ -s "$TMP/perr" ]; then
+    fail "$pdesc" "exit $pstatus, expected 0 and a quiet stderr" "stderr: [$( cat "$TMP/perr" )]"
+  elif [ "$pwant" = silent ] && [ -n "$pout" ]; then
+    fail "$pdesc" "expected silence" "actual: [$pout]"
+  elif [ "$pwant" = offers ]; then
+    case $pout in
+      'blueprint: '*"$PV4_MONITOR"*) pass "$pdesc" ;;
+      *) fail "$pdesc" "expected a line starting 'blueprint: ' carrying [$PV4_MONITOR]" "actual: [$pout]" ;;
+    esac
+  else
+    pass "$pdesc"
+  fi
+}
+
+if [ ! -f "$SESSION_HOOK" ]; then
+  fail 'hooks/blueprint-session-channel.sh ships (pv4 cases)' "no file at $SESSION_HOOK"
+else
+  assert_pv4_session silent 'no pv4 record and no .blueprint/: silent' -
+  assert_pv4_session offers 'a pv4 record and no listener: it prints the Monitor line for blueprint-pv4 listen --session <id>' s-pv4-7
+  printf '%s\n' 'blueprint: this checkout is connected to Blueprint session s-pv4-7 at https://acme.blueprint.example, and no listener of this checkout holds it, so your Asks go to the hosted agent instead of here. Start the listener now, and let the turn end: Monitor({ command: "blueprint-pv4 listen --session s-pv4-7", persistent: true }). If it says this laptop is not signed in, ask the user to run ! blueprint-pv4 login --host https://acme.blueprint.example; blueprint-pv4 status says more.' \
+    >"$TMP/pout-expected"
+  if cmp -s "$TMP/pout" "$TMP/pout-expected"; then
+    pass 'and that is the whole output, one line naming the session, its host and the sign-in'
+  else
+    fail 'and that is the whole output, one line naming the session, its host and the sign-in' \
+      "expected: [$( cat "$TMP/pout-expected" )]" "actual: [$( cat "$TMP/pout" )]"
+  fi
+  # This shell is alive: a listener of this checkout on the record's session.
+  assert_pv4_session silent 'a live listener on the same session: silent' s-pv4-7 "$$ s-pv4-7"
+  # A listener on another session (connected again since) is not one on this.
+  assert_pv4_session offers 'a live listener on another session: it still offers the listener' s-pv4-7 "$$ s-other"
+  # A listener that died without removing its pid file.
+  sh -c 'exit 0' & pdead=$!
+  wait "$pdead" 2>/dev/null
+  assert_pv4_session offers 'a pid file whose listener died: it offers the listener' s-pv4-7 "$pdead s-pv4-7"
+  # `kill -0 -1` asks about every process this user owns, and succeeds: a pid
+  # that is not a plain number is no listener.
+  assert_pv4_session offers 'a pid file whose pid is not a number (-1): it offers the listener' s-pv4-7 "-1 s-pv4-7"
+  # The id is printed into a command the model runs: anything but an id's
+  # characters is no record.
+  assert_pv4_session silent 'a record whose sessionId is not an id (a semicolon, spaces): silent' 's-1;rm -rf ~'
+  PV4_HOST='https://acme.example; rm -rf ~'
+  assert_pv4_session silent 'a record whose host carries a semicolon and spaces: silent' s-pv4-7
+  PV4_HOST='acme.blueprint.example'
+  assert_pv4_session silent 'a record whose host is not an http(s) URL: silent' s-pv4-7
+  PV4_HOST=''
 fi
 
 # ── The lane git guard (hooks/lane-git-guard.sh) ─────────────────────────────
@@ -1836,6 +1931,56 @@ for l in open(sys.argv[1]):
       fail 'blueprint-send --session-id sends that conversation of this project' "exit $cstatus; expected claude-old; actual [$cconv]" "stdout: [$( cat "$TMP/cout" )]"
     fi
 
+    # ── a checkout connected by blueprint-pv4 (1.12): its record and its token ──
+    # No TS record and no blueprint CLI sign-in; the pv4 record names the stub and
+    # session s-pv4-9, and ~/.config/blueprint-pv4/credentials.json holds the
+    # device sign-in's pv4s_ token for it, as `blueprint-pv4 login` writes it.
+    cmain_home=$chome cmain_work=$cwork
+    chome="$TMP/chome-pv4"; cwork="$TMP/cwork-pv4"
+    rm -rf "$chome" "$cwork"
+    mkdir -p "$chome/.config/blueprint-pv4" "$cwork/.git"
+    printf '{"hosts": {"http://127.0.0.1:%s": {"token": "pv4s_laptop"}}}\n' "$CAPTURE_PORT" \
+      >"$chome/.config/blueprint-pv4/credentials.json"
+    printf '{"host":"http://127.0.0.1:%s","sessionId":"s-pv4-9","branchAtConnect":"main","connectedAt":"2026-11-09T00:00:00+00:00","repository":"github.com/acme/shop"}\n' \
+      "$CAPTURE_PORT" >"$cwork/.git/blueprint-pv4-connection.json"
+    : >"$TMP/creq"
+    capture_hook SessionEnd claude-pv4 "$TMP/claude-7f3a.jsonl" false BLUEPRINT_CAPTURE=always
+    cpv4=$( python3 -c 'import json,sys
+reqs = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+print(" ".join(r["path"] for r in reqs))
+print(" ".join(sorted(set(r["auth"] for r in reqs if r["path"] != "/bucket"))))
+print(" ".join(r["body"].get("session", "-") for r in reqs if r["path"].endswith("capture-conversation")))' "$TMP/creq" )
+    cexpect='/secret-check /documents/upload-grant /bucket /api/conversations/capture-conversation
+Bearer pv4s_laptop
+s-pv4-9'
+    if [ "$cstatus" = 0 ] && [ "$cpv4" = "$cexpect" ]; then
+      pass 'a pv4 record and a blueprint-pv4 sign-in: capture posts to the record'"'"'s host as Bearer pv4s_, attached to its session'
+    else
+      fail 'a pv4 record and a blueprint-pv4 sign-in: capture posts to the record'"'"'s host as Bearer pv4s_, attached to its session' \
+        "exit $cstatus; expected [$cexpect]" "actual [$cpv4] stderr: [$( cat "$TMP/cerr" )]"
+    fi
+    # Both records and both sign-ins, for the same host: the TS record and the
+    # blueprint CLI's token keep their place (design R3), the pv4 ones are the
+    # fallback only.
+    mkdir -p "$chome/.config/blueprint"
+    cp "$cmain_home/.config/blueprint/credentials.json" "$chome/.config/blueprint/credentials.json"
+    cp "$cmain_work/.git/blueprint-connection.json" "$cwork/.git/blueprint-connection.json"
+    : >"$TMP/creq"
+    capture_hook SessionEnd claude-both "$TMP/claude-7f3a.jsonl" false BLUEPRINT_CAPTURE=always
+    cboth=$( python3 -c 'import json,sys
+reqs = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+print(" ".join(sorted(set(r["auth"] for r in reqs if r["path"] != "/bucket"))))
+print(" ".join(r["body"].get("session", "-") for r in reqs if r["path"].endswith("capture-conversation")))' "$TMP/creq" )
+    cexpect='Bearer pv4k_test
+s-42'
+    if [ "$cstatus" = 0 ] && [ "$cboth" = "$cexpect" ]; then
+      pass 'a TS record beside a pv4 one: capture keeps the TS record and the blueprint CLI token'
+    else
+      fail 'a TS record beside a pv4 one: capture keeps the TS record and the blueprint CLI token' \
+        "exit $cstatus; expected [$cexpect]" "actual [$cboth] stderr: [$( cat "$TMP/cerr" )]"
+    fi
+    chome=$cmain_home cwork=$cmain_work
+
     # ── Blueprint unreachable: fail open, one line ──
     stop_capture_server
     capture_hook SessionEnd claude-7f3a "$TMP/claude-7f3a.jsonl" false BLUEPRINT_CAPTURE=always
@@ -1871,6 +2016,773 @@ for l in open(sys.argv[1]):
     fi
   fi
   stop_capture_server
+fi
+
+# ── Signing a laptop in to pv4 and connecting a checkout (bin/blueprint-pv4) ──
+#
+# 1.12 (design seams 1 and 2, AC7). `blueprint-pv4 login --host <h>` signs this
+# laptop in by RFC 8628 device code as the client `blueprint-cli` and keeps the
+# `pv4s_` token owner-only in ~/.config/blueprint-pv4/credentials.json, keyed by
+# host; `connect` reads HubCards for this checkout's origin and keeps the cards
+# on its branch: one is recorded in the git dir's blueprint-pv4-connection.json,
+# none is CONNECT_NO_SESSION (nothing is started, U1-12-F6 A), several are
+# CONNECT_SEVERAL and `--session <id>` records the one picked. The pv4 server is
+# a python stub on an ephemeral port that logs every request; HOME points at a
+# temp dir in every case, so the real ~/.config is never read or written.
+
+printf '\nblueprint-pv4 (device sign-in, connect)\n'
+
+PV4_BIN="$PLUGIN/bin/blueprint-pv4"
+
+cat >"$TMP/pv4-server.py" <<'PYPV4'
+# A pv4 tenant stub. POST /_pv4/device/code answers a code to the declared
+# client blueprint-cli only; POST /_pv4/device/token answers authorization_pending
+# once, then the pv4s_ token (approved at once); GET /_pv4/session answers who the
+# bearer is; POST /_pv4/sign-out ends it; GET /api/session_engine/hub-cards
+# answers the cards in the file argv[2] filtered by repository, discarded and id,
+# as pv4's /api read does. Every request is a JSON line in argv[1].
+#
+# The laptop listener's half (1.12 slice 9) follows the JSON script in argv[3],
+# re-read on each request: POST /api/session_engine/session/<id>/<command>
+# (attach-laptop, detach-laptop, answer-laptop-ring, as JSON, the shape pv4's /api
+# commands take) answers 200 {}, an answer-laptop-ring taking the script's
+# "answer"["<run>"] replies in turn ([status, body], the last repeated); GET
+# /pv4/live/session_engine/session-boards is the script's "streams"[n] for the n-th
+# connection (the last repeated): its frames as pv4's live hub writes them
+# (live/stream.go: `id:` for an update, `event: <name>`, `data: <json>`), then the
+# stream closes, or with "hold" pings until the client goes; GET
+# /api/session_engine/open-laptop-rings lists the script's "open" rows on the
+# session_id asked whose "from_stream" connection has opened and whose run no
+# answer has taken yet, as the read model drops an answered ring.
+import json, sys, threading, time, urllib.parse
+from http.server import BaseHTTPRequestHandler, HTTPServer
+try:
+    from http.server import ThreadingHTTPServer
+except ImportError:  # before 3.7
+    from socketserver import ThreadingMixIn
+    class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+        daemon_threads = True
+log_path, cards_path = sys.argv[1], sys.argv[2]
+script_path = sys.argv[3] if len(sys.argv) > 3 else ""
+TOKEN = "pv4s_stubtoken0123456789"
+polls = {"n": 0}
+lock = threading.Lock()
+listen = {"streams": 0, "taken": set(), "answers": {}}
+def script():
+    try:
+        return json.load(open(script_path))
+    except (OSError, ValueError):
+        return {}
+class H(BaseHTTPRequestHandler):
+    def reply(self, status, obj):
+        body = json.dumps(obj).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+    def log(self, form, body=None):
+        u = urllib.parse.urlsplit(self.path)
+        entry = {"method": self.command, "path": u.path, "query": dict(urllib.parse.parse_qsl(u.query)),
+                 "auth": self.headers.get("Authorization", ""), "form": form}
+        if body is not None: entry["json"] = body
+        with lock:
+            open(log_path, "a").write(json.dumps(entry) + "\n")
+        return u, entry
+    def do_POST(self):
+        raw = self.rfile.read(int(self.headers.get("Content-Length") or 0)).decode()
+        if self.headers.get("Content-Type", "").startswith("application/json"):
+            try:
+                body = json.loads(raw or "null")
+            except ValueError:
+                body = "not JSON: " + raw
+            form = {}
+        else:
+            body, form = None, dict(urllib.parse.parse_qsl(raw))
+        u, _ = self.log(form, body)
+        parts = u.path.split("/")
+        if len(parts) == 6 and parts[:4] == ["", "api", "session_engine", "session"]:
+            if self.headers.get("Authorization", "") != "Bearer " + TOKEN:
+                self.reply(401, {"message": "sign in first"}); return
+            if parts[5] == "answer-laptop-ring" and isinstance(body, dict):
+                run = str(body.get("run"))
+                replies = script().get("answer", {}).get(run) or [[200, {}]]
+                with lock:
+                    n = listen["answers"].get(run, 0)
+                    listen["answers"][run] = n + 1
+                status, out = replies[min(n, len(replies) - 1)]
+                if status == 200:
+                    with lock: listen["taken"].add(run)
+                self.reply(status, out); return
+            if parts[5] in ("attach-laptop", "detach-laptop"):
+                self.reply(200, {}); return
+            self.reply(404, {"error": "no such route"}); return
+        if u.path == "/_pv4/device/code":
+            if form.get("client_id") != "blueprint-cli":
+                self.reply(400, {"error": "invalid_client", "error_description": "not a client this app signs in"}); return
+            self.reply(200, {"device_code": "dev-123", "user_code": "WDJB-MJHT",
+                             "verification_uri": "http://x/_pv4/device",
+                             "verification_uri_complete": "http://x/_pv4/device?user_code=WDJB-MJHT",
+                             "expires_in": 600, "interval": 0})
+        elif u.path == "/_pv4/device/token":
+            if form.get("grant_type") != "urn:ietf:params:oauth:grant-type:device_code" or form.get("device_code") != "dev-123" or form.get("client_id") != "blueprint-cli":
+                self.reply(400, {"error": "invalid_grant", "error_description": "unknown"}); return
+            polls["n"] += 1
+            if polls["n"] == 1:
+                self.reply(400, {"error": "authorization_pending", "error_description": "not yet"}); return
+            self.reply(200, {"access_token": TOKEN, "token_type": "Bearer", "expires_in": 2592000})
+        elif u.path == "/_pv4/sign-out":
+            self.send_response(204); self.end_headers()
+        else:
+            self.reply(404, {"error": "no such route"})
+    def do_GET(self):
+        u, _ = self.log({})
+        if self.headers.get("Authorization", "") != "Bearer " + TOKEN:
+            self.reply(401, {"message": "sign in first"}); return
+        if u.path == "/_pv4/session":
+            self.reply(200, {"actor": "member:ana-1", "role": "contributor", "method": "device", "email": "ana@acme.test", "name": "Ana"})
+        elif u.path == "/pv4/live/session_engine/session-boards":
+            with lock:
+                n = listen["streams"]
+                listen["streams"] = n + 1
+            streams = script().get("streams") or [{"hold": True}]
+            st = streams[min(n, len(streams) - 1)]
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            try:
+                for f in st.get("frames", []):
+                    head = ("id: %s\n" % f["id"]) if "id" in f else ""
+                    data = f["data"] if isinstance(f["data"], str) else json.dumps(f["data"])
+                    self.wfile.write((head + "event: %s\ndata: %s\n\n" % (f["event"], data)).encode())
+                    self.wfile.flush()
+                deadline = time.time() + 60
+                while st.get("hold") and time.time() < deadline:
+                    time.sleep(0.1)
+                    self.wfile.write(b": ping\n\n")
+                    self.wfile.flush()
+            except OSError:
+                pass
+        elif u.path == "/api/session_engine/open-laptop-rings":
+            q = dict(urllib.parse.parse_qsl(u.query))
+            with lock:
+                opened, taken = listen["streams"], set(listen["taken"])
+            rows = [{k: v for k, v in r.items() if k != "from_stream"} for r in script().get("open", [])
+                    if r.get("session_id") == q.get("session_id") and opened >= r.get("from_stream", 1) and str(r.get("run")) not in taken]
+            self.reply(200, rows)
+        elif u.path == "/api/session_engine/hub-cards":
+            q = dict(urllib.parse.parse_qsl(u.query))
+            rows = json.load(open(cards_path))
+            if "repository" in q: rows = [r for r in rows if r["repository"] == q["repository"]]
+            if "discarded" in q: rows = [r for r in rows if str(r["discarded"]).lower() == q["discarded"]]
+            if "id" in q: rows = [r for r in rows if r["id"] == q["id"]]
+            self.reply(200, rows)
+        else:
+            self.reply(404, {"error": "no such route"})
+    def log_message(self, *a):
+        pass
+srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+srv.daemon_threads = True
+sys.stdout.write("%d\n" % srv.server_port)
+sys.stdout.flush()
+srv.serve_forever()
+PYPV4
+
+pv4_server_pid=''
+start_pv4_server(){
+  rm -f "$TMP/pport"
+  : >"$TMP/preq"
+  python3 "$TMP/pv4-server.py" "$TMP/preq" "$TMP/pv4-cards.json" "$TMP/pv4-listen.json" >"$TMP/pport" 2>/dev/null &
+  pv4_server_pid=$!
+  i=0
+  while [ ! -s "$TMP/pport" ] && [ "$i" -lt 100 ]; do
+    i=$(( i + 1 ))
+    sleep 0.05 2>/dev/null || sleep 1
+  done
+  PV4_HOST="http://127.0.0.1:$( tr -d ' \n' <"$TMP/pport" 2>/dev/null )"
+}
+stop_pv4_server(){
+  [ -n "$pv4_server_pid" ] && kill "$pv4_server_pid" 2>/dev/null
+  wait "$pv4_server_pid" 2>/dev/null
+  pv4_server_pid=''
+}
+
+# pv4_repo <origin url or '-'> <branch>: a fresh checkout at $TMP/pv4-repo.
+pv4_repo(){
+  rm -rf "$TMP/pv4-repo"
+  mkdir -p "$TMP/pv4-repo"
+  git -C "$TMP/pv4-repo" init -q
+  git -C "$TMP/pv4-repo" symbolic-ref HEAD "refs/heads/$2"
+  [ "$1" = '-' ] || git -C "$TMP/pv4-repo" remote add origin "$1"
+}
+# pv4_cards <json>: what the stub's HubCards holds.
+pv4_cards(){ printf '%s\n' "$1" >"$TMP/pv4-cards.json"; }
+# pv4_run <args...>: the bin in the checkout, HOME at $TMP/pv4-home, git's own
+# config scrubbed; stdout, stderr and status in $TMP/pout, $TMP/perr, $pstatus.
+pv4_run(){
+  ( cd "$TMP/pv4-repo" && HOME="$TMP/pv4-home" XDG_CONFIG_HOME='' GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+      "$PV4_BIN" "$@" >"$TMP/pout" 2>"$TMP/perr" </dev/null )
+  pstatus=$?
+}
+PV4_RECORD="$TMP/pv4-repo/.git/blueprint-pv4-connection.json"
+PV4_CREDS="$TMP/pv4-home/.config/blueprint-pv4/credentials.json"
+PV4_CARD_X='{"id":"11111111-1111-4111-8111-111111111111","name":"Checkout flow","repository":"github.com/acme/shop","branch":"feat/x","column":"designing","discarded":false}'
+PV4_CARD_X2='{"id":"22222222-2222-4222-8222-222222222222","name":"Checkout copy","repository":"github.com/acme/shop","branch":"feat/x","column":"mapping","discarded":false}'
+PV4_CARD_Y='{"id":"33333333-3333-4333-8333-333333333333","name":"Refunds","repository":"github.com/acme/shop","branch":"feat/y","column":"designing","discarded":false}'
+PV4_CARD_GONE='{"id":"44444444-4444-4444-8444-444444444444","name":"Old try","repository":"github.com/acme/shop","branch":"feat/x","column":"idea","discarded":true}'
+PV4_CARD_OTHER='{"id":"55555555-5555-4555-8555-555555555555","name":"Elsewhere","repository":"github.com/acme/other","branch":"feat/x","column":"designing","discarded":false}'
+
+if ! command -v python3 >/dev/null 2>&1; then
+  fail 'python3 is available for the blueprint-pv4 cases' 'python3 not on PATH'
+elif [ ! -f "$PV4_BIN" ]; then
+  fail 'bin/blueprint-pv4 exists' "missing: $PV4_BIN"
+else
+  # ── the bin itself: executable, Python 3 standard library only ──
+  pv4_imports=$( python3 - "$PV4_BIN" <<'PYIMP' 2>&1
+import ast, sys
+tree = ast.parse(open(sys.argv[1], encoding="utf-8").read())
+names = set()
+for n in ast.walk(tree):
+    if isinstance(n, ast.Import): names |= {a.name.split(".")[0] for a in n.names}
+    if isinstance(n, ast.ImportFrom) and n.level == 0: names.add(n.module.split(".")[0])
+def stdlib(name):
+    # sys.stdlib_module_names is 3.10+; before it, a module is the standard
+    # library's when it is built in or found under the stdlib folder, not site-packages.
+    if hasattr(sys, "stdlib_module_names"): return name in sys.stdlib_module_names
+    import importlib.util, os, sysconfig
+    spec = importlib.util.find_spec(name)
+    if spec is None: return False
+    if spec.origin in ("built-in", "frozen"): return True
+    home = os.path.realpath(sysconfig.get_paths()["stdlib"]) + os.sep
+    where = os.path.realpath(spec.origin or (list(spec.submodule_search_locations or []) or [""])[0])
+    return where.startswith(home) and "site-packages" not in where
+bad = sorted(x for x in names if not stdlib(x))
+print("ok" if names and not bad else "non-stdlib: %s (imports %s)" % (bad, sorted(names)))
+PYIMP
+)
+  if [ -x "$PV4_BIN" ] && [ "$( head -1 "$PV4_BIN" )" = '#!/usr/bin/env python3' ] && [ "$pv4_imports" = ok ]; then
+    pass 'bin/blueprint-pv4 is an executable python3 script that imports the standard library only'
+  else
+    fail 'bin/blueprint-pv4 is an executable python3 script that imports the standard library only' \
+      "executable: $( [ -x "$PV4_BIN" ] && echo yes || echo no )" "shebang: $( head -1 "$PV4_BIN" )" "imports: $pv4_imports"
+  fi
+
+  start_pv4_server
+  if [ "$PV4_HOST" = 'http://127.0.0.1:' ]; then
+    fail 'the pv4 stub server starts' 'no port'
+  else
+    rm -rf "$TMP/pv4-home"; mkdir -p "$TMP/pv4-home"
+    pv4_cards "[$PV4_CARD_X]"
+
+    # ── login: the device flow, the token kept owner-only (U1-12-F2 S1) ──
+    pv4_repo git@github.com:acme/shop.git feat/x
+    ( umask 022; pv4_run login --host "$PV4_HOST/" ; echo "$pstatus" >"$TMP/pstatus" )
+    pstatus=$( cat "$TMP/pstatus" )
+    plogin=$( python3 - "$PV4_CREDS" "$PV4_HOST" "$TMP/preq" <<'PYLOGIN' 2>&1
+import json, os, stat, sys
+creds, host, log = sys.argv[1:4]
+bad = []
+try:
+    mode = stat.S_IMODE(os.stat(creds).st_mode)
+    if mode != 0o600: bad.append("mode %o, expected 600" % mode)
+    d = json.load(open(creds))
+    tok = d.get("hosts", {}).get(host, {}).get("token")
+    if tok != "pv4s_stubtoken0123456789": bad.append("token under %s is %r (file %r)" % (host, tok, d))
+except (OSError, ValueError) as e:
+    bad.append("credentials: %s" % e)
+reqs = [json.loads(l) for l in open(log)]
+code = [r for r in reqs if r["path"] == "/_pv4/device/code"]
+tokens = [r for r in reqs if r["path"] == "/_pv4/device/token"]
+if len(code) != 1 or code[0]["form"].get("client_id") != "blueprint-cli": bad.append("device/code requests: %r" % code)
+if len(tokens) != 2: bad.append("expected 2 token polls (pending, then the token), got %d" % len(tokens))
+print("; ".join(bad) or "ok")
+PYLOGIN
+)
+    if [ "$pstatus" = 0 ] && [ "$plogin" = ok ]; then
+      pass 'login --host runs the device flow as blueprint-cli and stores the pv4s_ token by host, mode 0600'
+    else
+      fail 'login --host runs the device flow as blueprint-cli and stores the pv4s_ token by host, mode 0600' \
+        "exit $pstatus" "$plogin" "stdout: $( cat "$TMP/pout" )" "stderr: $( cat "$TMP/perr" )"
+    fi
+    case $( cat "$TMP/pout" "$TMP/perr" ) in
+      *WDJB-MJHT*'/_pv4/device?user_code=WDJB-MJHT'*|*'/_pv4/device?user_code=WDJB-MJHT'*WDJB-MJHT*)
+        pass 'login shows the user code and the page to approve it at' ;;
+      *) fail 'login shows the user code and the page to approve it at' "stdout: $( cat "$TMP/pout" )" "stderr: $( cat "$TMP/perr" )" ;;
+    esac
+    if [ -d "$HOME/.config/blueprint-pv4" ] && [ "$HOME/.config/blueprint-pv4/credentials.json" -nt "$TMP/pv4-server.py" ]; then
+      fail 'login wrote no file under the real HOME' "touched $HOME/.config/blueprint-pv4/credentials.json"
+    else
+      pass 'login wrote no file under the real HOME'
+    fi
+
+    # ── whoami ──
+    pv4_run whoami
+    case $( cat "$TMP/pout" ) in
+      *member:ana-1*"$PV4_HOST"*|*"$PV4_HOST"*member:ana-1*) [ "$pstatus" = 0 ] && pass 'whoami names the actor the stored token signs in as, on its host' || fail 'whoami names the actor the stored token signs in as, on its host' "exit $pstatus" ;;
+      *) fail 'whoami names the actor the stored token signs in as, on its host' "exit $pstatus" "stdout: $( cat "$TMP/pout" )" "stderr: $( cat "$TMP/perr" )" ;;
+    esac
+    pv4_run whoami --token
+    if [ "$pstatus" = 0 ] && [ "$( cat "$TMP/pout" )" = 'pv4s_stubtoken0123456789' ]; then
+      pass 'whoami --token prints the stored token alone'
+    else
+      fail 'whoami --token prints the stored token alone' "exit $pstatus" "stdout: [$( cat "$TMP/pout" )]"
+    fi
+
+    # ── connect, none on the branch (U1-12-F6 S1, AC7) ──
+    pv4_cards "[$PV4_CARD_Y, $PV4_CARD_GONE, $PV4_CARD_OTHER]"
+    : >"$TMP/preq"
+    pv4_run connect
+    pq=$( python3 -c 'import json,sys
+r = [json.loads(l) for l in open(sys.argv[1])]
+print(r[0]["path"] == "/api/session_engine/hub-cards" and r[0]["query"] == {"repository": "github.com/acme/shop", "discarded": "false"} and r[0]["auth"] == "Bearer pv4s_stubtoken0123456789" and len(r) == 1)' "$TMP/preq" 2>&1 )
+    case $( cat "$TMP/pout" ) in
+      *CONNECT_NO_SESSION*)
+        if [ "$pstatus" != 0 ] && [ ! -e "$PV4_RECORD" ] && [ "$pq" = True ]; then
+          pass 'connect with no session for the branch prints CONNECT_NO_SESSION, exits non-zero and writes no record'
+        else
+          fail 'connect with no session for the branch prints CONNECT_NO_SESSION, exits non-zero and writes no record' \
+            "exit $pstatus" "record: $( [ -e "$PV4_RECORD" ] && cat "$PV4_RECORD" || echo none )" "one request, HubCards read as asked (repository, discarded=false, bearer), nothing started: $pq"
+        fi ;;
+      *) fail 'connect with no session for the branch prints CONNECT_NO_SESSION, exits non-zero and writes no record' \
+           "exit $pstatus" "stdout: [$( cat "$TMP/pout" )]" "stderr: $( cat "$TMP/perr" )" ;;
+    esac
+
+    # ── connect, one on the branch ──
+    pv4_cards "[$PV4_CARD_X, $PV4_CARD_Y, $PV4_CARD_GONE]"
+    pv4_run connect
+    prec=$( python3 - "$PV4_RECORD" "$PV4_HOST" <<'PYREC' 2>&1
+import datetime, json, sys
+try:
+    r = json.load(open(sys.argv[1]))
+except (OSError, ValueError) as e:
+    print("no record: %s" % e); sys.exit()
+want = {"host": sys.argv[2], "sessionId": "11111111-1111-4111-8111-111111111111", "branchAtConnect": "feat/x", "repository": "github.com/acme/shop"}
+bad = ["%s=%r, expected %r" % (k, r.get(k), v) for k, v in want.items() if r.get(k) != v]
+try:
+    datetime.datetime.fromisoformat(str(r.get("connectedAt")).replace("Z", "+00:00"))
+except ValueError:
+    bad.append("connectedAt=%r is not an ISO time" % r.get("connectedAt"))
+if sorted(r) != sorted(list(want) + ["connectedAt"]): bad.append("keys %r" % sorted(r))
+print("; ".join(bad) or "ok")
+PYREC
+)
+    if [ "$pstatus" = 0 ] && [ "$prec" = ok ]; then
+      pass 'connect with one session on the branch writes {host, sessionId, branchAtConnect, connectedAt, repository} in the git dir'
+    else
+      fail 'connect with one session on the branch writes {host, sessionId, branchAtConnect, connectedAt, repository} in the git dir' \
+        "exit $pstatus" "$prec" "stdout: $( cat "$TMP/pout" )" "stderr: $( cat "$TMP/perr" )"
+    fi
+
+    # ── status, then disconnect ──
+    pv4_run status
+    pst=$( cat "$TMP/pout" )
+    pmiss=''
+    for w in "host: $PV4_HOST" 'session: 11111111-1111-4111-8111-111111111111' 'signed in: yes' 'attachment: '; do
+      case $pst in *"$w"*) ;; *) pmiss="$pmiss [$w]" ;; esac
+    done
+    if [ "$pstatus" = 0 ] && [ -z "$pmiss" ]; then
+      pass 'status prints the host, the session, the sign-in and the attachment'
+    else
+      fail 'status prints the host, the session, the sign-in and the attachment' "exit $pstatus" "missing:$pmiss" "stdout: [$pst]"
+    fi
+    pv4_run disconnect
+    if [ "$pstatus" = 0 ] && [ ! -e "$PV4_RECORD" ]; then
+      pass 'disconnect removes the record'
+    else
+      fail 'disconnect removes the record' "exit $pstatus" "record: $( [ -e "$PV4_RECORD" ] && cat "$PV4_RECORD" )"
+    fi
+    pv4_run status
+    case $( cat "$TMP/pout" ) in
+      *'session: none'*) pass 'status after disconnect says no session' ;;
+      *) fail 'status after disconnect says no session' "stdout: [$( cat "$TMP/pout" )]" ;;
+    esac
+
+    # ── connect, several on the branch ──
+    pv4_cards "[$PV4_CARD_X, $PV4_CARD_X2, $PV4_CARD_Y]"
+    pv4_run connect
+    pout=$( cat "$TMP/pout" )
+    case $pout in
+      *CONNECT_SEVERAL*11111111-1111-4111-8111-111111111111*'Checkout flow'*22222222-2222-4222-8222-222222222222*'Checkout copy'*)
+        if [ "$pstatus" != 0 ] && [ ! -e "$PV4_RECORD" ] && ! printf '%s' "$pout" | grep -q 33333333; then
+          pass 'connect with several sessions on the branch prints CONNECT_SEVERAL listing them, and writes no record'
+        else
+          fail 'connect with several sessions on the branch prints CONNECT_SEVERAL listing them, and writes no record' "exit $pstatus" "stdout: [$pout]"
+        fi ;;
+      *) fail 'connect with several sessions on the branch prints CONNECT_SEVERAL listing them, and writes no record' "exit $pstatus" "stdout: [$pout]" ;;
+    esac
+
+    # ── connect --session (U1-12-F6 S3) ──
+    pv4_repo https://github.com/acme/shop.git main
+    pv4_cards "[$PV4_CARD_X, $PV4_CARD_X2]"
+    : >"$TMP/preq"
+    pv4_run connect --session 22222222-2222-4222-8222-222222222222
+    psess=$( python3 -c 'import json,sys
+r = json.load(open(sys.argv[1]))
+print(r["sessionId"], r["branchAtConnect"], r["repository"])' "$PV4_RECORD" 2>&1 )
+    if [ "$pstatus" = 0 ] && [ "$psess" = '22222222-2222-4222-8222-222222222222 main github.com/acme/shop' ]; then
+      pass 'connect --session <id> records that session, whatever its branch'
+    else
+      fail 'connect --session <id> records that session, whatever its branch' "exit $pstatus" "record: $psess" "stdout: $( cat "$TMP/pout" )" "stderr: $( cat "$TMP/perr" )"
+    fi
+    rm -f "$PV4_RECORD"
+    pv4_run connect --session 99999999-9999-4999-8999-999999999999
+    case $( cat "$TMP/pout" ) in
+      *CONNECT_NO_SESSION*) [ "$pstatus" != 0 ] && [ ! -e "$PV4_RECORD" ] && pass 'connect --session with an id the host does not list prints CONNECT_NO_SESSION and writes no record' \
+          || fail 'connect --session with an id the host does not list prints CONNECT_NO_SESSION and writes no record' "exit $pstatus" ;;
+      *) fail 'connect --session with an id the host does not list prints CONNECT_NO_SESSION and writes no record' "exit $pstatus" "stdout: [$( cat "$TMP/pout" )]" ;;
+    esac
+
+    # ── the repository as Blueprint keys it (PlainRepository: lower case, port kept) ──
+    # pv4_plain <origin> <cards json> <expected repository>: connect finds the
+    # card under Blueprint's spelling, asks HubCards in it and records it.
+    pv4_plain(){
+      pv4_repo "$1" feat/x
+      pv4_cards "$2"
+      : >"$TMP/preq"
+      pv4_run connect
+      pplain=$( python3 -c 'import json,os,sys
+r = json.load(open(sys.argv[1])) if os.path.exists(sys.argv[1]) else {"sessionId": "no-record", "repository": "-"}
+q = [json.loads(l)["query"].get("repository") for l in open(sys.argv[2])]
+print(r["sessionId"], r["repository"], q)' "$PV4_RECORD" "$TMP/preq" 2>&1 )
+      rm -f "$PV4_RECORD"
+    }
+    pv4_plain git@github.com:Acme/Shop.git "[$PV4_CARD_X]"
+    if [ "$pstatus" = 0 ] && [ "$pplain" = "11111111-1111-4111-8111-111111111111 github.com/acme/shop ['github.com/acme/shop']" ]; then
+      pass 'connect from a mixed-case origin finds the lower-case card and records github.com/acme/shop'
+    else
+      fail 'connect from a mixed-case origin finds the lower-case card and records github.com/acme/shop' \
+        "exit $pstatus" "expected: 11111111-1111-4111-8111-111111111111 github.com/acme/shop ['github.com/acme/shop']" "actual: $pplain" "stdout: [$( cat "$TMP/pout" )]"
+    fi
+    pv4_plain ssh://git@Git.Acme.test:2222/Acme/Shop.git/ \
+      '[{"id":"66666666-6666-4666-8666-666666666666","name":"On a port","repository":"git.acme.test:2222/acme/shop","branch":"feat/x","column":"designing","discarded":false}]'
+    if [ "$pstatus" = 0 ] && [ "$pplain" = "66666666-6666-4666-8666-666666666666 git.acme.test:2222/acme/shop ['git.acme.test:2222/acme/shop']" ]; then
+      pass 'connect from an ssh:// origin with a port keeps the port, drops the user, .git and trailing slash'
+    else
+      fail 'connect from an ssh:// origin with a port keeps the port, drops the user, .git and trailing slash' \
+        "exit $pstatus" "expected: 66666666-6666-4666-8666-666666666666 git.acme.test:2222/acme/shop ['git.acme.test:2222/acme/shop']" "actual: $pplain" "stdout: [$( cat "$TMP/pout" )]"
+    fi
+
+    # ── the refusals before any read ──
+    pv4_repo - feat/x
+    pv4_run connect
+    case $( cat "$TMP/pout" ) in
+      *CONNECT_NO_ORIGIN*) [ "$pstatus" != 0 ] && [ ! -e "$PV4_RECORD" ] && pass 'connect in a checkout with no origin remote prints CONNECT_NO_ORIGIN' \
+          || fail 'connect in a checkout with no origin remote prints CONNECT_NO_ORIGIN' "exit $pstatus" ;;
+      *) fail 'connect in a checkout with no origin remote prints CONNECT_NO_ORIGIN' "exit $pstatus" "stdout: [$( cat "$TMP/pout" )]" ;;
+    esac
+    pv4_repo "$TMP/elsewhere/shop.git" feat/x
+    pv4_run connect
+    case $( cat "$TMP/pout" ) in
+      *CONNECT_NO_ORIGIN*) [ "$pstatus" != 0 ] && [ ! -e "$PV4_RECORD" ] && pass 'connect whose origin is a folder prints CONNECT_NO_ORIGIN' \
+          || fail 'connect whose origin is a folder prints CONNECT_NO_ORIGIN' "exit $pstatus" ;;
+      *) fail 'connect whose origin is a folder prints CONNECT_NO_ORIGIN' "exit $pstatus" "stdout: [$( cat "$TMP/pout" )]" ;;
+    esac
+    pv4_repo git@github.com:acme/shop.git feat/x
+    pv4_cards "[$PV4_CARD_X]"
+    pv4_run logout
+    plo=$( python3 -c 'import json,sys
+d = json.load(open(sys.argv[1]))
+print(sys.argv[2] in d.get("hosts", {}))' "$PV4_CREDS" "$PV4_HOST" 2>&1 )
+    if [ "$pstatus" = 0 ] && [ "$plo" = False ] && grep -q '"path": "/_pv4/sign-out", "query": {}, "auth": "Bearer pv4s_stubtoken0123456789"' "$TMP/preq"; then
+      pass 'logout signs the token out on its host and forgets it'
+    else
+      fail 'logout signs the token out on its host and forgets it' "exit $pstatus" "host still stored: $plo" "requests: $( grep sign-out "$TMP/preq" )"
+    fi
+    # ── which host: several signed in, and a token the host no longer takes ──
+    printf '{"hosts": {"%s": {"token": "pv4s_stubtoken0123456789"}, "https://other.example": {"token": "pv4s_other"}}}\n' "$PV4_HOST" >"$PV4_CREDS"
+    pv4_run connect
+    case $( cat "$TMP/pout" ) in
+      *CONNECT_HOST_REQUIRED*"$PV4_HOST"*) [ "$pstatus" != 0 ] && [ ! -e "$PV4_RECORD" ] && pass 'connect signed in to several hosts and naming none prints CONNECT_HOST_REQUIRED listing them' \
+          || fail 'connect signed in to several hosts and naming none prints CONNECT_HOST_REQUIRED listing them' "exit $pstatus" ;;
+      *) fail 'connect signed in to several hosts and naming none prints CONNECT_HOST_REQUIRED listing them' "exit $pstatus" "stdout: [$( cat "$TMP/pout" )]" ;;
+    esac
+    pv4_run connect --host "$PV4_HOST"
+    if [ "$pstatus" = 0 ] && grep -q '"sessionId": "11111111-1111-4111-8111-111111111111"' "$PV4_RECORD" 2>/dev/null; then
+      pass 'connect --host picks that host among several'
+    else
+      fail 'connect --host picks that host among several' "exit $pstatus" "stdout: [$( cat "$TMP/pout" )]"
+    fi
+    rm -f "$PV4_RECORD"
+    printf '{"hosts": {"%s": {"token": "pv4s_stale"}}}\n' "$PV4_HOST" >"$PV4_CREDS"
+    pv4_run connect
+    case $( cat "$TMP/pout" ) in
+      *CONNECT_NOT_SIGNED_IN*) [ "$pstatus" != 0 ] && [ ! -e "$PV4_RECORD" ] && pass 'connect with a token the host answers 401 to prints CONNECT_NOT_SIGNED_IN' \
+          || fail 'connect with a token the host answers 401 to prints CONNECT_NOT_SIGNED_IN' "exit $pstatus" ;;
+      *) fail 'connect with a token the host answers 401 to prints CONNECT_NOT_SIGNED_IN' "exit $pstatus" "stdout: [$( cat "$TMP/pout" )]" ;;
+    esac
+    printf '{"hosts": {}}\n' >"$PV4_CREDS"
+    pv4_run connect
+    case $( cat "$TMP/pout" ) in
+      *CONNECT_NOT_SIGNED_IN*) [ "$pstatus" != 0 ] && [ ! -e "$PV4_RECORD" ] && pass 'connect signed in nowhere prints CONNECT_NOT_SIGNED_IN' \
+          || fail 'connect signed in nowhere prints CONNECT_NOT_SIGNED_IN' "exit $pstatus" ;;
+      *) fail 'connect signed in nowhere prints CONNECT_NOT_SIGNED_IN' "exit $pstatus" "stdout: [$( cat "$TMP/pout" )]" ;;
+    esac
+  fi
+  stop_pv4_server
+fi
+
+# ── The laptop listener (bin/blueprint-pv4 listen) ───────────────────────────
+#
+# 1.12 slice 9 (design seams 3, 4, 7, 8 and 11). `blueprint-pv4 listen --session
+# <id>` attaches the laptop (POST /api/session_engine/session/<id>/attach-laptop,
+# again on its interval), holds GET /pv4/live/session_engine/session-boards with
+# the bearer, prints `Ask from <member> on session <id>: <ask>` for each
+# LaptopRungShown push and answers it (answer-laptop-ring {run}); after each
+# (re)connect it reads OpenLaptopRings and answers the rings still open, each run
+# once. While it runs it holds <git dir>/blueprint-pv4-listen.pid, `<pid>
+# <session>`, the file the SessionStart hook reads (D27). `disconnect` detaches and
+# stops it. The stub is the pv4 tenant stub above, following $TMP/pv4-listen.json;
+# the intervals are shortened by env so no case waits on the real 4 minutes, and
+# every wait polls a condition under a deadline.
+
+printf '\nblueprint-pv4 listen (the laptop ring)\n'
+
+PV4_PIDFILE="$TMP/pv4-repo/.git/blueprint-pv4-listen.pid"
+# pv4_ring <run> <ask> <clipped> [<session>]: a LaptopRungShown frame as pv4's
+# live hub sends it, a live.Message (pv4 live/live.go Message) whose data are the
+# push's fields (modules/session_engine/module.yaml pushes.LaptopRungShown); on
+# session S unless one is named.
+pv4_ring(){
+  printf '{"event": "LaptopRungShown", "data": {"module": "session_engine", "name": "LaptopRungShown", "actor": "member:ana-1", "who": "Ana", "data": {"session_id": "%s", "run": %s, "presser": "member:ana-1", "ask": "%s", "clipped": %s, "at": "2026-11-09T10:00:00Z"}, "event_id": 4%s}}' \
+    "${4:-S}" "$1" "$2" "$3" "$1"
+}
+# pv4_listen_start [env assignments...]: the listener on session S in the
+# checkout, HOME at $TMP/pv4-home, in the background as $plisten.
+pv4_listen_start(){
+  ( cd "$TMP/pv4-repo" && exec env HOME="$TMP/pv4-home" XDG_CONFIG_HOME='' GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+      BLUEPRINT_PV4_REATTACH_S=0.3 BLUEPRINT_PV4_RECONNECT_S=0.05 BLUEPRINT_PV4_ANSWER_S=1 "$@" \
+      "$PV4_BIN" listen --session S >"$TMP/plisten.out" 2>"$TMP/plisten.err" </dev/null ) &
+  plisten=$!
+}
+# pv4_until <seconds> <condition>: polls the shell condition every 50 ms until it
+# holds, the listener dies or the deadline passes; true when it held.
+pv4_until(){
+  pu=0
+  while [ "$pu" -lt $(( $1 * 20 )) ]; do
+    eval "$2" && return 0
+    kill -0 "$plisten" 2>/dev/null || { eval "$2"; return; }
+    pu=$(( pu + 1 ))
+    sleep 0.05 2>/dev/null || sleep 1
+  done
+  eval "$2"
+}
+# pv4_count <grep pattern>: how many logged requests match.
+pv4_count(){ grep -c -- "$1" "$TMP/preq" 2>/dev/null || true; }
+pv4_listen_stop(){
+  kill -9 "$plisten" 2>/dev/null
+  wait "$plisten" 2>/dev/null
+}
+
+if ! command -v python3 >/dev/null 2>&1 || [ ! -f "$PV4_BIN" ]; then
+  fail 'bin/blueprint-pv4 and python3 are there for the listen cases' "bin: $PV4_BIN"
+else
+  start_pv4_server
+  pv4_repo git@github.com:acme/shop.git feat/x
+  rm -rf "$TMP/pv4-home"; mkdir -p "$TMP/pv4-home/.config/blueprint-pv4"
+  # Signed in to two hosts: with no --host, listen takes the record's.
+  printf '{"hosts": {"%s": {"token": "pv4s_stubtoken0123456789"}, "https://other.example": {"token": "pv4s_other"}}}\n' "$PV4_HOST" >"$PV4_CREDS"
+  printf '{"host": "%s", "sessionId": "S", "branchAtConnect": "feat/x", "connectedAt": "2026-11-09T10:00:00+00:00", "repository": "github.com/acme/shop"}\n' \
+    "$PV4_HOST" >"$PV4_RECORD"
+  cp "$PV4_RECORD" "$TMP/plisten.record"
+  # The first stream: presence, an update, then rings for runs 3 (taken), 3 again
+  # (a fold into the ringing run: its ask, laptop-summon.yaml), 5 (clipped; its
+  # answer refused: the hosted agent took it), 6 (a 503, then the refusal a
+  # repeated answer gets, D29: taken), 7 on another session (not this listener's),
+  # 9 (that refusal at the first try: printed) and 10 (503 until the answer's
+  # deadline), then it closes. The second carries no push: run 4 rang in the gap
+  # between the two, so only OpenLaptopRings, listing it from that connection on,
+  # tells of it; then it closes. The third holds. OpenLaptopRings also lists run
+  # 10, whose answer never landed: a run this listener already tried, so the read
+  # neither prints it again nor answers it again.
+  printf '{"streams": [{"frames": [%s, %s, %s, %s, %s, %s, %s, %s, %s]}, {"frames": []}, {"hold": true}], "open": [%s, %s], "answer": {"5": [[422, %s]], "6": [[503, %s], [422, %s]], "9": [[422, %s]], "10": [[503, %s]]}}\n' \
+    '{"event": "presence", "data": [{"actor": "member:ana-1", "name": "Ana", "via": "laptop"}]}' \
+    '{"id": "39", "event": "update", "data": "39"}' \
+    "$( pv4_ring 3 'rename the aggregate' false )" \
+    "$( pv4_ring 3 'and split the policy' false )" \
+    "$( pv4_ring 5 'write the docs' true )" \
+    "$( pv4_ring 6 'add a test' false )" \
+    "$( pv4_ring 7 'not this session' false T )" \
+    "$( pv4_ring 9 'check the build' false )" \
+    "$( pv4_ring 10 'wait it out' false )" \
+    '{"session_id": "S", "run": 4, "presser": "member:ana-1", "ask": "fix the tests\n\n(summoned by Ana)", "requested_at": "2026-11-09T10:00:04Z", "window_s": 10, "from_stream": 2}' \
+    '{"session_id": "S", "run": 10, "presser": "member:ana-1", "ask": "wait it out", "requested_at": "2026-11-09T10:00:10Z", "window_s": 10, "from_stream": 2}' \
+    '{"field": "run", "message": "the hosted agent took it"}' \
+    '{"message": "busy"}' \
+    '{"field": "run", "message": "only the member whose laptop it rang takes run 6"}' \
+    '{"field": "run", "message": "only the member whose laptop it rang takes run 9"}' \
+    '{"message": "busy"}' \
+    >"$TMP/pv4-listen.json"
+  : >"$TMP/preq"
+  pv4_listen_start
+  pv4_until 30 '[ "$( pv4_count session-boards )" -ge 3 ] && [ "$( pv4_count attach-laptop )" -ge 2 ] && [ "$( pv4_count "\"json\": {\"run\": 4}" )" -ge 1 ]'
+
+  # ── the pid file the SessionStart hook reads (D27) ──
+  if [ "$( cat "$PV4_PIDFILE" 2>/dev/null )" = "$plisten S" ]; then
+    pass 'while it listens, <git dir>/blueprint-pv4-listen.pid holds "<pid> <session>"'
+  else
+    fail 'while it listens, <git dir>/blueprint-pv4-listen.pid holds "<pid> <session>"' \
+      "expected: [$plisten S]" "actual: [$( cat "$PV4_PIDFILE" 2>/dev/null || echo 'no file' )]" "stdout: $( cat "$TMP/plisten.out" )" "stderr: $( cat "$TMP/plisten.err" )"
+  fi
+  pv4_run status
+  case $( cat "$TMP/pout" ) in
+    *"attachment: listening (pid $plisten)"*) pass 'status names the listener holding the session as the attachment' ;;
+    *) fail 'status names the listener holding the session as the attachment' "stdout: [$( cat "$TMP/pout" )]" ;;
+  esac
+
+  # ── what it sent ──
+  plog=$( python3 - "$TMP/preq" <<'PYLISTEN' 2>&1
+import json, sys
+reqs = [json.loads(l) for l in open(sys.argv[1])]
+bearer = "Bearer pv4s_stubtoken0123456789"
+out = {}
+attach = [r for r in reqs if r["path"].endswith("/attach-laptop")]
+out["attach"] = "%s x%s" % (sorted({(r["method"], r["path"], r["auth"] == bearer, json.dumps(r.get("json"))) for r in attach}), "2+" if len(attach) >= 2 else len(attach))
+streams = [r for r in reqs if r["path"] == "/pv4/live/session_engine/session-boards"]
+out["stream"] = sorted({(r["method"], json.dumps(r["query"], sort_keys=True), r["auth"] == bearer) for r in streams})
+rings = [r for r in reqs if r["path"] == "/api/session_engine/open-laptop-rings"]
+out["open"] = sorted({(r["method"], json.dumps(r["query"]), r["auth"] == bearer) for r in rings})
+answers = [r for r in reqs if r["path"].endswith("/answer-laptop-ring")]
+out["answer_paths"] = sorted({(r["method"], r["path"], r["auth"] == bearer) for r in answers})
+runs = {}
+for r in answers:
+    k = json.dumps(r.get("json"))
+    runs[k] = runs.get(k, 0) + 1
+out["answers"] = sorted(runs.items())
+for k in ("attach", "stream", "open", "answer_paths", "answers"):
+    print("%s: %s" % (k, out[k]))
+PYLISTEN
+)
+  pwant_attach="attach: [('POST', '/api/session_engine/session/S/attach-laptop', True, '{}')] x2+"
+  case $plog in
+    *"$pwant_attach"*) pass 'listen sends AttachLaptop on S with the bearer, and again on its re-attach interval' ;;
+    *) fail 'listen sends AttachLaptop on S with the bearer, and again on its re-attach interval' "expected: $pwant_attach" "actual: $plog" ;;
+  esac
+  pwant_stream="stream: [('GET', '{\"board\": \"map\", \"session_id\": \"S\"}', True)]"
+  case $plog in
+    *"$pwant_stream"*) pass 'listen holds the session-boards stream of S with the bearer' ;;
+    *) fail 'listen holds the session-boards stream of S with the bearer' "expected: $pwant_stream" "actual: $plog" ;;
+  esac
+  case $plog in
+    *"open: [('GET', '{\"session_id\": \"S\"}', True)]"*) pass 'listen reads OpenLaptopRings of S with the bearer' ;;
+    *) fail 'listen reads OpenLaptopRings of S with the bearer' "actual: $plog" ;;
+  esac
+
+  # ── a ring prints one line and is answered (scenario 1) ──
+  if grep -qx 'Ask from Ana on session S: rename the aggregate' "$TMP/plisten.out" &&
+     printf '%s\n' "$plog" | grep -q "('{\"run\": 3}', 1)" &&
+     printf '%s\n' "$plog" | grep -q "answer_paths: \[('POST', '/api/session_engine/session/S/answer-laptop-ring', True)\]"; then
+    pass 'a ring for run 3 prints "Ask from Ana on session S: rename the aggregate" and AnswerLaptopRing{session S, run 3} is sent once'
+  else
+    fail 'a ring for run 3 prints "Ask from Ana on session S: rename the aggregate" and AnswerLaptopRing{session S, run 3} is sent once' \
+      "stdout: [$( cat "$TMP/plisten.out" )]" "requests: $plog"
+  fi
+  # ── a fold into the ringing run prints its ask; the run is answered once ──
+  if [ "$( grep -c '^Ask from Ana on session S: rename the aggregate$' "$TMP/plisten.out" )" = 1 ] &&
+     [ "$( grep -c '^Ask from Ana on session S: and split the policy$' "$TMP/plisten.out" )" = 1 ] &&
+     printf '%s\n' "$plog" | grep -q "('{\"run\": 3}', 1)"; then
+    pass 'a second ring for run 3 (a fold: "and split the policy") prints its own Ask line, and run 3 is still answered once'
+  else
+    fail 'a second ring for run 3 (a fold: "and split the policy") prints its own Ask line, and run 3 is still answered once' \
+      "stdout: [$( cat "$TMP/plisten.out" )]" "requests: $plog"
+  fi
+  # ── an open ring is answered after a reconnect (scenario 2) ──
+  if printf '%s\n' "$plog" | grep -q "('{\"run\": 4}', 1)" &&
+     [ "$( grep -c '^Ask from Ana on session S: fix the tests (summoned by Ana)$' "$TMP/plisten.out" )" = 1 ]; then
+    pass 'after the stream closes, a ring whose push was lost (run 4) is read from OpenLaptopRings on reconnect, printed and answered once'
+  else
+    fail 'after the stream closes, a ring whose push was lost (run 4) is read from OpenLaptopRings on reconnect, printed and answered once' \
+      "stdout: [$( cat "$TMP/plisten.out" )]" "requests: $plog"
+  fi
+  pv4_tries=$( printf '%s\n' "$plog" | python3 -c 'import ast,sys
+line = [l for l in sys.stdin if l.startswith("answers: ")][0]
+n = dict(ast.literal_eval(line[len("answers: "):]))
+print(n.get("{\"run\": 5}"), n.get("{\"run\": 6}"), n.get("{\"run\": 9}"), "2+" if (n.get("{\"run\": 10}") or 0) >= 2 else n.get("{\"run\": 10}"), n.get("{\"run\": 7}"))' 2>&1 )
+  if [ "$pv4_tries" = '1 2 1 2+ None' ]; then
+    pass 'a refused answer is not retried; a failed one is, until a refusal or the deadline; a ring on another session is not answered'
+  else
+    fail 'a refused answer is not retried; a failed one is, until a refusal or the deadline; a ring on another session is not answered' \
+      "expected tries of runs 5 6 9 10 7: 1 2 1 2+ None" "actual: $pv4_tries" "requests: $plog"
+  fi
+  printf '%s\n' \
+    "Listening for Asks on session S at $PV4_HOST." \
+    'Ask from Ana on session S: rename the aggregate' \
+    'Ask from Ana on session S: and split the policy' \
+    'Ask from Ana on session S: write the docs (… see the board)' \
+    'Run 5 on session S was not taken here: the hosted agent took it' \
+    'Ask from Ana on session S: add a test' \
+    'Ask from Ana on session S: check the build' \
+    'Run 9 on session S was not taken here: only the member whose laptop it rang takes run 9' \
+    'Ask from Ana on session S: wait it out' \
+    "Run 10 on session S was not taken here: $PV4_HOST did not take the answer within 1s" \
+    'Ask from Ana on session S: fix the tests (summoned by Ana)' >"$TMP/plisten.want"
+  if cmp -s "$TMP/plisten.want" "$TMP/plisten.out"; then
+    pass 'listen prints one line per pushed ring (a fold too), clipped asks pointing at the board, a refused answer, and a lost ring read on reconnect once'
+  else
+    fail 'listen prints one line per pushed ring (a fold too), clipped asks pointing at the board, a refused answer, and a lost ring read on reconnect once' \
+      "expected:" "$( cat "$TMP/plisten.want" )" "actual:" "$( cat "$TMP/plisten.out" )" "stderr: $( cat "$TMP/plisten.err" )"
+  fi
+
+  # ── disconnect detaches and stops the listener (seam 11) ──
+  : >"$TMP/preq"
+  pv4_run disconnect
+  pv4_until 15 '! kill -0 "$plisten" 2>/dev/null'
+  if kill -0 "$plisten" 2>/dev/null; then
+    pstopped=no
+    pv4_listen_stop
+  else
+    pstopped=yes
+    wait "$plisten" 2>/dev/null
+  fi
+  pdetach=$( pv4_count '"path": "/api/session_engine/session/S/detach-laptop", "query": {}, "auth": "Bearer pv4s_stubtoken0123456789", "form": {}, "json": {}' )
+  # The listener goes before the detach: no re-attach of its lands after it.
+  pafter=$( python3 -c 'import json, sys
+paths = [json.loads(l)["path"] for l in open(sys.argv[1])]
+d = [i for i, p in enumerate(paths) if p.endswith("/detach-laptop")]
+print(sum(p.endswith("/attach-laptop") for p in paths[d[0]:]) if d else "no detach")' "$TMP/preq" 2>&1 )
+  if [ "$pafter" = 0 ]; then
+    pass 'disconnect stops the listener before it detaches: no AttachLaptop follows the DetachLaptop'
+  else
+    fail 'disconnect stops the listener before it detaches: no AttachLaptop follows the DetachLaptop' "AttachLaptop after the detach: $pafter"
+  fi
+  if [ "$pstatus" = 0 ] && [ "$pstopped" = yes ] && [ "$pdetach" = 1 ] && [ ! -e "$PV4_PIDFILE" ] && [ ! -e "$PV4_RECORD" ]; then
+    pass 'disconnect sends DetachLaptop for S, stops the listener, and the listener removes its pid file'
+  else
+    fail 'disconnect sends DetachLaptop for S, stops the listener, and the listener removes its pid file' \
+      "exit $pstatus" "listener stopped: $pstopped" "DetachLaptop sent: $pdetach" "pid file: $( cat "$PV4_PIDFILE" 2>/dev/null || echo gone )" \
+      "record: $( [ -e "$PV4_RECORD" ] && echo kept || echo gone )" "stdout: [$( cat "$TMP/pout" )]"
+  fi
+
+  # ── an interrupt ends it too, and the pid file goes with it ──
+  cp "$TMP/plisten.record" "$PV4_RECORD"
+  printf '{"streams": [{"hold": true}]}\n' >"$TMP/pv4-listen.json"
+  : >"$TMP/preq"
+  pv4_listen_start
+  pv4_until 20 '[ "$( pv4_count session-boards )" -ge 1 ]'
+  pheld=$( cat "$PV4_PIDFILE" 2>/dev/null )
+  kill -INT "$plisten" 2>/dev/null
+  pv4_until 15 '! kill -0 "$plisten" 2>/dev/null'
+  if kill -0 "$plisten" 2>/dev/null; then pstopped=no; pv4_listen_stop; else pstopped=yes; wait "$plisten" 2>/dev/null; fi
+  if [ "$pheld" = "$plisten S" ] && [ "$pstopped" = yes ] && [ ! -e "$PV4_PIDFILE" ]; then
+    pass 'an interrupted listener removes its pid file'
+  else
+    fail 'an interrupted listener removes its pid file' "held: [$pheld]" "stopped: $pstopped" "pid file after: $( cat "$PV4_PIDFILE" 2>/dev/null || echo gone )"
+  fi
+
+  # ── one listener per checkout ──
+  printf '%s S\n' "$$" >"$PV4_PIDFILE"
+  pv4_run listen --session S
+  case $( cat "$TMP/pout" ) in
+    LISTEN_HELD*)
+      if [ "$pstatus" != 0 ] && [ "$( cat "$PV4_PIDFILE" )" = "$$ S" ]; then
+        pass 'listen where a live listener holds the pid file prints LISTEN_HELD and leaves the file'
+      else
+        fail 'listen where a live listener holds the pid file prints LISTEN_HELD and leaves the file' "exit $pstatus" "pid file: $( cat "$PV4_PIDFILE" 2>/dev/null )"
+      fi ;;
+    *) fail 'listen where a live listener holds the pid file prints LISTEN_HELD and leaves the file' "exit $pstatus" "stdout: [$( cat "$TMP/pout" )]" "stderr: $( cat "$TMP/perr" )" ;;
+  esac
+  rm -f "$PV4_PIDFILE"
+  stop_pv4_server
 fi
 
 # ── The mechanism: how the plugin declares the hooks ─────────────────────────
