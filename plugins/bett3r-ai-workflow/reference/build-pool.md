@@ -26,9 +26,13 @@ In a pool worktree point the scaffolder's `--design`/`--graph` at the main check
 
 `worktree-pool land <worktree> <sha> --base <reset tip>`, `<reset tip>` being the `tip=` of that worktree's last reset verdict.
 
+A land is a cherry-pick, and a host that merges generated files by keeping one side (a `merge=<driver>` in `.gitattributes`) loses a slice's generated change whenever a sibling changed the same file first. Such a host declares `designTooling.regenerate` (and optionally `designTooling.regenerateCheck`) in `.blueprint.config.json`; `land` runs them on the tip after every pick and commits the regen itself. You run neither by hand.
+
 | Outcome | Action |
 |---|---|
-| `outcome=landed` | Set `passes: true` now, at the land, with the landed sha: the verdict's `sha=`, the **landed** sha, never the worker's, into `.work/slices.yaml` and a fleet's state file; then push. `already=true` reads the same way (a resumed run re-landing after a crash between land and record): record `sha=`. |
+| `outcome=landed` | Set `passes: true` now, at the land, with the landed sha: the verdict's `sha=`, the **landed** sha, never the worker's, into `.work/slices.yaml` and a fleet's state file; then push. `already=true` reads the same way (a resumed run re-landing after a crash between land and record): record `sha=`. `regen=committed`: the script regenerated the tip and committed it as `regenSha=`; before `passes: true`, dispatch the `test-runner` on the landed slice's oracle in the main tree, and a red one is `ESCALATE` with the regen commit named. `regen=clean` or `regen=none` needs nothing more. |
+| `outcome=refused reason=merge-driver-without-regenerate` | Branch untouched. The pick would hand `paths=` to a custom merge driver (one that keeps a side and expects a regenerate after) while the host declares no `designTooling.regenerate`. `ESCALATE` naming the paths and the missing key; never land it some other way, which leaves the tip stale. |
+| `outcome=failed step=regenerate\|regenerate-check\|regenerate-commit` | The slice's commit is on the branch (`sha=`), its generated files not settled. `passes:` stays false: stop landing and `ESCALATE` with the output. |
 | `outcome=conflict` | Branch untouched. `ESCALATE` the slice with `paths=`, resolve nothing by hand, dispatch none of its dependants. Its worktree keeps the commit and is retired. |
 | `outcome=refused reason=main-checkout-dirty` | Your main tree has tracked modifications: contamination. Stop landing and surface them; a commit or discard made to let a land through is the move this refusal exists to stop. Untracked files refuse nothing. |
 | `outcome=refused reason=sha-not-in-worktree` | Read that worktree's `git log`: exactly one commit in `<reset tip>..HEAD` lands; anything else is `ESCALATE`. |

@@ -40,6 +40,7 @@ Roles and method ship here; domain knowledge stays in the host repo and its fram
 - the `verifier` reads `${CLAUDE_PROJECT_DIR}/.claude/rules/` for the host's invariants;
 - the `executor` uses the framework skills the host provides (a PV3 repo installs `bett3r-pv3-ai-skills` beside this plugin);
 - where a design graph fixes an artifact mechanically, `/design` ends in a scaffold commit made by the scaffolder the repo declares as `designTooling.scaffold` in `.blueprint.config.json`, gated by its `designTooling.typecheck`, skipped when either is undeclared; without a scaffold report, `/build` runs that scaffolder per slice.
+- a host that merges generated files by keeping one side declares `designTooling.regenerate` (and optionally `designTooling.regenerateCheck`) in `.blueprint.config.json`; `/build`'s worktree pool runs them after every land and `/merge-multi` after every unit merge (`worktree-pool regenerate`), each committing the regen, and both refuse a merge through such a driver when nothing is declared.
 
 ## BLUEPRINT board mode
 
