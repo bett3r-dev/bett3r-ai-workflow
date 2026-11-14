@@ -7,7 +7,7 @@ board. pv4 work does not use the spec-driven flow of `bett3r-ai-workflow`; it le
 
 | Skill | Does |
 |---|---|
-| `framework-adapter` | The pv4 vocabulary a Blueprint design run reads before modelling: each `pv4.yaml` term mapped to one of the board's eight kinds, pv4's naming (PascalCase names, invariant sentences, snake_case modules and fields, `renamed-from:`), and the file each kind becomes. Vocabulary only; the method stays in Blueprint. |
+| `framework-adapter` | The pv4 vocabulary a Blueprint design run reads before modelling: each `pv4.yaml` term mapped to one of the board's eight kinds, pv4's naming (PascalCase names, invariant sentences, snake_case modules and fields, `renamed-from:`), the file each kind becomes, and how pv4 scaffold writes lists, views and screens (one view per read model, a page labelled as its read model, any other screen a GET route with defaults to confirm). The method stays in Blueprint. |
 
 ## Install
 

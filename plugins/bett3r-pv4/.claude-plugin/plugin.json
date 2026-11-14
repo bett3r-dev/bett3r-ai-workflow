@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "bett3r-pv4",
-  "version": "0.1.0",
-  "description": "The pv4 + Blueprint plugin: skills for designing and building pv4 apps on a Blueprint board. Today it holds `framework-adapter`, the vocabulary that maps a pv4 manifest (`pv4.yaml`) onto the board's eight kinds and names nodes the way pv4 does, read by a Blueprint design run on a pv4 repository before it models. It carries vocabulary only; the design method stays in Blueprint.",
+  "version": "0.2.0",
+  "description": "The pv4 + Blueprint plugin: skills for designing and building pv4 apps on a Blueprint board. Today it holds `framework-adapter`, the vocabulary that maps a pv4 manifest (`pv4.yaml`) onto the board's eight kinds and names nodes the way pv4 does, with how pv4 scaffold writes lists, views and screens, read by a Blueprint design run on a pv4 repository before it models. The design method stays in Blueprint.",
   "author": {
     "name": "Tomas Ruiz",
     "email": "tomasruizr@gmail.com"

@@ -33,7 +33,7 @@
     {
       "name": "bett3r-pv4",
       "source": "./plugins/bett3r-pv4",
-      "description": "The pv4 + Blueprint plugin: skills for designing and building pv4 apps on a Blueprint board. Its first skill, framework-adapter, is the pv4 vocabulary a Blueprint design run reads before modelling: each pv4.yaml term mapped to a board kind, pv4's naming, and the file each kind becomes. Vocabulary only; the method stays in Blueprint."
+      "description": "The pv4 + Blueprint plugin: skills for designing and building pv4 apps on a Blueprint board. Its first skill, framework-adapter, is the pv4 vocabulary a Blueprint design run reads before modelling: each pv4.yaml term mapped to a board kind, pv4's naming, the file each kind becomes, and how pv4 scaffold writes lists, views and screens. The method stays in Blueprint."
     }
   ]
 }
