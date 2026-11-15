@@ -51,6 +51,10 @@ module is a board node, and its id comes from the manifest alone:
   (`PlaceOrder`, `OrderPlaced`).
 - Invariants: PascalCase sentences that say what holds (`OneSessionPerTicket`).
 - Modules and fields: snake_case (`session_engine`, `placed_at`).
+- A command declares no field `id`: every command already carries the id of the aggregate it
+  changes, and pv4 refuses one that declares it again. Name another aggregate's id for it
+  (`slot_id`), a record found by a value of its own for that value (`sku`), and leave a command
+  that needs nothing else with no field of its own.
 - `renamed-from: <old name>` on a node keeps the id the old name had across a rename. Without it
   a rename is one node removed and one added.
 
