@@ -18,20 +18,32 @@ module is a board node, and its id comes from the manifest alone:
 | `commands.<Name>` (`handled-by`, `produces`, `reads`, `invariants: [...]`); `creates: true` is the board tag `starts` | command |
 | `events.<Name>` | event |
 | `policies.<Name>`: `issues: [Command]`, or `calls: {System: {on-success, on-failure}}` | policy |
-| `read-models.<Name>`, with its SELECT in `db/<read_model>_select.sql` (the board draws that view as a `postgres-view` beside it) | read model |
+| `sweeps.<Name>`: `{ over: ReadModel, due: <timestamp filter>, issues: Command }` | policy tagged `sweep` |
+| `read-models.<Name>`, with its SELECT in `<module>/read_models/<read_model>/<read_model>_select.sql`; `projections.<Name>` | read model (a projection tagged `projection`) |
 | `external-systems.<Name>`, with its send stub in `externalsystems/` | external system |
 | `invariants.<Name>: {field?}` | invariant |
 | a generated page, or a GET hand route under `handroutes/` | screen |
 
-`sweeps` and `jobs` have no board kind: they are not drawn.
+A sweep runs on a timer: each period it issues its command once per row of its read model
+whose `due` timestamp has passed. Draw it as a policy tagged `sweep` with a reads-from edge
+to that read model (its `over`), an issues edge to the command, and no event triggering it.
+Its `due` is a timestamp field of the read model; give the read model one (a constant in the
+past, `due_at`, makes every row due at once). The command it issues starts a flow of its own
+on the board, the sweep drawn ahead of it. `jobs` have no board kind: they are not drawn.
+
+## What is already in the code
+
+The board's code layer is the session branch's extracted code. A node or edge that is there
+already is drawn as it is: join it with edges, or propose a change to it
+(ProposeElementChanges), never propose it again. Only what this change adds is a new node.
 
 ## Lists, views and screens
 
-- A plain list is a read model that reads-from a `postgres-view`, which reads-from the
-  aggregate: `RoomDirectory` → view `RoomDirectory` → `Room` is `RoomDirectory: { reads-from: [Room] }`.
-- Each read model reads a view of its own, named after it (`rooms_view_room-directory` for
-  `rooms_rm_room-directory`): a view is one read model's SELECT. A view several read models
-  read, named after none of them, is asked about, once.
+- A read model is drawn with each event that changes it projected-to it: `RoomAdded` projected-to
+  `RoomDirectory` is `RoomDirectory: { reads-from: [Room] }`, a SELECT over the aggregate that
+  emits it. Tagged `projection`, its events write its rows instead (`projections.<Name>`). It may
+  read another read model's published view (a reads-from edge between read models). The board
+  draws no `postgres-view` node: a read model's SELECT is its file, not a node.
 - A read model's page is a screen labelled as the read model (`rooms_ui_room-directory`); a
   command it invokes lands on that page unless it lands on another already, or is another
   module's, which is asked about. A screen under another label that shows exactly one
@@ -68,6 +80,7 @@ File names are the snake_case of the manifest's names.
 | invariant | `<module>/<invariant>_check.go` |
 | aggregate + event | `<module>/<aggregate>_<event>_apply.go` |
 | policy | `<module>/policies/<policy>_<event>_react.go` |
+| sweep | none of its own: the command it issues has its handler |
 | external system | `<module>/externalsystems/<system>_send.go` |
-| read model | `<module>/db/<read_model>_select.sql` |
+| read model | `<module>/read_models/<read_model>/<read_model>_select.sql` |
 | screen (hand route) | `handroutes/<route>_serve.go` |
