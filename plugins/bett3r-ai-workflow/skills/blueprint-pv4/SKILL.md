@@ -27,7 +27,7 @@ The token and the key are secrets: keep them out of the repo and the transcript,
 
 Each tool is a pv4 command or read model, named as the tenant names it. Among them:
 
-- **Writes**: ProposeElements, ProposeElementChanges, ProposeElementRemovals, LinkElements, UnlinkElements, WriteComments, ResolveComments, RaiseForks, ChooseOptions, CiteSources, PostMapNodes, StrikeMapNodes, NoteMapLists, GroundMap.
+- **Writes**: ProposeChange, UnlinkElements, WriteComments, ResolveComments, RaiseForks, ChooseOptions, CiteSources, PostMapNodes, StrikeMapNodes, NoteMapLists, GroundMap.
 - **Reads**: DesignElements, ShapeFields, Discussion, SessionMaps, MapNodes, MapLinks, MapForks, ForkOptions, MapNotes, DesignRuns, Search, Why, BoardGraph.
 
 Read the session's design, discussion and map before you write to it. Every write is one transaction, recorded and attributed to whoever the token or key acts as; a no-op answer means the session already holds it, so treat it as success.
