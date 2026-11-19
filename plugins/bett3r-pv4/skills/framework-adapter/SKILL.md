@@ -35,7 +35,7 @@ on the board, the sweep drawn ahead of it. `jobs` have no board kind: they are n
 
 The board's code layer is the session branch's extracted code. A node or edge that is there
 already is drawn as it is: join it with edges, or propose a change to it
-(ProposeElementChanges), never propose it again. Only what this change adds is a new node.
+(ProposeChange's `changes` list), never propose it again. Only what this change adds is a new node.
 
 ## Lists, views and screens
 
